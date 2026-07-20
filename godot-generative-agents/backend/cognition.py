@@ -210,7 +210,7 @@ from text_adventure_games.actions.things import CRAFT_VERBS
 from text_adventure_games.enums import ActionName, Property
 
 from . import seed
-from .actions import Travel
+from .actions import TalkTo, Travel
 from .planner import LLMPlanner, MockPlanner
 from .prompt_templates import render
 
@@ -557,16 +557,19 @@ def attach_agents(
         # closed enum can choose them even without an authored commands: stop),
         # then whatever authored-command verbs remain (sorted), deduplicating
         # while preserving that order.
+        # "wait" was once stripped here (a Wait tool on every decide invited
+        # sitting idle at recurring token spend); #614 retires that -- WaitPenn's
+        # required duration_minutes makes a chosen wait SETTLE like perform, so
+        # authored wait spacers now promote like any other verb. NB: that safety
+        # lives in the REGISTERED action, not here -- a world that offers the
+        # engine's bare Wait (no duration slot) to a real brain re-opens the
+        # idle trap; every Penn entry point registers WaitPenn (penn_world's
+        # PENN_EXTRA_ACTIONS).
         authored_verbs = sorted(
             {
-                verb
+                cmd.split(" ", 1)[0]
                 for stop in spec["schedule"]
                 for cmd in stop.get("commands") or []
-                # "wait" is an idle spacer deliberately excluded from
-                # PENN_ACTION_VERBS; never promote it to a real-brain tool -- a
-                # Wait schema on every decide is recurring token spend and
-                # invites the model to sit idle.
-                if (verb := cmd.split(" ", 1)[0]) != "wait"
             }
         )
         ordered = ["travel", "perform", *(extra_action_names or []), *authored_verbs]
@@ -753,6 +756,36 @@ def action_tools_for(game, char, max_enum: int = DECIDE_MAX_ENUM):
             # Overwrite the engine's generic placeholder ("... e.g. 'player with
             # club'"), which actively misleads once the slot is a closed menu.
             props["arguments"]["description"] = "choose exactly one of the listed names"
+
+    # Bespoke curation for talk_to (#614): "another living character is
+    # co-located" is not expressible as a REQUIRED_AFFORDANCES tag -- the #612
+    # helper's scope is items / inventory / the location itself, never its
+    # characters (flagged on #612) -- so the toolset builder reads the same
+    # facts TalkTo.check_preconditions reads, keeping offered <=> gate. The
+    # third leg -- the target must have an ``agent`` -- is the same fact the
+    # engine's conversation.can_converse requires of both sides; without it
+    # build_world's silent "Observer" player (the engine's required player,
+    # standing at the hub, never scripted with an agent) would be offered as
+    # a talk target it can never actually converse with. The person slot's
+    # enum comes from the same character dict the gate matches against, so
+    # menu and gate cannot disagree about who is present. (TalkTo's slots are
+    # ``person``/``topic``, never the engine's generic ``arguments``, so the
+    # #635 enum loop above leaves it untouched.)
+    others = sorted(
+        c.name
+        for c in (char.location.characters.values() if char.location else [])
+        if c is not char
+        and not c.get_property("is_dead")
+        and getattr(c, "agent", None) is not None
+    )
+    talk_tool = next((t for t in tools if t["name"] == TalkTo.ACTION_NAME), None)
+    if talk_tool is not None:
+        if not others:
+            tools.remove(talk_tool)
+        elif len(others) <= max_enum:
+            prop = talk_tool["parameters"]["properties"].get("person")
+            if prop is not None:
+                prop["enum"] = others
     return tools
 
 
@@ -1445,17 +1478,67 @@ def remember_outcome(char, command: str, step: int) -> None:
         # still-sick agent whose drink changed nothing). Normal importance.
         text = render("reflection", verb=verb, item=rest.strip())
         importance = 2.0
+    elif verb == "study":
+        # The one-shot delta Study.apply_effects just recorded (#615) -- the
+        # brain's #581 duration pick or the action's default. Consume it (the
+        # just_sickened pattern) so it can't leak into a later outcome.
+        minutes = char.get_property("just_studied_minutes")
+        char.set_property("just_studied_minutes", False)
+        text = render(
+            "reflection",
+            verb=verb,
+            topic=rest.strip(),
+            minutes=int(minutes) if minutes else 0,
+        )
+        importance = 2.0
+    elif verb == "eat":
+        # Satiety is the memory (#615); hunger as an accumulating drive is #594.
+        text = render("reflection", verb=verb, item=rest.strip())
+        importance = 2.0
+    elif verb == "check_out_book":
+        # The #616 book loop's first half: taking custody unlocks read, so it
+        # outranks a plain get (2.0).
+        text = render("reflection", verb=verb, item=rest.strip())
+        importance = 3.0
+    elif verb == "read":
+        # The loop's payoff: the content itself enters memory. parse_command
+        # stamped the action it just ran on char.last_action, and Read already
+        # matched the exact item (aliases, containers, worn -- the parser's
+        # full scope rules); reuse that instead of re-deriving the match here.
+        thing = getattr(getattr(char, "last_action", None), "item", None)
+        content = thing.get_property("read_text") if thing else ""
+        text = render(
+            "reflection",
+            verb=verb,
+            item=thing.name if thing else rest.strip(),
+            content=content or "",
+        )
+        importance = 3.0
     elif verb in ("get", "activate", "deactivate"):
         # World-mutating one-shot verbs (#300): worth a normal-importance
         # memory, unlike the 1.0 catch-all below.
         text = render("reflection", verb=verb, command=command)
         importance = 2.0
-    elif verb == "wait":
-        # Idle filler (#300 spacers, or a live brain choosing to wait): not
-        # worth a memory at all. Skip it so a run doesn't accrue identical 1.0
-        # "I did wait" entries that crowd the agent's card and feed
-        # maybe_reflect's importance accumulator with noise.
+    elif verb == "talk_to":
+        # #614: nothing at parse time. The intent memory ("I went to talk to
+        # X ...") is written by maybe_converse's phase 1.5 IFF the conversation
+        # actually opens -- a request that phase 1.5 drops (pair on cooldown,
+        # target busy/walking) would otherwise stamp a false dialogue-tier
+        # record, and the un-settled initiator can retry every tick for the
+        # whole cooldown window.
         return
+    elif verb == "wait":
+        # Spacer / one-tick idle (#300 mock spacers, or a brain that omitted
+        # the duration): still not worth a memory -- identical 1.0 "I did wait"
+        # entries would crowd the card and feed maybe_reflect's accumulator
+        # with noise, and the mock bake must stay byte-identical.
+        # A SETTLED wait (#614: a real brain chose a duration this decide --
+        # the stash is reset every observe_and_decide, so it can't leak from
+        # an earlier tick) is an honest, legible decision: record it once.
+        if getattr(agent, "last_duration_minutes", None) is None:
+            return
+        text = render("reflection", verb=verb)
+        importance = 1.0
     else:
         text = render("reflection", verb=verb, command=command)
         importance = 1.0
@@ -1663,10 +1746,81 @@ def maybe_converse(
             del active[key]
             finished_this_step.update((ac.a, ac.b))
 
-    # (2) Start new conversations among settled, co-located, non-busy residents.
+    # Residents already conversing (or whose conversation just finished this
+    # tick) are ineligible to start another one below (#187).
     busy = {
         name for ac in active.values() for name in (ac.a, ac.b)
     } | finished_this_step
+
+    # (1.5) Agent-initiated requests (#614): a talk_to command earlier this
+    # tick left a one-shot marker; open that conversation NOW, before the
+    # proximity pair scan, so the explicit choice wins the tick and the first
+    # line is spoken this same step (mirroring phase 2's start-and-advance).
+    # The marker is consumed unconditionally: a request that cannot start
+    # (target left / busy / mid-walk, pair on cooldown) is dropped and the
+    # initiator -- unpinned, un-settled -- simply re-decides next tick. Mock
+    # brains never emit talk_to, so this loop is inert offline.
+    for name in order:
+        char = chars[name]
+        target_name = char.get_property("talk_request")
+        if not target_name:
+            continue
+        char.set_property("talk_request", False)
+        topic = char.get_property("talk_topic") or ""
+        char.set_property("talk_topic", False)
+        target = chars.get(target_name)
+        if (
+            name in busy
+            or target is None
+            or target_name in busy
+            or target.location is not char.location
+            or state[target_name]["path"]
+            or state[target_name].get("conversing")
+        ):
+            continue
+        key = frozenset((name, target_name))
+        if key in active or step - cooldowns.get(key, -(10**9)) < cooldown_steps:
+            continue
+        # Record the intent only now that the conversation actually opens (a
+        # dropped request must leave no false record -- the un-settled
+        # initiator can retry every tick), and BEFORE the first line: the
+        # opener's partner-name retrieval surfaces this fresh topic memory.
+        # That's the #614 topic-threading seam, dialogue-tier importance.
+        char.agent.memory.add_observation(
+            render("reflection", verb="talk_to", person=target_name, topic=topic),
+            turn=step,
+            importance=convo.DEFAULT_CHAT_IMPORTANCE,
+        )
+        ac = ActiveConversation(
+            a=name,
+            b=target_name,
+            convo=convo.Conversation(participants=(name, target_name)),
+            # The initiator opens: its fresh topic memory (written just above)
+            # surfaces in the opener's partner-name retrieval -- topic
+            # threading with no new dialogue machinery.
+            next_speaker=name,
+            started=step,
+        )
+        active[key] = ac
+        ended, delta = _advance_conversation(
+            game,
+            ac,
+            chars,
+            state,
+            frame,
+            step,
+            cooldowns,
+            max_exchanges,
+            clock,
+            line_playback_steps,
+        )
+        completed += delta
+        if ended:
+            del active[key]
+            if not ac.convo.happened:
+                continue  # opened with nothing -> reserve no one
+        busy.update((name, target_name))
+
     settled = [
         chars[name]
         for name in order

@@ -239,11 +239,14 @@ def test_action_names_include_authored_verbs():
     assert chars["Testa"].agent.action_names == ["travel", "perform", "drink", "get"]
 
 
-def test_wait_commands_never_enter_the_tool_enum():
-    """Finding A (#590 review): `wait` is a deliberately-excluded idle verb, so
-    even if an authored stop uses it as a spacer it must never be promoted to a
-    real brain's tool enum -- a Wait schema on every decide is token spend that
-    invites idling."""
+def test_wait_commands_now_enter_the_tool_enum():
+    """Finding A (#590 review) excluded `wait` as a deliberately-stripped idle
+    verb; #614 retires the strip, so an authored stop's `wait` spacers now
+    promote like any other verb, same as the real authored verbs. This pins
+    verb derivation only: the world here registers no WaitPenn, so its `wait`
+    is the engine's bare (settle-less) one -- the settle safety the removal
+    leans on (a required duration_minutes) lives with WaitPenn in the Penn
+    worlds (test_universal_verbs_614 pins that half)."""
     persona = _persona(
         [
             {
@@ -258,7 +261,7 @@ def test_wait_commands_never_enter_the_tool_enum():
     game, chars = build_world(None, personas, LOCATIONS)
     attach_agents(chars, personas)
     names = chars["Testa"].agent.action_names
-    assert "wait" not in names
+    assert "wait" in names
     assert "get" in names  # the real authored verb still made it in
 
 

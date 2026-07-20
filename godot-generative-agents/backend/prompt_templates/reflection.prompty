@@ -4,13 +4,20 @@ description: >
   A persona's own successful action, recorded as a first-person observation
   memory (backend/cognition.py, remember_outcome). The command verb
   selects the phrasing: arriving somewhere, doing an activity, drinking
-  (with a sick variant for contaminated water, #300), or a quoted fallback
-  for any other command. The memory's importance is chosen in Python (it is
-  data, not text), so only the wording lives here.
+  (with a sick variant for contaminated water, #300), idling (if chosen
+  as a settled-wait #614), agent-initiated talk_to (with an optional topic,
+  #614), studying or eating (#615), checking out or reading a library book
+  (#616, the read phrasing quoting the book's content when there is any),
+  or a quoted fallback for any other command.
+  The memory's importance is chosen in Python (it is data, not text), so
+  only the wording lives here.
 inputs:
   verb:
     type: string
-    description: The command verb -- "travel", "perform", "drink", "boil", or anything else.
+    description: The command verb -- "travel", "perform", "drink", "boil", "wait", "talk_to", "study", "eat", "check_out_book", "read", or anything else.
+  person:
+    type: string
+    description: Who was talked to (used when verb == "talk_to").
   location:
     type: string
     description: The place arrived at (used when verb == "travel").
@@ -19,13 +26,22 @@ inputs:
     description: What the persona is doing (used when verb == "perform").
   item:
     type: string
-    description: What was drunk (used when verb == "drink").
+    description: What was drunk (verb == "drink"), eaten (verb == "eat"), checked out, or read (verb == "check_out_book" or "read").
+  content:
+    type: string
+    description: The book's read_text, quoted in the read memory (verb == "read"; empty when the thing carried no text).
   sick:
     type: boolean
     description: Whether this drink just sickened the persona (verb == "drink").
   recovered:
     type: boolean
     description: Whether this drink just cured the persona's sickness (verb == "drink", #300).
+  topic:
+    type: string
+    description: What was brought up (verb == "talk_to") or studied (verb == "study"); may be empty.
+  minutes:
+    type: integer
+    description: How many in-game minutes the study took (verb == "study", #615).
   command:
     type: string
     description: The raw command, quoted verbatim in the fallback (any other verb).
@@ -50,6 +66,24 @@ I drank the {{ item }}, and the sickness has finally passed -- I feel much bette
 I drank the {{ item }}.
 {%- elif verb == "boil" -%}
 I boiled the water to make it safe to drink.
+{%- elif verb == "wait" -%}
+I waited; nothing needed doing.
+{%- elif verb == "talk_to" and topic -%}
+I went to talk to {{ person }} about {{ topic }}.
+{%- elif verb == "talk_to" -%}
+I went to talk to {{ person }}.
+{%- elif verb == "study" and topic -%}
+I studied {{ topic }} for {{ minutes }} minutes.
+{%- elif verb == "study" -%}
+I studied for {{ minutes }} minutes.
+{%- elif verb == "eat" -%}
+I ate the {{ item }}.
+{%- elif verb == "check_out_book" -%}
+I checked out {{ item }} from the library.
+{%- elif verb == "read" and content -%}
+I read {{ item }}. It said: "{{ content }}"
+{%- elif verb == "read" -%}
+I read {{ item }}.
 {%- else -%}
 I did "{{ command }}".
 {%- endif -%}
