@@ -63,6 +63,12 @@ _LEAD_ARTICLES = ("a ", "an ", "the ", "some ")
 # growing unbounded for a heavily-wished-for action.
 _MAX_EXAMPLE_REASONS = 3
 
+# Cap on how many distinct example goals a row carries -- same idea as
+# _MAX_EXAMPLE_REASONS, kept as a separate constant because a wish's reason
+# and the goal it serves are conceptually different fields that don't have
+# to move together, even though both start at 3.
+_MAX_EXAMPLE_GOALS = 3
+
 
 def normalize_desired(desired: str) -> str:
     """The v1 grouping key for a wish's desired-action phrase.
@@ -128,6 +134,7 @@ class ActionDemand:
     distinct_agents: int  # unique non-null `actor` values in the group
     trigger_mix: dict  # trigger -> count within the group, keys sorted
     example_reasons: list  # up to _MAX_EXAMPLE_REASONS distinct non-empty reasons
+    example_goals: list  # up to _MAX_EXAMPLE_GOALS distinct goal strings, flattened
     first_turn: int  # min `turn` in the group
     last_turn: int  # max `turn` in the group
 
@@ -177,6 +184,17 @@ def _row_for(key: str, recs: list[dict]) -> ActionDemand:
         if len(reasons) >= _MAX_EXAMPLE_REASONS:
             break
 
+    goals: list[str] = []
+    for r in recs:
+        for g in r.get("goals") or []:
+            g = (g or "").strip()
+            if g and g not in goals:
+                goals.append(g)
+            if len(goals) >= _MAX_EXAMPLE_GOALS:
+                break
+        if len(goals) >= _MAX_EXAMPLE_GOALS:
+            break
+
     turns = [r.get("turn", 0) for r in recs]
     return ActionDemand(
         key=key,
@@ -185,6 +203,7 @@ def _row_for(key: str, recs: list[dict]) -> ActionDemand:
         distinct_agents=len(agents),
         trigger_mix=dict(sorted(triggers.items())),
         example_reasons=reasons,
+        example_goals=goals,
         first_turn=min(turns),
         last_turn=max(turns),
     )
@@ -208,8 +227,9 @@ def render_markdown(report: Report) -> str:
         f"- distinct groups: {len(report.rows)}",
         f"- trigger mix: {trigger_line}",
         "",
-        "| Rank | Desired action | Count | Agents | Turns | Trigger mix | Example reasons |",
-        "|---|---|---|---|---|---|---|",
+        "| Rank | Desired action | Count | Agents | Turns | Trigger mix |"
+        " Example reasons | Goals blocked |",
+        "|---|---|---|---|---|---|---|---|",
     ]
     for rank, row in enumerate(report.rows, start=1):
         triggers = ", ".join(f"{k}={v}" for k, v in row.trigger_mix.items())
@@ -218,11 +238,16 @@ def render_markdown(report: Report) -> str:
             if row.example_reasons
             else "-"
         )
+        goals = (
+            "; ".join(_escape_md(g) for g in row.example_goals)
+            if row.example_goals
+            else "-"
+        )
         lines.append(
             f"| {rank} | {_escape_md(row.key)}"
             f' (e.g. "{_escape_md(row.representative)}") | {row.count} |'
             f" {row.distinct_agents} | {row.first_turn}-{row.last_turn} |"
-            f" {triggers} | {reasons} |"
+            f" {triggers} | {reasons} | {goals} |"
         )
     return "\n".join(lines) + "\n"
 
@@ -241,6 +266,7 @@ def render_json(report: Report) -> dict:
                 "distinct_agents": row.distinct_agents,
                 "trigger_mix": row.trigger_mix,
                 "example_reasons": row.example_reasons,
+                "example_goals": row.example_goals,
                 "first_turn": row.first_turn,
                 "last_turn": row.last_turn,
             }
