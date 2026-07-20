@@ -22,7 +22,7 @@ from __future__ import annotations
 import re
 
 from text_adventure_games import parsing
-from text_adventure_games.enums import Role
+from text_adventure_games.enums import ActionName, Role
 from text_adventure_games.llm_client import (
     SELECT_OPTION_TOOL,
     LlmClient,
@@ -226,6 +226,10 @@ class LlmParser(parsing.Parser):
         # wish -- rather than force-map onto the nearest existing verb.
         options = dict(self.command_descriptions)
         if agent_driven:
+            # (#627) an agent must never end the session, so quit is off the
+            # table for the LLM fallback too -- otherwise a "quit" the keyword
+            # parser's QUIT guard just dropped could be re-picked here.
+            options = {d: n for d, n in options.items() if n != ActionName.QUIT}
             options[_NONE_OF_THESE] = _NO_MATCH
         instructions = render("match_intent", allow_none=agent_driven)
         result = self._pick_option(instructions, options, command)

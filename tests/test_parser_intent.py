@@ -51,6 +51,18 @@ def _intent(command, custom_actions=()):
     return game.parser.determine_intent(command, actor=game.player)
 
 
+def _agent_intent(command, custom_actions=()):
+    """determine_intent as an autonomous NPC (actor != player) would reach it."""
+    room = things.Location("Room", "A bare stone room.")
+    player = things.Character("player", "an adventurer", "I explore.")
+    npc = things.Character("npc", "a wanderer", "I wander.")
+    room.add_character(npc)
+    game = games.Game(
+        room, player, characters=[npc], custom_actions=list(custom_actions)
+    )
+    return game.parser.determine_intent(command, actor=npc)
+
+
 def test_perform_free_text_routes_to_perform():
     # The Diego freeze (#536): "l-ate- into" hijacked this command to EAT,
     # which precondition-blocked the agent every turn for the rest of its day.
@@ -113,3 +125,29 @@ def test_verb_words_still_match_mid_command():
     assert _intent("the troll eats the fish") == ActionName.EAT
     assert _intent("drinking the potion") == ActionName.DRINK
     assert _intent("lights the lamp") == ActionName.LIGHT
+
+
+# --- QUIT is the player's alone (#627) --------------------------------------
+#
+# QUIT ends the session for everyone, so an autonomous agent must never reach
+# it -- one stray "quit"/"q" in an NPC command would otherwise terminate a
+# long live run or bake. The player keeps quitting; the agent's command falls
+# through to the no-verb gate (None) and is captured as a parse_gap wish.
+
+
+def test_player_can_still_quit():
+    assert _intent("quit") == ActionName.QUIT
+    assert _intent("q") == ActionName.QUIT  # the alias, via the fallback
+    assert _intent("just quit the game") == ActionName.QUIT
+
+
+def test_agent_cannot_quit_via_keyword():
+    assert _agent_intent("quit") != ActionName.QUIT
+    assert _agent_intent("i give up, quit this task") != ActionName.QUIT
+
+
+def test_agent_cannot_quit_via_the_alias_fallback():
+    # "q" never hits the \bquit\b branch -- it reaches QUIT only through the
+    # else-branch matching the Quit action's alias, so the fallback must skip
+    # the Quit action for an agent too, or the keyword guard alone is a no-op.
+    assert _agent_intent("q") != ActionName.QUIT
