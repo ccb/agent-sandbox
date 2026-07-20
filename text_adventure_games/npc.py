@@ -36,7 +36,7 @@ from __future__ import annotations
 import re
 
 from . import prompt_templates
-from .actions.base import HIDDEN_ACTIONS, registered_action_entries
+from .actions.base import offered_action_names, registered_action_entries
 from .config import AgentConfig
 from .enums import ReActLabel, Role
 from .llm_client import run_tool_loop
@@ -308,24 +308,14 @@ def tools_for(parser, actor=None, names=None, max_enum: int | None = _MAX_SCOPE_
         name: (action, desc, aliases)
         for name, action, desc, aliases in registered_action_entries(parser)
     }
-    wanted = list(names) if names else list(entries)
     tools = []
-    seen = set()
     verb_by_tool_name: dict[str, str] = {}
-    for name in wanted:
-        if name in HIDDEN_ACTIONS or name in seen:
-            continue
-        seen.add(name)
+    # offered_action_names applies the menu policy (drop the hidden wrapper,
+    # curate #612 affordances, dedup) -- the SAME source Game.describe_for reads
+    # for the observation's "Available actions:" line, so the menu and the line
+    # can't disagree (#697). We just build a tool per name it returns.
+    for name in offered_action_names(parser, actor, names):
         action, desc, aliases = entries.get(name, (None, "", []))
-        # Affordance curation (#612): skip a tagged verb when nothing in the
-        # actor's scope affords it. Universal verbs (the default) pass through.
-        if (
-            actor is not None
-            and action is not None
-            and getattr(action, "REQUIRED_AFFORDANCES", ())
-            and not action.affordance_in_scope(actor, parser.game)
-        ):
-            continue
         tool = _build_action_tool(name, action, desc, aliases, parser, actor, max_enum)
         clash = verb_by_tool_name.get(tool["name"])
         if clash is not None:

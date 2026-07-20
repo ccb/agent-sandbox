@@ -1054,12 +1054,20 @@ def observe_and_decide(
     if not agent.memory.owner:
         agent.memory.owner = char.name
     agent.memory.perceive(game, char)
+    # The decide prompt lists exactly the tools this agent is offered this tick
+    # (#697), so the real brain isn't shown verbs it can't call. Retrieval, though,
+    # runs on the FULL registered menu (agent_action_menu=False) -- byte-identical
+    # to what describe_for produced before #697 -- so curating the prompt's menu
+    # can't shift which memories surface. The mock reads only the first line of the
+    # prompt, so the offered menu never reaches its decision; the byte-identical
+    # bake is preserved (frames embed last_retrieved, not the observation text).
     base = game.describe_for(char)
+    retrieval_query = game.describe_for(char, agent_action_menu=False)
     if retrieval is None:
-        relevant = agent.memory.retrieve(query=base, turn=step)
+        relevant = agent.memory.retrieve(query=retrieval_query, turn=step)
     else:
         relevant = agent.memory.retrieve(
-            query=base,
+            query=retrieval_query,
             turn=step,
             max_records=retrieval.max_records,
             token_budget=retrieval.token_budget,

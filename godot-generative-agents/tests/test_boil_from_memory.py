@@ -102,7 +102,10 @@ def test_importance_forward_retrieval_rescues_a_buried_seed_633():
             importance=2.0,
         )
     game.turn = 80
-    query = game.describe_for(ch)  # the exact string observe_and_decide retrieves on
+    # The exact string observe_and_decide retrieves on: the full-menu observation
+    # (agent_action_menu=False), which retrieval uses so #697's prompt-menu
+    # curation can't shift which memories surface.
+    query = game.describe_for(ch, agent_action_menu=False)
 
     def surfaced(**kw):
         recs = mem.retrieve(query, turn=80, touch=False, **kw)
