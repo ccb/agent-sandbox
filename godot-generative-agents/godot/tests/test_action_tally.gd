@@ -7,6 +7,7 @@ extends SceneTree
 ## this before the scene smoke).
 
 const ActionTally := preload("res://scripts/action_tally.gd")
+const ActionsHud := preload("res://scripts/actions_hud.gd")
 
 var _failures := 0
 
@@ -86,6 +87,19 @@ func _initialize() -> void:
 	var jr: Array = ActionTally.tally(junk, 5, 10)
 	_check(jr.size() == 1 and jr[0]["action"] == "eat" and jr[0]["count"] == 1,
 		"malformed records skipped; only the well-formed one counts")
+
+	# --- actions_hud.gd panel rendering (added to the tree so _ready builds it) ---
+	var hud := ActionsHud.new()
+	get_root().add_child(hud)
+	hud.set_rows([{"action": "go", "count": 3}, {"action": "travel", "count": 2}])
+	_check(hud._rows_box.get_child_count() == 2, "set_rows renders one row per entry")
+	# Re-render with a different set: old rows are replaced, not appended (no doubling).
+	hud.set_rows([{"action": "eat", "count": 1}])
+	_check(hud._rows_box.get_child_count() == 1, "set_rows rebuilds cleanly (no stale rows)")
+	# Empty tally -> a single "no actions yet" caption, not a blank box.
+	hud.set_rows([])
+	_check(hud._rows_box.get_child_count() == 1, "empty rows -> one empty-state caption")
+	hud.free()
 
 	if _failures == 0:
 		print("test_action_tally: all checks passed")
