@@ -95,6 +95,43 @@ def test_llm_brain_requires_the_anthropic_key(monkeypatch):
         resolve_llm({"provider": "anthropic"}, "llm")
 
 
+def test_llm_brain_threads_and_validates_the_tiering_map(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    world_llm = {
+        "provider": "anthropic",
+        "model": "claude-haiku-4-5",
+        "models": {"plan": "claude-sonnet-4-6"},
+    }
+    # YAML map flows through; --model-for entries override/extend it.
+    llm = resolve_llm(world_llm, "llm", model_for={"reflect": "claude-sonnet-4-6"})
+    assert llm["models"] == {
+        "plan": "claude-sonnet-4-6",
+        "reflect": "claude-sonnet-4-6",
+    }
+    assert world_llm["models"] == {"plan": "claude-sonnet-4-6"}  # never mutated
+    # Unknown roles are a config typo: die with the valid role list.
+    with pytest.raises(SystemExit, match="planz"):
+        resolve_llm(world_llm, "llm", model_for={"planz": "claude-sonnet-4-6"})
+    # No map anywhere -> no "models" key (exact-dict pins elsewhere rely on it).
+    assert "models" not in resolve_llm(
+        {"provider": "anthropic", "model": "claude-haiku-4-5"}, "llm"
+    )
+    assert "models" not in resolve_llm({"models": {}}, "llm")
+
+
+def test_parse_model_for_pairs():
+    parse = serve_penn._parse_model_for
+    assert parse(["plan=claude-sonnet-4-6", "score=claude-haiku-4-5"]) == {
+        "plan": "claude-sonnet-4-6",
+        "score": "claude-haiku-4-5",
+    }
+    assert parse(None) == {}
+    with pytest.raises(SystemExit, match="ROLE=MODEL"):
+        parse(["plan"])
+    with pytest.raises(SystemExit, match="ROLE=MODEL"):
+        parse(["=claude-sonnet-4-6"])
+
+
 # --------------------------------------------------- check_anthropic_key
 #
 # resolve_llm proves the key EXISTS; check_anthropic_key proves it WORKS,
@@ -285,6 +322,39 @@ def _llm_stepper(monkeypatch, max_cost=5.0, fail=False, monitor=None, plan="sche
         llm=llm,
         plan_mode=plan,
     )
+
+
+def test_tiering_map_reaches_every_client_and_stamps_fixed_roles(monkeypatch):
+    created = []
+
+    def fake_create(config, ledger=None):
+        created.append(config)
+        return _ScriptedBrain(ledger=ledger)
+
+    monkeypatch.setattr(serve_penn, "create_llm_client", fake_create)
+    llm = {
+        "provider": "anthropic",
+        "model": "claude-haiku-4-5",
+        "models": {"plan": "claude-sonnet-4-6", "reflect": "claude-sonnet-4-6"},
+        "max_cost_usd": 5.0,
+    }
+    stepper = PennStepper(
+        num_steps=5, world=build_penn_world(), llm=llm, plan_mode="llm"
+    )
+    # Every client (decide-family, per-agent brains, reflect, plan) carries the
+    # map -- the adapters route per stamped role, so one config fits all.
+    assert created and all(
+        c.models_by_role
+        == {"plan": "claude-sonnet-4-6", "reflect": "claude-sonnet-4-6"}
+        for c in created
+    )
+    # The two fixed-role clients never stamp context themselves: the stepper
+    # pre-stamps them once, which both labels their ledger records (Task 1)
+    # and routes them to the tier model (Task 2).
+    assert stepper.reflector_client.context["role"] == "reflect"
+    assert stepper.planner_client.context["role"] == "plan"
+    # The decide-family client is stamped per call by its call sites, not here.
+    assert "role" not in stepper.llm_client.context
 
 
 def _move(char, location):
