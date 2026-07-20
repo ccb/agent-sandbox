@@ -35,6 +35,41 @@ def registered_action_entries(parser):
         yield name, action, description, aliases
 
 
+def offered_action_names(parser, actor=None, names=None):
+    """The verb names offered to *actor* as tools this tick -- the exact set
+    :func:`~text_adventure_games.npc.tools_for` builds tools for, minus the tool
+    schemas. *names* limits the menu (pass the agent's ``action_names``; ``None``
+    or empty means every registered verb, mirroring ``tools_for``). The hidden
+    comma-sequence wrapper is always dropped, and an affordance-curated verb
+    (#612) is dropped when its place-check fails for *actor* -- so the
+    observation's "Available actions:" line can be built from the same source as
+    the tool menu and never disagree with it (#697). Order follows *names* (else
+    registration order), deduplicated.
+
+    Shared by ``tools_for`` (the tool builder) and ``Game.describe_for`` (the
+    observation renderer) so the two are one source of truth.
+    """
+    entries = {
+        name: action for name, action, _d, _a in registered_action_entries(parser)
+    }
+    wanted = list(names) if names else list(entries)
+    out, seen = [], set()
+    for name in wanted:
+        if name in HIDDEN_ACTIONS or name in seen:
+            continue
+        seen.add(name)
+        action = entries.get(name)
+        if (
+            actor is not None
+            and action is not None
+            and getattr(action, "REQUIRED_AFFORDANCES", ())
+            and not action.affordance_in_scope(actor, parser.game)
+        ):
+            continue
+        out.append(name)
+    return out
+
+
 class Action(GatedEffect):
     """
     In the game, rather than allowing players to do anything, we have a

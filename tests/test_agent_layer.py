@@ -366,6 +366,45 @@ def test_decide_and_route_attributes_calls_to_actor_and_turn(tiny_game):
     assert rec.turn == tiny_game.turn  # attribution picked up the game's turn
 
 
+def test_agent_observation_lists_exactly_its_offered_tools(tiny_game):
+    """#697: an agent-driven character's observation "Available actions:" line
+    enumerates exactly the verbs it is offered as tools this tick -- not the full
+    ~40-verb registered set -- so propose (the escape hatch) isn't buried among
+    verbs it can't call. The line and the tool menu read one source
+    (offered_action_names), so they agree in membership and count."""
+    from text_adventure_games.llm_client import MockReActClient
+    from text_adventure_games.npc import LLMAgent, tools_for
+
+    troll = tiny_game.characters["troll"]
+    agent = LLMAgent(MockReActClient(), persona="I am the troll.")
+    agent.action_names = ["go", "wait", "propose"]  # a curated subset of the ~40
+    troll.set_agent(agent)
+
+    obs = tiny_game.describe_for(troll)
+    line = next(ln for ln in obs.splitlines() if ln.startswith("Available actions:"))
+    listed = {v.strip() for v in line.split(":", 1)[1].split(",")}
+
+    # Exactly the curated verbs: no more (the unoffered verbs are gone), no less
+    # (propose is present, not buried).
+    assert listed == {"go", "wait", "propose"}
+    # These ARE registered but were NOT offered, so they must not appear.
+    assert "attack" in tiny_game.parser.actions and "attack" not in listed
+    assert "quit" in tiny_game.parser.actions and "quit" not in listed
+    # ...and the line matches the tool menu the agent is actually handed.
+    tools = tools_for(tiny_game.parser, actor=troll, names=agent.action_names)
+    assert len(tools) == len(listed)
+
+
+def test_non_agent_observation_keeps_the_full_action_list(tiny_game):
+    """The #697 change is scoped to agent-driven characters: a plain character
+    (the player, a scripted NPC) still sees every registered verb, so its
+    observation stays byte-identical to before."""
+    obs = tiny_game.describe_for(tiny_game.player)
+    line = next(ln for ln in obs.splitlines() if ln.startswith("Available actions:"))
+    listed = {v.strip() for v in line.split(":", 1)[1].split(",")}
+    assert listed == set(tiny_game.parser.actions.keys())
+
+
 # ----------------------------------------------------------------------
 # Section E: native tool loop wiring (#355) -- reflect in-conversation
 # ----------------------------------------------------------------------
