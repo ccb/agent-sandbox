@@ -5,6 +5,7 @@ from text_adventure_games import games, things
 from text_adventure_games.reporting import CaptureRenderer, Channel
 from text_adventure_games.wishes import (
     ActionWish,
+    TRIGGER_CRAFT_GAP,
     TRIGGER_PARSE_GAP,
     TRIGGER_PROPOSED,
 )
@@ -50,10 +51,12 @@ def test_action_wish_defaults_are_empty_not_shared():
 
 
 def test_trigger_constants():
-    # #621 (parse-gap capture) will use the reserved constant; pin both values
-    # because wishes.jsonl consumers key on them (#622/#623).
+    # #621 (parse-gap capture) and #628 (craft-gap capture) use these reserved
+    # constants; pin all three values because wishes.jsonl consumers key on
+    # them (#622/#623).
     assert TRIGGER_PROPOSED == "proposed"
     assert TRIGGER_PARSE_GAP == "parse_gap"
+    assert TRIGGER_CRAFT_GAP == "craft_gap"
 
 
 # ----------------------------------------------------------------------
@@ -401,6 +404,20 @@ def test_successful_and_precondition_failed_commands_are_not_parse_gaps():
     assert game.wishes == []
     game.parser.parse_command("propose", actor=troll)  # verb matched, gate failed
     assert game.wishes == []  # a precondition fail is NOT a parse gap
+
+
+def test_craft_command_in_recipeless_game_is_still_a_parse_gap():
+    # Option B (#628) guard: craft_gap is only reachable when the game has
+    # registered recipes (parsing.py's CRAFT routing gate). tiny_game() never
+    # registers any, so "make ..." never reaches CRAFT -- it falls through to
+    # the no-verb gate and is captured the same way any other unmatched
+    # command is, as a parse_gap, not a craft_gap. Same demand, different
+    # trigger depending on whether the world happens to have crafting.
+    game = tiny_game()
+    assert not game.parser.parse_command("make boiled water")
+    [wish] = game.wishes
+    assert wish.trigger == TRIGGER_PARSE_GAP
+    assert wish.desired == "make boiled water"
 
 
 # ----------------------------------------------------------------------

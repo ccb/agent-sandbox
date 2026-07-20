@@ -15,7 +15,7 @@ from text_adventure_games import games
 from .things import Character, Item, Location
 from . import actions, blocks
 from .enums import ActionName, Direction, Role
-from .wishes import ActionWish, TRIGGER_PARSE_GAP
+from .wishes import ActionWish, TRIGGER_CRAFT_GAP, TRIGGER_PARSE_GAP
 from .reporting import Channel, Message, default_renderer, wrap_text
 
 # Maps the one-letter direction shortcuts ("n", "s", "e", "w") onto canonical
@@ -538,10 +538,13 @@ class Parser:
             meta={"wish": wish} if wish else None,
         )
 
-    def _log_parse_gap(self, command: str, actor=None):
-        """Record a ``trigger="parse_gap"`` ActionWish (#621): *command*
-        matched no verb. The situation snapshot mirrors the propose verb's
-        (actions/wish.py) so wishes.jsonl consumers see one shape."""
+    def _build_gap_wish(self, command: str, actor, trigger: str) -> ActionWish:
+        """The situation snapshot (actor, location, non-done goals, scope,
+        turn) shared by every *automatic* wish-capture trigger: parse_gap
+        (#621) and craft_gap (#628). Both use ``desired == raw_command ==
+        command`` -- unlike ``propose``, there's no separate because-clause
+        to split out. Mirrors the propose verb's snapshot (actions/wish.py)
+        so every wishes.jsonl consumer sees one shape regardless of trigger."""
         char = actor if actor is not None else getattr(self.game, "player", None)
         location = getattr(char, "location", None)
         scope = []
@@ -554,18 +557,31 @@ class Parser:
             for g in getattr(char, "goals", []) or []
             if not getattr(g, "done", False)
         ]
-        self.game.log_wish(
-            ActionWish(
-                actor=char.name if char is not None else None,
-                turn=self.game.turn,
-                location=location.name if location is not None else None,
-                desired=command,
-                trigger=TRIGGER_PARSE_GAP,
-                goals=goals,
-                scope=scope,
-                raw_command=command,
-            )
+        return ActionWish(
+            actor=char.name if char is not None else None,
+            turn=self.game.turn,
+            location=location.name if location is not None else None,
+            desired=command,
+            trigger=trigger,
+            goals=goals,
+            scope=scope,
+            raw_command=command,
         )
+
+    def _log_parse_gap(self, command: str, actor=None):
+        """Record a ``trigger="parse_gap"`` ActionWish (#621): *command*
+        matched no verb at all."""
+        self.game.log_wish(self._build_gap_wish(command, actor, TRIGGER_PARSE_GAP))
+
+    def log_craft_gap(self, command: str, actor=None):
+        """Record a ``trigger="craft_gap"`` ActionWish (#628): a crafting
+        command routed into CRAFT (the game has a recipe registered
+        somewhere) but named no recipe the crafter knows OR could learn --
+        the crafting counterpart to ``_log_parse_gap`` for recipe-less games,
+        where the identical command never reaches CRAFT at all. Public, like
+        ``agent_wish``, so the Craft action (``actions/things.py``) can call
+        it directly instead of re-deriving the scope/goals snapshot itself."""
+        self.game.log_wish(self._build_gap_wish(command, actor, TRIGGER_CRAFT_GAP))
 
     def npc_log(self, message: str):
         """Legacy agent-trace shim (a single pre-formatted line). Prefer the
