@@ -209,6 +209,24 @@ class Parser:
         Here we have implemented it with a simple keyword match. Later
         we will use AI to do more flexible matching.
         """
+        intent = self._resolve_intent(command, actor=actor)
+        # QUIT ends the session for everyone, so it is the human player's alone:
+        # an autonomous agent (it passes itself as ``actor``, never the player)
+        # must never terminate a live run or bake by emitting a "quit"/"q"
+        # command (#627). Whichever internal path resolved it, drop a QUIT from an
+        # agent so the command falls through to the no-verb gate and is captured
+        # as a parse_gap wish instead.
+        if (
+            intent == ActionName.QUIT
+            and actor is not None
+            and actor is not getattr(self.game, "player", None)
+        ):
+            return None
+        return intent
+
+    def _resolve_intent(self, command: str, actor=None):
+        """Keyword-routing core of ``determine_intent`` -- see the wrapper for
+        the #627 QUIT guard applied to whatever this resolves."""
         # Resolve the acting character (the actor, else a player-default scan).
         # Used below only to interpret directions relative to where they stand.
         character = actor if actor is not None else self.get_character(command)
