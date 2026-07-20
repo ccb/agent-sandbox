@@ -399,10 +399,14 @@ def test_bake_simulate_under_scripted_drives_tool_loop_cognition_and_reflection(
     # The shared ledger (passed into the factory, not a separate instance)
     # recorded calls -- a non-empty GET /usage surface.
     assert ledger.summary()["calls"] > 0
-    # The recalibrated threshold (25, see the monkeypatch above) is only
-    # honest while the legitimate day accrues in the 25-30 band; assert the
-    # band directly so an importance-weighting change fails at the real
-    # invariant -- re-derive the threshold if this trips (#669 review).
+    # The recalibrated threshold (25, see the monkeypatch above) is load-bearing
+    # for the mid-importance agents (e.g. Sofia ~27, who reflects only because of
+    # it); assert the band directly so an importance-weighting change fails at the
+    # real invariant. Upper bound re-derived post-#616: furnishing Van Pelt with
+    # the book-loop props adds 3 "I see <shelf/book> nearby" perception memories
+    # (1.0 each) to an agent routed past the stacks, lifting the busiest day to
+    # ~32 -- above the old engine-default 30. Re-derive again (don't patch the
+    # assert) if this trips (#669 review).
     day_totals = {
         name: sum(
             m.get("importance", 0.0)
@@ -412,7 +416,7 @@ def test_bake_simulate_under_scripted_drives_tool_loop_cognition_and_reflection(
         for name, stream in mems.items()
     }
     top = max(day_totals.values())
-    assert 25 <= top < 30, f"day importance profile drifted: {day_totals}"
+    assert 25 <= top < 33, f"day importance profile drifted: {day_totals}"
     # Reflection actually fired: at least one persona's memory stream
     # contains a REFLECTION-kind memory over the full simulated day.
     assert any(

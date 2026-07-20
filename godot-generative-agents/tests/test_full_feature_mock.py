@@ -73,14 +73,17 @@ def test_scripted_run_populates_every_gated_feature():
     # 3. Conversation produced CHAT memories (real converse ran, not the injector).
     assert MemoryKind.CHAT.value in kinds, "no CHAT memories -- conversation dark"
 
-    # 4. Reflection wrote memories. The recalibrated threshold (25, see _run)
-    #    is only honest while the legitimate day accrues in the 25-30 band:
-    #    above the pinned threshold, below the engine default of 30 that the
-    #    phantom Irvine conversation used to cross. Assert the band directly so
-    #    a future importance-weighting change fails HERE, at the real
-    #    invariant, instead of silently hollowing out the reflection assert --
-    #    if this trips, re-derive the threshold rather than patching either
-    #    assert (#669 review).
+    # 4. Reflection wrote memories. The recalibrated threshold (25, see _run) is
+    #    load-bearing for the mid-importance agents (e.g. Sofia ~27, who reflects
+    #    only because of it); assert the band directly so a future
+    #    importance-weighting change fails HERE, at the real invariant, instead
+    #    of silently hollowing out the reflection assert. Upper bound re-derived
+    #    post-#616: furnishing Van Pelt with the book-loop props adds 3 "I see
+    #    <shelf/book> nearby" perception memories (1.0 each) to an agent routed
+    #    past the stacks, lifting the busiest day to ~32 -- above the old
+    #    engine-default 30 the phantom Irvine conversation used to cross. If this
+    #    trips, re-derive the threshold rather than patching either assert
+    #    (#669 review).
     day_totals = {}
     for char in stepper.chars.values():
         stream = memory_stream_for_persona(char.agent)
@@ -88,7 +91,7 @@ def test_scripted_run_populates_every_gated_feature():
             m["importance"] for m in stream if m["kind"] != MemoryKind.REFLECTION.value
         )
     top = max(day_totals.values())
-    assert 25 <= top < 30, f"day importance profile drifted: {day_totals}"
+    assert 25 <= top < 33, f"day importance profile drifted: {day_totals}"
     assert MemoryKind.REFLECTION.value in kinds, "no reflection memories"
 
     # 5. The usage ledger is non-empty (GET /usage surface populated offline).
