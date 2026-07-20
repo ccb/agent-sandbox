@@ -311,6 +311,10 @@ def test_reading_the_ledger_deals_the_manifest():
     g.relocate(g.player, g.locations["The Wagon's Hold"])
     g.do_command("read ledger")
     assert "manifest" in cap.texts(Channel.FIGURE)
+    text = " ".join(cap.texts(Channel.NARRATION))
+    assert "You thumb through pages of freight" in text  # the card's echo
+    assert "SPIDER-SILK, ONE BOLT: LIGHT, AND KNOWS IT" in text
+    assert "Tomorrow, Gnomon" in text  # the clue survives the framing
     g.do_command("read ledger")
     assert cap.texts(Channel.FIGURE).count("manifest") == 2
 

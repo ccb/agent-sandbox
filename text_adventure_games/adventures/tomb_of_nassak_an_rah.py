@@ -2257,9 +2257,14 @@ def build_game(seed=None):
         "Your hands find a folding desk, and on it a book bound in "
         "lizard-skin, closed around a ribbon. Too dark to read a word of it.",
     )
+    # The prose rhymes with the card (CCB pick: 'the echo of the card') --
+    # the manifest litho (49) and this read quote the same three lines.
     ledger.set_property(
         "read_text",
-        "The hand is neat. '...ninth day. Camped in the lee "
+        "You thumb through pages of freight -- SAFFRON, ONE BALE: A "
+        "SEASON'S WATER. DATES, ONE CRATE: A MONTH OF MEALS. SPIDER-SILK, "
+        "ONE BOLT: LIGHT, AND KNOWS IT -- until the ribbon stops you at "
+        "the final page. The hand is neat. '...ninth day. Camped in the lee "
         "of the tomb the road-folk call the Three Mouths. Of it, Gnomon "
         "tells three things: that the boy's mouth is lightless within, and "
         "what roosts there hates a lamp worse than a shout; that the halls "
