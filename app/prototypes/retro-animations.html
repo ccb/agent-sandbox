@@ -3720,10 +3720,12 @@
     // the organs, marked where they wait
     const OPOS = [[266, 213], [292, 213], [222, 206], [324, 214], [210, 203]];
     OPOS.forEach(([ox, oy]) => el(F.ghost, "circle", { cx: ox, cy: oy, r: 2.6, fill: I4 }));
-    // the five jars, ranked
+    // the five jars, ranked -- each tagged with what it takes (CCB: the
+    // organ in place of the number), per the lattice's canon order
+    const ORGANS = ["LUNGS", "LIVER", "EYES", "INTESTINES", "BRAIN"];
     const JX = [184, 252, 320, 388, 456];
     JX.forEach((jx, i) => jarAt(jx, 262, HEADS[i], I2));
-    const nums = JX.map(jx => { const n = label(svg, jx, 302, 10, FUNGUS);
+    const tags = JX.map(jx => { const n = label(svg, jx, 302, 7.5, FUNGUS);
       n.setAttribute("text-anchor", "middle"); return n; });
     // the boy, small, watching
     el(F.ghost, "circle", { cx: 158, cy: 276, r: 8, fill: I2 });
@@ -3743,9 +3745,9 @@
         payload.setAttribute("cy", oy + (246 - oy) * k - Math.sin(k * Math.PI) * 34);
         payload.setAttribute("opacity", 1);
       } else payload.setAttribute("opacity", 0);
-      nums.forEach((n, i) => { n.textContent =
-        (step > i || (step === i && f >= .6)) && T >= 24 ? String(i + 1) : ""; });
-      typeOn(F.foot, "THE BOY MEMORIZED THE ORDER.", T, 168, 1.5);
+      tags.forEach((n, i) => { n.textContent =
+        (step > i || (step === i && f >= .6)) && T >= 24 ? ORGANS[i] : ""; });
+      typeOn(F.foot, "HIS FATHER'S INNARDS FORETOLD HIS FATE.", T, 162, 1.9);
     });
   }
 
