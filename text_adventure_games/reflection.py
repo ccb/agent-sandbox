@@ -268,6 +268,7 @@ SALIENT_QUESTIONS_TOOL = {
             }
         },
         "required": ["questions"],
+        "additionalProperties": False,  # OpenAI strict mode (#357)
     },
 }
 
@@ -290,7 +291,12 @@ INSIGHT_TOOL = {
                 "items": {"type": "integer"},
             },
         },
+        # evidence is genuinely optional (an insight may cite nothing --
+        # _map_evidence then falls back to citing every supporting memory), so
+        # this tool is best-effort rather than OpenAI strict (#357).
+        # additionalProperties:false still tightens validation.
         "required": ["insight"],
+        "additionalProperties": False,
     },
 }
 
@@ -362,30 +368,22 @@ class LLMReflector:
     def _map_evidence(evidence, records) -> list[int]:
         """Map the model's 1-based citation numbers back to record ids.
 
-        Tolerant of the model citing strings ("2"), out-of-range numbers, or
-        nothing at all -- anything unusable is dropped, and :meth:`infer` falls
-        back to citing every supporting record when the result is empty.
-        """
+        Out-of-range citations are dropped, and :meth:`infer` falls back to citing
+        every supporting record when the result is empty. Arguments are
+        schema-validated upstream (#357), so items are already integers here --
+        this is the genuinely *semantic* step (number -> record id), not type
+        coercion, which is why it stays while the old ``_coerce_int`` retired."""
         if not isinstance(evidence, list):
             return []
         ids: list[int] = []
-        for value in evidence:
-            number = LLMReflector._coerce_int(value)
-            if number is not None and 1 <= number <= len(records):
+        for number in evidence:
+            if (
+                isinstance(number, int)
+                and not isinstance(number, bool)
+                and 1 <= number <= len(records)
+            ):
                 ids.append(records[number - 1].id)
         return ids
-
-    @staticmethod
-    def _coerce_int(value) -> int | None:
-        """An int from an int or plain numeric string, else ``None`` (bools are
-        not ints here) -- mirrors ``LLMPlanner._coerce_int``."""
-        if isinstance(value, bool):
-            return None
-        if isinstance(value, int):
-            return value
-        if isinstance(value, str) and value.strip().lstrip("+-").isdigit():
-            return int(value.strip())
-        return None
 
     def _call(self, user: str, tool: dict) -> dict:
         messages = [

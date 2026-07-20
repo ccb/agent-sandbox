@@ -272,7 +272,10 @@ def test_llm_reflector_drops_out_of_range_evidence():
         {
             INSIGHT_TOOL["name"]: {
                 "insight": "An insight.",
-                "evidence": [1, 99, "2", "x"],  # 99 and 'x' are unusable
+                # Items arrive schema-validated as ints now (#357), so the only
+                # cases left are in-range vs out-of-range; 99 exceeds the 3
+                # supporting records and is dropped by the semantic mapping.
+                "evidence": [1, 2, 99],
             }
         }
     )

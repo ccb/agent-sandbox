@@ -135,6 +135,28 @@ def test_ledger_summary_shape():
     assert s["calls"] == 1
     assert s["by_actor"] == {"troll": 0.001}
     assert s["input_tokens"] == 10 and s["output_tokens"] == 2
+    # #357 tool-schema health keys are always present (0 for a clean call).
+    assert s["validation_failures"] == 0
+    assert s["repairs"] == 0
+    assert s["repair_successes"] == 0
+
+
+def test_ledger_summary_counts_schema_outcomes():
+    # #357: failing replies, repair attempts, and successful repairs are counted.
+    led = UsageLedger()
+    led.record(
+        CallRecord(usage=Usage("mock", "mock"), cost_usd=0.0, schema_invalid=True)
+    )
+    led.record(
+        CallRecord(usage=Usage("mock", "mock"), cost_usd=0.0, schema_repaired=True)
+    )
+    led.record(
+        CallRecord(usage=Usage("mock", "mock"), cost_usd=0.0, schema_repaired=False)
+    )
+    s = led.summary()
+    assert s["validation_failures"] == 1
+    assert s["repairs"] == 2  # both repair attempts (succeeded and failed)
+    assert s["repair_successes"] == 1
 
 
 # --- UsageLedger cost ceiling / kill-switch (issue #183) ----------------
