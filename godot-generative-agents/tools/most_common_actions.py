@@ -60,7 +60,9 @@ def load_records(path: str | Path) -> list[dict]:
                     records.append(json.loads(line))
         return records
     data = json.loads(path.read_text(encoding="utf-8"))
-    events = data.get("events", [])
+    if not isinstance(data, dict) or "events" not in data:
+        raise ValueError(f"{path}: no top-level 'events' array (not a baked replay?)")
+    events = data["events"]
     if not isinstance(events, list):
         raise ValueError(f"{path}: top-level 'events' is not a JSON array")
     return events
@@ -99,7 +101,7 @@ def build_report(records: list[dict]) -> Report:
     is fully deterministic and never depends on dict/set iteration order (the
     golden test pins exactly this order).
     """
-    kept = [r for r in records if r.get("action") not in EXCLUDED_KINDS]
+    kept = [r for r in records if r.get("action", "") not in EXCLUDED_KINDS]
 
     groups: dict[str, list[dict]] = {}
     for rec in kept:
@@ -149,7 +151,7 @@ def render_markdown(report: Report) -> str:
         "",
         f"- total actions: {report.total_actions}",
         f"- distinct actions: {len(report.rows)}",
-        f"- actor totals: {_fmt_mix(report.actor_totals)}",
+        f"- actor totals: {_fmt_mix(report.actor_totals) or '-'}",
         "",
         "| Rank | Action | Count | Actors | Turns | Actor mix |",
         "|---|---|---|---|---|---|",
@@ -198,10 +200,9 @@ def main(argv: list[str] | None = None) -> int:
         default="md",
         help=(
             "stdout format when neither --out-md nor --out-json is given "
-            "(default: md); ignored if either --out-md or --out-json is "
-            "given -- in that case nothing prints to stdout except the "
-            "'wrote <path>' lines, and both formats are written via their "
-            "respective flags regardless of --format"
+            "(default: md); ignored when either --out-* flag is given -- then "
+            "nothing prints to stdout but the 'wrote <path>' lines, and each "
+            "report is written only via its own flag"
         ),
     )
     ap.add_argument(

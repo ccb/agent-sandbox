@@ -26,6 +26,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 _TOOLS_DIR = Path(__file__).resolve().parents[1] / "tools"
 sys.path.insert(0, str(_TOOLS_DIR))
 
@@ -52,6 +54,15 @@ def test_load_records_reads_a_baked_replay_json(tmp_path):
     out = tmp_path / "penn_replay.json"
     out.write_text(json.dumps(replay))
     assert mca.load_records(out) == _load()
+
+
+def test_load_records_rejects_json_without_an_events_array(tmp_path):
+    # A .json that isn't a baked replay (no top-level "events") must fail loud,
+    # not silently report zero actions.
+    out = tmp_path / "not_a_replay.json"
+    out.write_text(json.dumps({"schema_version": 1}))
+    with pytest.raises(ValueError):
+        mca.load_records(out)
 
 
 # --- build_report: filter / group / rank / tiebreak ----------------------
@@ -117,6 +128,13 @@ def test_actor_totals_exclude_null_and_are_sorted():
         "Professor Tanaka": 2,
         "Sofia Ramirez": 3,
     }
+    # dict == ignores key order; pin the sort explicitly so a dropped sorted()
+    # is caught here and not only by the golden-Markdown test.
+    assert list(report.actor_totals) == [
+        "Diego Torres",
+        "Professor Tanaka",
+        "Sofia Ramirez",
+    ]
 
 
 # --- golden: exact Markdown + JSON output ---------------------------------
