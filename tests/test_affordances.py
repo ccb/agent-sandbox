@@ -231,6 +231,43 @@ def test_describe_for_shows_worn_and_wielded_sections():
     assert "Wielded: sword" in obs
 
 
+def test_describe_for_omits_sick_line_when_healthy_634():
+    # Byte-identical for games that never sicken a character: no is_sick, no line.
+    game = _one_char_game()
+    assert "You feel ill." not in game.describe_for(game.player)
+
+
+def test_describe_for_shows_and_hides_self_sick_line_634():
+    game = _one_char_game()
+    game.player.set_property("is_sick", True)
+    assert "You feel ill." in game.describe_for(game.player)
+    # Authorable wording overrides the neutral default.
+    game.player.set_property("sick_self_description", "Your stomach is cramping.")
+    obs = game.describe_for(game.player)
+    assert "Your stomach is cramping." in obs
+    assert "You feel ill." not in obs
+    # Recovery: the line simply disappears once is_sick clears.
+    game.player.set_property("is_sick", False)
+    assert "cramping" not in game.describe_for(game.player)
+
+
+def test_visible_description_shows_sickness_to_a_bystander_634():
+    room = things.Location("Room", "A plain room.")
+    player = things.Character("player", "the player", "I explore.")
+    other = things.Character("Nadia", "a student", "I study.")
+    game = games.Game(room, player, characters=[other])
+    room.add_character(other)
+    other.set_property("is_sick", True)
+    obs = game.describe_for(player)
+    assert "Nadia - Nadia, looking ill" in obs
+    # Authorable, and dead/unconscious still take priority over sick.
+    other.set_property("sick_description", "Nadia, pale and sweating")
+    assert "Nadia, pale and sweating" in game.describe_for(player)
+    other.set_property("is_dead", True)
+    assert "looking ill" not in game.describe_for(player)
+    assert "pale and sweating" not in game.describe_for(player)
+
+
 def test_describe_for_omits_affordance_brackets_for_plain_scenery():
     game = _one_char_game()
     statue = things.Item("statue", "a marble statue")
