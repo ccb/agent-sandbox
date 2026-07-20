@@ -1,0 +1,13 @@
+{"turn": 0, "actor": "Diego Torres", "action": "go", "summary": "travel to Meyerson Hall", "payload": {}}
+{"turn": 0, "actor": "Sofia Ramirez", "action": "go", "summary": "travel to Van Pelt", "payload": {}}
+{"turn": 1, "actor": "Diego Torres", "action": "go", "summary": "travel to Irvine", "payload": {}}
+{"turn": 2, "actor": "Professor Tanaka", "action": "go", "summary": "travel to College Green", "payload": {}}
+{"turn": 1, "actor": "Diego Torres", "action": "eat", "summary": "eat a sandwich", "payload": {}}
+{"turn": 3, "actor": "Sofia Ramirez", "action": "eat", "summary": "eat a bagel", "payload": {}}
+{"turn": 5, "actor": "Diego Torres", "action": "eat", "summary": "eat an apple", "payload": {}}
+{"turn": 2, "actor": "Diego Torres", "action": "wait", "summary": "wait a while", "payload": {}}
+{"turn": 4, "actor": "Sofia Ramirez", "action": "wait", "summary": "wait for class", "payload": {}}
+{"turn": 6, "actor": "Professor Tanaka", "action": "wait", "summary": "wait for students", "payload": {}}
+{"turn": 7, "actor": null, "action": "read", "summary": "a sign is read", "payload": {}}
+{"turn": 3, "actor": "Diego Torres", "action": "trigger", "summary": "a bell rings", "payload": {}}
+{"turn": 4, "actor": "Sofia Ramirez", "action": "sound", "summary": "footsteps echo", "payload": {}}
