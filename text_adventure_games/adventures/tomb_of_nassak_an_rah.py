@@ -3087,8 +3087,50 @@ def build_game(seed=None):
     )
     for _a in ("centipede", "glass"):
         centipede.add_alias(_a)
-    centipede.set_property("figure", "centipede")
     den.add_character(centipede)
+
+    # The chimney's card follows the growth and the tenant (CCB): orange with
+    # the centipede in residence (20), vacated (20-F), charred with the glass
+    # unbothered (20-G), or burnt bare (20-H). Fire kills fungus, not silica.
+    def _growth_dead(g=None):
+        return bool(
+            chimney.get_property("burned")
+            or summit.get_property("cleansed")
+            or sphere.get_property("horror_dead")
+        )
+
+    def _centipede_home(g=None):
+        return (
+            not centipede.get_property("is_dead")
+            and not centipede.get_property("is_unconscious")
+            and (
+                centipede.location is chimney
+                or (
+                    not centipede.get_property("sprung")
+                    # scoured out with the growth before it ever sprang
+                    and not chimney.get_property("burned")
+                )
+            )
+        )
+
+    def _chimney_card(g=None):
+        if _centipede_home():
+            return "chimney-g" if _growth_dead() else "centipede"
+        return "chimney-h" if _growth_dead() else "chimney-f"
+
+    centipede.set_property(
+        "figure", lambda g: "chimney-g" if _growth_dead() else "centipede"
+    )
+    # ...and the same map as the room's plate on ARRIVAL, light permitting
+    # (the shaft is gloom; a blind arrival keeps the card unburned).
+    chimney.set_property(
+        "figure",
+        lambda g: (
+            _chimney_card(g)
+            if perception.sight_for(g.player, chimney)[0] >= perception.Sight.CLEAR
+            else None
+        ),
+    )
 
     # The prismatic blade -- a weapon, pried from a guard's cylinder. (The full
     # guard-mummy gear and spore hazard arrive in Phase 4; for now the blade lets
@@ -5221,7 +5263,9 @@ def build_game(seed=None):
             centipede.set_property("sprung", True)
             if centipede.location is not chimney:
                 g.relocate(centipede, chimney)
-            g.show_figure("centipede", force=True)  # a story beat: always plays
+            g.show_figure(  # a story beat: always plays, in the growth's colours
+                "chimney-g" if _growth_dead() else "centipede", force=True
+            )
             g.parser.ok(
                 "The growth beside you bends wrong -- and four feet of glass "
                 "uncoils out of it, faster than the eye wants to allow."

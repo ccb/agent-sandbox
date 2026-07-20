@@ -10,7 +10,7 @@
    and disconnected nodes drop off the clock automatically. */
 (() => {
   "use strict";
-  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-c": ["svg", 640, 400], "cyl-o": ["svg", 640, 400], "cyl-v": ["svg", 640, 400], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "ext1c": ["svg", 640, 400], "ext1e": ["svg", 640, 400], "flask": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tesseract": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
+  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "chimney-f": ["svg", 640, 360], "chimney-g": ["svg", 640, 360], "chimney-h": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-c": ["svg", 640, 400], "cyl-o": ["svg", 640, 400], "cyl-v": ["svg", 640, 400], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "ext1c": ["svg", 640, 400], "ext1e": ["svg", 640, 400], "flask": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tesseract": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
   const FIG = {
     _defs: {}, _uid: 0, _ticks: [], _timer: null, _target: null,
     MAX_LIVE: 3,
@@ -4589,73 +4589,142 @@
     });
   });
 
-  /* ---------------- 20: the glass centipede ---------------- */
-  FIG._define("centipede", "svg", function (svg) {
+  /* ---- chimCard: the fungal chimney, on its side (20 / 20-F/G/H, CCB) ----
+     The shaft rotated across the card: rock above and below, the prayers'
+     glow at the far end, thick tendrils spanning the width -- orange and
+     spored while the growth lives, charred brown and ash-quiet once burnt
+     -- and the glass centipede at double scale through the middle of it,
+     whenever the tenant is home. ---- */
+  function chimCard(svg, bug, burnt, hdrText, clsText, footText) {
     el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
     el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
     const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
     const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
-    cls.textContent = "HAZARD / SILICA / QUICK";
-    el(svg, "line", { x1: 0, y1: 316, x2: 640, y2: 316, stroke: PH, "stroke-width": 1.4 });
-    for (let x = 30; x < 640; x += 74)                        // rubble on the floor
-      el(svg, "polyline", { fill: "none", stroke: PH_DIM,
-        points: `${x},316 ${x + 6},308 ${x + 13},316` });
+    cls.textContent = clsText;
+    [[52, -1], [326, 1]].forEach(([wy, dir]) => {              // the rock, above and below
+      const pts = [];
+      for (let x = 0; x <= 640; x += 26)
+        pts.push(`${x},${wy + ((x / 26) % 3 - 1) * 5 * dir}`);
+      el(svg, "polyline", { points: pts.join(" "), fill: "none",
+        stroke: PH_DIM, "stroke-width": 1.5 });
+      for (let x = 40; x < 620; x += 74)
+        el(svg, "line", { x1: x, y1: wy + 4 * dir, x2: x + 8, y2: wy + 16 * dir,
+          stroke: PH_DIM, opacity: .5 });
+    });
+    el(svg, "ellipse", { cx: 652, cy: 190, rx: 40, ry: 150, fill: "#ffd76a",
+      "fill-opacity": .06 });                                  // the prayers, that way
+    el(svg, "ellipse", { cx: 648, cy: 190, rx: 26, ry: 100, fill: "#ffd76a",
+      "fill-opacity": .07 });
+    const motes = Array.from({ length: burnt ? 5 : 12 }, (_, i) =>
+      ({ y: 68 + (i * 41) % 240, ph: i * 47,
+         q: el(svg, "circle", { r: i % 3 ? 1.2 : 1.8,
+           fill: burnt ? PH_DIM : FUNGUS, opacity: burnt ? .35 : .5 }) }));
+    const TCOL = burnt ? ["#5d4227", "#6f4e2c", "#6f4e2c", "#5d4227"]
+      : ["#b36b2a", FUNGUS, FUNGUS, "#b36b2a"];
+    const NODE = burnt ? "#41301f" : "#b36b2a";
+    const TEND = [[72, 12], [128, 15], [254, 13], [300, 10]].map(([ty, w], i) =>
+      ({ ty, ph: i * 1.7, q: el(svg, "polyline", { fill: "none", stroke: TCOL[i],
+        "stroke-width": w, "stroke-linecap": "round", opacity: .85 }) }));
+    TEND.forEach(td => [120, 330, 540].forEach(nx =>
+      el(svg, "circle", { cx: nx + td.ph * 12, cy: td.ty, r: 5, fill: NODE })));
     const GLASS = "#cfefff";
-    const wave = x => 286 + Math.sin(x * .018) * 16;
+    const wave = x => 190 + Math.sin(x * .018) * 16;           // dead centre of the shaft
     const DASH = [[20, 28], [44, 52], [68, 76], [92, 100], [116, 124], [140, 148]];
     // it does not stop when it goes unseen (CCB): 4 px/frame in the light,
-    // 5 in the dark -- it gains ground while your eye loses it, so every
-    // reappearance is ahead of the vanishing point.
+    // 5 in the dark -- every reappearance is ahead of the vanishing point.
     const seenIn = T => DASH.reduce((a, [s2, e2]) =>
       a + Math.max(0, Math.min(T, e2 + 3) - s2), 0);
     const pos = T => { const sf = seenIn(T); return -40 + sf * 4 + (T - sf) * 5; };
-    const segs = Array.from({ length: 16 }, () => el(svg, "ellipse",
-      { rx: 8, ry: 5, fill: "none", stroke: GLASS, "stroke-width": 1.3, opacity: 0 }));
-    const legs = Array.from({ length: 32 }, () => el(svg, "line",
-      { stroke: "#9fd9f2", "stroke-width": 1, opacity: 0 }));
-    const feelers = [0, 1].map(() => el(svg, "line",
-      { stroke: GLASS, "stroke-width": 1.2, opacity: 0 }));
-    const glints = ["#ff5a5a", "#ffd76a", "#7fff9e", GLASS, GLASS,
-      "#9fd9f2", GLASS, "#ffd76a"].map(c =>
-      el(svg, "circle", { r: 2, fill: c, opacity: 0 }));
-    label(svg, 24, 350, 10, PH_DIM).textContent = "VISIBILITY";
-    const cells = Array.from({ length: 6 }, (_, i) =>
-      el(svg, "rect", { x: 110 + i * 16, y: 340, width: 12, height: 11,
-        fill: GLASS, "fill-opacity": .08 }));
+    let segs = [], legs = [], feelers = [], glints = [], cells = [];
+    if (bug) {
+      segs = Array.from({ length: 16 }, () => el(svg, "ellipse",
+        { rx: 16, ry: 10, fill: "none", stroke: GLASS, "stroke-width": 1.5, opacity: 0 }));
+      legs = Array.from({ length: 32 }, () => el(svg, "line",
+        { stroke: "#9fd9f2", "stroke-width": 1.3, opacity: 0 }));
+      feelers = [0, 1].map(() => el(svg, "line",
+        { stroke: GLASS, "stroke-width": 1.4, opacity: 0 }));
+      glints = ["#ff5a5a", "#ffd76a", "#7fff9e", GLASS, GLASS,
+        "#9fd9f2", GLASS, "#ffd76a"].map(c =>
+        el(svg, "circle", { r: 3, fill: c, opacity: 0 }));
+      label(svg, 24, 350, 10, PH_DIM).textContent = "VISIBILITY";
+      cells = Array.from({ length: 6 }, (_, i) =>
+        el(svg, "rect", { x: 110 + i * 16, y: 340, width: 12, height: 11,
+          fill: GLASS, "fill-opacity": .08 }));
+    }
     const foot = label(svg, 630, 350, 10, FUNGUS); foot.setAttribute("text-anchor", "end");
     const doWipe = wipe(svg, 640, 360, 2, 10);
     clock(t => {
       const T = t % 168;
       doWipe(T);
-      typeOn(hdr, "THE GLASS CENTIPEDE", T, 4, 1.4);
-      const hx = pos(T);
-      const seen = DASH.some(([s2, e2]) => T >= s2 && T < e2 + 3);
-      segs.forEach((n, i) => {
-        const x = hx - i * 13, y = wave(x);
-        n.setAttribute("cx", x); n.setAttribute("cy", y);
-        n.setAttribute("opacity", seen && x > -20 && x < 660 ? .9 - i * .02 : 0);
-        [0, 1].forEach(k => {
-          const L2 = legs[i * 2 + k];
-          L2.setAttribute("x1", x - 3 + k * 6); L2.setAttribute("y1", y + 4);
-          L2.setAttribute("x2", x - 6 + k * 12); L2.setAttribute("y2", y + 13);
-          L2.setAttribute("opacity", seen && x > -20 && x < 660 ? .7 : 0);
+      typeOn(hdr, hdrText, T, 4, 1.4);
+      TEND.forEach(td => {
+        const pts = [];
+        for (let x = -10; x <= 650; x += 40)
+          pts.push(`${x},${td.ty + Math.sin(x * .012 + td.ph + t * (burnt ? .015 : .04)) * (burnt ? 4 : 9)}`);
+        td.q.setAttribute("points", pts.join(" "));            // burnt growth barely sways
+      });
+      motes.forEach(s => {                                     // drifting shaft-wise
+        const k = (t * (burnt ? .4 : .8) + s.ph) % 700;
+        s.q.setAttribute("cx", k - 30);
+        s.q.setAttribute("cy", s.y + Math.sin((t + s.ph) * .1) * 6);
+      });
+      if (bug) {
+        const hx = pos(T);
+        const seen = DASH.some(([s2, e2]) => T >= s2 && T < e2 + 3);
+        segs.forEach((n, i) => {                               // twice the animal (CCB)
+          const x = hx - i * 26, y = wave(x);
+          n.setAttribute("cx", x); n.setAttribute("cy", y);
+          n.setAttribute("opacity", seen && x > -40 && x < 680 ? .9 - i * .02 : 0);
+          [0, 1].forEach(k => {
+            const L2 = legs[i * 2 + k];
+            L2.setAttribute("x1", x - 6 + k * 12); L2.setAttribute("y1", y + 8);
+            L2.setAttribute("x2", x - 12 + k * 24); L2.setAttribute("y2", y + 26);
+            L2.setAttribute("opacity", seen && x > -40 && x < 680 ? .7 : 0);
+          });
         });
-      });
-      feelers.forEach((n, k) => {
-        n.setAttribute("x1", hx + 6); n.setAttribute("y1", wave(hx) - 2);
-        n.setAttribute("x2", hx + 20); n.setAttribute("y2", wave(hx) - 10 + k * 12);
-        n.setAttribute("opacity", seen ? .9 : 0);
-      });
-      glints.forEach((n, j) => {                              // the sparkling wake
-        const gi = (Math.floor(t / 2) * 7 + j * 5) % 22;      // 16 body + 6 wake
-        const x = hx - gi * 13;
-        n.setAttribute("cx", x + ((t + j) % 3) - 1); n.setAttribute("cy", wave(x) + ((t * j) % 5) - 2);
-        n.setAttribute("opacity", !seen && (t + j * 2) % 5 < 2 && x > 0 && x < 640 ? .9 : 0);
-      });
-      const on = seen ? 6 : (t % 7 === 0 ? 1 : 0);
-      cells.forEach((r, i) => r.setAttribute("fill-opacity", i < on ? .8 : .08));
-      typeOn(foot, "FOUR FEET OF GLASS. FASTER THAN THE EYE WANTS TO ALLOW.", T, 20, 1.8);
+        feelers.forEach((n, k) => {
+          n.setAttribute("x1", hx + 12); n.setAttribute("y1", wave(hx) - 4);
+          n.setAttribute("x2", hx + 40); n.setAttribute("y2", wave(hx) - 20 + k * 24);
+          n.setAttribute("opacity", seen ? .9 : 0);
+        });
+        glints.forEach((n, j) => {                             // the sparkling wake
+          const gi = (Math.floor(t / 2) * 7 + j * 5) % 22;     // 16 body + 6 wake
+          const x = hx - gi * 26;
+          n.setAttribute("cx", x + ((t + j) % 3) - 1);
+          n.setAttribute("cy", wave(x) + ((t * j) % 5) - 2);
+          n.setAttribute("opacity", !seen && (t + j * 2) % 5 < 2 && x > 0 && x < 640 ? .9 : 0);
+        });
+        const on = seen ? 6 : (t % 7 === 0 ? 1 : 0);
+        cells.forEach((r, i) => r.setAttribute("fill-opacity", i < on ? .8 : .08));
+      }
+      typeOn(foot, footText, T, 20, 1.8);
     });
+  }
+
+  /* ---------------- 20: the glass centipede (in residence) ---------------- */
+  FIG._define("centipede", "svg", function (svg) {
+    chimCard(svg, true, false, "THE GLASS CENTIPEDE", "HAZARD / SILICA / QUICK",
+      "FOUR FEET OF GLASS. FASTER THAN THE EYE WANTS TO ALLOW.");
+  });
+
+  /* ---------------- 20-F: the chimney, vacated ---------------- */
+  FIG._define("chimney-f", "svg", function (svg) {
+    chimCard(svg, false, false, "THE FUNGAL CHIMNEY", "THE CHIMNEY / TENANT: OUT",
+      "SOMETHING LIVED HERE. IT FOLLOWED YOU OUT.");
+  });
+
+  /* ---------------- 20-G: the chimney, burnt and tenanted ---------------- */
+  FIG._define("chimney-g", "svg", function (svg) {
+    chimCard(svg, true, true, "THE FUNGAL CHIMNEY, BURNT",
+      "THE CHIMNEY / CHARRED / TENANTED",
+      "THE GROWTH BURNED. THE GLASS DID NOT.");
+  });
+
+  /* ---------------- 20-H: the chimney, burnt and bare ---------------- */
+  FIG._define("chimney-h", "svg", function (svg) {
+    chimCard(svg, false, true, "THE FUNGAL CHIMNEY, BURNT",
+      "THE CHIMNEY / CHARRED / BARE",
+      "BLACK, BARE, AND BREATHABLE.");
   });
 
   /* ---------------- 21: the epitaph ---------------- */

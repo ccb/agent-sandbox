@@ -428,6 +428,26 @@ def test_examining_the_lattice_deals_the_memory_cards_too():
             "mem-raising", "mem-embalm"} <= figs
 
 
+def test_the_chimney_card_follows_growth_and_tenant():
+    """The chimney's plate maps its two axes (CCB): tenant home/out and
+    growth alive/dead -- 20 / 20-F / 20-G / 20-H."""
+    g, _cap = _game()
+    g.do_command("search merchant")
+    g.do_command("take glowstone")
+    g.do_command("light glowstone")
+    chimney = g.locations["The Fungal Chimney"]
+    g.relocate(g.player, chimney)
+    fig = chimney.get_property("figure")
+    cent = g.characters["glass centipede"]
+    assert fig(g) == "centipede"        # in ambush, growth alive
+    cent.set_property("sprung", True)   # lured out, and elsewhere
+    assert fig(g) == "chimney-f"
+    g.locations["Burial Sphere of Nassak An-Rah"].set_property("horror_dead", True)
+    assert fig(g) == "chimney-h"        # charred, and gone
+    g.relocate(cent, chimney)
+    assert fig(g) == "chimney-g"        # charred; the glass is unbothered
+
+
 def test_a_purged_fungus_also_retires_the_gift_card():
     """The other road to a dead network -- the Horror slain in the sphere --
     must also retire 19-B at the summit (CCB: don't replay the gift once
