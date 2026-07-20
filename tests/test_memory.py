@@ -291,6 +291,39 @@ def test_retrieve_alpha_weights_override():
     )
 
 
+def test_landmark_importance_exempts_a_seed_from_recency_burial_633():
+    # An old high-importance memory (a seeded aversion) against a stream of fresh
+    # ordinary ones. Recency collapse buries the seed by default despite its
+    # importance and relevance; a landmark threshold pins its recency so it stays
+    # eligible. Passing None is byte-identical to omitting the knob.
+    # Seed and fresh memories share the query's location tokens equally, so
+    # relevance can't separate them -- recency is the decider, exactly the #633
+    # setup where a relevant, important seed still loses to fresh churn.
+    mem = AgentMemory(owner="nadia")
+    seed = mem.add_observation(
+        "the unboiled water at Houston Hall made me sick", turn=0, importance=5
+    )
+    for t in range(1, 40):
+        mem.add_observation("settling in at Houston Hall", turn=t, importance=2)
+    query = "Houston Hall"
+
+    # Default: recency collapse buries the seed under the fresh stream.
+    assert seed not in mem.retrieve(query, turn=40, touch=False)
+
+    # Landmark: the importance-5 seed is exempt from decay and surfaces.
+    assert seed in mem.retrieve(query, turn=40, touch=False, landmark_importance=5.0)
+
+    # The threshold is a floor: an importance below it is not pinned.
+    assert seed not in mem.retrieve(
+        query, turn=40, touch=False, landmark_importance=6.0
+    )
+
+    # None == omitting the knob (no behavior change for existing callers).
+    assert mem.retrieve(query, turn=40, touch=False) == mem.retrieve(
+        query, turn=40, touch=False, landmark_importance=None
+    )
+
+
 def test_retrieve_updates_last_accessed_turn():
     mem = AgentMemory(owner="troll")
     r = mem.add_observation("the player gave me a fish", turn=0)
