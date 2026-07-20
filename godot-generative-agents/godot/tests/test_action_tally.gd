@@ -79,6 +79,7 @@ func _initialize() -> void:
 	var junk := [
 		"not a dict", 42, null,
 		{"turn": 0},                       # no action
+		{"turn": 0, "action": null},        # present-but-null action
 		{"action": "go"},                  # no turn
 		{"turn": "x", "action": "go"},     # non-numeric turn
 		{"turn": 0, "action": ""},         # empty action

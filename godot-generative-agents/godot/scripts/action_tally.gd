@@ -31,7 +31,13 @@ static func tally(events: Array, up_to_step: int, top_n: int) -> Array:
 		if typeof(rec) != TYPE_DICTIONARY:
 			continue
 		var e := rec as Dictionary
-		var action := String(e.get("action", "")).strip_edges()
+		# A present-but-null action would String(null)-crash (cf. replay_markers.gd
+		# #631), so require a real String before stripping -- symmetric with the turn
+		# guard below and true to this function's #638 "skip, never crash" contract.
+		var raw: Variant = e.get("action")
+		if not (raw is String):
+			continue
+		var action := (raw as String).strip_edges()
 		if action == "" or action in EXCLUDED_ACTIONS:
 			continue
 		# JSON numbers arrive as int or float; a missing/null/string turn can't be
