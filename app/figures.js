@@ -10,7 +10,7 @@
    and disconnected nodes drop off the clock automatically. */
 (() => {
   "use strict";
-  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-c": ["svg", 640, 400], "cyl-o": ["svg", 640, 400], "cyl-v": ["svg", 640, 400], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "ext1c": ["svg", 640, 400], "ext1e": ["svg", 640, 400], "flask": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tesseract": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
+  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-c": ["svg", 640, 400], "cyl-o": ["svg", 640, 400], "cyl-v": ["svg", 640, 400], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "ext1c": ["svg", 640, 400], "ext1e": ["svg", 640, 400], "flask": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tesseract": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
   const FIG = {
     _defs: {}, _uid: 0, _ticks: [], _timer: null, _target: null,
     MAX_LIVE: 3,
@@ -2469,6 +2469,445 @@
       ear.setAttribute("transform", (t % 14) < 2 && T > 84 ? "translate(0 -3)" : "");
       who.textContent = T > 90 ? "EVERYTHING." : "";
       typeOn(foot, "FOOD, HONESTLY -- AND ANYTHING WITH A NOSE WILL KNOW.", T, 120, 1.9);
+    });
+  });
+
+  /* ---- memFrame: the memory-playback frame (the 41-45 series, CCB) ----
+     A crystal facet set in the Hall of Memory's chosen tiling: the facet's
+     own shape tessellated fine across the dark (it tiles true, with
+     v1=(0,216), v2=(360,108)), banks waking as a diagonal wavefront sweeps
+     through. Everything remembered inside is drawn in solid fills that
+     breathe like the zoxen mirage; anything that still exists today is
+     brightest; wear is notched into the lower edge. ---- */
+  function memFrame(svg, clsText, wear) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = clsText;
+    const HEXP = (cx, cy, k) => [[-210, 0], [-150, -108], [150, -108], [210, 0],
+      [150, 108], [-150, 108]].map(([px, py]) =>
+      `${cx + px * k},${cy + py * k}`).join(" ");
+    const inside = (dx, dy, pad) => Math.abs(dy) <= 108 + pad &&
+      Math.abs(dx) <= 210 + pad - 60 * Math.max(0, Math.abs(dy) - pad) / 108;
+    const cells = [], K = .15;
+    for (let i = -9; i <= 9; i++) for (let j = -14; j <= 14; j++) {
+      const cx = 320 + i * 360 * K, cy = 196 + (i * 108 + j * 216) * K;
+      if (cy < 52 || cy > 322 || cx < -30 || cx > 670) continue;
+      if (inside(cx - 320, cy - 196, 14)) continue;
+      const base = .05 + ((i * 7 + j * 13 + 200) % 5) * .016;
+      cells.push({ base, cx, cy, q: el(svg, "polygon",
+        { points: HEXP(cx, cy, K * .9), fill: PH, "fill-opacity": base }) });
+    }
+    el(svg, "polygon", { points: "110,196 170,88 470,88 530,196 470,304 170,304",
+      fill: PH, "fill-opacity": .08, stroke: PH_BRIGHT, "stroke-width": 1.5 });
+    el(svg, "polygon", { points: "122,196 176,98 464,98 518,196 464,294 176,294",
+      fill: PH, "fill-opacity": .05, stroke: PH_DIM, opacity: .5 });
+    for (let w = 0; w < wear; w++)                             // the wear, notched
+      el(svg, "line", { x1: 184 + w * 9, y1: 300,
+        x2: 184 + w * 9, y2: w % 4 === 2 ? 312 : 308, stroke: PH_DIM, opacity: .85 });
+    const glint = el(svg, "circle", { r: 2, fill: PH_BRIGHT, opacity: 0 });
+    const ghost = el(svg, "g", {});                            // the memory itself
+    const foot = label(svg, 320, 348, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const MCORN = [[110, 196], [170, 88], [470, 88], [530, 196], [470, 304], [170, 304]];
+    return { hdr, ghost, foot, tick: (t) => {
+      const front = ((t * 4) % 1000) - 30;                     // the wavefront
+      cells.forEach(c2 => {
+        const d = Math.abs(c2.cx + c2.cy - front);
+        c2.q.setAttribute("fill-opacity",
+          d < 44 ? c2.base + .15 * (1 - d / 44) : c2.base);
+      });
+      const c = MCORN[Math.floor(t / 22) % 6];
+      glint.setAttribute("cx", c[0]); glint.setAttribute("cy", c[1]);
+      glint.setAttribute("opacity", (t % 22) < 3 ? .9 : 0);
+      ghost.setAttribute("opacity", .35 + Math.max(0, Math.sin(t * .1)) * .55);
+    } };
+  }
+
+  /* ---------------- 41: remember -- his mother ---------------- */
+  FIG._define("mem-mother", "svg", function (svg) {
+    const F = memFrame(svg, "HALL OF MEMORY / WEAR: NEARLY THROUGH", 13);
+    const I1 = "#1b4055", I2 = "#25567a", I3 = "#33739c", I4 = "#4a97c6";
+    // the light behind them, breathing
+    const glow = [105, 70, 40].map((r, i) => el(F.ghost, "circle",
+      { cx: 330, cy: 182, r, fill: PH, "fill-opacity": [.04, .07, .11][i] }));
+    // the mother, a dark shape leaning in from the upper left
+    el(F.ghost, "path", { fill: I1, d:
+      "M 226 170 Q 216 114 268 102 Q 306 98 318 128 L 331 159 L 322 180 L 324 192 " +
+      "Q 314 200 300 198 Q 262 198 226 170 Z" });
+    el(F.ghost, "path", { fill: I1, d:
+      "M 226 168 Q 212 202 220 244 Q 240 258 258 248 Q 236 220 240 190 Z" });  // her hair
+    el(F.ghost, "path", { d:
+      "M 316 126 Q 326 142 331 157 Q 324 165 327 171 Q 320 176 324 182 Q 322 188 312 195",
+      fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.8 }); // the lit edge: brow,
+    el(F.ghost, "circle", { cx: 314, cy: 148, r: 1.6, fill: BG });  // nose, lips -- and
+    el(F.ghost, "path", { d: "M 306 148 Q 312 152 318 150", fill: "none",
+      stroke: BG, "stroke-width": 1.4 });                      // her closed eye
+    // the child, looking up out of the glow
+    el(F.ghost, "circle", { cx: 356, cy: 206, r: 22, fill: I3 });
+    el(F.ghost, "path", { d: "M 340 190 Q 352 183 366 191", fill: "none",
+      stroke: PH_BRIGHT, "stroke-width": 1.6 });               // the lit brow
+    el(F.ghost, "circle", { cx: 345, cy: 203, r: 2, fill: BG });   // the open eye,
+    el(F.ghost, "path", { d: "M 340 197 Q 345 194 350 197", fill: "none",
+      stroke: BG, "stroke-width": 1.4 });                      // watching her
+    el(F.ghost, "path", { d: "M 364 200 Q 370 206 364 212", fill: "none",
+      stroke: BG, "stroke-width": 1.4 });                      // the ear
+    el(F.ghost, "path", { fill: I2, d:
+      "M 338 224 Q 314 234 312 256 Q 330 274 362 270 Q 390 260 386 234 Q 378 222 360 220 Z" });
+    // THE HAND -- four fingers following the curve of the small head
+    const hand = el(F.ghost, "g", {});
+    el(hand, "path", { d: "M 26 12 Q 48 30 62 54", fill: "none", stroke: I2,
+      "stroke-width": 9, "stroke-linecap": "round" });         // the forearm
+    el(hand, "path", { fill: I4, d:
+      "M 14 -8 Q 27 -7 28 4 Q 27 16 16 15 Q 20 4 14 -8 Z" }); // the back of the hand
+    ["M 18 -6 Q 0 -9 -6 -4", "M 19 0 Q 0 -2 -7 3",
+     "M 19 6 Q 1 5 -6 10", "M 18 12 Q 3 12 -3 16"].forEach(d =>
+      el(hand, "path", { d, fill: "none", stroke: I4, "stroke-width": 4.2,
+        "stroke-linecap": "round" }));                         // the fingers, cupping
+    el(hand, "path", { d: "M 24 14 Q 20 22 11 24", fill: "none", stroke: I4,
+      "stroke-width": 4.6, "stroke-linecap": "round" });       // the thumb, beneath
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 150;
+      doWipe(T);
+      typeOn(F.hdr, "REMEMBER: HIS MOTHER", T, 4, 1.4);
+      F.tick(t);
+      glow.forEach((g2, i) => g2.setAttribute("fill-opacity",
+        [.04, .07, .11][i] * (.7 + (Math.floor(t / 5) % 3) * .2)));
+      const HOME = [372, 210], AWAY = [400, 234];             // a short, gentle settle
+      let hx = AWAY[0], hy = AWAY[1], on = 1;
+      if (T < 12) { on = 0; }
+      else if (T < 40) { const k = (T - 12) / 28;
+        hx = AWAY[0] + Math.round((HOME[0] - AWAY[0]) * k / 2) * 2;
+        hy = AWAY[1] + Math.round((HOME[1] - AWAY[1]) * k / 2) * 2; }
+      else if (T < 104) { hx = HOME[0]; hy = HOME[1] + (T >= 60 && T < 74 ? 2 : 0); }
+      else if (T < 128) { const k = (T - 104) / 24;
+        hx = HOME[0] + Math.round((AWAY[0] - HOME[0]) * k / 2) * 2;
+        hy = HOME[1] + Math.round((AWAY[1] - HOME[1]) * k / 2) * 2; }
+      else on = 0;
+      hand.setAttribute("transform", `translate(${hx} ${hy})`);
+      hand.setAttribute("opacity", on);
+      typeOn(F.foot, "THE MOST CONSULTED BANK IN THE LATTICE.", T, 110, 1.5);
+    });
+  });
+
+  /* ---------------- 42: remember -- the bath ---------------- */
+  FIG._define("mem-bath", "svg", function (svg) {
+    const F = memFrame(svg, "HALL OF MEMORY / WEAR: HEAVY", 9);
+    const I1 = "#1b4055", I2 = "#25567a", I3 = "#33739c", I4 = "#4a97c6";
+    // the tub, a filled vessel
+    el(F.ghost, "path", { fill: I2, d:
+      "M 210 216 L 430 216 Q 434 264 390 274 L 250 274 Q 206 264 210 216 Z" });
+    el(F.ghost, "path", { fill: I3, d:
+      "M 218 216 L 422 216 L 419 229 Q 320 240 221 229 Z" });  // the warm water
+    // clawfoot feet, with some pride in them: a scroll, a ball, three claws
+    [[248, 274, -1], [392, 274, 1]].forEach(([fx, fy, dir]) => {
+      el(F.ghost, "path", { fill: "none", stroke: I2, "stroke-width": 3,
+        "stroke-linecap": "round",
+        d: `M ${fx} ${fy} Q ${fx - 6 * dir} ${fy + 8} ${fx - 2 * dir} ${fy + 14} ` +
+           `Q ${fx + 2 * dir} ${fy + 19} ${fx + 7 * dir} ${fy + 15}` });
+      el(F.ghost, "circle", { cx: fx + 5 * dir, cy: fy + 17, r: 3, fill: I3 });
+      [[3, 0], [6, 2], [9, 5]].forEach(([dx, dy]) =>
+        el(F.ghost, "line", { x1: fx + (dx + 1) * dir, y1: fy + 13 + dy,
+          x2: fx + (dx + 4) * dir, y2: fy + 17 + dy, stroke: I2,
+          "stroke-width": 1.6 }));
+    });
+    // the king, water to the chin
+    el(F.ghost, "circle", { cx: 320, cy: 198, r: 16, fill: I4 });
+    el(F.ghost, "path", { d: "M 310 196 Q 314 199 318 197", fill: "none",
+      stroke: BG, "stroke-width": 1.6 });                      // closed eyes
+    el(F.ghost, "path", { d: "M 322 196 Q 326 199 330 197", fill: "none",
+      stroke: BG, "stroke-width": 1.6 });
+    el(F.ghost, "path", { d: "M 306 190 Q 318 180 336 190 L 332 184 Q 320 176 308 184 Z",
+      fill: I2 });                                             // wet hair
+    // warmth, ringing off him on the step clock
+    const rings = Array.from({ length: 3 }, () =>
+      el(F.ghost, "ellipse", { cx: 320, cy: 216, fill: "none", stroke: I4,
+        "stroke-width": 1.6 }));
+    // steam, in solid slow ribbons, beside his head
+    const steam = Array.from({ length: 3 }, () =>
+      el(F.ghost, "polyline", { fill: "none", stroke: I2, "stroke-width": 2.5,
+        "stroke-linecap": "round", opacity: .5 }));
+    // the one solid thing: the drop, and where it lands
+    const drop = el(svg, "circle", { r: 2, fill: PH_BRIGHT, opacity: 0 });
+    const splash = el(svg, "circle", { cx: 330, cy: 215, fill: "none",
+      stroke: PH_BRIGHT, "stroke-width": 1.2, opacity: 0 });
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 150;
+      doWipe(T);
+      typeOn(F.hdr, "REMEMBER: THE BATH", T, 4, 1.4);
+      F.tick(t);
+      rings.forEach((n, i) => {
+        const k = (t * 2 + i * 20) % 60;
+        n.setAttribute("rx", 20 + k); n.setAttribute("ry", 3 + k * .14);
+        n.setAttribute("opacity", Math.max(0, .7 - k / 60));
+      });
+      steam.forEach((s, i) => {
+        const x0 = [250, 286, 392][i], up = (t * 2 + i * 17) % 36;
+        s.setAttribute("points", Array.from({ length: 4 }, (_, q) =>
+          `${x0 + Math.sin(t * .18 + q + i * 2) * 5},${206 - up - q * 12}`).join(" "));
+        s.setAttribute("opacity", .5 - up / 100);
+      });
+      const D = t % 34;                                       // the weeping, kept
+      if (D < 6) {
+        drop.setAttribute("cx", 328 + D * .4); drop.setAttribute("cy", 203 + D * 2);
+        drop.setAttribute("opacity", 1);
+        splash.setAttribute("opacity", 0);
+      } else if (D < 14) {
+        drop.setAttribute("opacity", 0);
+        splash.setAttribute("r", 2 + (D - 6) * 1.4);
+        splash.setAttribute("opacity", .8 - (D - 6) * .1);
+      } else { drop.setAttribute("opacity", 0); splash.setAttribute("opacity", 0); }
+      typeOn(F.foot, "THE CRYSTAL KEEPS THE WEEPING WITH THE WARMTH.", T, 106, 1.5);
+    });
+  });
+
+  /* ---------------- 43: remember -- the kestrel ---------------- */
+  FIG._define("mem-kestrel", "svg", function (svg) {
+    const F = memFrame(svg, "HALL OF MEMORY / WEAR: WORN SMOOTH", 7);
+    const I1 = "#1b4055", I2 = "#25567a", I3 = "#33739c", I4 = "#4a97c6";
+    // the old king in profile, dropped low so the cast stays in-crystal
+    el(F.ghost, "path", { fill: I1, d:
+      "M 176 202 Q 166 240 158 296 L 250 296 Q 240 260 226 232 Q 214 208 196 200 Z" });
+    el(F.ghost, "circle", { cx: 190, cy: 184, r: 17, fill: I2 });   // his head
+    el(F.ghost, "path", { fill: I2, d: "M 204 176 L 215 185 L 204 191 Z" });  // the profile
+    el(F.ghost, "path", { fill: I1, d:
+      "M 198 194 Q 207 208 196 213 Q 187 206 190 196 Z" });    // the beard
+    el(F.ghost, "path", { d: "M 176 174 Q 186 164 200 168", fill: "none",
+      stroke: I1, "stroke-width": 3, "stroke-linecap": "round" });  // what hair is left
+    const armG = el(F.ghost, "g", {});                         // the casting arm
+    el(armG, "path", { d: "M 210 228 Q 250 242 284 252", fill: "none",
+      stroke: I2, "stroke-width": 13, "stroke-linecap": "round" });  // the arm, held out
+    el(armG, "path", { d: "M 270 248 Q 296 256 320 258", fill: "none",
+      stroke: I3, "stroke-width": 16, "stroke-linecap": "round" });  // the gauntlet
+    el(armG, "path", { d: "M 264 236 L 272 262", fill: "none",
+      stroke: I3, "stroke-width": 6, "stroke-linecap": "round" });   // its flared cuff
+    el(armG, "circle", { cx: 328, cy: 258, r: 9, fill: I3 });        // the fist
+    el(armG, "path", { d: "M 330 267 Q 336 280 328 290", fill: "none",
+      stroke: I1, "stroke-width": 2 });                              // the jesses
+    el(F.ghost, "path", { d: "M 176 236 Q 172 244 178 250", fill: "none",
+      stroke: I1, "stroke-width": 2 });                        // sleeve folds
+    el(F.ghost, "path", { d: "M 196 234 Q 192 242 198 248", fill: "none",
+      stroke: I1, "stroke-width": 2 });
+    // the kestrel, arriving with everything spread
+    const bird = el(F.ghost, "g", {});
+    const mkWing = (mir) => {
+      const g = el(bird, "g", {});
+      const M = (x) => mir ? 12 - x : x;
+      el(g, "path", { fill: I3, d:
+        `M ${M(-4)} -34 L ${M(-56)} -58 L ${M(-74)} -50 L ${M(-48)} -28 ` +
+        `Q ${M(-20)} -22 ${M(-4)} -26 Z` });
+      [[-56, -58, -84, -66], [-59, -54, -88, -56], [-61, -49, -88, -45],
+       [-62, -44, -84, -36]].forEach(([x1, y1, x2, y2]) =>
+        el(g, "line", { x1: M(x1), y1, x2: M(x2), y2, stroke: I3,
+          "stroke-width": 3, "stroke-linecap": "round" }));    // the fingered tips
+      [[-40, -30, -46, -16], [-28, -27, -32, -13], [-16, -25, -18, -11]]
+        .forEach(([x1, y1, x2, y2]) =>
+        el(g, "line", { x1: M(x1), y1, x2: M(x2), y2, stroke: I2,
+          "stroke-width": 2.5, "stroke-linecap": "round" }));  // the secondaries
+      return g;
+    };
+    const wingL = mkWing(false), wingR = mkWing(true);
+    const folded = el(bird, "path", { fill: "none", stroke: I3, "stroke-width": 3,
+      "stroke-linecap": "round", opacity: 0,
+      d: "M -8 -30 Q 6 -36 18 -26 M -6 -24 Q 6 -30 16 -21" }); // wings, put away
+    el(bird, "path", { d: "M -2 0 L -2 -12 M 6 0 L 6 -12", fill: "none",
+      stroke: I2, "stroke-width": 2.5 });                      // the legs, reaching
+    el(bird, "path", { fill: I4, d:
+      "M -12 -14 Q -16 -34 2 -40 Q 20 -38 20 -20 Q 18 -10 4 -8 Q -8 -8 -12 -14 Z" });
+    el(bird, "circle", { cx: 8, cy: -46, r: 8, fill: I4 });    // the head
+    el(bird, "path", { d: "M 15 -48 L 21 -45", fill: "none", stroke: I3,
+      "stroke-width": 2.5, "stroke-linecap": "round" });       // the beak
+    el(bird, "circle", { cx: 10, cy: -48, r: 1.2, fill: BG }); // the eye
+    el(bird, "path", { d: "M 0 -9 L -11 13 M 3 -9 L -3 17 M 6 -9 L 7 18 M 9 -9 L 13 14",
+      fill: "none", stroke: I2, "stroke-width": 3,
+      "stroke-linecap": "round" });                            // the fanned tail
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 180;
+      doWipe(T);
+      typeOn(F.hdr, "REMEMBER: THE KESTREL", T, 4, 1.4);
+      F.tick(t);
+      const att = Math.floor(T / 45), A = T % 45;              // four tries a cycle
+      const last = att === 3;
+      const OFF = [410, 236];
+      // the cast (CCB): no wobble -- the ARM lifts and throws the bird
+      let lift = 0;
+      if (!last) {
+        if (A >= 18 && A < 26) lift = -Math.floor((A - 18) / 2) * 4 - 4;
+        else if (A >= 26 && A < 32) lift = -16;
+        else if (A >= 32 && A < 40) lift = -16 + (Math.floor((A - 32) / 2) + 1) * 4;
+      }
+      armG.setAttribute("transform", `rotate(${lift} 210 228)`);
+      const rad = lift * Math.PI / 180;                        // the fist, mid-cast
+      const px = 210 + 114 * Math.cos(rad) - 20 * Math.sin(rad);
+      const py = 228 + 114 * Math.sin(rad) + 20 * Math.cos(rad);
+      let bx, by, wings;
+      if (A < 12) { const k = A / 12;                          // beating in
+        bx = OFF[0] + Math.round((px - OFF[0]) * k / 2) * 2;
+        by = OFF[1] + Math.round((py - OFF[1]) * k / 2) * 2;
+        wings = "beat";
+      } else if (A < 14) { bx = Math.round(px); by = Math.round(py);
+        wings = "hold"; }                                      // the brake, all spread
+      else if (last || A < 26) {                               // perched, riding the fist
+        bx = Math.round(px / 2) * 2; by = Math.round(py / 2) * 2;
+        wings = "fold";
+      } else {                                                 // thrown -- and kept
+        const k = Math.min(1, (A - 26) / 16);                  // inside the crystal
+        bx = Math.round((325 + 91 * k) / 2) * 2;
+        by = Math.round((216 - 32 * k - 20 * Math.sin(k * Math.PI)) / 2) * 2;
+        wings = "beat";
+      }
+      bird.setAttribute("transform", `translate(${bx} ${by})`);
+      if (wings === "fold") {                                  // put away, perched
+        wingL.setAttribute("opacity", 0); wingR.setAttribute("opacity", 0);
+        folded.setAttribute("opacity", 1);
+      } else {
+        folded.setAttribute("opacity", 0);
+        wingL.setAttribute("opacity", 1); wingR.setAttribute("opacity", 1);
+        const a = wings === "beat" ? ((t % 4) < 2 ? -14 : 16) : 0;
+        wingL.setAttribute("transform", `rotate(${a} -4 -30)`);
+        wingR.setAttribute("transform", `rotate(${-a} 16 -30)`);
+      }
+      typeOn(F.foot, "HE OUTLIVED EVERYONE WHO WOULD HAVE LAUGHED.", T, 136, 1.5);
+    });
+  });
+
+  /* ---------------- 44: remember -- the raising ---------------- */
+  FIG._define("mem-raising", "svg", function (svg) {
+    const F = memFrame(svg, "HALL OF MEMORY / WEAR: LIGHT", 3);
+    const I1 = "#1b4055", I2 = "#25567a", I3 = "#33739c", I4 = "#4a97c6";
+    const A1 = "#7b5c2e", A2 = "#a97f3e";
+    el(F.ghost, "rect", { x: 162, y: 282, width: 316, height: 14, fill: I1 });
+    // the bannermen, a frieze in profile
+    const men = [];
+    const flags = [];
+    for (let i = 0; i < 5; i++) {
+      const bx = 190 + i * 52;
+      const g = el(F.ghost, "g", {});
+      el(g, "path", { fill: i % 2 ? I2 : I3, d:
+        `M ${bx - 13} 282 L ${bx - 9} 226 Q ${bx} 218 ${bx + 9} 226 L ${bx + 13} 282 Z` });
+      el(g, "circle", { cx: bx + 3, cy: 210, r: 8, fill: I4 });
+      if (i % 3 === 0)                                         // the hats disagree
+        el(g, "polygon", { points: `${bx - 4},206 ${bx + 4},184 ${bx + 11},206`, fill: I2 });
+      else if (i % 3 === 1)
+        el(g, "rect", { x: bx - 5, y: 197, width: 17, height: 7, fill: I1 });
+      else {
+        el(g, "line", { x1: bx + 3, y1: 202, x2: bx + 1, y2: 184, stroke: I2,
+          "stroke-width": 2.5 });
+        el(g, "path", { d: `M ${bx + 1} 184 Q ${bx - 6} 180 ${bx - 9} 186`,
+          fill: "none", stroke: A2, "stroke-width": 2 });      // the plume
+      }
+      const top = 124 + (i % 2) * 16;
+      el(g, "line", { x1: bx + 17, y1: 282, x2: bx + 17, y2: top, stroke: I3,
+        "stroke-width": 1.8 });
+      flags.push({ q: el(g, "polygon", { fill: i % 2 ? A2 : A1 }), x: bx + 17,
+        y: top, i });
+      men.push(g);
+    }
+    // the young Autarch, and the staff that waits
+    el(F.ghost, "path", { fill: I3, d:
+      "M 440 282 L 444 224 Q 452 214 462 224 L 468 282 Z" });
+    el(F.ghost, "path", { d: "M 442 276 L 466 276", stroke: A2, "stroke-width": 2,
+      fill: "none" });                                         // the hem, trimmed in sand
+    el(F.ghost, "circle", { cx: 449, cy: 206, r: 9, fill: I4 });
+    el(F.ghost, "path", { fill: I4, d: "M 441 202 L 435 208 L 441 211 Z" });  // his profile
+    [[452, 190], [458, 194]].forEach(([sx, sy]) => {
+      el(F.ghost, "line", { x1: 451, y1: 198, x2: sx, y2: sy, stroke: I4,
+        "stroke-width": 1.3 });
+      el(F.ghost, "circle", { cx: sx, cy: sy, r: 1.6, fill: A2 });
+    });
+    el(F.ghost, "line", { x1: 428, y1: 282, x2: 428, y2: 208, stroke: A2,
+      "stroke-width": 3 });                                    // the staff
+    el(F.ghost, "circle", { cx: 428, cy: 203, r: 4, fill: A2 });
+    el(F.ghost, "path", { d: "M 446 232 Q 440 234 436 233", fill: "none",
+      stroke: I3, "stroke-width": 6, "stroke-linecap": "round" });  // his reaching arm
+    const fist = el(F.ghost, "circle", { cx: 434, cy: 233, r: 5, fill: I4 });
+    const grip = el(F.ghost, "circle", { cx: 440, cy: 238, r: 5, fill: I3, opacity: 0 });
+    const vice = label(svg, 452, 156, 10, FUNGUS);
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 150;
+      doWipe(T);
+      typeOn(F.hdr, "REMEMBER: THE RAISING", T, 4, 1.4);
+      F.tick(t);
+      men.forEach((g, i) => g.setAttribute("transform",
+        `translate(0 ${((t + i * 3) % 6) < 3 ? 0 : -1})`));    // marching in place
+      flags.forEach(f => {                                     // the banners ripple
+        const fl = ((t + f.i * 2) % 6) < 3 ? 4 : -3;
+        f.q.setAttribute("points",
+          `${f.x},${f.y} ${f.x + 40},${f.y + 12 + fl} ${f.x},${f.y + 26}`);
+      });
+      const shake = T < 90 ? [2, -1, 1, -2][t % 4] : 0;        // too hard to take it
+      fist.setAttribute("cx", 434 + shake);
+      fist.setAttribute("cy", 233 + (shake ? [0, 1, -1, 0][t % 4] : 0));
+      grip.setAttribute("opacity", T >= 90 ? 1 : 0);           // the other hand closes
+      vice.textContent = T >= 92 && T < 148 ? "THE VICE." : "";
+      typeOn(F.foot, "HIS HISTORIANS WOULD CALL IT THE VICE.", T, 110, 1.5);
+    });
+  });
+
+  /* ---------------- 45: remember -- the embalming ---------------- */
+  FIG._define("mem-embalm", "svg", function (svg) {
+    const F = memFrame(svg, "HALL OF MEMORY / WEAR: STUDIED", 6);
+    const I1 = "#1b4055", I2 = "#25567a", I3 = "#33739c", I4 = "#4a97c6";
+    const HEADS = ["BABOON", "HUMAN", "MANTIS", "FALCON", "JACKAL"];
+    const jarAt = (x, y, kind, fill) => {
+      el(F.ghost, "polygon", { points: `${x - 15},${y + 26} ${x + 15},${y + 26} ` +
+        `${x + 11},${y} ${x - 11},${y}`, fill });
+      el(F.ghost, "rect", { x: x - 12, y: y - 4, width: 24, height: 5, fill });
+      el(F.ghost, "circle", { cx: x, cy: y - 13, r: 7, fill });
+      if (kind === "BABOON") el(F.ghost, "path", { fill: "none", stroke: BG,
+        "stroke-width": 1.4, d: `M ${x - 5} ${y - 12} Q ${x} ${y - 7} ${x + 5} ${y - 12}` });
+      if (kind === "HUMAN") [[x - 2.5, y - 14], [x + 2.5, y - 14]].forEach(([ex, ey]) =>
+        el(F.ghost, "circle", { cx: ex, cy: ey, r: 1, fill: BG }));
+      if (kind === "MANTIS") [[-4, -26], [4, -26]].forEach(([dx, dy]) =>
+        el(F.ghost, "line", { x1: x + dx * .4, y1: y - 18, x2: x + dx, y2: y + dy,
+          stroke: fill, "stroke-width": 1.4 }));
+      if (kind === "FALCON") el(F.ghost, "path", { fill: "none", stroke: BG,
+        "stroke-width": 1.4, d: `M ${x + 3} ${y - 15} q 5 2 1 6` });
+      if (kind === "JACKAL") [[-5, 0], [5, 0]].forEach(([dx]) =>
+        el(F.ghost, "polygon", { points: `${x + dx - 3},${y - 18} ${x + dx},${y - 27} ` +
+          `${x + dx + 3},${y - 18}`, fill }));
+    };
+    // the bier, and the old king supine
+    el(F.ghost, "rect", { x: 196, y: 224, width: 244, height: 9, fill: I1 });
+    [[212, 233], [424, 233]].forEach(([lx, ly]) => el(F.ghost, "line",
+      { x1: lx, y1: ly, x2: lx, y2: ly + 18, stroke: I1, "stroke-width": 4 }));
+    el(F.ghost, "circle", { cx: 216, cy: 210, r: 11, fill: I4 });   // his head
+    el(F.ghost, "path", { fill: I3, d:
+      "M 228 204 L 380 206 Q 420 208 430 216 L 430 222 L 228 222 Z" });
+    el(F.ghost, "path", { fill: I3, d: "M 292 197 Q 304 192 314 198 L 312 205 L 294 205 Z" });
+    // the organs, marked where they wait
+    const OPOS = [[266, 213], [292, 213], [222, 206], [324, 214], [210, 203]];
+    OPOS.forEach(([ox, oy]) => el(F.ghost, "circle", { cx: ox, cy: oy, r: 2.6, fill: I4 }));
+    // the five jars, ranked
+    const JX = [184, 252, 320, 388, 456];
+    JX.forEach((jx, i) => jarAt(jx, 262, HEADS[i], I2));
+    const nums = JX.map(jx => { const n = label(svg, jx, 302, 10, FUNGUS);
+      n.setAttribute("text-anchor", "middle"); return n; });
+    // the boy, small, watching
+    el(F.ghost, "circle", { cx: 158, cy: 276, r: 8, fill: I2 });
+    el(F.ghost, "path", { fill: I2, d: "M 146 296 Q 148 284 158 283 Q 168 284 170 296 Z" });
+    const payload = el(svg, "circle", { r: 3, fill: PH_BRIGHT, opacity: 0 });
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 200;
+      doWipe(T);
+      typeOn(F.hdr, "REMEMBER: THE EMBALMING", T, 4, 1.4);
+      F.tick(t);
+      const step = Math.floor((T - 24) / 30), f = ((T - 24) % 30) / 30;
+      if (step >= 0 && step < 5 && f < .6) {                   // the payload, arcing
+        const k = f / .6;
+        const [ox, oy] = OPOS[step], jx = JX[step];
+        payload.setAttribute("cx", ox + (jx - ox) * k);
+        payload.setAttribute("cy", oy + (246 - oy) * k - Math.sin(k * Math.PI) * 34);
+        payload.setAttribute("opacity", 1);
+      } else payload.setAttribute("opacity", 0);
+      nums.forEach((n, i) => { n.textContent =
+        (step > i || (step === i && f >= .6)) && T >= 24 ? String(i + 1) : ""; });
+      typeOn(F.foot, "THE BOY MEMORIZED THE ORDER.", T, 168, 1.5);
     });
   });
 

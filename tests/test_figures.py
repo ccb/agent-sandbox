@@ -396,6 +396,26 @@ def test_the_flask_deals_its_specimen_card():
     assert cap.texts(Channel.FIGURE) == ["flask", "flask"]
 
 
+def test_the_lattice_banks_deal_their_memory_cards():
+    """The memory series (41-45): REMEMBER <day> at the lattice plays that
+    bank's card, forced like any replay -- and the embalming bank now plays
+    the memory (45), not the plain canopic litho."""
+    g, cap = _game()
+    g.relocate(g.player, g.locations["Hall of Memory"])
+    for command, key in (
+        ("remember bath", "mem-bath"),
+        ("remember mother", "mem-mother"),
+        ("remember kestrel", "mem-kestrel"),
+        ("remember banners", "mem-raising"),
+        ("remember embalming", "mem-embalm"),
+    ):
+        g.do_command(command)
+        assert key in cap.texts(Channel.FIGURE), command
+    assert "canopic-c" not in cap.texts(Channel.FIGURE)
+    g.do_command("remember bath")  # a replay REPLAYS
+    assert cap.texts(Channel.FIGURE).count("mem-bath") == 2
+
+
 def test_a_purged_fungus_also_retires_the_gift_card():
     """The other road to a dead network -- the Horror slain in the sphere --
     must also retire 19-B at the summit (CCB: don't replay the gift once

@@ -96,12 +96,12 @@ _LATTICE_FACETS = (
         "key": "embalming",
         "name": "THE EMBALMING",
         "words": ("embalming", "embalm", "funeral", "organs", "father"),
-        # The replay is the litho (CCB): the bank shows the canopic system
-        # as it teaches it -- the same card the plinths wear downstairs.
         # HIS FATHER'S embalming, not his own (CCB): a lattice holds only
         # days a man lived; this is the funeral the boy watched, and the
-        # order he memorized is the order the plinths still want.
-        "figure": "canopic-c",
+        # order he memorized is the order the plinths still want. The bank
+        # plays the memory card (45); the plinths downstairs keep the plain
+        # canopic litho (03-C).
+        "figure": "mem-embalm",
         "text": (
             "his father's embalming, watched from between the courtiers' robes: "
             "the baboon took the old king's lungs, the human his liver, the "
@@ -125,6 +125,7 @@ _LATTICE_FACETS = (
         "key": "bath",
         "name": "THE BATH",
         "words": ("bath", "water", "weeping", "immersion"),
+        "figure": "mem-bath",
         "text": (
             "a bath: full immersion, water to the chin and warm -- a luxury no one "
             "now living has tasted. He weeps in it, quietly, where no court can "
@@ -140,6 +141,7 @@ _LATTICE_FACETS = (
         "key": "mother",
         "name": "HIS MOTHER",
         "words": ("mother", "neck", "his mother"),
+        "figure": "mem-mother",
         "text": (
             "his mother's hand on the back of his neck, from before either crown "
             "or name. The facet is brief. It is the most consulted bank in the "
@@ -174,6 +176,7 @@ _LATTICE_FACETS = (
         "key": "the raising",
         "name": "THE RAISING",
         "words": ("raising", "banners", "vice", "staff", "crown"),
+        "figure": "mem-raising",
         "text": (
             "the day they raised him: ten thousand banners the colour of this sand, "
             "and his own hands shaking too hard to take the staff, so that he grips "
@@ -229,6 +232,7 @@ _LATTICE_FACETS = (
         "key": "kestrel",
         "name": "THE KESTREL",
         "words": ("kestrel", "bird", "falconry", "wrist"),
+        "figure": "mem-kestrel",
         "text": (
             "an old man's hands -- his own, by then -- teaching a kestrel to stand "
             "on a wrist, over and over, with the patience of a man who has outlived "
