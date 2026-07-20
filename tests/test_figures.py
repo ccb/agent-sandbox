@@ -159,7 +159,8 @@ def test_every_wired_key_exists_in_the_registry():
                 _walk(it)
     # event-cued keys (not discoverable by walking) + client-cued ones
     wired |= {"seal", "autarch", "autarch-e", "bats", "bats-c", "road", "epitaph",
-              "youth-b", "youth-c"}  # the lit hall and the lesson are event-cued
+              "youth-b", "youth-c",  # the lit hall and the lesson are event-cued
+              "flood", "tank-f"}  # the burst-tank trigger owns these two
     missing = wired - registry
     assert not missing, f"wired keys with no card: {sorted(missing)}"
 
@@ -272,6 +273,35 @@ def test_the_hall_of_youth_deals_by_light_and_the_bats_teach_the_lesson():
             break
         g.do_command("listen")
     assert "youth-c" in cap.texts(Channel.FIGURE)
+
+
+def test_the_tank_is_the_room_and_the_flood_plays_once():
+    """The Hall of Hounds deals the section blueprint (50) on arrival and
+    EXAMINE TANK; BREAK TANK plays THE FLOOD (51), forced, once; and from
+    then on the wreckage -- which answers to the old name -- and every
+    arrival deal the decanted plate (52)."""
+    g, cap = _game()
+    hounds = g.locations["Hall of Hounds"]
+    neighbor, direction = next(
+        (loc, d)
+        for loc in g.locations.values()
+        for d, dest in loc.connections.items()
+        if dest is hounds
+    )
+    word = str(getattr(direction, "value", direction))
+    g.relocate(g.player, neighbor)
+    g.do_command(f"go {word}")
+    assert "tank" in cap.texts(Channel.FIGURE)
+    g.do_command("examine tank")  # the wall stands: the blueprint re-earns
+    assert cap.texts(Channel.FIGURE).count("tank") >= 2
+    g.do_command("break tank")
+    assert "flood" in cap.texts(Channel.FIGURE)
+    assert "cyborg hound" in hounds.items  # the tenants spilled with the gel
+    g.relocate(g.player, neighbor)
+    g.do_command(f"go {word}")  # arrival now deals the aftermath
+    assert "tank-f" in cap.texts(Channel.FIGURE)
+    g.do_command("examine tank")  # the wreckage answers to the old name
+    assert cap.texts(Channel.FIGURE).count("tank-f") >= 2
 
 
 def test_reading_the_ledger_deals_the_manifest():

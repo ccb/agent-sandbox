@@ -2376,9 +2376,12 @@ def build_game(seed=None):
         "servo-hocks, chrome ribs, lenses where a dog keeps its eyes. They are "
         "perfectly preserved. The lenses are open.",
     )
-    # The tank IS this room (CCB audit): the synth-hound litho greets
-    # the first arrival; examining the pile still re-earns it.
-    hounds.set_property("figure", "hound")
+    # The tank IS this room (CCB): arrival deals the section blueprint (50)
+    # while the wall stands, and the decanted aftermath (52) once it does
+    # not. The hound itself keeps its own litho on examine.
+    hounds.set_property(
+        "figure", lambda g: "tank" if "tank" in hounds.items else "tank-f"
+    )
     warriors = things.Location(
         "Hall of Warriors",
         "Four plexiglas cylinders stand on an uneven floor, each holding a "
@@ -2622,6 +2625,8 @@ def build_game(seed=None):
     tank.make_container()
     tank.set_property("is_closed", True)
     tank.set_property("is_breakable", True)
+    tank.set_property("figure", "tank")  # the section blueprint (50): examine
+    # re-earns; the burst-tank trigger below owns the flood and the aftermath
     tank.set_property(
         "break_text",
         "The plexiglas gives all at once and the wall of gel comes with it -- "
@@ -3950,6 +3955,45 @@ def build_game(seed=None):
             )
 
     game.add_trigger("bats_follow_dates", _dates_thrown, _bats_follow)
+
+    # --- The tank bursts (CCB): BREAK TANK floods the hall -------------------
+    # Break shatters the tank out of the world (spilling the hound), so the
+    # flood beat (51) plays here, once -- and the hall gains wreckage that
+    # answers to the old name, so EXAMINE TANK keeps working and deals the
+    # decanted plate (52), as does every arrival after.
+    def _tank_gone(g):
+        return "tank" not in hounds.items and not hounds.get_property("tank_burst")
+
+    def _tank_bursts(g):
+        hounds.set_property("tank_burst", True)
+        wreckage = _scenery(
+            hounds,
+            "burst tank",
+            "the burst tank, its frame standing empty",
+            "The frame stands; the glass is a glitter across the floor. The "
+            "gel lies in a luminous green-gold sheet, going nowhere slowly, "
+            "and the coursers lie strewn in it wall to wall, each at the "
+            "angle the flood filed it. The lenses are still open.",
+        )
+        wreckage.add_alias("tank")
+        wreckage.add_alias("spill")
+        wreckage.add_alias("wreckage")
+        wreckage.set_property("figure", "tank-f")
+        hounds.description = (
+            "The tank's frame stands empty over a floor flooded in luminous "
+            "gel, green-gold and going nowhere. The hounds lie strewn where "
+            "the flood set them down, black and spindly, each at its own "
+            "angle. They are no longer perfectly preserved. The lenses are "
+            "open."
+        )
+        hounds.dim_description = (
+            "The hall glows from the floor now -- a spilled sheet of "
+            "green-gold gel, luminous and slow, with ten hound-shapes "
+            "lying dark across it."
+        )
+        g.show_figure("flood", force=True)
+
+    game.add_trigger("tank_bursts", _tank_gone, _tank_bursts)
 
     def _wheel_turning(g):
         loc = next(
