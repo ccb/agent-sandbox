@@ -234,7 +234,12 @@ def test_unknown_recipe_is_not_craftable_even_with_ingredients():
     )
     game.do_command("make bow")
     assert "bow" not in player.inventory  # gated despite having the ingredients
-    assert _said(cap, "don't know how")  # not the ingredient gap
+    # An UNLEARNED recipe (#628 split): "haven't learned yet", not "don't know
+    # how" -- the latter is now reserved for a target that names no recipe at
+    # all, and logs a craft_gap wish (which an unlearned recipe must not).
+    assert _said(cap, "haven't learned")
+    assert not _said(cap, "don't know how")
+    assert game.wishes == []
 
 
 def test_bare_verb_skips_unknown_recipes():
@@ -286,7 +291,8 @@ def test_by_ingredients_resolution_is_also_gated():
     )
     game.do_command("combine string and stick")
     assert "bow" not in player.inventory
-    assert _said(cap, "don't know how")
+    assert _said(cap, "haven't learned")  # unlearned, not truly unknown (#628)
+    assert game.wishes == []
 
 
 def test_learning_one_recipe_does_not_unlock_another():
@@ -302,7 +308,8 @@ def test_learning_one_recipe_does_not_unlock_another():
     game.learn_recipe("raft")  # learn the OTHER recipe
     game.do_command("make bow")
     assert "bow" not in player.inventory  # the bow stays gated
-    assert _said(cap, "don't know how")
+    assert _said(cap, "haven't learned")  # unlearned, not truly unknown (#628)
+    assert game.wishes == []
 
 
 def test_gated_recipe_without_a_name_is_rejected():
@@ -311,3 +318,54 @@ def test_gated_recipe_without_a_name_is_rejected():
     # producing a permanently un-craftable recipe.
     with pytest.raises(ValueError):
         Recipe(inputs=["string", "stick"], output=_bow, known=False)
+
+
+# --- craft_gap wish capture (#628, Option B) --------------------------------
+#
+# A recipe-ful world's "make <target-with-no-matching-recipe>" used to die
+# silently in check_preconditions -- no GameEvent, no wish. Split from the
+# unlearned-recipe case above: a truly unknown target still gets the "don't
+# know how" message, but now also logs a craft_gap wish (the demand-capture
+# gap issue #628 closes). Routing itself is unchanged (Option A, rejected).
+
+
+def test_truly_unknown_target_logs_a_craft_gap_wish():
+    # A bow recipe is registered (so the game routes "make ..." to CRAFT at
+    # all), but "boiled water" names no recipe whatsoever -- truly unknown,
+    # not just unlearned. No ingredients in hand, so the bare-verb fallback
+    # (resolution path #3) can't silently satisfy the bow recipe instead.
+    game, player, cap = _game(recipes=[_bow_recipe()], inv=[])
+    game.do_command("make boiled water")
+    assert "bow" not in player.inventory
+    assert _said(cap, "don't know how")
+    [wish] = game.wishes
+    assert wish.trigger == "craft_gap"
+    assert wish.desired == "make boiled water"
+    assert wish.raw_command == "make boiled water"
+    assert wish.actor == player.name
+    assert wish.turn == game.turn
+    assert wish.location == player.location.name
+
+
+def test_unknown_target_with_only_an_unlearned_recipe_registered_still_gaps():
+    # Guards the detection helper: an UNLEARNED recipe must not be mistaken
+    # for a match on an unrelated target -- "boiled water" still doesn't name
+    # the (unlearned) bow recipe, so it's truly unknown, craft_gap fires.
+    game, player, cap = _game(
+        recipes=[_bow_recipe(known=False)], inv=_string_and_stick()
+    )
+    game.do_command("make boiled water")
+    assert _said(cap, "don't know how")
+    [wish] = game.wishes
+    assert wish.trigger == "craft_gap"
+
+
+def test_unlearned_recipe_logs_no_wish():
+    # Case 1 (the learnable-enabler case) is not missing demand -- it's a
+    # #135 learning gate -- so it must never produce a wish.
+    game, player, cap = _game(
+        recipes=[_bow_recipe(known=False)], inv=_string_and_stick()
+    )
+    game.do_command("make bow")
+    assert _said(cap, "haven't learned")
+    assert game.wishes == []
