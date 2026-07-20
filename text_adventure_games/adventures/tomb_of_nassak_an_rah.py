@@ -4901,6 +4901,38 @@ def build_game(seed=None):
         "cylinder_break_card", _cylinder_broke, _cylinder_break_card, repeatable=True
     )
 
+    # OPENING a canopic jar deals its face-card too (CCB), the way EXAMINE
+    # already does -- the generic Open action doesn't touch figures, so a jar
+    # opened rather than examined would otherwise show no litho. (Kept jar-local
+    # rather than an engine rule, so opening the tank or coffin isn't roped in.)
+    _JAR_FIGURES = {
+        "baboon jar": "jar-baboon",
+        "human jar": "jar-human",
+        "mantis jar": "jar-mantis",
+        "falcon jar": "jar-falcon",
+        "jackal jar": "jar-jackal",
+    }
+
+    def _jar_opened(g):
+        return any(
+            e.actor == g.player.name
+            and e.action == "open"
+            and any(j in (e.summary or "").lower() for j in _JAR_FIGURES)
+            for e in g.events[g._round_event_start :]
+        )
+
+    def _jar_open_card(g):
+        for e in g.events[g._round_event_start :]:
+            if e.actor != g.player.name or e.action != "open":
+                continue
+            summary = (e.summary or "").lower()
+            for name, key in _JAR_FIGURES.items():
+                if name in summary:
+                    g.show_figure(key, force=True)
+                    return
+
+    game.add_trigger("jar_open_card", _jar_opened, _jar_open_card, repeatable=True)
+
     def _hop_anywhere(start, goal):
         """One step from *start* toward *goal*, any route (Silas knows every
         hall; unlike the pack he honors no territory)."""

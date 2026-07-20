@@ -14,19 +14,39 @@
   const FIG = {
     _defs: {}, _uid: 0, _ticks: [], _timer: null, _target: null,
     MAX_LIVE: 3,
+    // Frame 0 sits mid-wipe (every card slides a black cover off over its
+    // first ~12 frames). A card that never gets to animate must therefore be
+    // drawn on a later, revealed frame or it freezes on black. 16 clears the
+    // wipe with room to spare while still showing the opening tableau.
+    SETTLE_FRAME: 16,
     keys() { return Object.keys(this._defs); },
     has(key) { return Object.prototype.hasOwnProperty.call(this._defs, key); },
     meta(key) { return META[key]; },
     _define(key, kind, build) { this._defs[key] = build; },
     _clock(fn) {
+      // No animation coming (reduced motion, or called outside a render):
+      // draw one revealed frame rather than the mid-wipe frame 0.
+      if (FIG.reducedMotion || !FIG._target) {
+        try { fn(FIG.SETTLE_FRAME); } catch (err) {}
+        return;
+      }
       fn(0);
-      if (FIG.reducedMotion || !FIG._target) return;
       FIG._ticks.push({ fn, t: 0, node: FIG._target });
       const seen = [];
       for (let i = FIG._ticks.length - 1; i >= 0; i--) {
         const n = FIG._ticks[i].node;
         if (!seen.includes(n)) seen.push(n);
-        if (seen.indexOf(n) >= FIG.MAX_LIVE) FIG._ticks.splice(i, 1);
+        if (seen.indexOf(n) >= FIG.MAX_LIVE) {
+          // A single turn can emit more than MAX_LIVE cards (e.g. a loud break
+          // wakes the spawn and the pack). The surplus are pruned in this same
+          // synchronous pass -- before the 12fps timer ever fires -- so they
+          // never leave frame 0. Settle those on a revealed frame so they
+          // freeze on their opening tableau instead of on the black wipe.
+          const dropped = FIG._ticks.splice(i, 1)[0];
+          if (dropped.t === 0) {
+            try { dropped.fn(FIG.SETTLE_FRAME); } catch (err) {}
+          }
+        }
       }
       if (!FIG._timer) FIG._timer = setInterval(FIG._tickAll, 1000 / 12);
     },

@@ -475,6 +475,22 @@ def test_breaking_a_cylinder_deals_its_plate_on_the_figure_channel():
     assert "cylinders" in cap.texts(Channel.FIGURE)
 
 
+def test_opening_a_canopic_jar_deals_its_card():
+    """OPEN a jar deals its face-card the way EXAMINE already does (CCB) -- the
+    generic Open action doesn't touch figures, so a trigger re-earns it."""
+    for jar, key in (
+        ("baboon jar", "jar-baboon"),
+        ("human jar", "jar-human"),
+        ("mantis jar", "jar-mantis"),
+    ):
+        g, cap = _game()
+        g.relocate(g.player, g.locations["Hall of the Canopic Jars"])
+        g.do_command(f"open {jar}")
+        assert key in cap.texts(Channel.FIGURE)  # the litho rode the opening
+        g.do_command(f"examine {jar}")  # and a look still re-earns it
+        assert cap.texts(Channel.FIGURE).count(key) == 2
+
+
 def test_wearables_deal_their_cards_on_wear():
     """Putting a carded wearable ON is as deliberate as examining it: WEAR
     always draws the card (CCB) -- for the boots (38), the respirator (39),
