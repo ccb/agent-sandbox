@@ -458,6 +458,23 @@ def test_the_cylinder_card_names_the_first_break():
         assert fig(g) == "cylinders"  # deeper wreckage: the generic plate
 
 
+def test_breaking_a_cylinder_deals_its_plate_on_the_figure_channel():
+    """The break that CAUSES the first-break plate must also SHOW it (CCB):
+    a trigger re-earns the hall's current card on any cylinder break, so the
+    litho appears without a follow-up EXAMINE or LOOK."""
+    for colour, key in (("amber", "cyl-a"), ("cerulean", "cyl-c")):
+        g, cap = _game()
+        g.relocate(g.player, g.locations["Hall of Warriors"])
+        g.do_command(f"break {colour} cylinder")
+        assert key in cap.texts(Channel.FIGURE)  # the plate rode the break
+    # A deeper break falls back to the generic plate.
+    g, cap = _game()
+    g.relocate(g.player, g.locations["Hall of Warriors"])
+    g.do_command("break amber cylinder")
+    g.do_command("break viridian cylinder")
+    assert "cylinders" in cap.texts(Channel.FIGURE)
+
+
 def test_wearables_deal_their_cards_on_wear():
     """Putting a carded wearable ON is as deliberate as examining it: WEAR
     always draws the card (CCB) -- for the boots (38), the respirator (39),

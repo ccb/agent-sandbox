@@ -545,6 +545,32 @@ def test_feeding_the_pack_buys_them_off():
     assert "jackal pack" not in hall.characters
 
 
+def test_feed_is_a_synonym_for_give():
+    """CCB: 'feed X to Y' is a tomb-local alias for GIVE, so the natural verb
+    settles the pack exactly as 'give' does."""
+    game = _game()
+    cap = _texts(game)
+    _no_spawn(game)
+    for cmd in (
+        "in",
+        "open crates",
+        "take dates",
+        "out",
+        "north",
+        "north",
+        "north",
+        "say hey",
+        "say hey",
+    ):
+        game.do_command(cmd)
+    hall = game.locations["Hall of Memory"]
+    assert "jackal pack" in hall.characters
+    assert type(game.parser.peek_action("feed dates to jackals")).__name__ == "Feed"
+    game.do_command("feed dates to jackals")
+    assert "jackal pack" not in hall.characters  # fed off, same as GIVE
+    assert "terrible courtesy" in " ".join(cap.texts(Channel.NARRATION)).lower()
+
+
 def test_the_pack_refuses_what_it_cannot_eat():
     game = _game()
     cap = _texts(game)
@@ -1825,7 +1851,7 @@ def test_the_lattice_shows_a_different_memory_each_look():
     cap = _texts(game)
     for _ in range(8):
         game.do_command("x lattice")
-    looks = [t for t in cap.texts(Channel.NARRATION) if "Lazulite" in t]
+    looks = [t for t in cap.texts(Channel.NARRATION) if "lazulite crystals" in t.lower()]
     assert len(set(looks)) >= 3  # variety across looks
     assert any("embalming" in m for m in tomb._LATTICE_MEMORIES)  # clue kept
 

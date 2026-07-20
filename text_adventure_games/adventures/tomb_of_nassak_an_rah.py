@@ -178,7 +178,7 @@ _LATTICE_FACETS = (
         "words": ("raising", "banners", "vice", "staff", "crown"),
         "figure": "mem-raising",
         "text": (
-            "the day they raised him: ten thousand banners the colour of this sand, "
+            "the day they raised ten thousand banners the colour of this sand, "
             "and his own hands shaking too hard to take the staff, so that he grips "
             "his wrist to steady it -- the gesture his historians would later call "
             "the Vice."
@@ -318,7 +318,7 @@ def _lattice_look(g=None):
     hidden bank -- the keep-list -- wakes exactly once, then the lattice
     returns to replaying at its own whim."""
     intro = (
-        "Lazulite crystals knit across the walls, worn smooth at "
+        "The lazulite crystals are worn smooth at "
         "hand-height. A bank wakes at your attention and replays "
     )
     if g is None:
@@ -1731,6 +1731,27 @@ class DecantBlood(actions.Action):
             f"{doses} dose{'s' if doses != 1 else ''} the sand will never "
             f"see. The skin holds {rations} rations now, none of them shy."
         )
+
+
+class Feed(actions.Give):
+    """FEED X TO Y -- a tomb-local synonym for GIVE (CCB), so handing meat to
+    the jackal pack reads the way a player expects. GIVE still works; this only
+    lets the natural verb land too, and it stays confined to this adventure
+    rather than teaching the shared engine that "feed" means "give".
+
+    The base :class:`Give` splits giver/item/recipient on the words
+    "give"/"hand", so we rewrite the leading "feed" to "give" before delegating;
+    everything downstream (the hand-off, the jackal-feed trigger) is unchanged.
+    """
+
+    ACTION_NAME = "feed"
+    ACTION_DESCRIPTION = "Feed something to someone (a synonym for GIVE)"
+    ACTION_ALIASES = ["feed to"]
+
+    def __init__(self, game, command: str, actor=None):
+        # command is already lowercased/stripped by the parser and begins with
+        # "feed", so replacing the first "feed" swaps only the verb.
+        super().__init__(game, command.replace("feed", "give", 1), actor=actor)
 
 
 class TossCentipede(actions.Action):
@@ -3531,6 +3552,7 @@ def build_game(seed=None):
             TossCentipede,
             Butcher,
             DecantBlood,
+            Feed,
         ],
     )
     game.max_score = 170
@@ -4855,6 +4877,29 @@ def build_game(seed=None):
             )
 
     game.add_trigger("lattice_break", _lattice_broken, _lattice_shatters)
+
+    # Breaking a cylinder re-shows the hall's plate (CCB). The per-colour litho
+    # (06-C/A/V/O when exactly one is down, the generic 06 deeper in) was only
+    # wired to EXAMINE and a lit arrival, so the break that CAUSES it showed
+    # nothing. Re-earn the current plate on any cylinder break.
+    _CYL_WORDS = ("cylinder", "cerulean", "amber", "viridian", "orange")
+
+    def _cylinder_broke(g):
+        return any(
+            e.actor == g.player.name
+            and e.action == "break"
+            and any(w in (e.summary or "").lower() for w in _CYL_WORDS)
+            for e in g.events[g._round_event_start :]
+        )
+
+    def _cylinder_break_card(g):
+        card = _cylinders_card(g)
+        if card:
+            g.show_figure(card, force=True)
+
+    game.add_trigger(
+        "cylinder_break_card", _cylinder_broke, _cylinder_break_card, repeatable=True
+    )
 
     def _hop_anywhere(start, goal):
         """One step from *start* toward *goal*, any route (Silas knows every
