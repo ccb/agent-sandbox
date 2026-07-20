@@ -1122,6 +1122,20 @@ def test_taste_is_the_cautious_cousin_of_eat():
     assert "not going to lick" in " ".join(cap3.texts(Channel.NARRATION))
 
 
+def test_lick_boots_earns_the_title():
+    """LICK BOOTS (CCB): the boots carry an authored taste line -- the
+    narrator names you a bootlicker and notes whose tomb rewards the
+    instinct. The lick, of course, consumes nothing."""
+    game = _game()
+    _hand(game, "Hall of Warriors", "viridian cylinder", "magnetic boots")
+    cap = _texts(game)
+    game.do_command("lick boots")
+    text = " ".join(cap.texts(Channel.NARRATION))
+    assert "technically and forever, a bootlicker" in text
+    assert "loved this sort of enthusiasm" in text
+    assert "magnetic boots" in game.player.carried_items()
+
+
 def test_every_organ_keeps_its_own_taste():
     """Each canopic organ tastes distinct (CCB) -- the intestines taste of
     OFFAL -- and an open jar standing on a plinth is still within reach of

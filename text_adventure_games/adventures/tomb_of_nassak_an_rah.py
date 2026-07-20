@@ -3166,6 +3166,14 @@ def build_game(seed=None):
     boots.add_alias("boots")
     boots.set_property("figure", "boots")  # the stepping card (38): take once,
     # examine and wear re-earn
+    # LICK BOOTS earns exactly what it deserves (CCB).
+    boots.perceptible_by(
+        perception.Sense.TASTE,
+        "You run your tongue along the magnetic sole. Nothing happens, except "
+        "that you are now, technically and forever, a bootlicker. The tomb "
+        "was built for a man who loved this sort of enthusiasm in his "
+        "subordinates.",
+    )
     respirator = things.Item(
         "respirator",
         "an Autarchy respirator",
