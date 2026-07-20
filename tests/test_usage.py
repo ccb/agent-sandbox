@@ -117,23 +117,6 @@ def test_ledger_unattributed_calls_land_under_one_key():
     led = UsageLedger()
     led.record(CallRecord(usage=Usage("mock", "mock"), cost_usd=0.0))
     assert "(unattributed)" in led.totals_by_actor()
-    assert "(unattributed)" in led.totals_by_call_site()
-
-
-def test_ledger_totals_by_call_site():
-    # #368: cost attributed by cognition call-site, the signal for model tiering.
-    led = UsageLedger()
-    led.record(CallRecord(usage=Usage("mock", "mock"), cost_usd=0.30, call_site="plan"))
-    led.record(
-        CallRecord(usage=Usage("mock", "mock"), cost_usd=0.05, call_site="converse")
-    )
-    led.record(
-        CallRecord(usage=Usage("mock", "mock"), cost_usd=0.02, call_site="converse")
-    )
-    led.record(CallRecord(usage=Usage("mock", "mock"), cost_usd=0.10))  # no call_site
-    assert led.totals_by_call_site() == pytest.approx(
-        {"plan": 0.30, "converse": 0.07, "(unattributed)": 0.10}
-    )
 
 
 def test_ledger_summary_shape():
@@ -145,14 +128,12 @@ def test_ledger_summary_shape():
             ),
             cost_usd=0.001,
             actor="troll",
-            call_site="decide",
         )
     )
     s = led.summary()
     assert s["kind"] == "summary"
     assert s["calls"] == 1
     assert s["by_actor"] == {"troll": 0.001}
-    assert s["by_call_site"] == {"decide": 0.001}
     assert s["input_tokens"] == 10 and s["output_tokens"] == 2
 
 
@@ -190,7 +171,7 @@ def test_record_call_mock_is_zero_cost_and_attributed():
     led = UsageLedger()
     rec = record_call(
         led,
-        {"actor": "troll", "turn": 3, "call_site": "decide", "attempt": 1},
+        {"actor": "troll", "turn": 3, "attempt": 1},
         "mock",
         "mock",
         None,  # raw_usage None -> zero Usage
@@ -198,12 +179,7 @@ def test_record_call_mock_is_zero_cost_and_attributed():
         "go north",
     )
     assert rec.cost_usd == 0.0
-    assert (rec.actor, rec.turn, rec.call_site, rec.attempt) == (
-        "troll",
-        3,
-        "decide",
-        1,
-    )
+    assert (rec.actor, rec.turn, rec.attempt) == ("troll", 3, 1)
     assert rec.prompt_sha256 is not None
     assert len(led.records) == 1
 
@@ -229,3 +205,54 @@ def test_prompt_sha256_is_stable_and_key_order_independent():
     assert prompt_sha256(a) == prompt_sha256(b)
     c = [{"role": "user", "content": "bye"}]
     assert prompt_sha256(a) != prompt_sha256(c)
+
+
+# ---------------------------------------------------------------- role (#368)
+
+
+def _role_record(role, cost=0.1):
+    return CallRecord(
+        usage=Usage.zero("anthropic", "claude-haiku-4-5"),
+        cost_usd=cost,
+        actor="troll",
+        role=role,
+    )
+
+
+def test_call_record_role_lands_in_primitive():
+    line = _role_record("plan").to_primitive()
+    assert line["role"] == "plan"
+    # Absent role serializes as None, like actor does for unattributed calls.
+    assert _role_record(None).to_primitive()["role"] is None
+
+
+def test_record_call_reads_role_from_context():
+    led = UsageLedger()
+    rec = record_call(
+        led,
+        {"actor": "troll", "turn": 3, "role": "score"},
+        "anthropic",
+        "claude-haiku-4-5",
+        None,
+        [{"role": "user", "content": "hi"}],
+        "ok",
+    )
+    assert rec.role == "score"
+    # No role in context -> None, not a crash.
+    rec = record_call(
+        led, {"actor": "troll"}, "anthropic", "claude-haiku-4-5", None, None, None
+    )
+    assert rec.role is None
+
+
+def test_ledger_totals_by_role_and_summary():
+    led = UsageLedger()
+    led.record(_role_record("plan", 0.30))
+    led.record(_role_record("decide", 0.01))
+    led.record(_role_record("decide", 0.02))
+    led.record(_role_record(None, 0.05))
+    assert led.totals_by_role() == pytest.approx(
+        {"plan": 0.30, "decide": 0.03, "(unattributed)": 0.05}
+    )
+    s = led.summary()
+    assert s["by_role"] == {"plan": 0.30, "decide": 0.03, "(unattributed)": 0.05}
