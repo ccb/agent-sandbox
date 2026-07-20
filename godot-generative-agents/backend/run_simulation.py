@@ -26,6 +26,7 @@ from text_adventure_games.planning import (
     BEHIND_SCHEDULE,
     RevisionTrigger,
 )
+from text_adventure_games.enums import ActionName
 from text_adventure_games.npc import maybe_reflect
 from text_adventure_games.reporting import Channel, Message, default_renderer
 from text_adventure_games.usage import UsageLedger
@@ -142,6 +143,21 @@ def _model_duration_steps(agent, clock, cog) -> int | None:
         return None
     minutes = max(cog.duration_min_minutes, min(cog.duration_max_minutes, minutes))
     return _minutes_to_steps(minutes, clock)
+
+
+def _settle_after_dead_talk(st: dict, step_idx: int, cog: "CognitionConfig") -> None:
+    """Brief settle after a decide-level talk that produced no real
+    conversation (issue #689): a talk is instantaneous (never sets
+    `performing`), so without this the agent is instantly `due` again every
+    tick until the #86 pair cooldown expires -- a fully paid decide+score
+    retry loop. `on_plan = False` is load-bearing: it routes this settle's
+    expiry (the top-of-tick pre-pass) through the "deviation completed"
+    branch, which un-latches without calling `schedule.advance()` -- a dead
+    talk never completed a real schedule stop.
+    """
+    st["performing"] = True
+    st["on_plan"] = False
+    st["perform_until"] = step_idx + cog.dead_talk_settle_steps
 
 
 def _settles_in_place(game, command: str) -> bool:
@@ -419,6 +435,18 @@ def step(
                 st["memories"] = memories_for_frame(
                     getattr(char.agent, "last_retrieved", None)
                 )
+            # #689: a decide-level talk (talk to/with, chat with, ask ... about
+            # ...) never produces a real conversation for Penn -- that's
+            # maybe_converse/maybe_react's job -- so whichever way it resolves
+            # below, it gets a brief settle instead of an instant re-decide.
+            # peek_action reads the routed action WITHOUT running it (the same
+            # side-effect-free lookup the #42 simultaneous gather phase uses),
+            # so this works whether the talk is about to succeed empty or fail
+            # the precondition gate.
+            is_talk = False
+            if command:
+                peeked = game.parser.peek_action(command, actor=char)
+                is_talk = peeked is not None and peeked.ACTION_NAME == ActionName.TALK
             # #581 pacing args are minutes -> steps; with no clock they can't
             # be honored (_model_duration_steps below returns None), so drop
             # the stash BEFORE the command runs. This keeps the settled-wait
@@ -571,6 +599,8 @@ def step(
                     activity = char.get_property("activity") or "spending time"
                     where = char.location.tile_address if char.location else "?"
                     st["desc"] = f"{activity} @ {where}"
+                    if is_talk:
+                        _settle_after_dead_talk(st, step_idx, cog)
             elif command:
                 # The agent chose a command but it failed the precondition gate.
                 # Offer its planner a chance to re-plan around the blocked action
@@ -581,6 +611,10 @@ def step(
                 maybe_revise_plan(
                     char, RevisionTrigger(ACTION_FAILED, step_idx, reason), clock
                 )
+                if is_talk:
+                    # #689: a blocked talk (no co-located target this tick) is
+                    # just as retry-prone as an empty one -- settle here too.
+                    _settle_after_dead_talk(st, step_idx, cog)
 
         # Advance one tile along any active walk -- unless pinned mid-walk by
         # a react-started conversation (#370). Inert before #370: a
