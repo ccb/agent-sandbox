@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import styles from "./GodotCanvas.module.css";
 
 // The Godot Web export ships an `index.js` that defines a global `Engine` class.
 // We load it at runtime (the file only exists after `npm run export:godot`) and
@@ -26,7 +27,9 @@ function loadEngineScript(): Promise<void> {
     const existing = document.querySelector<HTMLScriptElement>("script[data-godot-engine]");
     if (existing) {
       existing.addEventListener("load", () => resolve());
-      existing.addEventListener("error", () => reject(new Error("Failed to load the Godot engine")));
+      existing.addEventListener("error", () =>
+        reject(new Error("Failed to load the Godot engine")),
+      );
       return;
     }
     const script = document.createElement("script");
@@ -90,11 +93,11 @@ export function GodotCanvas() {
   }, []);
 
   return (
-    <div className="godot-canvas-wrap">
-      <canvas ref={canvasRef} id="canvas" className="godot-canvas">
+    <div className={styles.wrap}>
+      <canvas ref={canvasRef} id="canvas" className={styles.canvas}>
         Your browser does not support the canvas element.
       </canvas>
-      {status && <div className="godot-status">{status}</div>}
+      {status && <div className={styles.status}>{status}</div>}
     </div>
   );
 }

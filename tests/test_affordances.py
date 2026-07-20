@@ -2,8 +2,9 @@
 
 import pytest
 
-from text_adventure_games import games, things
+from text_adventure_games import actions, games, things
 from text_adventure_games.enums import Property
+from text_adventure_games.npc import tools_for
 
 
 def _one_char_game():
@@ -337,3 +338,251 @@ def test_inventory_truly_empty():
     text = _inventory_text(game)
     assert "is empty." in text
     assert "Wearing:" not in text and "Wielding:" not in text
+
+
+# ----------------------------------------------------------------------
+# REQUIRED_AFFORDANCES: affordance-curated toolsets (issue #612)
+#
+# A verb declares its placement requirement as data; the toolset builder
+# (npc.tools_for) and the precondition gate read the SAME declaration, so
+# "which verbs make sense here?" cannot drift between the two.
+# ----------------------------------------------------------------------
+
+
+class _Study(actions.Action):
+    """A tagged test verb: it declares that something 'studyable' must be in
+    scope, and its gate calls the shared place-precondition helper -- the
+    pattern an opted-in verb follows so offered <=> the gate's place-check."""
+
+    ACTION_NAME = "study"
+    ACTION_DESCRIPTION = "Study something studyable"
+    REQUIRED_AFFORDANCES = ("studyable",)
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.character = self.acting_character(command, hint="studier")
+
+    def check_preconditions(self):
+        return self.has_affordance_in_scope(self.character)
+
+    def apply_effects(self):
+        self.parser.ok("You study for a while.")
+
+
+class _Brew(actions.Action):
+    """A verb with a multi-entry declaration: ALL tags must sit on ONE thing."""
+
+    ACTION_NAME = "brew"
+    ACTION_DESCRIPTION = "Brew tea from a full kettle"
+    REQUIRED_AFFORDANCES = ("is_kettle", "is_full")
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.character = self.acting_character(command, hint="brewer")
+
+    def check_preconditions(self):
+        return self.has_affordance_in_scope(self.character)
+
+    def apply_effects(self):
+        self.parser.ok("You brew a pot of tea.")
+
+
+def _offered(game, actor):
+    """The set of tool names tools_for offers *actor* right now."""
+    return {t["name"] for t in tools_for(game.parser, actor=actor)}
+
+
+# --- the declaration + helper ---
+
+
+def test_base_action_declares_no_affordances():
+    # The inherited default is the empty tuple: a universal verb.
+    assert actions.Action.REQUIRED_AFFORDANCES == ()
+
+
+def test_universal_verb_is_in_scope_anywhere():
+    # An empty declaration passes the helper even in a bare room.
+    game = _one_char_game()
+    assert actions.Wait.affordance_in_scope(game.player, game) is True
+
+
+def test_affordance_in_scope_sees_a_location_item():
+    game = _one_char_game()
+    assert _Study.affordance_in_scope(game.player, game) is False
+    desk = things.Item("desk", "a study desk")
+    desk.set_property("studyable", True)
+    game.player.location.add_item(desk)
+    assert _Study.affordance_in_scope(game.player, game) is True
+
+
+def test_affordance_in_scope_sees_the_inventory():
+    game = _one_char_game()
+    book = things.Item("workbook", "a workbook")
+    book.set_property("studyable", True)
+    game.player.add_to_inventory(book)
+    assert _Study.affordance_in_scope(game.player, game) is True
+
+
+def test_affordance_in_scope_sees_the_location_itself():
+    # Location is a Thing, so an arena tag uses the same property mechanism.
+    game = _one_char_game()
+    game.player.location.set_property("studyable", True)
+    assert _Study.affordance_in_scope(game.player, game) is True
+
+
+def test_affordance_in_scope_ignores_hidden_items():
+    # A hidden item isn't actionable (it's out of parser scope), so it can't
+    # afford a verb either.
+    game = _one_char_game()
+    desk = things.Item("desk", "a study desk")
+    desk.set_property("studyable", True)
+    desk.set_property("is_hidden", True)
+    game.player.location.add_item(desk)
+    assert _Study.affordance_in_scope(game.player, game) is False
+
+
+def test_multi_entry_declaration_is_all_of_on_one_thing():
+    game = _one_char_game()
+    kettle = things.Item("kettle", "an empty kettle")
+    kettle.set_property("is_kettle", True)
+    pond = things.Item("pond", "a full pond")
+    pond.set_property("is_full", True)
+    game.player.location.add_item(kettle)
+    game.player.location.add_item(pond)
+    # The tags are split across two things: not enough.
+    assert _Brew.affordance_in_scope(game.player, game) is False
+    # Both tags on one thing: now the verb is afforded.
+    kettle.set_property("is_full", True)
+    assert _Brew.affordance_in_scope(game.player, game) is True
+
+
+# --- the toolset filter (npc.tools_for) ---
+
+
+def test_tools_for_always_offers_universal_verbs():
+    game = _one_char_game()
+    offered = _offered(game, game.player)
+    assert "go" in offered and "wait" in offered
+
+
+def test_tools_for_offers_tagged_verb_only_when_afforded():
+    game = _one_char_game()
+    game.parser.add_action(_Study)
+    assert "study" not in _offered(game, game.player)
+
+    desk = things.Item("desk", "a study desk")
+    desk.set_property("studyable", True)
+    game.player.location.add_item(desk)
+    assert "study" in _offered(game, game.player)
+
+    # The desk leaves scope -> the verb disappears again.
+    game.player.location.remove_item(desk)
+    assert "study" not in _offered(game, game.player)
+
+
+def test_tools_for_offers_tagged_verb_in_a_tagged_location():
+    game = _one_char_game()
+    game.parser.add_action(_Study)
+    game.player.location.set_property("studyable", True)
+    assert "study" in _offered(game, game.player)
+
+
+def test_tools_for_without_actor_does_not_curate():
+    # No actor -> no scope to read, so the filter stays out of the way
+    # (mirrors how scope enums degrade without an actor).
+    game = _one_char_game()
+    game.parser.add_action(_Study)
+    names = {t["name"] for t in tools_for(game.parser)}
+    assert "study" in names
+
+
+# --- the gate half of the invariant ---
+
+
+def test_gate_helper_fails_with_a_fresh_reason():
+    # The place-precondition helper reports WHY through parser.fail, so the
+    # ReAct retry loop never reads a stale reason from an earlier failure.
+    game = _one_char_game()
+    game.parser.add_action(_Study)
+    game.parser.parse_command("go north")  # fails: no such exit
+    earlier = game.parser.last_fail_message
+
+    assert not game.parser.parse_command("study")
+    assert game.parser.last_fail_message != earlier
+    assert game.parser.last_fail_message == "There is nothing to study here."
+
+
+def test_offered_matches_the_gates_place_check():
+    # The invariant, asserted directly: the verb is offered exactly when its
+    # gate's place-check passes -- both read the same declaration.
+    game = _one_char_game()
+    game.parser.add_action(_Study)
+
+    assert "study" not in _offered(game, game.player)
+    assert not game.parser.parse_command("study")
+
+    game.player.location.set_property("studyable", True)
+    assert "study" in _offered(game, game.player)
+    assert game.parser.parse_command("study")
+
+
+# --- the engine declarations: Eat and Read ---
+
+
+def test_eat_declares_edible_and_is_curated():
+    assert actions.Eat.REQUIRED_AFFORDANCES == (Property.EDIBLE,)
+    game = _one_char_game()
+    assert "eat" not in _offered(game, game.player)
+
+    apple = things.Item("apple", "a crisp apple")
+    apple.set_property(Property.EDIBLE, True)
+    game.player.location.add_item(apple)
+    assert "eat" in _offered(game, game.player)
+
+
+def test_eat_gate_reports_no_food_in_scope():
+    game = _one_char_game()
+    assert not game.parser.parse_command("eat")
+    assert game.parser.last_fail_message == "There is nothing to eat here."
+
+
+def test_eat_offered_but_gate_still_checks_possession():
+    # Offered => the PLACE check passes; the gate still owns the rest. An
+    # edible apple lying here offers `eat`, but eating it needs it in hand.
+    game = _one_char_game()
+    apple = things.Item("apple", "a crisp apple")
+    apple.set_property(Property.EDIBLE, True)
+    game.player.location.add_item(apple)
+
+    assert "eat" in _offered(game, game.player)
+    assert actions.Eat.affordance_in_scope(game.player, game) is True
+    assert not game.parser.parse_command("eat apple")  # not carried yet
+
+    assert game.parser.parse_command("get apple")
+    assert game.parser.parse_command("eat apple")
+
+
+def test_read_declares_readable_and_is_curated():
+    assert actions.Read.REQUIRED_AFFORDANCES == (Property.READABLE,)
+    game = _one_char_game()
+    assert "read" not in _offered(game, game.player)
+
+    sign = things.Item("sign", "a wooden sign")
+    sign.set_property(Property.READABLE, True)
+    sign.set_property(Property.READ_TEXT, "Beware of the troll.")
+    game.player.location.add_item(sign)
+    assert "read" in _offered(game, game.player)
+
+
+def test_read_gate_keeps_its_or_and_invariant_is_one_directional():
+    # Read's gate passes on READ_TEXT *or* READABLE (kept as-is, per review):
+    # an item carrying only read_text still READs fine -- it just isn't
+    # offered. So for Read the invariant is one-directional:
+    # offered => the gate's place-check passes (never the converse).
+    game = _one_char_game()
+    note = things.Item("note", "a scribbled note")
+    note.set_property(Property.READ_TEXT, "Meet me at dawn.")
+    game.player.location.add_item(note)
+
+    assert "read" not in _offered(game, game.player)  # not tagged READABLE
+    assert game.parser.parse_command("read note")  # but the gate allows it

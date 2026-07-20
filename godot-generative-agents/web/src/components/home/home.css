@@ -1,0 +1,218 @@
+/* Landing page styled after the Nerfies academic project-page template
+   (https://github.com/nerfies/nerfies.github.io). The original is built on
+   Bulma + Font Awesome + Google Fonts over CDNs; the companion runs cross-origin
+   isolated (COOP/COEP), which blocks cross-origin subresources, so we reproduce
+   the relevant Bulma values inline and use system fonts + inline SVG icons. All
+   rules are scoped under .nrf so this dark-on-the-rest-of-the-app page can't
+   leak its styles. Numbers mirror Bulma's defaults (title sizes, button shape,
+   container width, footer background) to keep the look faithful. */
+.nrf {
+  --nrf-text: #4a4a4a; /* Bulma body color */
+  --nrf-heading: #363636; /* Bulma .title color */
+  --nrf-link: hsl(204, 86%, 53%); /* Bulma info blue — Nerfies author links */
+  --nrf-dark: #363636; /* Bulma .button.is-dark */
+  --nrf-dark-hover: #2b2b2b;
+  --nrf-light: #f5f5f5;
+  --nrf-footer-bg: #fafafa;
+  /* 'Google Sans' / 'Noto Sans' are used by Nerfies but aren't bundled here;
+     fall back to a clean system stack so the page needs no font download. */
+  --nrf-title-font:
+    "Google Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --nrf-body-font:
+    "Noto Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  min-height: 100%;
+  background: #fff;
+  color: var(--nrf-text);
+  font-family: var(--nrf-body-font);
+  font-size: 16px;
+  line-height: 1.5;
+  text-align: left;
+}
+
+/* --- layout --- */
+.nrf-container {
+  max-width: 960px; /* Bulma .container.is-max-desktop */
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+.nrf-section {
+  padding: 3rem 1.5rem;
+}
+.nrf-hero-body {
+  padding: 3rem 1.5rem;
+}
+.nrf-centered {
+  text-align: center;
+}
+.nrf-justified {
+  text-align: justify;
+}
+/* Bulma .column.is-four-fifths, centered (the abstract column). */
+.nrf-narrow {
+  max-width: 80%;
+  margin: 0 auto;
+}
+
+/* --- titles (Bulma .title / .subtitle) --- */
+.nrf-title {
+  margin: 0 0 1.5rem;
+  color: var(--nrf-heading);
+  font-family: var(--nrf-title-font);
+  font-weight: 600;
+  line-height: 1.125;
+}
+.nrf-title-1 {
+  font-size: 3rem;
+}
+.nrf-title-3 {
+  font-size: 2rem;
+}
+.nrf-subtitle {
+  color: var(--nrf-text);
+  font-size: 1.25rem;
+  font-weight: 400;
+  line-height: 1.25;
+}
+
+/* --- hero: authors + affiliations + links --- */
+.nrf-venue {
+  margin: 0 0 1.5rem;
+  color: #555;
+  font-family: var(--nrf-title-font);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+.nrf-authors {
+  font-family: var(--nrf-title-font);
+  font-size: 1.25rem;
+  line-height: 1.6;
+}
+.nrf-affiliations {
+  margin-top: 0.4rem;
+  font-family: var(--nrf-title-font);
+  font-size: 1.25rem;
+}
+.nrf-author-block {
+  display: inline-block;
+}
+.nrf-authors a {
+  color: var(--nrf-link);
+  text-decoration: none;
+}
+.nrf-authors a:hover {
+  text-decoration: underline;
+}
+
+/* Bulma .button.is-rounded.is-dark row. */
+.nrf-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+  margin-top: 1.6rem;
+}
+.nrf-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  height: 2.5em;
+  padding: calc(0.5em - 1px) 1.1em;
+  background: var(--nrf-dark);
+  color: #fff;
+  border: 1px solid transparent;
+  border-radius: 9999px;
+  font-family: var(--nrf-body-font);
+  font-size: 1rem;
+  line-height: 1.5;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.nrf-button:hover {
+  background: var(--nrf-dark-hover);
+  color: #fff;
+}
+
+/* --- teaser placeholder --- */
+.nrf-teaser {
+  padding: 0 1.5rem 1rem;
+}
+.nrf-teaser-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 16 / 9;
+  margin: 0 auto;
+  max-width: 960px;
+  border: 1px solid #dcdcdc;
+  border-radius: 10px;
+  background: var(--nrf-light);
+  color: #7a7a7a;
+  font-size: 0.95rem;
+}
+.nrf-teaser-cap {
+  margin: 1.25rem 0 0;
+}
+
+/* --- content / abstract typography (Bulma .content) --- */
+.nrf-content {
+  font-size: 1rem;
+}
+.nrf-content p {
+  margin: 0 0 1em;
+}
+.nrf-content p:last-child {
+  margin-bottom: 0;
+}
+.nrf-content a {
+  color: var(--nrf-link);
+}
+.nrf-content a:hover {
+  text-decoration: underline;
+}
+
+/* --- BibTeX block (Bulma pre) --- */
+.nrf-pre {
+  margin: 0;
+  padding: 1.25rem 1.5rem;
+  background: var(--nrf-light);
+  color: var(--nrf-text);
+  border-radius: 6px;
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  white-space: pre;
+  text-align: left;
+}
+
+/* --- footer (Bulma .footer) --- */
+.nrf-footer {
+  padding: 3rem 1.5rem 4rem;
+  background: var(--nrf-footer-bg);
+  text-align: center;
+}
+.nrf-footer-content {
+  max-width: 66%;
+  margin: 0 auto;
+  font-size: 0.92rem;
+}
+.nrf-footer a {
+  color: var(--nrf-link);
+}
+.nrf-footer a:hover {
+  text-decoration: underline;
+}
+
+/* --- small screens --- */
+@media (max-width: 768px) {
+  .nrf-title-1 {
+    font-size: 2.2rem;
+  }
+  .nrf-narrow,
+  .nrf-footer-content {
+    max-width: 100%;
+  }
+}

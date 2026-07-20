@@ -1,0 +1,135 @@
+[gd_scene load_steps=15 format=3]
+
+[ext_resource type="Script" path="res://scripts/viewer.gd" id="1_replay"]
+[ext_resource type="Script" path="res://scripts/tiled_map.gd" id="2_tiled"]
+[ext_resource type="Texture2D" uid="uid://cq7ritci4gvgn" path="res://Cute_Fantasy_Free/Player/Player.png" id="3_player"]
+[ext_resource type="Script" path="res://scripts/camera_controls.gd" id="4_cam"]
+[ext_resource type="Script" path="res://scripts/agent_panel.gd" id="5_panel"]
+[ext_resource type="Theme" path="res://theme/cute_fantasy_ui.tres" id="6_theme"]
+[ext_resource type="Script" path="res://scripts/building_labels.gd" id="7_buildings"]
+[ext_resource type="Script" path="res://scripts/minimap.gd" id="8_minimap"]
+[ext_resource type="Script" path="res://scripts/heatmap_panel.gd" id="9_heatmap"]
+[ext_resource type="Script" path="res://scripts/live_hud.gd" id="10_hud"]
+[ext_resource type="Script" path="res://scripts/persona_inspector.gd" id="11_inspector"]
+[ext_resource type="Script" path="res://scripts/social_graph_panel.gd" id="12_socgraph"]
+[ext_resource type="Script" path="res://scripts/snapshot_gallery.gd" id="13_snapgallery"]
+[ext_resource type="Script" path="res://scripts/day_plan_panel.gd" id="14_dayplans"]
+
+[node name="PennReplay" type="Node2D"]
+script = ExtResource("1_replay")
+player_sheet = ExtResource("3_player")
+
+; The campus, drawn with the Kenney CC0 urban tiles (same map the sim walked).
+[node name="Map" type="TileMapLayer" parent="."]
+script = ExtResource("2_tiled")
+map_path = "res://maps/upenn_core_urban.tmj"
+
+; Floating building name-plates over the campus, shown zoomed-out and faded as you
+; zoom in (building_labels.gd). Sits above the Map but before the agent sprites
+; viewer.gd adds at runtime, so agent name-plates always draw on top.
+[node name="BuildingLabels" type="Node2D" parent="."]
+script = ExtResource("7_buildings")
+
+; The map is the 34th–36th x Spruce–Walnut block (3920x4464 px at 1 m/tile),
+; cropped to the four street edges — a PORTRAIT map in a 1920x1080 landscape
+; window. zoom 0.249 contain-fits: the FULL block is visible (the height fills the
+; window: 4464 * 0.242 ~= 1080 px), at the cost of grey margins on the left/right
+; (a portrait map can't fill a landscape window without cropping). Centred on the
+; block centre so it's symmetric.
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2(1960, 2232)
+zoom = Vector2(0.242, 0.242)
+script = ExtResource("4_cam")
+
+; Screen-space overlay (fixed on screen, unaffected by camera pan/zoom). The
+; character sidebar sits in the left grey margin a portrait map leaves in a
+; landscape window, so it covers no campus. viewer.gd fills it after load.
+[node name="UI" type="CanvasLayer" parent="."]
+; Above the runtime "perception fog" overlay (viewer.gd adds it on its own
+; CanvasLayer at layer 1), so the sidebar + minimap are never dimmed by the fog.
+layer = 10
+
+[node name="AgentPanel" type="PanelContainer" parent="UI"]
+anchor_bottom = 1.0
+offset_right = 300.0
+grow_vertical = 2
+theme = ExtResource("6_theme")
+script = ExtResource("5_panel")
+
+; Bottom-right minimap overview (minimap.gd). viewer.gd sizes + anchors it and
+; feeds it the camera + agents after load; sits over the campus in the bottom-right.
+[node name="Minimap" type="Control" parent="UI"]
+script = ExtResource("8_minimap")
+
+; Top-right run monitor (live_hud.gd, issue #264): cost meter + backend health +
+; Emergency Stop. Pure UI like the sidebar and minimap — viewer.gd wires it to a
+; data source: simulated usage in baked-replay mode (the default), or the real
+; backend's GET /usage + /health when live_backend_url / SIM_API_URL is set. It
+; anchors itself to the top-right corner in its own _ready.
+[node name="LiveHud" type="PanelContainer" parent="UI"]
+theme = ExtResource("6_theme")
+script = ExtResource("10_hud")
+
+; Movement-heatmap pop-up (heatmap_panel.gd), on its OWN CanvasLayer above the UI layer
+; (10) so, when shown, its full-screen dim reliably covers the sidebar + minimap + world
+; and it reads as a modal window (the same own-CanvasLayer trick the fog uses for
+; predictable layering). Hidden until opened (H key / the sidebar "Heatmap" button);
+; viewer.gd feeds it the replay after load and pushes the current step so the heat
+; accumulates live.
+[node name="HeatmapLayer" type="CanvasLayer" parent="."]
+layer = 11
+
+[node name="HeatmapPanel" type="Control" parent="HeatmapLayer"]
+visible = false
+script = ExtResource("9_heatmap")
+
+; Persona "State Details" inspector pop-up (persona_inspector.gd, issue #408), on
+; its OWN CanvasLayer above both the UI layer (10) and the heatmap (11) so its
+; full-screen dim covers everything and it reads as a modal window (same trick as
+; the heatmap and the fog). Hidden until opened (the sidebar's ⓘ Details button /
+; the P key for the tracked agent); viewer.gd fills it from the persona meta + the
+; current step and refreshes it live as playback advances behind it.
+[node name="PersonaInspectorLayer" type="CanvasLayer" parent="."]
+layer = 12
+
+[node name="PersonaInspector" type="Control" parent="PersonaInspectorLayer"]
+visible = false
+script = ExtResource("11_inspector")
+
+; Social-graph pop-up (social_graph_panel.gd, issue #252): who has talked to whom up
+; to the current step, plus the authored t=0 seed relationships. On its OWN
+; CanvasLayer above the other modals (heatmap 11, inspector 12) — same layering
+; trick — so its dim covers everything, and Esc closes the topmost modal first.
+; Hidden until opened (G key / the sidebar "Social graph" button); viewer.gd feeds
+; it the replay + meta.relationships after load and pushes the current step so the
+; graph accumulates live.
+[node name="SocialGraphLayer" type="CanvasLayer" parent="."]
+layer = 13
+
+[node name="SocialGraphPanel" type="Control" parent="SocialGraphLayer"]
+visible = false
+script = ExtResource("12_socgraph")
+
+; Snapshot gallery pop-up (snapshot_gallery.gd, issue #253): the frame snapshots taken
+; this session (camera button / C key), each captioned with its world timestamp. On its
+; OWN CanvasLayer above the other modals (heatmap 11, inspector 12, social graph 13) —
+; same layering trick — so its dim covers everything and Esc closes it first. Hidden
+; until opened (the sidebar's Snapshots button); viewer.gd feeds it each capture.
+[node name="SnapshotLayer" type="CanvasLayer" parent="."]
+layer = 14
+
+[node name="SnapshotGallery" type="Control" parent="SnapshotLayer"]
+visible = false
+script = ExtResource("13_snapgallery")
+
+; Day-plans pop-up (day_plan_panel.gd, issue #251): each agent's authored day
+; plan beside what they actually did, on one shared time axis. On its OWN
+; CanvasLayer above the other modals (heatmap 11, inspector 12, social graph 13,
+; gallery 14) so its dim covers everything and Esc closes it first. Hidden until
+; opened (the sidebar's Day plans button / T); viewer.gd feeds it the replay.
+[node name="DayPlanLayer" type="CanvasLayer" parent="."]
+layer = 15
+
+[node name="DayPlanPanel" type="Control" parent="DayPlanLayer"]
+visible = false
+script = ExtResource("14_dayplans")

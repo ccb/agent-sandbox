@@ -291,6 +291,14 @@ def tools_for(parser, actor=None, names=None, max_enum: int | None = _MAX_SCOPE_
     stays the authoritative menu even when it lists a verb the parser hasn't
     registered.
 
+    Affordance curation (issue #612): a verb declaring ``REQUIRED_AFFORDANCES``
+    is offered only when its ``affordance_in_scope`` check passes for *actor* --
+    the same check the verb's precondition gate runs, so a curated verb is
+    offered exactly when the gate's place-check would pass. Verbs with the
+    empty (default) declaration are universal and always offered, which also
+    keeps the curated set non-empty (the built-in go/look/wait never vanish).
+    Without an *actor* there is no scope to read, so nothing is curated.
+
     Token budget: tool definitions count against context and are NOT trimmed by
     :func:`~text_adventure_games.llm_client.limit_context_length`, so scope enums
     are capped (see :data:`_MAX_SCOPE_ENUM`) and a caller may pass a narrower
@@ -309,6 +317,15 @@ def tools_for(parser, actor=None, names=None, max_enum: int | None = _MAX_SCOPE_
             continue
         seen.add(name)
         action, desc, aliases = entries.get(name, (None, "", []))
+        # Affordance curation (#612): skip a tagged verb when nothing in the
+        # actor's scope affords it. Universal verbs (the default) pass through.
+        if (
+            actor is not None
+            and action is not None
+            and getattr(action, "REQUIRED_AFFORDANCES", ())
+            and not action.affordance_in_scope(actor, parser.game)
+        ):
+            continue
         tool = _build_action_tool(name, action, desc, aliases, parser, actor, max_enum)
         clash = verb_by_tool_name.get(tool["name"])
         if clash is not None:
