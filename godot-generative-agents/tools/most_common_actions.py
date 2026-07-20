@@ -127,3 +127,112 @@ def _row_for(action: str, recs: list[dict]) -> ActionCount:
         first_turn=min(turns),
         last_turn=max(turns),
     )
+
+
+# --- render ------------------------------------------------------------
+
+
+def _escape_md(text: str) -> str:
+    """Keep free-text (actor names, verbs) from breaking a Markdown row."""
+    return text.replace("|", "\\|").replace("\n", " ")
+
+
+def _fmt_mix(mix: dict) -> str:
+    """Render an already-sorted ``name -> count`` mix as ``"a=1, b=2"``."""
+    return ", ".join(f"{_escape_md(k)}={v}" for k, v in mix.items())
+
+
+def render_markdown(report: Report) -> str:
+    """The human report: a summary + one ranked table."""
+    lines = [
+        "# Most-Common Actions Report",
+        "",
+        f"- total actions: {report.total_actions}",
+        f"- distinct actions: {len(report.rows)}",
+        f"- actor totals: {_fmt_mix(report.actor_totals)}",
+        "",
+        "| Rank | Action | Count | Actors | Turns | Actor mix |",
+        "|---|---|---|---|---|---|",
+    ]
+    for rank, row in enumerate(report.rows, start=1):
+        mix = _fmt_mix(row.actor_mix) if row.actor_mix else "-"
+        lines.append(
+            f"| {rank} | {_escape_md(row.action)} | {row.count} |"
+            f" {row.distinct_actors} | {row.first_turn}-{row.last_turn} |"
+            f" {mix} |"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def render_json(report: Report) -> dict:
+    """The machine report: same data as the Markdown, JSON-ready."""
+    return {
+        "total_actions": report.total_actions,
+        "actor_totals": report.actor_totals,
+        "actions": len(report.rows),
+        "rows": [
+            {
+                "action": row.action,
+                "count": row.count,
+                "distinct_actors": row.distinct_actors,
+                "actor_mix": row.actor_mix,
+                "first_turn": row.first_turn,
+                "last_turn": row.last_turn,
+            }
+            for row in report.rows
+        ],
+    }
+
+
+# --- CLI -----------------------------------------------------------------
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument("input", type=Path, help="events.jsonl, or a baked replay .json")
+    ap.add_argument(
+        "--format",
+        choices=("md", "json"),
+        default="md",
+        help=(
+            "stdout format when neither --out-md nor --out-json is given "
+            "(default: md); ignored if either --out-md or --out-json is "
+            "given -- in that case nothing prints to stdout except the "
+            "'wrote <path>' lines, and both formats are written via their "
+            "respective flags regardless of --format"
+        ),
+    )
+    ap.add_argument(
+        "--out-md", type=Path, help="write the Markdown report to this path"
+    )
+    ap.add_argument("--out-json", type=Path, help="write the JSON report to this path")
+    args = ap.parse_args(argv)
+
+    records = load_records(args.input)
+    report = build_report(records)
+
+    wrote = False
+    if args.out_md:
+        args.out_md.write_text(render_markdown(report), encoding="utf-8")
+        print(f"wrote {args.out_md}")
+        wrote = True
+    if args.out_json:
+        args.out_json.write_text(
+            json.dumps(render_json(report), indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        print(f"wrote {args.out_json}")
+        wrote = True
+
+    if not wrote:
+        if args.format == "json":
+            print(json.dumps(render_json(report), indent=2, ensure_ascii=False))
+        else:
+            print(render_markdown(report), end="")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

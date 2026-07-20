@@ -117,3 +117,125 @@ def test_actor_totals_exclude_null_and_are_sorted():
         "Professor Tanaka": 2,
         "Sofia Ramirez": 3,
     }
+
+
+# --- golden: exact Markdown + JSON output ---------------------------------
+
+EXPECTED_MARKDOWN = (
+    "# Most-Common Actions Report\n"
+    "\n"
+    "- total actions: 11\n"
+    "- distinct actions: 4\n"
+    "- actor totals: Diego Torres=5, Professor Tanaka=2, Sofia Ramirez=3\n"
+    "\n"
+    "| Rank | Action | Count | Actors | Turns | Actor mix |\n"
+    "|---|---|---|---|---|---|\n"
+    "| 1 | go | 4 | 3 | 0-2 | Diego Torres=2, Professor Tanaka=1, Sofia Ramirez=1 |\n"
+    "| 2 | wait | 3 | 3 | 2-6 | Diego Torres=1, Professor Tanaka=1, Sofia Ramirez=1 |\n"
+    "| 3 | eat | 3 | 2 | 1-5 | Diego Torres=2, Sofia Ramirez=1 |\n"
+    "| 4 | read | 1 | 0 | 7-7 | - |\n"
+)
+
+EXPECTED_JSON = {
+    "total_actions": 11,
+    "actor_totals": {"Diego Torres": 5, "Professor Tanaka": 2, "Sofia Ramirez": 3},
+    "actions": 4,
+    "rows": [
+        {
+            "action": "go",
+            "count": 4,
+            "distinct_actors": 3,
+            "actor_mix": {"Diego Torres": 2, "Professor Tanaka": 1, "Sofia Ramirez": 1},
+            "first_turn": 0,
+            "last_turn": 2,
+        },
+        {
+            "action": "wait",
+            "count": 3,
+            "distinct_actors": 3,
+            "actor_mix": {"Diego Torres": 1, "Professor Tanaka": 1, "Sofia Ramirez": 1},
+            "first_turn": 2,
+            "last_turn": 6,
+        },
+        {
+            "action": "eat",
+            "count": 3,
+            "distinct_actors": 2,
+            "actor_mix": {"Diego Torres": 2, "Sofia Ramirez": 1},
+            "first_turn": 1,
+            "last_turn": 5,
+        },
+        {
+            "action": "read",
+            "count": 1,
+            "distinct_actors": 0,
+            "actor_mix": {},
+            "first_turn": 7,
+            "last_turn": 7,
+        },
+    ],
+}
+
+
+def test_render_markdown_is_pinned():
+    report = mca.build_report(_load())
+    assert mca.render_markdown(report) == EXPECTED_MARKDOWN
+
+
+def test_render_json_is_pinned():
+    report = mca.build_report(_load())
+    assert mca.render_json(report) == EXPECTED_JSON
+
+
+# --- _escape_md: Markdown cells survive stray "|" / newlines --------------
+
+
+def test_escape_md_escapes_pipes_and_newlines():
+    assert mca._escape_md("a | b") == "a \\| b"
+    assert mca._escape_md("line one\nline two") == "line one line two"
+
+
+def test_render_markdown_escapes_a_pipe_in_an_actor_name():
+    # A hand-built report whose actor name carries a literal "|" -- free-form
+    # text that would otherwise add a phantom column to the table row.
+    row = mca.ActionCount(
+        action="go",
+        count=1,
+        distinct_actors=1,
+        actor_mix={"Od|d Name": 1},
+        first_turn=1,
+        last_turn=1,
+    )
+    report = mca.Report(rows=[row], total_actions=1, actor_totals={"Od|d Name": 1})
+    md = mca.render_markdown(report)
+    lines = md.splitlines()
+    header = next(l for l in lines if l.startswith("| Rank |"))
+    data_line = next(l for l in lines if l.startswith("| 1 |"))
+    # Once escaped "\|" pairs are removed, only real column separators remain,
+    # and there must be exactly as many as in the header.
+    assert data_line.replace("\\|", "").count("|") == header.count("|")
+    assert "Od\\|d Name=1" in data_line
+
+
+# --- CLI ------------------------------------------------------------------
+
+
+def test_main_writes_out_md_and_out_json(tmp_path):
+    out_md = tmp_path / "report.md"
+    out_json = tmp_path / "report.json"
+    rc = mca.main([str(FIXTURE), "--out-md", str(out_md), "--out-json", str(out_json)])
+    assert rc == 0
+    assert out_md.read_text() == EXPECTED_MARKDOWN
+    assert json.loads(out_json.read_text()) == EXPECTED_JSON
+
+
+def test_main_prints_markdown_to_stdout_by_default(capsys):
+    rc = mca.main([str(FIXTURE)])
+    assert rc == 0
+    assert capsys.readouterr().out == EXPECTED_MARKDOWN
+
+
+def test_main_prints_json_to_stdout_with_format_flag(capsys):
+    rc = mca.main([str(FIXTURE), "--format", "json"])
+    assert rc == 0
+    assert json.loads(capsys.readouterr().out) == EXPECTED_JSON
