@@ -155,16 +155,11 @@ or a live URL) and **`/serve-backend`** (serve the sim, mock or real-LLM).
   render it via `prompt_templates.render(name, **vars)`, then **update the usage table
   in `prompt_templates/README.md`** and pin its exact output in
   `tests/test_prompt_templates.py`.
-- Feature branches → PR → `main`. **Exception — the `godot-ga-main` branch:** a
-  change that touches *only* `godot-generative-agents/` (which now includes the
-  map-generation tooling under `godot-generative-agents/tools/geo/`) goes on
-  the long-lived `godot-ga-main` branch instead — branch off it and target your PR at
-  it (reviewed by the Godot/geo owners, @aking526 + @0frankie, not the full `main`
-  review). Anything touching the shared engine library (`text_adventure_games/`,
-  the root `tests/`, top-level docs, …) still goes through `main`. A change
-  spanning *both* the engine and godot/geo goes to `main`. (The `backend` package
-  moved under `godot-generative-agents/backend/` in #399, so backend-only changes now
-  ride `godot-ga-main` with the rest of that project — even though the root `tests/`
-  and `generative-agents/` still import it.) Minor shared-config tweaks
-  (`.gitignore`, `mkdocs/`) may ride along on `godot-ga-main` when they're in service
-  of godot/geo work. `godot-ga-main` is cut from `main` and synced forward periodically.
+- Feature branches → PR → `main`. All work targets `main` now — the long-lived
+  `godot-ga-main` branch was retired and merged back in July 2026. Changes under
+  `godot-generative-agents/` (the Godot viewer, `backend/`, `tools/geo/`) are
+  still reviewed by the Godot/geo owners (@aking526 + @0frankie); everything else
+  gets the normal engine review. (The `backend` package lives under
+  `godot-generative-agents/backend/` since #399 — its import name is unchanged,
+  and the root `tests/` and `generative-agents/` import it via the editable
+  install.)

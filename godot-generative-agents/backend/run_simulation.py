@@ -68,8 +68,7 @@ def _resting_pron(char, schedule, matched, name, emoji):
 
 # A backend-local revision reason (#581): the brain performed somewhere other
 # than the scheduled stop. RevisionTrigger.reason is a plain string
-# (planning.py), so this needs no engine change -- it rides godot-ga-main with
-# the rest of the pacing work.
+# (planning.py), so this needs no engine change.
 DEVIATED = "deviated"
 
 
