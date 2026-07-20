@@ -334,6 +334,13 @@ class Character(Thing):
             return (
                 self.get_property("unconscious_description") or f"{self.name}, out cold"
             )
+        # Sickness is a perceivable condition too (issue #634): a bystander
+        # should see that someone is ill, so social reactions (#371/#582) have
+        # something to react to. Lower priority than dead/unconscious (a corpse
+        # doesn't read as "ill"); authorable, and only shown while is_sick, so a
+        # game that never sickens anyone is byte-identical.
+        if self.get_property("is_sick"):
+            return self.get_property("sick_description") or f"{self.name}, looking ill"
         return self.description
 
     def carried_items(self):
