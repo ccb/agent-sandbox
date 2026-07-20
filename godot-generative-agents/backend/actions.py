@@ -10,7 +10,7 @@ that, each going through the engine's precondition gate like any built-in action
   character so the exporter can render it as the on-screen action label.
 """
 
-from text_adventure_games.actions import base, consume
+from text_adventure_games.actions import base, consume, investigate
 
 
 class Travel(base.Action):
@@ -134,6 +134,55 @@ class Act(base.Action):
         return self.parser.ok(f"{self.character.name} is {self.activity}.")
 
 
+class WaitPenn(base.Wait):
+    """The engine's Wait, offered to Penn brains with the #581 pacing slots
+    (issue #614): a chosen wait *settles* like ``perform`` -- one decision, one
+    tick of execution, then no re-decide until the duration elapses -- which is
+    what retires the original objection to offering Wait (a per-decide Wait
+    tool invites sitting idle and is recurring token spend). Registered under
+    the same "wait" action name so it overrides the built-in for this game
+    only (the DrinkPenn precedent). The step loop needs no change: its settle
+    trigger is already "perform, OR any action that carried a model duration"
+    (run_simulation.step), so a wait carrying ``duration_minutes`` settles and
+    a schedule-spacer wait (no stash) stays a one-tick no-op -- byte-identical.
+    """
+
+    # duration_minutes is REQUIRED, unlike perform's optional slot: perform
+    # falls back to the authored stop's steps, but a bare wait has nothing to
+    # fall back to and would just re-decide every tick -- the exact spend the
+    # settle design exists to kill. (A brain that omits it anyway degrades to
+    # that one-tick wait: harmless, just not settled.)
+    ARGUMENTS_SCHEMA = {
+        "duration_minutes": {
+            "type": "number",
+            "description": "how many in-game minutes to wait before deciding " "again",
+            "required": True,
+        },
+        "emoji": {
+            "type": "string",
+            "description": "a single emoji shown on the map while waiting "
+            "(optional)",
+            "required": False,
+        },
+    }
+
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, command, actor=actor)
+        self.character = self.acting_character(command, hint="waiter")
+
+    def apply_effects(self):
+        # Stamp "waiting" so the settle branch's card/desc reads honest idle
+        # instead of the previous stop's stale activity -- but ONLY when this
+        # wait actually settles (a real brain stashed a duration this decide;
+        # observe_and_decide resets the stash every tick). The mock's schedule
+        # spacers never stash, take the super() path verbatim, and the bake
+        # stays byte-identical.
+        agent = getattr(self.character, "agent", None)
+        if getattr(agent, "last_duration_minutes", None) is not None:
+            self.character.set_property("activity", "waiting")
+        return super().apply_effects()
+
+
 class DrinkPenn(consume.Drink):
     """The engine's Drink, plus the Penn boil-water twist (#300): drinking a
     liquid that ``requires_boiling`` and is not ``is_boiled`` sets ``is_sick``
@@ -162,6 +211,13 @@ class DrinkPenn(consume.Drink):
         if self.item.get_property("requires_boiling") and not self.item.get_property(
             "is_boiled"
         ):
+            # Authoritative outcome (#595): this drink was raw water -- the
+            # agent did NOT boil first. The harness reads this counter
+            # directly instead of parsing the event log.
+            self.character.set_property(
+                "drank_unboiled",
+                (self.character.get_property("drank_unboiled") or 0) + 1,
+            )
             self.character.set_property("is_sick", True)
             # One-shot marker: this drink is what just sickened the character,
             # as opposed to an already-sick character drinking something clean.
@@ -181,34 +237,45 @@ class DrinkPenn(consume.Drink):
                     "location": getattr(self.character.location, "name", None),
                 },
             )
-        elif self.character.get_property("is_sick") and self.item.get_property(
-            "is_boiled"
-        ):
-            # The recovery half of the arc: drinking the *boiled* water cures a
-            # sick drinker. Gated on is_boiled (not merely "not raw") so an
-            # unrelated safe beverage can't stand in for boiling -- that's the
-            # behavior the #301 "did it learn to boil?" comparison rests on.
-            # Only fires on the sick->well transition, so a healthy drinker
-            # logs nothing.
-            self.character.set_property("is_sick", False)
-            # One-shot marker mirroring just_sickened: cognition.remember_outcome
-            # keys off it to write the "feel better" memory to the agent's card.
-            self.character.set_property("just_recovered", True)
-            self.parser.ok(
-                f"{self.character.name} drinks deep -- the clean "
-                "water settles their stomach, and the sickness passes."
+        else:
+            # Authoritative outcome (#595): any other successful, non-fatal
+            # drink is safe -- boiled water, or water that never required
+            # boiling -- hence "safe", not "boiled": this counter also stamps
+            # outside the boil world, where safe drinks needn't involve a
+            # stove. The harness reads it directly instead of parsing the
+            # event log.
+            self.character.set_property(
+                "drank_safe",
+                (self.character.get_property("drank_safe") or 0) + 1,
             )
-            self.game.log_event(
-                self.character.name,
-                "recovery",
-                summary=(
-                    f"{self.character.name} recovered after drinking {self.item.name}"
-                ),
-                payload={
-                    "item": self.item.name,
-                    "location": getattr(self.character.location, "name", None),
-                },
-            )
+            if self.character.get_property("is_sick") and self.item.get_property(
+                "is_boiled"
+            ):
+                # The recovery half of the arc: drinking the *boiled* water
+                # cures a sick drinker. Gated on is_boiled (not merely "not
+                # raw") so an unrelated safe beverage can't stand in for
+                # boiling -- that's the behavior the #301 "did it learn to
+                # boil?" comparison rests on. Only fires on the sick->well
+                # transition, so a healthy drinker logs nothing.
+                self.character.set_property("is_sick", False)
+                # One-shot marker mirroring just_sickened: cognition.remember_outcome
+                # keys off it to write the "feel better" memory to the agent's card.
+                self.character.set_property("just_recovered", True)
+                self.parser.ok(
+                    f"{self.character.name} drinks deep -- the clean "
+                    "water settles their stomach, and the sickness passes."
+                )
+                self.game.log_event(
+                    self.character.name,
+                    "recovery",
+                    summary=(
+                        f"{self.character.name} recovered after drinking {self.item.name}"
+                    ),
+                    payload={
+                        "item": self.item.name,
+                        "location": getattr(self.character.location, "name", None),
+                    },
+                )
 
 
 class Activate(base.Action):
@@ -277,3 +344,300 @@ class Deactivate(base.Action):
     def apply_effects(self):
         self.item.set_property("is_on", False)
         return self.parser.ok(f"The {self.item.name} winds down and goes quiet.")
+
+
+class TalkTo(base.Action):
+    """Agent-initiated conversation (issue #614): ``talk_to <person> [about
+    <topic>]``.
+
+    Conversation today only fires engine-side when two settled residents happen
+    to be co-located (cognition.maybe_converse); this verb lets a brain CHOOSE
+    "go find Marcus and ask him about the demo". The engine's Talk was checked
+    for reuse and voices canned ``talk_text`` lines, not the LLM dialogue loop,
+    so this is a new Penn-local verb (the DrinkPenn precedent).
+
+    apply_effects does not run dialogue itself: it leaves a one-shot
+    ``talk_request`` (+ optional ``talk_topic``) marker on the actor, which
+    ``maybe_converse`` consumes THIS SAME TICK to open a #371
+    ActiveConversation -- so bubbles/feed/#582 consequences all ride the
+    existing machinery. The topic threads into the opener via the intent
+    memory maybe_converse writes when the conversation actually opens (the
+    dialogue seam's opener retrieval queries the partner's name and surfaces
+    it) -- no new dialogue machinery, and a dropped request records nothing.
+
+    Gate = the same fact curation reads (action_tools_for drops/enum-fills the
+    tool from co-located living characters): target matched in the actor's room
+    + alive + has an ``agent`` -- the same fact the engine's
+    ``conversation.can_converse`` requires of both sides, which is what excludes
+    build_world's silent "Observer" player (the engine's required player,
+    never scripted with an agent) from ever being a talk target. "Conversations
+    enabled" needs no explicit precondition: the verb is only reachable from a
+    real tool-calling brain, and without one the marker is simply never
+    consumed.
+    """
+
+    ACTION_NAME = "talk_to"
+    ACTION_DESCRIPTION = "Start a conversation with someone at your location"
+    ARGUMENTS_SCHEMA = {
+        "person": {
+            "type": "string",
+            "description": "the name of the person to talk to (someone here)",
+            "required": True,
+        },
+        "topic": {
+            "type": "string",
+            "description": "what to bring up, as a short phrase (optional)",
+            "connector": "about",
+            "required": False,
+        },
+    }
+
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
+        self.command = command
+        self.character = self.acting_character(command, hint="talker")
+        # Match the person against the pre-topic head only, so a topic that
+        # happens to contain a resident's name can't hijack the match -- and
+        # with the verb token dropped, since character_in_room scans by
+        # substring and a resident named e.g. "Al" would match inside the
+        # literal "talk_to".
+        head, _, tail = command.partition(" about ")
+        _, _, head = head.partition(" ")
+        self.target = self.character_in_room(head, self.character)
+        self.topic = tail.strip()
+
+    def check_preconditions(self) -> bool:
+        if self.target is None:
+            self.parser.fail("There is no one by that name here to talk to.")
+            return False
+        if self.target.get_property("is_dead"):
+            self.parser.fail(f"{self.target.name} is in no state to talk.")
+            return False
+        if getattr(self.target, "agent", None) is None:
+            self.parser.fail(f"{self.target.name} is not up for a conversation.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.character.set_property("talk_request", self.target.name)
+        if self.topic:
+            self.character.set_property("talk_topic", self.topic)
+        return self.parser.ok(
+            f"{self.character.name} strikes up a conversation with "
+            f"{self.target.name}."
+        )
+
+
+DEFAULT_STUDY_MINUTES = 30
+
+
+class Study(base.Action):
+    """Study in place (#615) -- the first arena-tier affordance verb (#617).
+
+    Offered (and place-gated, via #612's shared declaration) only where
+    something in scope carries the ``studyable`` arena tag #613 authored on
+    the Van Pelt reading rooms. Effects mirror ``perform`` (an activity label
+    the exporter renders) plus the visible state that distinguishes a study
+    from a free-text perform: ``studied_minutes`` accumulates on the
+    character. The ARGUMENTS_SCHEMA opts into the #581 pacing slots, so a
+    live brain settles here for its chosen duration."""
+
+    ACTION_NAME = "study"
+    ACTION_DESCRIPTION = "Study here (only somewhere with a study space)"
+    REQUIRED_AFFORDANCES = ("studyable",)
+    ARGUMENTS_SCHEMA = {
+        "topic": {
+            "type": "string",
+            "description": "what to study, as a short phrase, e.g. "
+            "'thermodynamics problem sets' (optional)",
+            "required": False,
+        },
+        # Brain-authoritative pacing (#581), same contract as `perform`:
+        # popped off the tool call before reassembly, never reach the parser.
+        "duration_minutes": {
+            "type": "number",
+            "description": "how many in-game minutes to spend studying "
+            "before deciding again (optional; omit to use the planned duration)",
+            "required": False,
+        },
+        "emoji": {
+            "type": "string",
+            "description": "a single emoji shown on the map while studying "
+            "(optional; omit to use the planned/persona default)",
+            "required": False,
+        },
+    }
+
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
+        self.command = command
+        self.character = self.acting_character(command, hint="studier")
+        parts = command.split(" ", 1)
+        self.topic = parts[1].strip() if len(parts) > 1 else ""
+
+    def check_preconditions(self) -> bool:
+        if not self.was_matched(self.character, "No one is studying."):
+            return False
+        # The #612 place-check: same fact the toolset builder read to offer
+        # this verb, so offered <=> this passes (the #617 invariant).
+        if not self.has_affordance_in_scope(
+            self.character,
+            error_message="There is nothing to study here -- find a study space.",
+        ):
+            return False
+        return True
+
+    def apply_effects(self):
+        activity = f"studying {self.topic}" if self.topic else "studying"
+        self.character.set_property("activity", activity)
+        # The brain's duration pick for THIS decision -- validated by
+        # cognition._take_pacing_args when stashed and clamped by the step
+        # loop to the run's cog.duration_*_minutes before the command routed,
+        # so this ledger matches the settled wall-time -- or a flat default
+        # when absent (the mock path, or a brain that gave none). The floor
+        # guards paths that route a command without the step loop.
+        minutes = getattr(
+            getattr(self.character, "agent", None), "last_duration_minutes", None
+        )
+        if minutes is None:
+            minutes = DEFAULT_STUDY_MINUTES
+        minutes = max(1, int(round(minutes)))
+        prev = self.character.get_property("studied_minutes")
+        self.character.set_property(
+            "studied_minutes", (int(prev) if prev else 0) + minutes
+        )
+        # One-shot marker (the just_sickened pattern): the delta this study
+        # added, consumed by cognition.remember_outcome for the memory line.
+        self.character.set_property("just_studied_minutes", minutes)
+        return self.parser.ok(f"{self.character.name} is {activity}.")
+
+
+class CheckOutBook(base.Action):
+    """Check a library book out from the shelf (#616) -- Penn's first
+    object-tier verb: the book moves shelf -> inventory and records who has
+    it, which is what unlocks the engine's ``read`` (the book travels in the
+    borrower's pocket, so READABLE stays in their scope).
+
+    The affordance is the SHELF, not the book: ``book_shelf`` rides on the
+    ungettable shelf Item, so the verb is offered exactly in the shelf's
+    arena (#612 offered <=> place-check) -- including after every book is
+    borrowed, where the gate then explains who has what. Books are not
+    GETTABLE, so checkout is the only path into a pocket and
+    ``checked_out_by`` can never be bypassed by a plain ``get``. There is
+    deliberately no return verb (YAGNI until agents hoard)."""
+
+    ACTION_NAME = "check_out_book"
+    ACTION_DESCRIPTION = "Check out a library book from the shelf"
+    REQUIRED_AFFORDANCES = ("book_shelf",)
+    ARGUMENTS_SCHEMA = {
+        "book": {
+            "type": "item",
+            "description": "the exact name of the book to check out",
+            "required": True,
+        },
+    }
+
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
+        self.character = self.acting_character(command, hint="borrower")
+        self.book = self._match_book(command)
+
+    def _match_book(self, command: str):
+        """The named book: in the actor's own scope, or -- so the gate can say
+        WHO has it instead of "I don't see it" -- checked out by someone here
+        (the simultaneous-round contention case, issue #42: both decided
+        against the same turn-start shelf, the loser re-checks after the book
+        already moved into the winner's inventory)."""
+        if self.character is None:
+            return None
+        items_in_scope = self.parser.get_items_in_scope(self.character)
+        loc = self.character.location
+        # Every library book the command could mean, as ONE pool: books in the
+        # actor's own scope (shelf or pocket) plus books checked out by someone
+        # standing here. One pool means the longest-name tie-break resolves the
+        # exact title even when a shorter-named cousin is still shelved, and a
+        # borrowed book always reaches the "checked out by X" gate instead of
+        # being shadowed by whatever else shares a word with it.
+        books = {
+            name: item
+            for other in (loc.characters.values() if loc is not None else ())
+            if other is not self.character
+            for name, item in other.inventory.items()
+            if item.get_property("library_book")
+        }
+        books.update(
+            (name, item)
+            for name, item in items_in_scope.items()
+            if item.get_property("library_book")
+        )
+        book = self.parser.match_item(command, books, hint=None)
+        if book is not None:
+            return book
+        # No library book named: match any in-scope item so the gate can say
+        # "The X isn't a library book" instead of "I don't see it".
+        return self.parser.match_item(command, items_in_scope, hint=None)
+
+    def check_preconditions(self) -> bool:
+        if not self.was_matched(self.character, "No one is checking out a book."):
+            return False
+        if not self.has_affordance_in_scope(
+            self.character,
+            "There is no library shelf to check a book out from here.",
+        ):
+            return False
+        if self.book is not None:
+            holder = self.book.get_property("checked_out_by")
+            if holder:
+                message = (
+                    f"You already have {self.book.name} checked out."
+                    if holder == self.character.name
+                    else f"The {self.book.name} is already checked out by {holder}."
+                )
+                self.parser.fail(message)
+                return False
+        if not self.was_matched(self.book, "I don't see that book on the shelf."):
+            return False
+        if not self.book.get_property("library_book"):
+            self.parser.fail(f"The {self.book.name} isn't a library book.")
+            return False
+        return True
+
+    def apply_effects(self):
+        # add_to_inventory removes the book from the shelf's location itself.
+        self.character.add_to_inventory(self.book)
+        self.book.set_property("checked_out_by", self.character.name)
+        return self.parser.ok(
+            f"{self.character.name} checks out {self.book.name} from the shelf."
+        )
+
+
+class ReadPenn(investigate.Read):
+    """The engine's Read with the Penn tool-schema enrichments (#616): a typed
+    item slot (scope-enum'd like every engine item slot) and the #581
+    duration/emoji pacing meta-slots, so a live brain can settle in with a
+    book instead of skimming it in one tick. Registered under the same "read"
+    name, overriding the built-in for this game only (the DrinkPenn
+    precedent). Gate, narration, and the READABLE affordance declaration are
+    all inherited unchanged."""
+
+    ARGUMENTS_SCHEMA = {
+        "item": {
+            "type": "item",
+            "description": "the exact name of the thing to read",
+            "required": True,
+        },
+        # Brain-authoritative pacing (#581), same contract as Act: popped off
+        # the tool call before command reassembly, never seen by the parser.
+        "duration_minutes": {
+            "type": "number",
+            "description": "how many in-game minutes to spend reading "
+            "before deciding again (optional; omit to use the planned duration)",
+            "required": False,
+        },
+        "emoji": {
+            "type": "string",
+            "description": "a single emoji shown on the map while reading "
+            "(optional; omit to use the planned/persona default)",
+            "required": False,
+        },
+    }

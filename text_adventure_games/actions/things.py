@@ -108,6 +108,12 @@ class Get(base.Action):
                 " Your pack is full to the last slot: you move with a clatter "
                 "now, and climbing is out of the question."
             )
+        # Taking a thing with a card draws it (CCB): the acquisition is the
+        # moment. Deduped -- a card already met (an ambush, an examine)
+        # doesn't replay just for the pocketing; EXAMINE re-earns it.
+        if self.character is self.game.player:
+            fig = self.item.get_property("figure")
+            self.game.show_figure(fig(self.game) if callable(fig) else fig)
         self.parser.ok(description)
 
 
@@ -377,7 +383,11 @@ class Inventory(base.Action):
             sections.append(wounds.rstrip("\n"))
         if char.slot_capacity is not None:
             gauge = f"Slots: {char.slots_used()}/{char.slot_capacity}"
-            if char.is_encumbered():
+            if char.get_property(Property.IS_DEAD):
+                # The post-mortem ledger (CCB): a corpse is past encumbrance;
+                # the gauge simply shows what filled it.
+                gauge += " -- the wounds took the last of you"
+            elif char.is_encumbered():
                 gauge += " -- ENCUMBERED (you clatter when you move, and cannot climb)"
             sections.append(gauge)
 
@@ -520,6 +530,17 @@ class Examine(base.Action):
             )
         else:
             self.parser.ok("You don't see anything special.")
+            return
+        # A thing may carry a ``figure`` property: the key of an illustration
+        # card that a close look cues. FORCED (CCB): an explicit examine
+        # always re-earns the card, like LOOK does for rooms -- take/arrival/
+        # ambush cues stay once-per-game. A callable(game) -> key|None picks
+        # by live state (an autarch at rest draws differently than one
+        # hollowed out). Player looks only: an NPC examining doesn't draw on
+        # the player's screen.
+        if self.character is self.game.player:
+            fig = target.get_property("figure")
+            self.game.show_figure(fig(self.game) if callable(fig) else fig, force=True)
 
 
 class Throw(base.Action):
@@ -799,18 +820,19 @@ class Put(base.Action):
             )
             return False
         if not self.holder.is_open():
-            self.parser.fail(f"The {self.holder.name} is closed.")
+            self.parser.fail(f"The {self.holder.name} {self.holder.to_be()} closed.")
             return False
         if not self.holder.has_space():
-            self.parser.fail(f"The {self.holder.name} is full.")
+            self.parser.fail(f"The {self.holder.name} {self.holder.to_be()} full.")
             return False
         return True
 
     def apply_effects(self):
         self.character.discard_item(self.item)
         self.holder.add_item(self.item)
+        verb = base.conjugate(self.character, "put", "puts")
         self.parser.ok(
-            f"{self.character.name.capitalize()} puts the {self.item.name} "
+            f"{self.character.name.capitalize()} {verb} the {self.item.name} "
             f"{self.holder.preposition()} the {self.holder.name}."
         )
 
@@ -822,7 +844,9 @@ class Open(base.Action):
     def __init__(self, game, command: str, actor=None):
         super().__init__(game, actor=actor)
         self.character = self.acting_character(command, hint="wants to open something")
-        scope = {**self.character.location.items, **self.character.inventory}
+        # Full parser scope, not just the room's top level: a jar standing
+        # on a plinth (or a box in a carried bag) can be opened where it sits.
+        scope = self.parser.get_items_in_scope(self.character)
         self.item = self.parser.match_item(command, scope, hint="thing to open")
 
     def check_preconditions(self) -> bool:
@@ -832,7 +856,7 @@ class Open(base.Action):
             self.parser.fail(f"You can't open the {self.item.name}.")
             return False
         if not self.item.get_property("is_closed"):
-            self.parser.fail(f"The {self.item.name} is already open.")
+            self.parser.fail(f"The {self.item.name} {self.item.to_be()} already open.")
             return False
         return True
 
@@ -840,7 +864,7 @@ class Open(base.Action):
         self.item.set_property("is_closed", False)
         # Item-subject phrasing reads right for any actor -- "You opens the
         # pack" (player named "you") was ungrammatical. Same fix as Light/Douse.
-        message = f"The {self.item.name} is open."
+        message = f"The {self.item.name} {self.item.to_be()} open."
         # Reveal what's inside so the player learns what they can take, rather
         # than having to guess (the contents are now reachable by GET).
         contents = [
@@ -863,7 +887,7 @@ class Close(base.Action):
     def __init__(self, game, command: str, actor=None):
         super().__init__(game, actor=actor)
         self.character = self.acting_character(command, hint="wants to close something")
-        scope = {**self.character.location.items, **self.character.inventory}
+        scope = self.parser.get_items_in_scope(self.character)
         self.item = self.parser.match_item(command, scope, hint="thing to close")
 
     def check_preconditions(self) -> bool:
@@ -873,14 +897,16 @@ class Close(base.Action):
             self.parser.fail(f"You can't close the {self.item.name}.")
             return False
         if self.item.get_property("is_closed"):
-            self.parser.fail(f"The {self.item.name} is already closed.")
+            self.parser.fail(
+                f"The {self.item.name} {self.item.to_be()} already closed."
+            )
             return False
         return True
 
     def apply_effects(self):
         self.item.set_property("is_closed", True)
         # Item-subject phrasing, matching Open (and Light/Douse).
-        self.parser.ok(f"The {self.item.name} is closed.")
+        self.parser.ok(f"The {self.item.name} {self.item.to_be()} closed.")
 
 
 class Unlock_Door(base.Action):

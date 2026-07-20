@@ -297,6 +297,8 @@ watch, not for ending the run. The menu prefills the URL you just left, so
 loses no frames). Use the window close, the run monitor's Emergency stop, or
 `POST /shutdown` when you actually want the sim to stop.
 
+**Boil-from-memory experiment (#595).** `uv run python -m backend.penn.experiments.boil_from_memory --trials 5` (from `godot-generative-agents/`, needs `ANTHROPIC_API_KEY`) runs a live Haiku brain on the single-persona boil world with vs without a seeded "the unboiled water made me sick" memory, and prints the boil-before-drink rate for each arm. Add `--offline` for a key-free plumbing check (scripted brain, not a real measurement).
+
 Every request is printed to the server terminal as it happens (the **LLM
 request monitor**, `backend/llm_monitor.py`; `--no-monitor` silences it):
 
@@ -340,7 +342,10 @@ is the outage signal). Every `frame` feed record carries `tick_ms` (+
 `deciders`), so a client can tell "thinking" from "stuck" (the viewer-side
 indicator is #372). To *feel* the
 stalls without spending anything: `--mock-latency 5 --decide-workers 3` under
-the mock brain.
+the mock brain. `deciding` — a per-agent decision lifecycle record
+(`{agent, state: "begin"|"end", step, elapsed_ms?}`, #551), emitted under a
+real/scripted brain; the viewer shows a per-agent "thinking" bubble from it
+(and the global badge prefers it over stall-inference).
 
 ### The run monitor (top-right)
 

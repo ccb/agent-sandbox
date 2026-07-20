@@ -33,6 +33,7 @@ from text_adventure_games.usage import UsageLedger
 from .cognition import (
     attach_agents,
     maybe_converse,
+    maybe_react,
     maybe_revise_plan,
     memories_for_frame,
     memory_stream_for_persona,
@@ -40,6 +41,7 @@ from .cognition import (
     remember_outcome,
     score_new_memories,
 )
+from backend.drives import accrue_thirst
 from .sim_clock import SimClock
 from .sim_config import CognitionConfig
 from .world_map import WorldMap
@@ -70,7 +72,9 @@ def _resting_pron(char, schedule, matched, name, emoji):
 DEVIATED = "deviated"
 
 
-def _decide_for(game, char, step_idx, retrieval, clock=None, stop_since=0):
+def _decide_for(
+    game, char, step_idx, retrieval, clock=None, stop_since=0, deciding_sink=None
+):
     """Stamp the agent's LLM-usage context, then observe + decide (one call).
 
     The single decision entry point for both the serial path (called inline
@@ -93,9 +97,20 @@ def _decide_for(game, char, step_idx, retrieval, clock=None, stop_since=0):
     # outcome, the same shape react_behavior gives engine NPCs. The usage
     # context above is set first so the decide() call inside
     # observe_and_decide is attributed to this persona/step.
-    return observe_and_decide(
-        game, char, step_idx, retrieval=retrieval, clock=clock, stop_since=stop_since
-    )
+    if deciding_sink is not None:
+        deciding_sink(char.name, "begin", step_idx)
+    try:
+        return observe_and_decide(
+            game,
+            char,
+            step_idx,
+            retrieval=retrieval,
+            clock=clock,
+            stop_since=stop_since,
+        )
+    finally:
+        if deciding_sink is not None:
+            deciding_sink(char.name, "end", step_idx)
 
 
 def _result_or_none(fut):
@@ -129,6 +144,17 @@ def _model_duration_steps(agent, clock, cog) -> int | None:
     return _minutes_to_steps(minutes, clock)
 
 
+def _settles_in_place(game, command: str) -> bool:
+    """Did this command's verb opt into the #581 pacing slots? Those verbs
+    (perform, study, and any future #446 verb whose ``ARGUMENTS_SCHEMA``
+    advertises ``duration_minutes``) settle even when the brain gave no
+    explicit duration -- read off the registered action's schema, the same
+    signal cognition.py derives its ``pacing_tools`` set from, so a new
+    duration verb never needs a hand-edit here."""
+    action = game.parser.actions.get(command.split(" ", 1)[0])
+    return "duration_minutes" in (getattr(action, "ARGUMENTS_SCHEMA", None) or {})
+
+
 def step(
     game,
     chars: dict,
@@ -143,11 +169,13 @@ def step(
     conversation_enabled: bool = False,
     conversation_cooldowns: dict | None = None,
     active_conversations: dict | None = None,
+    react_state: dict | None = None,
     cog: CognitionConfig | None = None,
     decide_executor: concurrent.futures.Executor | None = None,
     decide_timeout: float | None = None,
     decide_pending: dict | None = None,
     decide_info: dict | None = None,
+    deciding_sink=None,
 ) -> tuple[dict, int]:
     """Run exactly one 10-second tick and return ``(frame, chats_this_step)``.
 
@@ -214,6 +242,18 @@ def step(
         conversation_cooldowns if conversation_cooldowns is not None else {}
     )
     cog = cog if cog is not None else CognitionConfig()
+
+    # React gate (#370): edge-triggered encounter detection needs memory of
+    # who was already in range last tick. A throwaway dict would make every
+    # tick look like a fresh encounter and storm the brain with react
+    # consults, so -- like active_conversations above -- a caller that enables
+    # react must own a persistent dict.
+    if conversation_enabled and cog.react_enabled and react_state is None:
+        raise ValueError(
+            "react_enabled requires a persistent react_state dict (#370): "
+            "with a throwaway dict every tick looks like a fresh encounter "
+            "and the react consult fires every single tick"
+        )
 
     # Give per-agent memory a coherent time axis: the step index is the "turn"
     # memories are stamped and scored against (issue #75). The custom loop never
@@ -302,6 +342,7 @@ def step(
                 retrieval,
                 clock=clock,
                 stop_since=state[name].get("stop_since", 0),
+                deciding_sink=deciding_sink,
             )
         if futs:
             # One shared wall-clock window: the futures started together, so
@@ -337,6 +378,14 @@ def step(
         char = chars[name]
         st = state[name]
 
+        # Opt-in thirst drive (#594): accrue once per character per step,
+        # before that character's own decision below, so a just-crossed
+        # IS_THIRSTY is visible to the same tick's decide. Unconditional (not
+        # gated on `due`) because a walking/performing agent still gets
+        # thirsty between decisions. A no-op for any persona without
+        # thirst_rate, so the default bake is untouched.
+        accrue_thirst(char)
+
         # Decision point: idle and not yet settled into an activity. The
         # pre-pass above already evaluated exactly that predicate into `due`
         # (nothing between the two passes touches another agent's state), so
@@ -353,6 +402,7 @@ def step(
                     retrieval,
                     clock=clock,
                     stop_since=st.get("stop_since", 0),
+                    deciding_sink=deciding_sink,
                 )
             )
             # Capture the thinking behind this decision for the replay card: the
@@ -369,6 +419,26 @@ def step(
                 st["memories"] = memories_for_frame(
                     getattr(char.agent, "last_retrieved", None)
                 )
+            # #581 pacing args are minutes -> steps; with no clock they can't
+            # be honored (_model_duration_steps below returns None), so drop
+            # the stash BEFORE the command runs. This keeps the settled-wait
+            # consumers (WaitPenn's activity stamp, remember_outcome's
+            # honest-idle memory) aligned with the settle trigger: a clockless
+            # wait is a plain one-tick idle, not a settled one. No-op for the
+            # mock brain, which never stashes -- the bake is untouched.
+            if clock is None and char.agent is not None:
+                char.agent.last_duration_minutes = None
+            else:
+                # #581/#615: clamp the brain's duration pick once, here at the
+                # source, so every consumer of the stash -- Study's ledger in
+                # apply_effects and _model_duration_steps below -- reads the same
+                # value the settle actually uses (bounds are this run's config).
+                minutes = getattr(char.agent, "last_duration_minutes", None)
+                if minutes is not None:
+                    char.agent.last_duration_minutes = max(
+                        cog.duration_min_minutes,
+                        min(cog.duration_max_minutes, minutes),
+                    )
             if command and game.parser.parse_command(command, actor=char):
                 remember_outcome(char, command, step_idx)
                 # LLM-scored poignancy (issue #583): override this tick's new
@@ -406,13 +476,23 @@ def step(
                     )
                     st["pron"] = WALK_EMOJI
                     st["desc"] = f"walking to {dest.name} @ {address}"
-                elif command.startswith("perform") or model_duration_steps is not None:
-                    # Settle into an in-place activity. The trigger is "perform,
-                    # OR any action that carried a model duration" -- so a future
-                    # duration-bearing verb (#446 study/eat) settles here too,
-                    # while the #300 instantaneous verbs (get/drink/activate),
-                    # which carry no duration and aren't "perform", keep falling
-                    # through as one-tick actions (byte-identical).
+                elif (
+                    command.startswith("perform")
+                    or (clock is not None and _settles_in_place(game, command))
+                    or model_duration_steps is not None
+                ):
+                    # Settle into an in-place activity. The trigger is "perform
+                    # (the legacy always-settles verb the clockless mock bake
+                    # relies on), OR a pacing-slot verb (study #615, wait #614)
+                    # WITH a clock to pace against, OR any action that carried a
+                    # model duration" -- a duration-less study must still settle
+                    # (with a clock), or the agent re-decides (and re-accumulates
+                    # studied_minutes) every tick. The clock gate keeps a
+                    # clockless wait a plain one-tick idle (#614): with no clock,
+                    # pacing can't be honored, so wait/study fall through like
+                    # the #300 instantaneous verbs (get/drink/activate), which
+                    # advertise no duration slot and never settle. Byte-identical:
+                    # the mock only ever emits perform, whose settle is unchanged.
                     st["performing"] = True
                     schedule = char.agent.schedule
                     # Place-match is the pacing-relevant signal: standing at the
@@ -502,9 +582,16 @@ def step(
                     char, RevisionTrigger(ACTION_FAILED, step_idx, reason), clock
                 )
 
-        # Advance one tile along any active walk.
-        if st["path"]:
+        # Advance one tile along any active walk -- unless pinned mid-walk by
+        # a react-started conversation (#370). Inert before #370: a
+        # conversation could only ever start between settled agents, whose
+        # path is empty, so no pinned agent ever had tiles left to walk.
+        # The character mirrors the state tile so TiledGame.can_perceive
+        # judges distance from where the agent actually stands, not its
+        # spawn point (issue #662).
+        if st["path"] and not st.get("conversing"):
             st["tile"] = st["path"].pop(0)
+            chars[name].tile = tuple(st["tile"])
             if not st["path"]:
                 # Arrived: re-anchor the decide-context clock (#580) so
                 # "how long on this stop" counts time AT the stop --
@@ -535,6 +622,23 @@ def step(
     # brain, so the default replay is unchanged.
     chats_this_step = 0
     if conversation_enabled:
+        # React-or-continue (#370): BEFORE the conversation pass, so a greet's
+        # first line is spoken this same tick by maybe_converse's advance
+        # phase. Off by default (cog.react_enabled) -> byte-identical.
+        if cog.react_enabled:
+            maybe_react(
+                chars,
+                state,
+                step_idx,
+                conversation_cooldowns,
+                order,
+                react_state=react_state,
+                active=active_conversations,
+                cooldown_steps=cog.conversation_cooldown_steps,
+                react_cooldown_steps=cog.react_cooldown_steps,
+                react_hour_cap=cog.react_hour_cap,
+                clock=clock,
+            )
         chats_this_step = maybe_converse(
             game,
             chars,
@@ -545,6 +649,7 @@ def step(
             order,
             cooldown_steps=cog.conversation_cooldown_steps,
             max_exchanges=cog.conversation_max_exchanges,
+            line_playback_steps=cog.conversation_line_playback_steps,
             clock=clock,
             active=active_conversations,
         )
@@ -572,7 +677,9 @@ def simulate(
     out_planner_sources: dict | None = None,
     out_plans: dict | None = None,
     out_events: list | None = None,
+    out_wishes: list | None = None,
     extra_action_names: list[str] | None = None,
+    stop_when=None,
 ) -> list[dict]:
     """Run the simulation and return one movement frame per step.
 
@@ -662,8 +769,21 @@ def simulate(
     (issue #467) as ``to_primitive()`` dicts — the #305 ``EventState`` shape
     the bake artifacts persist and the live feed publishes.
 
+    Pass an ``out_wishes`` list to collect the run's full ``ActionWish`` log
+    (issue #622) as ``to_primitive()`` dicts — the demand-signal record a
+    ``propose`` (or an unparsed command, #621) leaves behind. Empty for a
+    mock-brain run by construction: the mock never proposes and its authored
+    commands always parse, so ``game.wishes`` stays empty for the whole day.
+
     Pass ``extra_action_names`` (spec §3, #300) through to :func:`attach_agents` to
     widen every agent's ``action_names`` beyond its own authored-command verbs.
+
+    Pass ``stop_when`` (a ``game -> bool`` predicate, #676) to end the run early:
+    it is checked after each step's frame is recorded, and a truthy result breaks
+    the loop (the deciding step stays in the returned frames). Used by the boil
+    experiment to stop the moment the outcome is decided instead of paying for
+    idle live decides afterward. ``None`` (the default) runs the full ``num_steps``
+    -- so the bake path is byte-identical.
     """
     # The world is injected: a caller passes its own personas + builder (e.g.
     # penn_world's perception-gated builder). The builder receives the world_map
@@ -730,7 +850,9 @@ def simulate(
             "on_plan": True,
             # Pinned while a multi-tick conversation runs (issue #371): step()'s
             # pre-pass skips schedule-advance/decision/movement for a conversing
-            # agent, so the meeting isn't interrupted. Cleared when it ends.
+            # agent, so the meeting isn't interrupted. Stays set through the
+            # post-conversation playback hold (#673) -- the pair stands together
+            # while the viewer plays the exchange back -- then clears.
             "conversing": False,
         }
 
@@ -744,6 +866,10 @@ def simulate(
     # SAME multi-tick form as live -- there is no separate in-tick path -- but the
     # mock never speaks, so a bake holds zero conversations and stays byte-identical.
     active_conversations: dict = {}
+    # Who was already within mutual sight last tick (issue #370) -- the react
+    # pass's edge detector. Persistent for the run, like the two dicts above;
+    # inert unless cognition.react_enabled is set in the caller's config.
+    react_state: dict = {}
 
     # Heartbeat plumbing (real-brain runs only). A live run makes many blocking
     # API calls per turn with no other output during quiet stretches, which reads
@@ -787,6 +913,7 @@ def simulate(
             conversation_enabled=conversation_enabled,
             conversation_cooldowns=conversation_cooldowns,
             active_conversations=active_conversations,
+            react_state=react_state,
             cog=cog,
         )
         frames.append(frame)
@@ -812,6 +939,15 @@ def simulate(
                 )
             )
 
+        # Early termination (#676): a caller can end the run as soon as the
+        # thing it measures has happened -- e.g. the boil experiment stops the
+        # moment the agent drinks, rather than paying for ~75 more live decides
+        # by an agent with nothing left to pursue. Checked after the frame is
+        # recorded, so the deciding step stays in the replay. Never set on the
+        # bake path, so the bundled replay is byte-identical.
+        if stop_when is not None and stop_when(game):
+            break
+
     # Hand back each agent's complete memory stream, if the caller asked for it.
     if out_memories is not None:
         for name in order:
@@ -831,5 +967,12 @@ def simulate(
     # and the live feed carry the identical record.
     if out_events is not None:
         out_events.extend(event.to_primitive() for event in game.events)
+
+    # Hand back the run's full ActionWish log, if the caller asked for it
+    # (issue #622). Already-serialized WishState dicts, so bake artifacts and
+    # the live feed carry the identical record. Empty under the mock brain by
+    # construction (see the docstring above).
+    if out_wishes is not None:
+        out_wishes.extend(wish.to_primitive() for wish in game.wishes)
 
     return frames

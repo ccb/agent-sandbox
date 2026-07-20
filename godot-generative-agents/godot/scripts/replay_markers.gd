@@ -1,7 +1,7 @@
 extends RefCounted
 ## Pure marker collection for the timeline scrubber (issue #249): scan a loaded
 ## replay once and return the "interesting moments" as marker dictionaries
-## {step, kind, agent, label}, sorted by step. Four sources, four kinds:
+## {step, kind, agent, label}, sorted by step. Five sources, five kinds:
 ##   event      — the #476 game-event run record (replay top-level `events`)
 ##   chat       — a conversation onset (an agent's `chat` goes empty -> non-empty)
 ##   reflection — a reflection forming (memory_streams, kind == "reflection")
@@ -9,6 +9,10 @@ extends RefCounted
 ##                during travel the act address is already the DESTINATION's, so
 ##                an address change marks departure — the prefix is the signal,
 ##                same convention serve_penn.py keys on)
+##   wish       — an ActionWish demand-signal record (#622, surfaced #625): the
+##                replay top-level `wishes` array, one marker per record at its
+##                `turn`, same shape as `events` but its own kind (a wish is not
+##                a game event — it never happened, it was only wanted).
 ## Pure functions over plain Arrays/Dictionaries — no scene nodes, so the whole
 ## file is unit-testable headlessly (tests/test_replay_markers.gd).
 
@@ -18,7 +22,7 @@ const WALKING_PREFIX := "walking to "
 
 
 static func collect(frames: Array, names: Array, memory_streams: Dictionary,
-		events: Array) -> Array:
+		events: Array, wishes: Array = []) -> Array:
 	var markers: Array = []
 	var last := frames.size() - 1
 	if last < 0:
@@ -29,12 +33,32 @@ static func collect(frames: Array, names: Array, memory_streams: Dictionary,
 		var step := int((rec as Dictionary).get("turn", -1))
 		if step < 0 or step > last:
 			continue
-		var actor := String((rec as Dictionary).get("actor", ""))
+		# World-level stimuli (ambient sound, POST /world/event, the boil arc's
+		# `boiled` event) carry actor=null/"": label them "world". The raw value
+		# was crashing here -- String(null) has no constructor -- so the whole
+		# marker strip failed to build on any replay with a world event (#631).
+		var actor_raw: Variant = (rec as Dictionary).get("actor", "")
+		var actor := "world" if actor_raw == null or String(actor_raw).is_empty() \
+			else String(actor_raw)
 		# Carry the event `action` (sickness/boiled/recovery/...) so the strip can
 		# style each type distinctly (#593); the label stays "actor: summary".
 		markers.append({"step": step, "kind": "event", "agent": actor,
 			"action": String((rec as Dictionary).get("action", "")),
 			"label": "%s: %s" % [actor, String((rec as Dictionary).get("summary", ""))]})
+
+	# Wishes (#622, surfaced #625): one marker per ActionWish record, at its
+	# `turn` -- the demand-side twin of the events loop above. An actor-less
+	# wish shouldn't happen (ActionWish.actor is only null when no actor
+	# resolved), but guard the same way events do (#631) rather than crash.
+	for rec in wishes:
+		var step := int((rec as Dictionary).get("turn", -1))
+		if step < 0 or step > last:
+			continue
+		var actor_raw: Variant = (rec as Dictionary).get("actor", "")
+		var actor := "world" if actor_raw == null or String(actor_raw).is_empty() \
+			else String(actor_raw)
+		markers.append({"step": step, "kind": "wish", "agent": actor,
+			"label": "💭 %s wishes: %s" % [actor, _trim(String((rec as Dictionary).get("desired", "")))]})
 
 	# Reflections: from each persona's full memory stream, at the step it formed.
 	for name in memory_streams:

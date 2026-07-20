@@ -282,6 +282,14 @@ def tools_for(parser, actor=None, names=None, max_enum: int | None = _MAX_SCOPE_
     stays the authoritative menu even when it lists a verb the parser hasn't
     registered.
 
+    Affordance curation (issue #612): a verb declaring ``REQUIRED_AFFORDANCES``
+    is offered only when its ``affordance_in_scope`` check passes for *actor* --
+    the same check the verb's precondition gate runs, so a curated verb is
+    offered exactly when the gate's place-check would pass. Verbs with the
+    empty (default) declaration are universal and always offered, which also
+    keeps the curated set non-empty (the built-in go/look/wait never vanish).
+    Without an *actor* there is no scope to read, so nothing is curated.
+
     Token budget: tool definitions count against context and are NOT trimmed by
     :func:`~text_adventure_games.llm_client.limit_context_length`, so scope enums
     are capped (see :data:`_MAX_SCOPE_ENUM`) and a caller may pass a narrower
@@ -300,6 +308,15 @@ def tools_for(parser, actor=None, names=None, max_enum: int | None = _MAX_SCOPE_
             continue
         seen.add(name)
         action, desc, aliases = entries.get(name, (None, "", []))
+        # Affordance curation (#612): skip a tagged verb when nothing in the
+        # actor's scope affords it. Universal verbs (the default) pass through.
+        if (
+            actor is not None
+            and action is not None
+            and getattr(action, "REQUIRED_AFFORDANCES", ())
+            and not action.affordance_in_scope(actor, parser.game)
+        ):
+            continue
         tool = _build_action_tool(name, action, desc, aliases, parser, actor, max_enum)
         clash = verb_by_tool_name.get(tool["name"])
         if clash is not None:
@@ -1012,17 +1029,33 @@ def build_npc_context(character, game) -> str:
     # Full environment observation from the game engine
     lines.append(game.describe_for(character))
 
-    # Recent command history (last 5 exchanges)
-    # "Last 5" is a bit misleading, since llm_parser and parser respond differently to failure
-    # Could be something to look into
-    history = game.parser.command_history[-10:]
+    # Recent command history, scoped and attributed (issue #629): a command
+    # only appears if it was issued where this character now stands, and it is
+    # labeled with the name of whoever issued it ("You:" for the character's
+    # own commands). Unattributed entries (trigger-fired/scripted commands,
+    # actor=None) keep the legacy "Player:" label and are never filtered, and
+    # game narrations ("Game:") stay unscoped.
+    here = character.location.name if character.location else None
+    history = []
+    for entry in game.parser.command_history:
+        where = entry.get("location")
+        if entry["role"] == Role.USER and None not in (where, here) and where != here:
+            continue
+        history.append(entry)
+    history = history[-10:]
     if history:
         lines.append("")
         lines.append("Recent events:")
         for entry in history:
-            role = entry["role"]
             content = entry["content"]
-            prefix = "  Player:" if role == Role.USER else "  Game:"
+            if entry["role"] != Role.USER:
+                prefix = "  Game:"
+            elif entry.get("actor") == character.name:
+                prefix = "  You:"
+            elif entry.get("actor"):
+                prefix = f"  {entry['actor']}:"
+            else:
+                prefix = "  Player:"
             lines.append(f"{prefix} {content[:200]}")
 
     # What the character has recently heard. This is scoped per-character: only

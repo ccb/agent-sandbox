@@ -60,6 +60,10 @@ const LOG_ROLE_TINTS := {
 	"plan": Color(0.17, 0.29, 0.56),
 	"reflect": Color(0.18, 0.45, 0.18),
 }
+# The wish row's tint (#622, surfaced #625): the same rose-pink as
+# timeline_markers.gd's KIND_COLORS["wish"], so a demand-signal record reads
+# as the same color in both the live request log and the baked-replay strip.
+const WISH_TINT := Color("d9569f")
 
 var _dot: ColorRect
 var _status: Label
@@ -356,6 +360,46 @@ func add_engine_event(event: Dictionary) -> void:
 			% [channel, when, when, MUTED_COLOR.to_html(false), channel, text]
 		)
 	)
+
+
+func add_wish(rec: Dictionary) -> void:
+	## Append one row for an ActionWish demand-signal record (#622, surfaced
+	## #625): the actor wanted an action the game doesn't have (a deliberate
+	## `propose`, or an unparsed command). The compact row shows the 💭 marker
+	## + actor + a clipped `desired`; hovering reveals desired + reason +
+	## trigger in full -- the same "hint = full detail" idiom add_llm_call and
+	## add_engine_event use. desired/reason are free text (an LLM composed
+	## them), so brackets are neutralized before either lands in bbcode: a
+	## stray "[" in the row, or a stray "]" in the hint attribute (which would
+	## close the `[hint=...]` tag early), must not corrupt the RichTextLabel.
+	var desired := _wish_field(rec, "desired")
+	if desired.is_empty():
+		return
+	var reason := _wish_field(rec, "reason")
+	var trigger := String(rec.get("trigger", "")).strip_edges()
+	var actor := String(rec.get("actor")) if rec.get("actor") != null else "-"
+	var turn: Variant = rec.get("turn")
+	var when := "t%s" % str(turn) if turn != null else "-"
+	var clipped := desired if desired.length() <= 60 else desired.substr(0, 59) + "…"
+	var hint := "%s wishes (%s) · %s: %s" % [actor, trigger, when, desired]
+	if not reason.is_empty():
+		hint += " — because %s" % reason
+	_push_row(
+		(
+			"[hint=%s][color=#8a7660]%s[/color] [color=#%s]💭 wish[/color] %s: %s[/hint]"
+			% [_bracket_safe(hint), when, WISH_TINT.to_html(false), actor, clipped.replace("[", "[lb]")]
+		)
+	)
+
+
+func _wish_field(rec: Dictionary, key: String) -> String:
+	return String(rec.get(key, "")).strip_edges().replace("\n", " ")
+
+
+func _bracket_safe(text: String) -> String:
+	# Free text embedded in a [hint=...] attribute value must not carry an
+	# unescaped "]" -- it would close the tag early, garbling the row.
+	return text.replace("[", "(").replace("]", ")")
 
 
 func _push_row(line: String) -> void:

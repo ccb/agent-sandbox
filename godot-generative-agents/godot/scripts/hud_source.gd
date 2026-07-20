@@ -49,6 +49,14 @@ signal llm_call(record: Dictionary)
 ## rode the same feed as llm_calls (#394). Re-emitted so the HUD logs it in the
 ## same event feed instead of the viewer dropping it.
 signal engine_event(event: Dictionary)
+## One ActionWish demand-signal record arrived on the live feed (#622, surfaced
+## #625): the actor wanted an action the game doesn't have -- a deliberate
+## `propose`, or an unparsed command (a parse gap). Rides its OWN top-level
+## `kind: "wish"` (not wrapped in "engine" like llm_call/game_event rows), so
+## viewer.gd routes it here directly rather than through note_engine_event.
+## Re-emitted so the HUD logs it in the same request log, live-only (the
+## request log is hidden entirely in baked-replay mode -- see hud_source_replay.gd).
+signal wish(record: Dictionary)
 
 ## SIMULATED = baked-replay mode, numbers are synthetic; OK/DEGRADED/DOWN are
 ## the live-backend liveness ladder (healthy / missed a check / unreachable).
@@ -92,3 +100,9 @@ func note_engine_event(event: Dictionary) -> void:
 	## Seam twin of note_llm_call for the *other* engine change-feed records on
 	## the feed — narration, blocked, ... (#394). Re-emitted as engine_event.
 	engine_event.emit(event)
+
+
+func note_wish(record: Dictionary) -> void:
+	## Seam twin of note_llm_call/note_engine_event for a `wish` change-feed
+	## record (#622/#625). Re-emitted as the wish signal.
+	wish.emit(record)

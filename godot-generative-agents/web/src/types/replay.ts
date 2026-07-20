@@ -108,10 +108,34 @@ export interface MemoryRecord {
  * GameEvent.to_primitive()). `payload` is event-specific structured detail. */
 export interface EventState {
   turn: number;
-  actor: string;
+  /** null for world-level stimuli with no single actor — ambient sound,
+   * POST /world/event, the boil arc's `boiled` event (#631). */
+  actor: string | null;
   action: string;
   summary: string;
   payload: Record<string, unknown>;
+}
+
+/** One ActionWish log entry — the #622 demand record (verbatim
+ * ActionWish.to_primitive()). Recorded deliberately (the `propose` verb) or
+ * automatically (a command that matched no verb at all, #621). */
+export interface WishState {
+  /** null if no actor resolved (mirrors EventState's null actor). */
+  actor: string | null;
+  turn: number;
+  location: string | null;
+  desired: string;
+  /** The because-clause; "" for parse-gap wishes. */
+  reason: string;
+  /** "proposed" | "parse_gap". */
+  trigger: string;
+  /** Incomplete goals, described, at wish time. */
+  goals: string[];
+  /** Item/character names in scope at wish time. */
+  scope: string[];
+  raw_command: string;
+  /** Extension point (#41 nouns, ...). */
+  meta: Record<string, unknown>;
 }
 
 export interface Replay {
@@ -122,4 +146,6 @@ export interface Replay {
   memory_streams?: Record<string, MemoryRecord[]>;
   /** The GameEvent run record (#467). Absent from replays baked before it. */
   events?: EventState[];
+  /** The ActionWish demand record (#622). Absent from replays baked before it. */
+  wishes?: WishState[];
 }

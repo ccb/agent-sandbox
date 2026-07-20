@@ -89,6 +89,58 @@ func _initialize() -> void:
 	_check(String(evts[0]["label"]) == "Ada: drank unboiled water", "event label is 'actor: summary'")
 	_check(String(evts[0]["action"]) == "drink", "event marker carries the action type (#593)")
 
+	# --- actor-less world events get a "world" fallback label (#631) ---
+	# Ambient sound, POST /world/event, the boil arc's `boiled` event carry
+	# actor=None (or ""); the tooltip must read "world: summary", not the broken
+	# "<null>: ..." / ": ..." the raw actor produced.
+	var world_events := [
+		{"turn": 3, "actor": null, "action": "boiled",
+			"summary": "the pot is boiled clear on the stove", "payload": {}},
+		{"turn": 3, "actor": "", "action": "world_event",
+			"summary": "a siren wails", "payload": {}},
+	]
+	var world_evts := _of_kind(
+		ReplayMarkers.collect(frames, names, {}, world_events), "event")
+	_check(world_evts.size() == 2, "actor-less world events still produce markers")
+	_check(String(world_evts[0]["label"]) == "world: the pot is boiled clear on the stove",
+		"a null-actor event labels as 'world: summary' (#631)")
+	_check(String(world_evts[0]["agent"]) == "world",
+		"a null-actor event's agent is 'world' (#631)")
+	_check(String(world_evts[1]["label"]) == "world: a siren wails",
+		"an empty-actor event also labels as 'world' (#631)")
+
+	# --- wishes (#622 demand-signal record, surfaced #625) ---
+	var wishes := [
+		{"turn": 1, "actor": "Ada", "location": "UPenn:X", "desired": "a bike rack",
+			"reason": "mine got stolen", "trigger": "proposed", "goals": [], "scope": [],
+			"raw_command": "propose a bike rack because mine got stolen", "meta": {}},
+		{"turn": 99, "actor": "Ada", "location": "UPenn:X", "desired": "out of range",
+			"reason": "", "trigger": "proposed", "goals": [], "scope": [],
+			"raw_command": "propose out of range", "meta": {}},
+	]
+	var wish_markers := _of_kind(ReplayMarkers.collect(frames, names, {}, [], wishes), "wish")
+	_check(wish_markers.size() == 1 and wish_markers[0]["step"] == 1,
+		"in-range wish kept, out-of-range dropped")
+	_check(String(wish_markers[0]["agent"]) == "Ada", "wish marker carries the actor")
+	_check("💭" in String(wish_markers[0]["label"]) and "a bike rack" in String(wish_markers[0]["label"]),
+		"wish label carries the 💭 marker and the desired action")
+	# wishes defaults to [] when a caller (or an older code path) omits it --
+	# no wish markers appear, and the call doesn't crash for lack of the arg.
+	_check(_of_kind(ReplayMarkers.collect(frames, names, {}, events), "wish").is_empty(),
+		"collect() without a wishes arg produces no wish markers (default [])")
+
+	# actor-less wishes get the same "world" fallback as actor-less events (#631) --
+	# ActionWish.actor is only null when no actor resolved, but guard it the same way.
+	var world_wishes := [
+		{"turn": 1, "actor": null, "location": null, "desired": "a working printer",
+			"reason": "", "trigger": "parse_gap", "goals": [], "scope": [],
+			"raw_command": "print the essay", "meta": {}},
+	]
+	var world_wish_markers := _of_kind(
+		ReplayMarkers.collect(frames, names, {}, [], world_wishes), "wish")
+	_check(world_wish_markers.size() == 1 and String(world_wish_markers[0]["agent"]) == "world",
+		"an actor-less wish still produces a marker, labeled 'world'")
+
 	# --- per-event-type styling (timeline_markers.gd), #593 ---
 	var c_sick := TimelineMarkers.color_for("event", "sickness")
 	var c_boil := TimelineMarkers.color_for("event", "boiled")
@@ -112,6 +164,15 @@ func _initialize() -> void:
 		"sickness color is perceptually distinct from the default event red")
 	_check(_far(c_rec, TimelineMarkers.KIND_COLORS["arrival"], 0.15),
 		"recovery color is perceptually distinct from the arrival green")
+	# wish (#622/#625) gets its own KIND_COLORS entry, distinct from every other
+	# tick kind already on the strip (not just event/chat/reflection/arrival, but
+	# also the #593 event sub-styles it shares the strip with).
+	var c_wish := TimelineMarkers.color_for("wish", "")
+	_check(c_wish == TimelineMarkers.KIND_COLORS["wish"], "wish resolves via KIND_COLORS")
+	for other in [c_default, TimelineMarkers.KIND_COLORS["chat"],
+			TimelineMarkers.KIND_COLORS["reflection"], TimelineMarkers.KIND_COLORS["arrival"],
+			c_sick, c_boil, c_rec]:
+		_check(_far(c_wish, other, 0.15), "wish color is perceptually distinct from every other tick")
 
 	# tooltip_line prefixes known event types with an emoji + the type name.
 	var sick_tip := TimelineMarkers.tooltip_line(
@@ -127,14 +188,20 @@ func _initialize() -> void:
 		{"step": 2, "kind": "chat", "label": "Ada starts a conversation"})
 	_check(chat_tip == "step 2 — Ada starts a conversation",
 		"non-event kinds keep the plain tooltip")
+	var wish_tip := TimelineMarkers.tooltip_line(
+		{"step": 1, "kind": "wish", "label": "💭 Ada wishes: a bike rack"})
+	_check(wish_tip == "step 1 — 💭 Ada wishes: a bike rack",
+		"wish keeps the plain tooltip (the 💭 marker lives in the label, not EVENT_STYLE)")
 
 	# --- robustness + ordering ---
-	var all := ReplayMarkers.collect(frames, names, streams, events)
+	var all := ReplayMarkers.collect(frames, names, streams, events, wishes)
 	var steps := all.map(func(m: Dictionary) -> int: return m["step"])
 	var steps_sorted: Array = steps.duplicate()
 	steps_sorted.sort()
 	_check(steps == steps_sorted, "markers are sorted by step")
 	_check(ReplayMarkers.collect([], [], {}, []).is_empty(), "empty replay -> no markers, no crash")
+	_check(ReplayMarkers.collect([], [], {}, [], wishes).is_empty(),
+		"empty replay -> no markers even with wishes present, no crash")
 
 	if _failures == 0:
 		print("test_replay_markers: all checks passed")

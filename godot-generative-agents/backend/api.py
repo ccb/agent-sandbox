@@ -444,11 +444,12 @@ class EventsResponse(BaseModel):
 
     ``events`` are the retained records with ``cursor > N``, oldest first --
     the same objects ``WS /ws`` pushes, passed through as plain JSON (shapes:
-    ``kind: "frame" | "status" | "engine"``; see ``backend/README.md``). The
-    log is capped, so a very stale ``since`` may point at evicted history:
-    the client detects that gap by ``events[0].cursor > since + 1`` (or by
-    ``oldest_cursor``) and should re-sync from ``GET /live`` + ``/world_state``
-    instead of trusting the tail."""
+    ``kind: "frame" | "status" | "engine" | "intervention" | "wish"``; see
+    ``backend/README.md``). The log is capped, so a very stale ``since`` may
+    point at evicted history: the client detects that gap by
+    ``events[0].cursor > since + 1`` (or by ``oldest_cursor``) and should
+    re-sync from ``GET /live`` + ``/world_state`` instead of trusting the
+    tail."""
 
     latest_cursor: int
     oldest_cursor: int | None = Field(

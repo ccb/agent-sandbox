@@ -92,16 +92,39 @@ const BUBBLE_WIDTH := 210.0
 # Bubble text size, and how far the bubble's top sits above the nameplate.
 const BUBBLE_FONT_SIZE := 18
 const BUBBLE_Y_OFFSET := 78.0
+# The per-agent "thinking…" cue (#551) parks this much further up than the
+# speech bubble, so a mid-decision agent who is also mid-conversation shows
+# both without them overlapping.
+const THINK_Y_EXTRA := 30.0
 # A conversation plays back as staggered turn-taking: each line is shown for this
 # many sim steps, by ONLY its speaker, before the reply takes over -- so a
 # back-and-forth reads as a real exchange, not both agents talking at once. Each
-# line fades over its last FADE steps.
+# line fades over its last FADE steps. The backend paces to this constant so the
+# playback never outlives the talkers standing together: penn_world.py mirrors it
+# for the meeting injectors, and cognition.py's CONVERSATION_LINE_PLAYBACK_STEPS
+# (the #673 post-conversation hold) pins real #371 pairs for lines x this many
+# steps. Keep all three in sync.
 const DIALOGUE_LINE_STEPS := 14.0
 const DIALOGUE_FADE_STEPS := 2.0
 # Long utterances are clipped so a bubble stays a couple of lines tall.
 const BUBBLE_MAX_CHARS := 120
 # Near-black dialogue text on the white speech bubble.
 const SPEECH_TEXT_COLOR := Color(0.10, 0.10, 0.12)
+
+# Wish bubble (#622 ActionWish, surfaced #625): a distinct 💭 marker shown over
+# the wishing agent, parked ABOVE the dialogue bubble's slot (BUBBLE_Y_OFFSET)
+# so the two never overlap on the rare step where both fire. Unlike the
+# dialogue bubble's staggered turn-taking playback, a wish is a single flash:
+# it fades in, holds, and fades out over WISH_FADE_STEPS sim steps once
+# triggered (see _update_agent_wish / _refresh_wish_bubble).
+const WISH_BUBBLE_Y_OFFSET := 140.0
+const WISH_FADE_STEPS := 8.0
+const WISH_FADE_IN_STEPS := 1.0
+const WISH_FADE_OUT_STEPS := 2.0
+# Rose-pink, matching timeline_markers.gd's KIND_COLORS["wish"] and
+# live_hud.gd's WISH_TINT -- the same demand-signal color across every surface.
+const WISH_BORDER_COLOR := Color("d9569f")
+const WISH_TEXT_COLOR := Color(0.25, 0.08, 0.20)
 
 # Perception fog: while you Track an agent, the campus OUTSIDE their perception
 # radius is dimmed under a translucent grey cover, leaving a clear circle around
@@ -131,6 +154,17 @@ const ThinkingIndicator := preload("res://scripts/thinking_indicator.gd")
 const AgentFanout := preload("res://scripts/agent_fanout.gd")
 const LivePacer := preload("res://scripts/live_pacer.gd")
 const RestartDetect := preload("res://scripts/restart_detect.gd")
+const RunState := preload("res://scripts/run_state.gd")
+const PayloadGuards := preload("res://scripts/payload_guards.gd")
+const DecidingState := preload("res://scripts/deciding_indicator.gd")
+
+# The replay/live contract schema this viewer renders (backend.contract
+# SCHEMA_VERSION). A payload declaring a different one still renders, but warns
+# once about likely drift (#638); an absent one is tolerated (older payloads).
+const SUPPORTED_SCHEMA_VERSION := "1.0"
+# One-shot dedupe for the "unknown feed kind" warning so a newer backend
+# streaming an unrecognized kind every tick warns once, not per record (#638).
+var _warned_feed_kinds := {}
 
 var _tile_px := 16
 var _sec_per_step := 10
@@ -191,6 +225,21 @@ var _links_node: Node2D     # parents one Line2D per active conversation pair
 var _link_lines := {}       # sorted "A\nB" pair key -> Line2D
 var _speech_style: StyleBoxFlat
 
+# Wishes (#622 ActionWish record, surfaced #625): `_wishes` holds every record
+# seen so far -- the baked replay's `wishes` array at load, plus each live
+# `wish` feed record appended as it arrives (see _apply_live_wish) -- so the
+# scene marker works identically in both modes, the same way `_frames` unifies
+# baked and live for the rest of the renderer. `_wish_index` is a "%d:%s" %
+# [turn, actor] -> record lookup (built alongside), so the per-step trigger
+# below doesn't rescan the whole array every frame. `_wish_start`/`_wish_text`
+# are the per-agent bubble state the fade animation reads (see
+# _update_agent_wish / _refresh_wish_bubble), mirroring _convo_start/_bubble_idx.
+var _wishes: Array = []
+var _wish_index := {}
+var _wish_start := {}       # name -> sim step (float) its current wish began showing
+var _wish_text := {}        # name -> the bubble text for that wish (💭 + clipped desired)
+var _wish_style: StyleBoxFlat
+
 # Perception fog (see FOG_* above). `_tracked_name` is the agent the camera is
 # following (set on Track, cleared on release), or "" when free -- the fog only
 # shows while it's set. `_vision_r` is the radius in tiles, read from the replay
@@ -245,6 +294,7 @@ const CATCHUP_MAX := 3.0
 var _last_frame_ms := 0
 var _thinking := false
 var _thinking_badge: Control
+var _deciding_state  # DecidingState: per-agent "deciding" lifecycle (#551)
 var _live_url := ""
 var _live_token := ""
 var _ws: WebSocketPeer = null
@@ -334,6 +384,10 @@ func _ready() -> void:
 	# sidebar so it draws in screen space above the world; hidden until a stall.
 	_thinking_badge = preload("res://scripts/thinking_badge.gd").new()
 	$UI.add_child(_thinking_badge)
+	# Per-agent "deciding" lifecycle (#551): fed by the backend's `deciding` feed
+	# records (_apply_record); drives each agent's thinking bubble and lets the
+	# global badge above prefer the real signal over #372's stall-inference.
+	_deciding_state = DecidingState.new()
 	_panel.gallery_requested.connect(_toggle_gallery)
 	_gallery.close_requested.connect(_close_gallery)
 
@@ -363,6 +417,10 @@ func _ready() -> void:
 	# Dialogue bubble: a bright white speech bubble with a blue outline and a
 	# squared-off bottom-left corner (a pointer down toward the speaker).
 	_speech_style = _make_bubble_style(Color(1.0, 1.0, 1.0, 0.95), Color(0.25, 0.52, 0.85), 3, true)
+	# Wish bubble (#625): a pale rose-pink card with the matching WISH_BORDER_COLOR
+	# outline, so a 💭 marker reads as a distinct "thought" from a "spoken" dialogue
+	# bubble at a glance even though it's built from the same shape.
+	_wish_style = _make_bubble_style(Color(0.99, 0.93, 0.97, 0.95), WISH_BORDER_COLOR, 3, true)
 
 	# Holds the per-agent breadcrumb Line2Ds. Added here, before the agent sprites are
 	# spawned during load, so the trails always draw underneath the sprites they trail
@@ -428,6 +486,7 @@ func _setup_hud() -> void:
 	_hud_source.halted_changed.connect(_on_run_halted)
 	_hud_source.llm_call.connect(_hud.add_llm_call)
 	_hud_source.engine_event.connect(_hud.add_engine_event)
+	_hud_source.wish.connect(_hud.add_wish)
 	_hud.stop_requested.connect(_hud_source.request_stop)
 	add_child(_hud_source)
 
@@ -510,31 +569,50 @@ func _on_replay_request_completed(
 
 func _load_replay_from_text(text: String) -> void:
 	var data: Variant = JSON.parse_string(text)
-	if typeof(data) != TYPE_DICTIONARY:
-		push_error("penn_replay: replay payload is not valid replay JSON")
+	# One structural check + a single push_error + graceful abort, instead of
+	# hard-indexing meta/frames off a truncated re-bake or a skewed backend (#638).
+	var load_error := PayloadGuards.replay_load_error(data)
+	if load_error != "":
+		push_error("penn_replay: %s" % load_error)
 		return
+	var replay := data as Dictionary
+	var meta := replay["meta"] as Dictionary
+	if not PayloadGuards.schema_ok(meta, SUPPORTED_SCHEMA_VERSION):
+		push_warning(
+			"penn_replay: replay schema_version '%s' != supported '%s'; rendering may be degraded"
+			% [String(meta.get("schema_version", "?")), SUPPORTED_SCHEMA_VERSION])
 
-	_apply_meta(data["meta"])
-	_frames = data["frames"]
+	_apply_meta(meta)
+	_frames = replay["frames"]
 	# The per-persona full memory history, for the State Details inspector's memory
 	# stream (issue #408). Baked replays carry it; a payload without it (or the live
 	# feed) leaves this empty and the inspector shows only the retrieved-this-step set.
 	_memory_streams = data.get("memory_streams", {})
+	# The ActionWish demand-signal record (#622), surfaced in the scene as a 💭
+	# bubble (#625). Absent from replays baked before #622 -- .get() degrades to
+	# no wishes rather than a load error. Indexed by (turn, actor) so the scene
+	# marker's per-step trigger (_update_agent_wish) doesn't rescan the array.
+	_wishes = data.get("wishes", [])
+	_rebuild_wish_index()
 
 	# The timeline's "interesting moments" (issue #249): game events (#476 —
 	# this is the baked events key's first consumer), chat onsets, reflections,
-	# arrivals. One scan at load; live mode never gets here (no scrubber).
+	# arrivals, wishes (#625). One scan at load; live mode never gets here (no
+	# scrubber).
 	_panel.set_timeline_markers(
-		ReplayMarkers.collect(_frames, _names, _memory_streams, data.get("events", [])),
+		ReplayMarkers.collect(_frames, _names, _memory_streams, data.get("events", []), _wishes),
 		maxi(_frames.size() - 1, 0))
 
 	# Fill the sidebar's Focus dropdown with every building the cast visits over the whole
 	# replay (a one-time scan of all frames), sorted, so the option list is stable as the
 	# sim plays. The building is the middle segment of each `act` address (see _building_of).
 	var buildings := {}  # used as a set
-	for frame in _frames:
+	for fi in _frames.size():
 		for name in _names:
-			var b := _building_of(String((frame[name] as Dictionary)["act"]))
+			var entry := PayloadGuards.agent_entry(_frames, fi, name)
+			if entry.is_empty():
+				continue
+			var b := _building_of(PayloadGuards.act_of(entry))
 			if b != "":
 				buildings[b] = true
 	var sorted_buildings := buildings.keys()
@@ -570,7 +648,10 @@ func _load_replay_from_text(text: String) -> void:
 func _apply_meta(meta: Dictionary) -> void:
 	# World shape + cast, shared verbatim by the baked loader and the live
 	# handshake (issue #263) -- so an agent spawns identically either way.
-	_tile_px = int(meta["tile_px"])
+	# tile_px is guaranteed by the load boundary (replay_load_error); default to
+	# the current value on the live-handshake path so a meta without it can't
+	# crash a typed int() of a missing key (#638).
+	_tile_px = int(meta.get("tile_px", _tile_px))
 	_sec_per_step = int(meta.get("sec_per_step", 10))
 	# Perception radius for the tracking fog -- the sim's vision_r, falling back to
 	# the Smallville default for older replays that don't record it.
@@ -580,9 +661,16 @@ func _apply_meta(meta: Dictionary) -> void:
 	# Older replays/backends don't carry the key; [] just means an empty seed view.
 	_relationships = meta.get("relationships", [])
 	var thumb := _make_thumbnail()
-	for i in meta["personas"].size():
-		var persona: Dictionary = meta["personas"][i]
-		var pname: String = persona["name"]
+	var personas: Variant = meta.get("personas", [])
+	if typeof(personas) != TYPE_ARRAY:
+		personas = []
+	for i in (personas as Array).size():
+		var pentry: Variant = (personas as Array)[i]
+		if typeof(pentry) != TYPE_DICTIONARY or not (pentry as Dictionary).has("name"):
+			push_warning("penn_replay: skipping persona %d with no name in meta" % i)
+			continue
+		var persona := pentry as Dictionary
+		var pname: String = String(persona["name"])
 		var tint: Color = TINTS[i % TINTS.size()]
 		_names.append(pname)
 		# Keep the full persona entry for the State Details inspector (issue #408).
@@ -698,12 +786,12 @@ func _on_live_handshake_completed(
 	# Seed the sidebar's Start/Stop toggle from the handshake. A backend booted
 	# with --start-paused (the --brain llm default) is armed but has never
 	# ticked: the day — and its spend — waits behind "▶ Start simulation".
-	if bool((data as Dictionary).get("paused", false)):
-		_set_backend_run_state(
-			"waiting" if int((data as Dictionary).get("step", 0)) == 0 else "paused"
+	_set_backend_run_state(
+		RunState.from_status(
+			bool((data as Dictionary).get("paused", false)),
+			int((data as Dictionary).get("step", 0)),
 		)
-	else:
-		_set_backend_run_state("running")
+	)
 	# The HTTP backfill only earns its double-fetch (the socket's ?since= replay
 	# covers the same window) when it still has to place the playhead: the first
 	# join and a re-anchor, both of which have _live_started false (a re-anchor's
@@ -754,7 +842,15 @@ func _apply_record(rec: Variant) -> void:
 	if cursor >= 0 and cursor <= _last_cursor:
 		return  # already applied
 	_last_cursor = maxi(_last_cursor, cursor)
-	match String(record.get("kind", "")):
+	var kind := String(record.get("kind", ""))
+	# A newer backend's record kind (an `intervention`, #371 conversation, ...)
+	# is still fail-soft-dropped, but leaves a one-shot breadcrumb so version
+	# drift isn't invisible (#638). `wish` (#622) is known as of #625.
+	if not PayloadGuards.is_known_kind(kind) and not _warned_feed_kinds.has(kind):
+		_warned_feed_kinds[kind] = true
+		push_warning(
+			"penn_replay: ignoring unknown feed kind '%s' -- viewer may be out of date" % kind)
+	match kind:
 		"frame":
 			_apply_live_frame(int(record.get("step", -1)), record.get("agents"))
 		"status":
@@ -772,6 +868,49 @@ func _apply_record(rec: Variant) -> void:
 					_hud_source.note_llm_call(ev)
 				else:
 					_hud_source.note_engine_event(ev)
+		"wish":
+			# A first-class ActionWish demand-signal record (#622) -- NOT
+			# nested inside "engine" the way llm_call/game_event rows are.
+			# Feed it to the scene marker (same _wishes/_wish_index the baked
+			# loader fills, so _update_agent_wish triggers identically either
+			# way) and, live-only, the HUD's request log (#625).
+			_apply_live_wish(record)
+		"deciding":
+			# Per-agent thinking lifecycle (#551): update state, refresh the
+			# one affected agent's bubble.
+			_deciding_state.apply(record)
+			_refresh_deciding(String(record.get("agent", "")))
+
+
+func _apply_live_wish(record: Dictionary) -> void:
+	# A live `wish` feed record: grow the same _wishes/_wish_index the baked
+	# loader fills at load, so the scene's 💭 marker (_update_agent_wish) works
+	# identically whether the record came from a live tick or a bake -- and
+	# push it to the HUD's request log (hidden entirely in baked-replay mode,
+	# so this is effectively live-only, matching add_llm_call/add_engine_event).
+	_wishes.append(record)
+	_index_wish(record)
+	if _hud_source != null:
+		_hud_source.note_wish(record)
+
+
+func _index_wish(wish: Dictionary) -> void:
+	# `_wish_index["turn:actor"] -> record`, so _update_agent_wish's per-step
+	# trigger is an O(1) lookup instead of rescanning all of `_wishes` every
+	# frame. A wish with no `turn` or no `actor` can't be keyed (ActionWish.actor
+	# is only null when no actor resolved, #622) -- skip it rather than crash.
+	var step := int(wish.get("turn", -1))
+	var actor := String(wish.get("actor", ""))
+	if step < 0 or actor == "":
+		return
+	_wish_index["%d:%s" % [step, actor]] = wish
+
+
+func _rebuild_wish_index() -> void:
+	_wish_index.clear()
+	for w in _wishes:
+		if w is Dictionary:
+			_index_wish(w as Dictionary)
 
 
 func _apply_live_frame(step: int, agents: Variant) -> void:
@@ -783,6 +922,13 @@ func _apply_live_frame(step: int, agents: Variant) -> void:
 	# trails and the heatmap index the live array the same way they index a
 	# baked one. A gap (shouldn't happen -- cursors are contiguous) is padded by
 	# holding the previous pose rather than crashing the renderer.
+	# A contiguous cursor never skips far ahead; a corrupt/huge step must be
+	# dropped, not grown into by allocating millions of hold-frames (#638).
+	if PayloadGuards.gap_too_large(step, _frames.size()):
+		push_error(
+			"penn_replay: frame step %d is %d ahead of %d buffered; dropping (corrupt cursor?)"
+			% [step, step - _frames.size(), _frames.size()])
+		return
 	var prev_size := _frames.size()
 	while _frames.size() < step:
 		_frames.append(_frames[-1] if not _frames.is_empty() else agents)
@@ -821,12 +967,11 @@ func _on_live_status(record: Dictionary) -> void:
 		"started", "resumed":
 			# "started" can carry paused=true (a --start-paused boot): the day
 			# is still behind the sidebar's ▶ Start button.
-			if bool(record.get("paused", false)):
-				_set_backend_run_state(
-					"waiting" if int(record.get("step", 0)) == 0 else "paused"
-				)
-			else:
-				_set_backend_run_state("running")
+			var st := RunState.from_status(
+				bool(record.get("paused", false)), int(record.get("step", 0))
+			)
+			_set_backend_run_state(st)
+			if st == "running":
 				_panel.set_live_status("following backend")
 		"paused":
 			_set_backend_run_state("paused")
@@ -876,6 +1021,18 @@ func _on_reset_meta_completed(
 	# as the initial join does (?since=_last_cursor is overlap-safe).
 	_request_backfill()
 	_panel.set_live_status("following the new run")
+	# Re-arm the Start/Stop toggle from the new run's own state (#678). A reset
+	# day stays paused (a finished day was auto-paused, and reset doesn't
+	# resume), and no started/resumed record follows the reset one -- so without
+	# this the state would stay "finished", the ▶ Start button hidden, and the
+	# paused new run could never be started from the UI. "waiting" also swaps
+	# the status line for the actionable "press ▶ Start" message.
+	_set_backend_run_state(
+		RunState.from_status(
+			bool((data as Dictionary).get("paused", false)),
+			int((data as Dictionary).get("step", 0)),
+		)
+	)
 	# Normally the socket rides through a reset untouched. But if it dropped while
 	# this reset retry was pending, _schedule_retry's single-flight swallowed the
 	# socket's own reconnect (#549) — leaving no socket and no rewind detection.
@@ -905,12 +1062,21 @@ func _teardown_cast() -> void:
 	_live_started = false
 	_t = 0.0
 	_last_status_step = -1
+	# A rejoin's wishes belong to the OLD run; a stale entry would flash a 💭
+	# bubble on a coincidentally-matching (step, actor) key in the new one.
+	_wishes.clear()
+	_wish_index.clear()
+	_wish_start.clear()
+	_wish_text.clear()
+	if _deciding_state != null:
+		_deciding_state.clear()
 
 
 func _set_backend_run_state(state: String) -> void:
 	# Backend run state -> the sidebar Start/Stop toggle + status line. Driven
-	# only by the handshake and the feed's status records — never by button
-	# clicks — so a failed control request leaves the UI truthful.
+	# only by the handshake, the feed's status records, and the reset-follow
+	# re-arm (#678) — never by button clicks — so a failed control request
+	# leaves the UI truthful.
 	if state == _backend_run_state:
 		return
 	_backend_run_state = state
@@ -1175,6 +1341,44 @@ func _spawn_agent(name: String, index: int) -> void:
 	bubble.visible = false
 	node.add_child(bubble)
 
+	# A wish "thought" marker (#622 ActionWish, surfaced #625): a distinct 💭
+	# bubble that flashes over the agent the moment they wish for an action the
+	# game doesn't have. Parked further above the nameplate than the dialogue
+	# bubble (WISH_BUBBLE_Y_OFFSET > BUBBLE_Y_OFFSET) so the two never overlap;
+	# _update_agent_wish triggers it, _refresh_wish_bubble fades it.
+	var wish_bubble := Label.new()
+	wish_bubble.add_theme_font_size_override("font_size", BUBBLE_FONT_SIZE)
+	wish_bubble.add_theme_stylebox_override("normal", _wish_style)
+	wish_bubble.add_theme_color_override("font_color", WISH_TEXT_COLOR)
+	wish_bubble.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	wish_bubble.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	wish_bubble.custom_minimum_size = Vector2(BUBBLE_WIDTH, 0)
+	wish_bubble.position = Vector2(
+		-BUBBLE_WIDTH / 2.0, -(foot_lift + SPRITE_HALF_PX + 50.0 + WISH_BUBBLE_Y_OFFSET)
+	)
+	wish_bubble.visible = false
+	node.add_child(wish_bubble)
+
+	# A "thinking…" bubble parked above the nameplate, shown only while this agent
+	# is mid-decision (#551, driven by the backend `deciding` feed record). Styled
+	# as a status cue, distinct from the #245 white speech balloon; parked above
+	# where the speech bubble would sit so the two never overlap.
+	var think := Label.new()
+	think.add_theme_font_size_override("font_size", BUBBLE_FONT_SIZE)
+	think.add_theme_color_override("font_color", Color(0.96, 0.95, 0.90))
+	# A dark outline so the near-white status text stays legible over light map
+	# tiles (roads/grass), where bare font_color alone washes out (#598 review).
+	think.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.75))
+	think.add_theme_constant_override("outline_size", 4)
+	think.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	think.custom_minimum_size = Vector2(BUBBLE_WIDTH, 0)
+	think.position = Vector2(
+		-BUBBLE_WIDTH / 2.0, -(SPRITE_HALF_PX + 50.0 + BUBBLE_Y_OFFSET + THINK_Y_EXTRA)
+	)
+	think.visible = false
+	think.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	node.add_child(think)
+
 	# A click target over the sprite, so you can track an agent by clicking them on
 	# the map (not just via the sidebar's Track button). The box roughly covers the
 	# scaled character; clicking it toggles tracking through the same panel path the
@@ -1217,7 +1421,12 @@ func _spawn_agent(name: String, index: int) -> void:
 
 	# "fan" is the agent's current (eased) fan-out offset (#560); it glides toward
 	# the target ring offset each frame so co-located sprites don't teleport.
-	_agents[name] = {"node": node, "sprite": spr, "label": label, "bubble": bubble, "trail": trail, "fan": Vector2.ZERO}
+	# "think" is the per-agent "thinking…" bubble (#551), shown while deciding.
+	_agents[name] = {
+		"node": node, "sprite": spr, "label": label, "bubble": bubble,
+		"wish_bubble": wish_bubble, "trail": trail, "fan": Vector2.ZERO,
+		"think": think
+	}
 
 
 func _make_bubble_style(bg: Color, border_col: Color, border_w: int, tail: bool) -> StyleBoxFlat:
@@ -1273,8 +1482,11 @@ func _update_trail(trail: Line2D, name: String, step: int, head: Vector2) -> voi
 	var pts := PackedVector2Array()
 	var start := maxi(0, step - TRAIL_LEN + 1)
 	for k in range(start, step + 1):
-		var f: Dictionary = _frames[k][name]
-		pts.append(_tile_to_world(int(f["x"]), int(f["y"])))
+		var f := PayloadGuards.agent_entry(_frames, k, name)
+		if f.is_empty():
+			continue  # a partial frame in the trail window: skip that crumb (#638)
+		var t := PayloadGuards.tile_of(f)
+		pts.append(_tile_to_world(t.x, t.y))
 	pts.append(head)
 	trail.points = pts
 
@@ -1833,7 +2045,16 @@ func _process(delta: float) -> void:
 	# on _is_live, so baked replay never shows it. Edge-triggered so the sidebar
 	# text is only rewritten on change.
 	if _is_live:
-		var stalled := ThinkingIndicator.should_show(
+		# The explicit per-agent signal OR #372's head-hasn't-grown heuristic
+		# (#598 review): the `deciding` feed only publishes at the tick boundary,
+		# so a decide that begins AND ends within one tick leaves any_deciding()
+		# already false by the time we read it. Latching the heuristic off the
+		# moment any record arrived (the old behavior) therefore turned the badge
+		# dark under a real brain -- the opposite of the intended cue. OR-ing keeps
+		# the stall heuristic live to catch within-tick decides, while any_deciding()
+		# adds the cases that DO span ticks (a parked #366 straggler). Mock is
+		# unaffected: no records -> any_deciding() false -> pure stall-inference.
+		var stalled: bool = _deciding_state.any_deciding() or ThinkingIndicator.should_show(
 			_is_live, _backend_run_state, i >= last,
 			Time.get_ticks_msec() - _last_frame_ms, THINKING_STALL_MS)
 		if stalled != _thinking:
@@ -1875,22 +2096,33 @@ func _process(delta: float) -> void:
 	# that reasons about tiles (heatmap dwell, picking, conversations) is affected.
 	var fanout_tiles := {}
 	for name in _names:
-		var fa: Dictionary = _frames[i][name]
-		fanout_tiles[name] = Vector2i(int(fa["x"]), int(fa["y"]))
+		# A partial frame missing this persona (#605's mid-tick streaming) must
+		# skip it, not hard-index null into a typed Dictionary and crash the hot
+		# loop every frame (#638).
+		var fa := PayloadGuards.agent_entry(_frames, i, name)
+		if fa.is_empty():
+			continue
+		fanout_tiles[name] = PayloadGuards.tile_of(fa)
 	var fanout_groups: Dictionary = AgentFanout.groups(fanout_tiles)
 
 	for name in _names:
-		var a: Dictionary = _frames[i][name]
-		var b: Dictionary = _frames[j][name]
-		var pa := _tile_to_world(int(a["x"]), int(a["y"]))
-		var pb := _tile_to_world(int(b["x"]), int(b["y"]))
+		var a := PayloadGuards.agent_entry(_frames, i, name)
+		if a.is_empty():
+			continue  # no pose this frame: skip (also keeps _agents[name] safe)
+		var b := PayloadGuards.agent_entry(_frames, j, name)
+		if b.is_empty():
+			b = a  # next frame lacks this persona: hold the current pose
+		var ta := PayloadGuards.tile_of(a)
+		var tb := PayloadGuards.tile_of(b)
+		var pa := _tile_to_world(ta.x, ta.y)
+		var pb := _tile_to_world(tb.x, tb.y)
 		var agent: Dictionary = _agents[name]
 		agent["node"].position = pa.lerp(pb, frac)
 		# Ease the fan-out offset toward its target so agents glide into/out of
 		# formation when they join/leave a shared tile, instead of teleporting.
 		# Space by the sprite's on-screen size (SPRITE_HALF_PX), not the tile, so
 		# the ~2x-scaled sprites visibly clear each other (#560).
-		var grp: Array = fanout_groups[Vector2i(int(a["x"]), int(a["y"]))]
+		var grp: Array = fanout_groups.get(ta, [name])
 		var fan_target := Vector2.ZERO
 		if grp.size() > 1:
 			fan_target = AgentFanout.offset(grp.find(name), grp.size(), SPRITE_HALF_PX)
@@ -1900,9 +2132,9 @@ func _process(delta: float) -> void:
 		if show_trail:
 			_update_trail(agent["trail"], name, i, agent["node"].position)
 
-		var moving: bool = a["x"] != b["x"] or a["y"] != b["y"]
-		if moving and b["x"] != a["x"]:
-			agent["sprite"].flip_h = int(b["x"]) < int(a["x"])
+		var moving: bool = ta != tb
+		if moving and tb.x != ta.x:
+			agent["sprite"].flip_h = tb.x < ta.x
 		var frame_in_row: int = (int(_anim_t * ANIM_FPS) % WALK_LEN) if moving else 0
 		agent["sprite"].frame = WALK_ROW * SHEET_HFRAMES + frame_in_row
 
@@ -1913,13 +2145,17 @@ func _process(delta: float) -> void:
 		if _is_live:
 			_panel.set_live_clip_ready(_frames.size() >= LIVE_CLIP_MIN_N)
 		for name in _names:
-			var a: Dictionary = _frames[i][name]
+			var a := PayloadGuards.agent_entry(_frames, i, name)
+			if a.is_empty():
+				continue
 			# The current activity shows in the sidebar row (not as a map bubble); the
 			# location half of the same string feeds the Focus spotlight below.
-			var full := String(a["act"])
-			_panel.set_character_status(name, "%s %s" % [a["e"], full.split(" @ ")[0]])
+			var full := PayloadGuards.act_of(a)
+			_panel.set_character_status(
+				name, "%s %s" % [PayloadGuards.emoji_of(a), full.split(" @ ")[0]])
 			_agent_location[name] = _building_of(full)
 			_update_agent_speech(name, a, i)
+			_update_agent_wish(name, i)
 		# Re-evaluate the location spotlight now that everyone's building is up to date.
 		_apply_spotlight()
 		# Tick the State Details inspector's dynamic sections (current action,
@@ -1932,7 +2168,20 @@ func _process(delta: float) -> void:
 	# turn-taking + fade play out smoothly as the playhead advances within a step.
 	for name in _names:
 		_refresh_bubble(name, fpos)
+		_refresh_wish_bubble(name, fpos)
 	_refresh_links(fpos)
+
+	# Animate per-agent thinking bubbles (#551): a shared ellipsis clock so every
+	# visible bubble ticks in lockstep, same cadence as the global badge's cue.
+	# Skip the recompute + per-agent sweep entirely when nobody is deciding -- a
+	# bubble is visible only while its agent is (is_deciding => any_deciding), so
+	# there is nothing to animate otherwise (#598 review).
+	if _deciding_state.any_deciding():
+		var _dots := ThinkingIndicator.ellipsis(Time.get_ticks_msec())
+		for _n in _agents:
+			var _t_bubble: Label = _agents[_n]["think"]
+			if _t_bubble.visible:
+				_t_bubble.text = _dots
 
 	# Dim everything outside the tracked agent's perception radius (no-op when free).
 	_update_fog()
@@ -1986,6 +2235,14 @@ func _clip(text: String) -> String:
 	return text.substr(0, BUBBLE_MAX_CHARS - 1).strip_edges() + "…"
 
 
+func _refresh_deciding(name: String) -> void:
+	# Show/hide this agent's thinking bubble from the authoritative signal (#551).
+	if not _agents.has(name):
+		return
+	var think: Label = _agents[name]["think"]
+	think.visible = _deciding_state.is_deciding(name)
+
+
 func _refresh_bubble(name: String, fpos: float) -> void:
 	# Play this agent's conversation back one line at a time: show its bubble only
 	# during the slots where IT is the speaker (with that line's text), and hide it
@@ -2016,6 +2273,41 @@ func _refresh_bubble(name: String, fpos: float) -> void:
 	var within := elapsed - float(idx) * DIALOGUE_LINE_STEPS
 	var fade_in := clampf(within, 0.0, 1.0)
 	var fade_out := clampf((DIALOGUE_LINE_STEPS - within) / DIALOGUE_FADE_STEPS, 0.0, 1.0)
+	bubble.modulate.a = minf(fade_in, fade_out)
+
+
+func _update_agent_wish(name: String, step: int) -> void:
+	# Trigger this agent's 💭 bubble the step a wish for them lands in
+	# `_wish_index` (built at replay load, or grown live -- see
+	# _apply_live_wish). One flash per (step, actor) key: re-entering the same
+	# step (a paused replay ticking sub-frames) must not restart the fade.
+	var key := "%d:%s" % [step, name]
+	if not _wish_index.has(key):
+		return
+	if float(_wish_start.get(name, -1.0)) == float(step):
+		return  # already triggered for this step
+	var wish: Dictionary = _wish_index[key]
+	_wish_start[name] = float(step)
+	_wish_text[name] = "💭 %s" % _clip(String(wish.get("desired", "")))
+
+
+func _refresh_wish_bubble(name: String, fpos: float) -> void:
+	# Flash this agent's wish bubble for WISH_FADE_STEPS sim steps after it's
+	# triggered, easing in/out the same way a dialogue line does (_refresh_bubble)
+	# -- but a single flash, not staggered turn-taking (a wish has no reply).
+	var bubble: Label = _agents[name]["wish_bubble"]
+	var start: float = _wish_start.get(name, -1.0)
+	if start < 0.0:
+		bubble.visible = false
+		return
+	var elapsed := fpos - start
+	if elapsed < 0.0 or elapsed >= WISH_FADE_STEPS:
+		bubble.visible = false
+		return
+	bubble.text = String(_wish_text.get(name, ""))
+	bubble.visible = true
+	var fade_in := clampf(elapsed / WISH_FADE_IN_STEPS, 0.0, 1.0)
+	var fade_out := clampf((WISH_FADE_STEPS - elapsed) / WISH_FADE_OUT_STEPS, 0.0, 1.0)
 	bubble.modulate.a = minf(fade_in, fade_out)
 
 

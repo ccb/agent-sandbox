@@ -103,6 +103,11 @@ class CognitionConfig:
     conversation_max_exchanges: int = (
         6  # max back-and-forth lines per conversation (CONVERSATION_MAX_EXCHANGES)
     )
+    # Post-conversation playback hold (#673): steps per transcript line that a
+    # just-finished pair stays pinned, so the viewer can play the exchange back
+    # while they visibly stand together. Mirrors viewer.gd's DIALOGUE_LINE_STEPS
+    # (CONVERSATION_LINE_PLAYBACK_STEPS).
+    conversation_line_playback_steps: int = 14
     # Cognition tools (issue #512; the sim-level mirror of the engine's
     # AgentConfig.cognition_tools, #358): when True, a real supplied brain may
     # consult recall / query_knowledge / read_plan before picking its action
@@ -118,6 +123,15 @@ class CognitionConfig:
     # Min steps between deviation-driven plan revisions for one agent, so a
     # wandering brain can't storm its planner (each revise is a real LLM call).
     deviation_cooldown_steps: int = 30
+    # React-or-continue (issue #370): perception-driven interruption while
+    # mid-activity. Off by default -- byte-identical. When on, a walking agent
+    # that newly comes within mutual sight of another resident may spend one
+    # bounded `react` LLM call (continue / greet / replan), rule-gated and
+    # rate-capped by the two knobs below; either way the encounter itself is
+    # written into memory (the cheap perceive pass).
+    react_enabled: bool = False
+    react_cooldown_steps: int = 90  # min steps between one agent's react consults
+    react_hour_cap: int = 4  # hard cap on one agent's react consults per sim hour
 
 
 @dataclass

@@ -54,6 +54,23 @@ def test_dailyplan_primitive_round_trip():
     assert restored == plan
 
 
+def test_dailyplan_primitive_round_trip_preserves_commands():
+    # #464: a stop's authored commands must survive DailyPlan serialization too
+    # (to_primitive/from_primitive), not just the schedule-entry bridge -- and
+    # come back as a tuple even though JSON would carry them as a list.
+    plan = DailyPlan(
+        stops=[Stop("Houston Hall", "dinner", "🍽️", 20, commands=("boil water",))]
+    )
+    prim = plan.to_primitive()
+    # to_primitive emits commands as a plain JSON list (via to_schedule_entry),
+    # so from_primitive's ``Stop(**s)`` receives a list -- proving __post_init__
+    # normalizes it back to the tuple a frozen stop needs.
+    assert prim["stops"][0]["commands"] == ["boil water"]
+    restored = DailyPlan.from_primitive(prim)
+    assert restored == plan
+    assert restored.stops[0].commands == ("boil water",)
+
+
 def test_from_primitive_tolerates_missing_keys():
     # A lean payload (only stops) still loads, defaulting the rest.
     plan = DailyPlan.from_primitive({"stops": [{"place": "Pub", "activity": "rest"}]})
@@ -66,6 +83,8 @@ def test_from_primitive_tolerates_missing_keys():
 def test_stop_schedule_entry_bridge():
     stop = Stop("Hobbs Cafe", "tending the counter", "☕", 220)
     entry = stop.to_schedule_entry()
+    # A command-less stop serializes with NO `commands` key, byte-identical to
+    # its authored world_data.yaml entry (the Smallville replay invariant).
     assert entry == {
         "place": "Hobbs Cafe",
         "activity": "tending the counter",
@@ -77,6 +96,76 @@ def test_stop_schedule_entry_bridge():
     assert Stop.from_schedule_entry(
         {"place": "Johnson Park", "activity": "a walk"}
     ) == Stop("Johnson Park", "a walk", None, None)
+
+
+def test_stop_schedule_entry_carries_commands():
+    # #464: authored per-stop commands must survive the round-trip the plan-commit
+    # path (Stop -> to_schedule_entry -> replace_schedule -> from_schedule_entry)
+    # drives, not get whitelisted away like they were before the `commands` field.
+    stop = Stop(
+        "Houston Hall",
+        "settling in for dinner",
+        "🍽️",
+        20,
+        commands=("get pot of murky water", "drink pot of murky water"),
+    )
+    entry = stop.to_schedule_entry()
+    assert entry["commands"] == [  # emitted as a plain YAML/JSON list...
+        "get pot of murky water",
+        "drink pot of murky water",
+    ]
+    assert Stop.from_schedule_entry(entry) == stop  # ...and rebuilt loss-free
+
+    # A YAML stop's list of commands is normalized to a tuple, so the frozen
+    # stop stays hashable and equal to a tuple-constructed one.
+    from_list = Stop.from_schedule_entry(
+        {"place": "P", "activity": "a", "commands": ["boil water"]}
+    )
+    assert from_list.commands == ("boil water",)
+    assert from_list == Stop("P", "a", commands=("boil water",))
+    assert hash(from_list) == hash(Stop("P", "a", commands=("boil water",)))
+
+    # A directly list-constructed stop is coerced too (__post_init__), so no
+    # construction path can leave an unhashable list on a frozen stop.
+    assert Stop("P", "a", commands=["boil water"]).commands == ("boil water",)
+    assert hash(Stop("P", "a", commands=["boil water"]))  # does not raise
+
+
+def test_stop_schedule_entry_carries_furniture():
+    # #603: the per-stop furniture hint (the fixture the agent should occupy)
+    # must survive the same plan-commit round-trip, alongside commands.
+    stop = Stop(
+        "Irvine Auditorium", "the guest lecture", "🎤", 60, furniture="blackboard"
+    )
+    entry = stop.to_schedule_entry()
+    assert entry["furniture"] == "blackboard"
+    assert Stop.from_schedule_entry(entry) == stop  # rebuilt loss-free
+
+    # A furniture-less stop emits NO `furniture` key (byte-identical to its
+    # authored spec) and rebuilds with furniture=None.
+    bare = Stop("Johnson Park", "a walk").to_schedule_entry()
+    assert "furniture" not in bare
+    assert Stop.from_schedule_entry(bare).furniture is None
+
+    # commands and furniture coexist on one stop and both round-trip.
+    both = Stop("Houston Hall", "dinner", commands=("boil water",), furniture="stove")
+    round_tripped = Stop.from_schedule_entry(both.to_schedule_entry())
+    assert round_tripped == both
+    assert (round_tripped.commands, round_tripped.furniture) == (
+        ("boil water",),
+        "stove",
+    )
+
+
+def test_dailyplan_primitive_round_trip_preserves_furniture():
+    # #603: furniture survives DailyPlan serialization too (to_primitive stores
+    # it via asdict; from_primitive's Stop(**s) reads it back).
+    plan = DailyPlan(
+        stops=[Stop("Irvine Auditorium", "lecture", "🎤", 60, furniture="blackboard")]
+    )
+    restored = DailyPlan.from_primitive(plan.to_primitive())
+    assert restored == plan
+    assert restored.stops[0].furniture == "blackboard"
 
 
 # --- B. validate_stops ------------------------------------------------------

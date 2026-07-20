@@ -11,6 +11,9 @@ _conj = base.conjugate
 class Eat(base.Action):
     ACTION_NAME = ActionName.EAT
     ACTION_DESCRIPTION = "Eat something"
+    # Offered to an agent only where something edible is in scope (issue #612);
+    # the gate below reads the same declaration as its place-check.
+    REQUIRED_AFFORDANCES = (Property.EDIBLE,)
 
     def __init__(self, game, command: str, actor=None):
         super().__init__(game, actor=actor)
@@ -22,10 +25,13 @@ class Eat(base.Action):
     def check_preconditions(self) -> bool:
         """
         Preconditions:
+        * Something edible must be in scope (the #612 place-check)
         * There must be a matched item
         * The item must be food
         * The food must be carried by the character (in hand or a container)
         """
+        if not self.has_affordance_in_scope(self.character):
+            return False
         if not self.was_matched(
             self.item, error_message="I don't know what you want to eat"
         ):
@@ -216,11 +222,28 @@ class Light(base.Action):
         Effects:
         * Changes the state to lit
         """
+        from .. import perception
+
+        loc = self.character.location
+        before = (
+            perception.sight_for(self.character, loc)[0] if loc is not None else None
+        )
         self.item.set_property(Property.IS_LIT, True)
         # Item-subject phrasing so it reads right for any actor -- "You lights the
         # lamp" (player named "you") would be ungrammatical.
         description = "The {item} flares alight and glows.".format(item=self.item.name)
         self.parser.ok(description)
+        # Raising a light where you couldn't see earns the room's full look
+        # (CCB): the same as typing LOOK -- description, contents, and the
+        # room's card -- because the light is what just revealed them.
+        if (
+            self.character is self.game.player
+            and loc is not None
+            and before is not None
+            and before < perception.Sight.CLEAR
+            and perception.sight_for(self.character, loc)[0] > before
+        ):
+            base.Describe(self.game, command="look", actor=self.character)()
 
 
 class Douse(base.Action):

@@ -147,6 +147,17 @@ class Thing:
         """
         self.properties[property_name] = property
 
+    def to_be(self):
+        """'is' or 'are', for number agreement in engine messages ("The
+        crates ARE open"). Honors an explicit ``is_plural`` property when one
+        is set; otherwise guesses from the head noun -- the word before an
+        "of" phrase ("crate of dates" is singular) or the final word
+        ("magnetic boots" are plural)."""
+        if "is_plural" in self.properties:
+            return "are" if self.properties["is_plural"] else "is"
+        head = self.name.split(" of ")[0].split()[-1].lower()
+        return "are" if head.endswith("s") and not head.endswith("ss") else "is"
+
     def get_property(self, property_name: PropertyKey):
         """
         Gets the value of this property (defaults to False if unset).

@@ -85,6 +85,21 @@ class Action(GatedEffect):
     # through the precondition gate unchanged.
     ARGUMENTS_SCHEMA: dict | None = None
 
+    # Affordance declaration for this verb (issue #612): the property tags that
+    # something in the actor's action scope must carry for the verb to make
+    # sense HERE. The empty tuple (the inherited default) means the verb is
+    # **universal** -- always offered, exactly as before, so nothing changes
+    # until a verb opts in. A tagged verb declares e.g.::
+    #
+    #     REQUIRED_AFFORDANCES = (Property.EDIBLE,)
+    #
+    # Multi-entry tuples are ALL-of on a single thing (one thing must carry
+    # every tag); the common case is one tag. Both the agent toolset builder
+    # (``npc.tools_for``) and the precondition gate (via
+    # ``has_affordance_in_scope``) read this same declaration, so "which verbs
+    # are offered" and "which verbs the gate lets through" cannot drift.
+    REQUIRED_AFFORDANCES: tuple[str, ...] = ()
+
     # Whether this verb is something the player issues, and so should appear in
     # the HELP listing. Defaults to True. NPC-only flavor actions (a troll's
     # "growl", a ghost's "haunt") set this False so HELP stays a player's menu.
@@ -232,10 +247,65 @@ class Action(GatedEffect):
         action_name = " ".join([w.lower() for w in words])
         return action_name
 
+    @classmethod
+    def affordance_in_scope(cls, character, game) -> bool:
+        """Is this verb afforded where *character* stands right now?
+
+        True iff some single thing in the character's action scope carries
+        EVERY property in ``REQUIRED_AFFORDANCES``. The scope is what the
+        character could actually act on: items at their location, their
+        inventory (via the parser's own scope resolution, so hidden items
+        stay invisible here too), and the location itself -- ``Location`` is
+        a ``Thing``, so a room tag like ``"studyable"`` uses the same
+        property mechanism as an item tag.
+
+        A universal verb (empty declaration) is afforded everywhere. With no
+        character to stand somewhere, there is no scope to read, so we don't
+        curate (mirrors how ``npc.tools_for`` degrades without an actor).
+
+        This is the ONE fact behind the #612 invariant: ``npc.tools_for``
+        calls it to decide whether to offer the verb, and the verb's own
+        ``check_preconditions`` calls it (through
+        :meth:`has_affordance_in_scope`) as its place-check -- so a verb is
+        offered exactly when the gate's place-check would pass.
+        """
+        if not cls.REQUIRED_AFFORDANCES:
+            return True
+        if character is None:
+            return True
+        candidates = list(game.parser.get_items_in_scope(character).values())
+        if character.location is not None:
+            candidates.append(character.location)
+        return any(
+            all(thing.get_property(tag) for tag in cls.REQUIRED_AFFORDANCES)
+            for thing in candidates
+        )
+
     ###
     # Preconditions - these functions are common preconditions.
     # They handle the error messages sent to the parser.
     ###
+
+    def has_affordance_in_scope(
+        self,
+        character: Character,
+        error_message: str = None,
+        describe_error: bool = True,
+    ) -> bool:
+        """Precondition form of :meth:`affordance_in_scope`: same check, but
+        it reports the reason through ``parser.fail`` so a blocked agent gets
+        a fresh, correct explanation to retry on (never a stale one left over
+        from an earlier failure). An opted-in verb calls this first in its
+        ``check_preconditions``; the rest of the gate (possession, state, ...)
+        still runs after and remains the sole authority over world mutation.
+        """
+        if self.affordance_in_scope(character, self.game):
+            return True
+        if not error_message:
+            error_message = f"There is nothing to {self.action_name()} here."
+        if describe_error:
+            self.parser.fail(error_message)
+        return False
 
     def at(self, thing: Thing, location: Location, describe_error: bool = True) -> bool:
         """
@@ -546,4 +616,23 @@ class Describe(Action):
                 travel = loc.travel_descriptions.get(direction) or ""
                 line = f"To the {direction}, you see {dest.name}."
                 return self.parser.ok(f"{line} {travel}".strip())
+        # An explicit LOOK replays the room's illustration (CCB): the arrival
+        # plate is once-per-game, but asking to look again re-earns it. Only
+        # the bare look forms count -- Go's internal describe passes the
+        # movement command through here and must not re-cue.
+        looker = self.actor if self.actor is not None else self.game.player
+        if looker is self.game.player and cmd in (
+            "look",
+            "l",
+            "describe",
+            "look around",
+            "look round",
+            "look here",
+        ):
+            loc = looker.location
+            if loc is not None:
+                fig = loc.get_property("figure")
+                self.game.show_figure(
+                    fig(self.game) if callable(fig) else fig, force=True
+                )
         self.parser.ok(self.game.describe())
