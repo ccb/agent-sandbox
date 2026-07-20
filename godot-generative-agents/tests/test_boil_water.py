@@ -78,6 +78,8 @@ def test_unboiled_drink_sickens_and_logs_event():
     assert game.parser.parse_command("get cup of murky water", actor=char)
     assert game.parser.parse_command("drink cup of murky water", actor=char)
     assert char.get_property("is_sick") is True
+    # The wording the engine's #634 sick self-line emits via describe_for.
+    assert "violently ill" in char.get_property("sick_self_description")
     sick = [e for e in game.events if e.action == "sickness"]
     assert len(sick) == 1
     assert sick[0].payload["item"] == "cup of murky water"
