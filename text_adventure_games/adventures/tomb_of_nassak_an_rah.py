@@ -2854,7 +2854,15 @@ def build_game(seed=None):
         "hypergeometric, and heavier inside than out.",
     )
     manifold_box.add_alias("box")
-    manifold_box.set_property("figure", "tesseract")
+    # The box draws gilt by depth (01); with the ulfire lantern in hand the
+    # same examine finds the ninth angle instead (01-D) -- the lantern's
+    # light shows the compartment, and the card agrees.
+    manifold_box.set_property(
+        "figure",
+        lambda g: "tesseract-u"
+        if "ulfire lantern" in g.player.carried_items()
+        else "tesseract",
+    )
     coffin = _scenery(
         sphere,
         "coffin",

@@ -160,7 +160,8 @@ def test_every_wired_key_exists_in_the_registry():
     # event-cued keys (not discoverable by walking) + client-cued ones
     wired |= {"seal", "autarch", "autarch-e", "bats", "bats-c", "road", "epitaph",
               "youth-b", "youth-c", "youth-d",  # lit hall, lesson, reprieve
-              "flood", "tank-f"}  # the burst-tank trigger owns these two
+              "flood", "tank-f",  # the burst-tank trigger owns these two
+              "tesseract-u"}  # the box's examine, seen by lantern-light
     missing = wired - registry
     assert not missing, f"wired keys with no card: {sorted(missing)}"
 
@@ -309,6 +310,27 @@ def test_the_tank_is_the_room_and_the_flood_plays_once():
     assert cap.texts(Channel.FIGURE).count("tank-f") >= 2
     g.do_command("examine hound")  # the spilled specimen keeps its litho (10)
     assert "hound" in cap.texts(Channel.FIGURE)
+
+
+def test_the_box_finds_the_ninth_angle_by_lantern_light():
+    """EXAMINE MANIFOLD BOX deals the gilt projection (01) bare-handed, and
+    THE NINTH ANGLE (01-D) once the ulfire lantern rides in the same pack --
+    its light is the 'very specific angle' the compartment wants."""
+    g, cap = _game()
+    sphere = g.locations["Burial Sphere of Nassak An-Rah"]
+    box = sphere.items["coffin"].contents["manifold box"]
+    sphere.items["coffin"].remove_item(box)
+    g.player.add_to_inventory(box)
+    g.do_command("examine manifold box")
+    assert "tesseract" in cap.texts(Channel.FIGURE)
+    keeper = next(
+        c for c in g.characters.values() if "ulfire lantern" in c.inventory
+    )
+    lantern = keeper.inventory["ulfire lantern"]
+    keeper.remove_from_inventory(lantern)
+    g.player.add_to_inventory(lantern)
+    g.do_command("examine manifold box")
+    assert "tesseract-u" in cap.texts(Channel.FIGURE)
 
 
 def test_reading_the_ledger_deals_the_manifest():

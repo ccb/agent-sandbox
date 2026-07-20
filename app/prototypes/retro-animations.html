@@ -501,6 +501,19 @@
   </section>
 
   <section>
+    <div class="slate"><h2>54 &mdash; THE WIND-WAGON, UNDER SAIL</h2><span class="kind">LITHO / KEPT, UNWIRED</span></div>
+    <div class="screen">
+      <svg id="wagon" viewBox="0 0 640 360" aria-label="The wind-wagon at speed, in life"></svg>
+    </div>
+    <p class="spec">The memorial litho in 36's tradition: the rig at full run -- zoxen
+       pair leading, pale ribs, the sail bellied and fluttering, spoked wheels turning,
+       pennant streaming, dunes scrolling on two depths of parallax with a dust wake
+       behind. BUILT TO OUTRUN ANYTHING ON THE ROAD. IT NEARLY DID.
+       <span class="attach">Attaches: nothing yet -- kept on the reel by CCB's request
+       (a natural home later: EXAMINE WRECK).</span></p>
+  </section>
+
+  <section>
     <div class="slate"><h2>10 &mdash; SYNTH-HOUND</h2><span class="kind">LITHO / PRESERVED SPECIMEN</span></div>
     <div class="screen">
       <svg id="hound" viewBox="0 0 640 360" aria-label="Synth-hound preserved in the gel tank"></svg>
@@ -770,10 +783,22 @@
   <section>
     <div class="slate"><h2>01 &mdash; THE MANIFOLD BOX</h2><span class="kind">WIREFRAME / HYPERGEOMETRY</span></div>
     <div class="screen"><canvas id="tesseract" width="640" height="360"></canvas></div>
-    <p class="spec">A tesseract projected 4D&rarr;3D&rarr;2D, rotating through the planes the tomb
-       does not otherwise have. Inner cell dimmed by <b>w</b>-depth. This cannot be modeled
-       from an illustration, because that is the joke.
-       <span class="attach">Attaches: EXAMINE MANIFOLD BOX, the ulfire reveal.</span></p>
+    <p class="spec">A tesseract projected 4D&rarr;3D&rarr;2D, rotating through the planes the
+       tomb does not otherwise have -- and now GILDED, as described: every edge dipped
+       by its <b>w</b>-depth, phosphor at the far cell warming to gold at the near one,
+       gilt rivets on the eight nearest corners. GILT: HONEST. GEOMETRY: NOT.
+       <span class="attach">Attaches: EXAMINE MANIFOLD BOX, bare-handed.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>01-D &mdash; THE NINTH ANGLE</h2><span class="kind">WIREFRAME / ULFIRE</span></div>
+    <div class="screen"><canvas id="tesseract-u" width="640" height="360"></canvas></div>
+    <p class="spec">The same projection through the lantern's light: every edge coloured
+       by w-depth across the full spectrum, red to white, until the rotation FINDS THE
+       ANGLE and freezes -- the inner compartment strobing in a colour that declines to
+       be named -- then loses it and goes back to searching.
+       <span class="attach">Attaches: EXAMINE MANIFOLD BOX while carrying the ulfire
+       lantern.</span></p>
   </section>
 
   <section>
@@ -1000,45 +1025,90 @@
     ctx.stroke();
   }
   const rot = (x, y, a) => [x * Math.cos(a) - y * Math.sin(a), x * Math.sin(a) + y * Math.cos(a)];
+  function lerpHex(c1, c2, k) {
+    const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+    const a = p(c1), b = p(c2);
+    return "rgb(" + a.map((v, i) => Math.round(v + (b[i] - v) * k)).join(",") + ")";
+  }
+  function tess4() {
+    const verts = [], edges = [];
+    for (let i = 0; i < 16; i++) verts.push([1, 2, 4, 8].map(b2 => (i & b2) ? 1 : -1));
+    for (let i = 0; i < 16; i++) for (const b2 of [1, 2, 4, 8])
+      if (!(i & b2)) edges.push([i, i | b2]);
+    return { verts, edges };
+  }
+  function project4(verts, a, b) {
+    return verts.map(v => {
+      let [x, y, z, w] = v;
+      [x, w] = rot(x, w, a); [y, z] = rot(y, z, b); [z, w] = rot(z, w, a * .5);
+      const s4 = 1.6 / (2.6 - w);
+      x *= s4; y *= s4; z *= s4;
+      const s3 = 300 / (4 - z * 1.2);
+      return { p: [320 + x * s3, 180 + y * s3], w };
+    });
+  }
 
-  /* ---------------- 01: tesseract ---------------- */
+  /* ---------------- 01: tesseract, gilt by depth ---------------- */
   {
     const cv = document.getElementById("tesseract"), ctx = cv.getContext("2d");
-    const verts = [], edges = [];
-    for (let i = 0; i < 16; i++) verts.push([1,2,4,8].map(b => (i & b) ? 1 : -1));
-    for (let i = 0; i < 16; i++) for (const b of [1,2,4,8]) if (!(i & b)) edges.push([i, i | b]);
+    const GOLD = "#ffd76a";
+    const { verts, edges } = tess4();
     clock(t => {
       const a = (t % 96) * Math.PI / 48, b = (t % 144) * Math.PI / 72;
       ctx.fillStyle = BG; ctx.fillRect(0, 0, cv.width, cv.height);
-      const inner = [], outer = [], pts = verts.map(v => {
-        let [x, y, z, w] = v;
-        [x, w] = rot(x, w, a); [y, z] = rot(y, z, b); [z, w] = rot(z, w, a * .5);
-        const s4 = 1.6 / (2.6 - w);           // 4D -> 3D
-        x *= s4; y *= s4; z *= s4;
-        const s3 = 300 / (4 - z * 1.2);       // 3D -> 2D
-        return { p: [320 + x * s3, 180 + y * s3], w };
-      });
-      edges.forEach(([i, j]) => ((pts[i].w + pts[j].w) < 0 ? inner : outer).push([i, j]));
-      drawEdges(ctx, pts.map(q => q.p), inner, PH_DIM, 4);
-      drawEdges(ctx, pts.map(q => q.p), outer, PH, 9);
-      // the METIS garnish: impossible debris, each shape awake for a moment
-      const DEBRIS = [
-        (x, y) => { ctx.strokeRect(x - 6, y - 6, 12, 12); },
-        (x, y) => { ctx.beginPath(); ctx.moveTo(x, y - 8); ctx.lineTo(x + 7, y);
-                    ctx.lineTo(x, y + 8); ctx.lineTo(x - 7, y); ctx.closePath(); ctx.stroke(); },
-        (x, y) => { ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2); ctx.stroke();
-                    ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.stroke(); },
-        (x, y) => { ctx.beginPath(); ctx.moveTo(x - 8, y + 4); ctx.lineTo(x - 2, y - 6);
-                    ctx.lineTo(x + 3, y + 2); ctx.lineTo(x + 9, y - 5); ctx.stroke(); },
-      ];
-      ctx.strokeStyle = PH_DIM; ctx.lineWidth = 1.2; ctx.shadowColor = PH; ctx.shadowBlur = 5;
-      DEBRIS.forEach((draw, i) => {
-        if (Math.floor(t / 7 + i * 2.5) % 4) return;   // each wakes in turn
-        const th = t * .05 + i * Math.PI / 2;
-        draw(320 + Math.cos(th) * 190, 180 + Math.sin(th) * 105);
-      });
-      ctx.shadowBlur = 0; ctx.fillStyle = PH_DIM; ctx.font = "11px ui-monospace, monospace";
-      ctx.fillText("INTERIOR: ADVISORY", 18, 340);
+      const pts = project4(verts, a, b);
+      // the gilding lives on the w-axis: far cell phosphor, near cell gold
+      edges.slice().sort((e1, e2) =>
+        (pts[e1[0]].w + pts[e1[1]].w) - (pts[e2[0]].w + pts[e2[1]].w))
+        .forEach(([i, j]) => {
+          const k = ((pts[i].w + pts[j].w) / 2 + 1) / 2;
+          drawEdges(ctx, pts.map(q => q.p), [[i, j]],
+            lerpHex(PH_DIM, GOLD, Math.max(0, Math.min(1, k))), 3 + k * 8);
+        });
+      pts.forEach(q => { if (q.w > .55) {                  // gilt rivets, near corners
+        ctx.fillStyle = GOLD; ctx.shadowColor = GOLD; ctx.shadowBlur = 8;
+        ctx.beginPath(); ctx.arc(q.p[0], q.p[1], 2.2, 0, Math.PI * 2); ctx.fill();
+      } });
+      ctx.shadowBlur = 0; ctx.font = "11px ui-monospace, monospace";
+      ctx.fillStyle = PH_DIM;
+      ctx.fillText("GILT: HONEST. GEOMETRY: NOT.", 18, 340);
+      ctx.fillStyle = GOLD;
+      ctx.fillText("W-AXIS: " + ((a * 180 / Math.PI) % 360 | 0) + "°", 520, 340);
+    });
+  }
+
+  /* ---------------- 01-D: the ninth angle ---------------- */
+  {
+    const cv = document.getElementById("tesseract-u"), ctx = cv.getContext("2d");
+    const HUES = ["#ff5a5a", "#ff9a3c", "#ffd76a", "#7fff9e", "#4db8ff",
+      "#7a7aff", "#c07aff", "#dff2ff"];
+    const { verts, edges } = tess4();
+    clock(t => {
+      const T = t % 192;
+      const found = T >= 150 && T < 174;                   // the ninth angle, briefly
+      const Tf = found ? 150 : T;
+      const a = Tf * Math.PI / 48, b = Tf * Math.PI / 72;
+      ctx.fillStyle = BG; ctx.fillRect(0, 0, cv.width, cv.height);
+      const pts = project4(verts, a, b);
+      edges.slice().sort((e1, e2) =>
+        (pts[e1[0]].w + pts[e1[1]].w) - (pts[e2[0]].w + pts[e2[1]].w))
+        .forEach(([i, j]) => {
+          const k = ((pts[i].w + pts[j].w) / 2 + 1) / 2;
+          drawEdges(ctx, pts.map(q => q.p), [[i, j]],
+            HUES[Math.max(0, Math.min(7, Math.floor(k * 7.99)))], 6);
+        });
+      ctx.font = "11px ui-monospace, monospace";
+      if (found) {                                         // the compartment, seen
+        const innerE = edges.filter(([i, j]) => pts[i].w + pts[j].w < 0);
+        drawEdges(ctx, pts.map(q => q.p), innerE,
+          (t % 2) ? "#ff5a5a" : "#c07aff", 18);
+        ctx.fillStyle = (t % 2) ? "#c07aff" : "#ff5a5a";
+        ctx.fillText("THE ANGLE: FOUND. COMPARTMENT: VISIBLE.", 18, 340);
+      } else {
+        ctx.fillStyle = PH_DIM;
+        ctx.fillText("SEARCHING FOR THE ANGLE" + ".".repeat(1 + (t % 3)), 18, 340);
+      }
+      ctx.fillStyle = found ? "#dff2ff" : PH_DIM;
       ctx.fillText("W-AXIS: " + ((a * 180 / Math.PI) % 360 | 0) + "°", 520, 340);
     });
   }
@@ -4491,6 +4561,104 @@
       cells.forEach((r2, i) => r2.setAttribute("fill-opacity", i < on ? .8 : .08));
       settle.textContent = T >= 58 && T < 146 ? "THE VAULT SETTLES. GRUDGINGLY." : "";
       typeOn(foot, "NO LIGHT, NO FURTHER OPINIONS.", T, 88, 2);
+    });
+  }
+
+  /* ---------------- 54: the wind-wagon, under sail (kept, unwired) ---------------- */
+  {
+    const svg = document.getElementById("wagon");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "THE ROAD TO GNOMON / IN LIFE";
+    const GLASS = "#cfefff";
+    el(svg, "circle", { cx: 560, cy: 84, r: 22, fill: GLASS, "fill-opacity": .12 });
+    const duneB = el(svg, "polyline", { fill: "none", stroke: PH_DIM, opacity: .5 });
+    const duneF = el(svg, "polyline", { fill: "none", stroke: PH_DIM,
+      "stroke-width": 1.6 });
+    const rig = el(svg, "g", {});
+    // the zoxen pair, patient in life as in death
+    const zox = [0, 1].map(i => {
+      const g = el(rig, "g", {});
+      const legsN = [0, 1, 2, 3].map(() => el(g, "line",
+        { stroke: "#25567a", "stroke-width": 3.4 }));
+      el(g, "ellipse", { cx: 0, cy: 0, rx: 26, ry: 13, fill: "#33739c" });
+      el(g, "circle", { cx: 26, cy: -8, r: 7, fill: "#33739c" });
+      el(g, "line", { x1: 30, y1: -14, x2: 38, y2: -22, stroke: PH_DIM,
+        "stroke-width": 2 });                                  // a horn
+      return { g, legsN, x: 120 + i * 74, y: 268 + i * 5 };
+    });
+    const trace = el(svg, "line", { stroke: PH_DIM, opacity: .8 });
+    const wag = el(svg, "g", {});
+    el(wag, "path", { fill: "#25567a", d: "M 300 240 L 470 240 L 486 268 L 292 268 Z" });
+    [316, 348, 380, 412, 444].forEach(x => el(wag, "line",
+      { x1: x, y1: 240, x2: x - 6, y2: 268, stroke: "#9fb7c9", opacity: .6 }));
+    el(wag, "line", { x1: 396, y1: 240, x2: 396, y2: 128, stroke: "#9fb7c9",
+      "stroke-width": 3 });
+    const sail = el(wag, "path", { fill: GLASS, "fill-opacity": .16, stroke: GLASS,
+      "stroke-width": 1.4 });
+    const pennant = el(wag, "polyline", { fill: "none", stroke: FUNGUS,
+      "stroke-width": 2 });
+    const wheels = [336, 452].map(x => {
+      const g = el(wag, "g", {});
+      el(g, "circle", { cx: 0, cy: 0, r: 20, fill: "none", stroke: PH,
+        "stroke-width": 2 });
+      const spokes = [0, 1, 2].map(() => el(g, "line",
+        { stroke: PH_DIM, "stroke-width": 1.6 }));
+      return { g, spokes, x, y: 286 };
+    });
+    const dust = Array.from({ length: 9 }, (_, i) => ({ ph: i * 31,
+      q: el(svg, "circle", { r: 2 + (i % 3), fill: PH_DIM, opacity: 0 }) }));
+    const foot = label(svg, 624, 350, 10, FUNGUS); foot.setAttribute("text-anchor", "end");
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 150;
+      doWipe(T);
+      typeOn(hdr, "THE WIND-WAGON, UNDER SAIL", T, 4, 1.6);
+      [[duneB, 236, 90, .8, 10], [duneF, 300, 60, 2.2, 16]].forEach(
+        ([q, y0, wl, sp, amp]) => {
+          const pts = [];
+          for (let x = -40; x <= 680; x += 20)
+            pts.push(`${x},${y0 - Math.abs(Math.sin((x + t * sp * 3) * Math.PI /
+              (wl * 3))) * amp}`);
+          q.setAttribute("points", pts.join(" "));
+        });
+      const bob = Math.sin(t * .4) * 2.5;
+      rig.setAttribute("transform", `translate(0 ${bob})`);
+      zox.forEach((z, i) => {
+        z.g.setAttribute("transform",
+          `translate(${z.x} ${z.y + Math.sin(t * .5 + i) * 2})`);
+        z.legsN.forEach((L2, k) => {
+          const sw = Math.sin(t * .55 + k * 1.6 + i) * 12;
+          L2.setAttribute("x1", -16 + k * 11); L2.setAttribute("y1", 8);
+          L2.setAttribute("x2", -16 + k * 11 + sw); L2.setAttribute("y2", 30);
+        });
+      });
+      trace.setAttribute("x1", 214); trace.setAttribute("y1", 268 + bob);
+      trace.setAttribute("x2", 300); trace.setAttribute("y2", 252 + bob);
+      const belly = 24 + Math.sin(t * .33) * 5 + Math.sin(t * 1.1) * 2;
+      sail.setAttribute("d",
+        `M 396 132 L 396 236 Q ${396 - 62 - belly} 200 ${396 - 40} 136 Z`);
+      const pp = [];
+      for (let k = 0; k <= 4; k++)
+        pp.push(`${396 - k * 12},${126 + Math.sin(t * .9 - k) * 3.5}`);
+      pennant.setAttribute("points", pp.join(" "));
+      wheels.forEach((w, i) => {
+        w.g.setAttribute("transform", `translate(${w.x} ${w.y})`);
+        w.spokes.forEach((s2, k) => {
+          const a = t * .45 + k * Math.PI / 3 + i;
+          s2.setAttribute("x1", Math.cos(a) * 18); s2.setAttribute("y1", Math.sin(a) * 18);
+          s2.setAttribute("x2", -Math.cos(a) * 18); s2.setAttribute("y2", -Math.sin(a) * 18);
+        });
+      });
+      dust.forEach(d2 => {
+        const k = (t * 6 + d2.ph) % 200;
+        d2.q.setAttribute("cx", 480 + k);
+        d2.q.setAttribute("cy", 296 - k * .12 + Math.sin(k * .1) * 4);
+        d2.q.setAttribute("opacity", Math.max(0, .5 - k / 220));
+      });
+      typeOn(foot, "BUILT TO OUTRUN ANYTHING ON THE ROAD. IT NEARLY DID.", T, 96, 1.9);
     });
   }
 
