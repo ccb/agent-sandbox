@@ -140,6 +140,15 @@ class Action(GatedEffect):
         can't see what happened). Override for flavor (e.g. "a scream")."""
         return "a commotion"
 
+    def event_payload(self) -> dict:
+        """Extra fields merged into the parser's per-command ``GameEvent`` for this
+        action (see ``Parser.parse_command``). Override to enrich an action's own
+        event -- e.g. ``Craft`` adds the recipe + produced items -- INSTEAD of
+        self-logging a second event of the same action name, which would duplicate
+        the parser's (issue #604). Called after ``apply_effects``, so an override
+        may read state the effect stashed. Default: no extra fields."""
+        return {}
+
     def acting_character(self, command, **kwargs):
         """Resolve who performs this action: the explicit actor if one was
         supplied, else the legacy command-string scan (player default)."""

@@ -58,6 +58,23 @@ def test_make_by_output_name_consumes_inputs_and_produces_output():
     assert _said(cap, "make bow") or _said(cap, "bow")
 
 
+def test_craft_logs_one_enriched_event_not_a_duplicate():
+    """#604: a craft logs exactly ONE `craft` GameEvent -- the parser's per-command
+    event, enriched via Craft.event_payload with the recipe + produced items -- not a
+    second, duplicate self-logged `craft` event of the same action name."""
+    game, player, cap = _game(
+        recipes=[_bow_recipe()],
+        inv=[things.Item("string", "a string"), things.Item("stick", "a stick")],
+    )
+    game.do_command("make bow")
+    crafts = [e for e in game.events if e.action == "craft"]
+    assert len(crafts) == 1, [(e.action, e.summary) for e in game.events]
+    ev = crafts[0]
+    assert ev.summary == "make bow"  # the command (parser's per-command event)
+    assert ev.payload.get("recipe") == "bow"  # recipe identity preserved
+    assert ev.payload.get("outputs") == ["bow"]  # produced items
+
+
 def test_missing_ingredient_reports_the_gap_and_changes_nothing():
     game, player, cap = _game(
         recipes=[_bow_recipe()], inv=[things.Item("stick", "a stick")]
