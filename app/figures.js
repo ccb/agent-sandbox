@@ -2895,50 +2895,44 @@
     });
   });
 
-  /* ---------------- 45: remember -- the embalming ---------------- */
+  /* ---------------- 45: remember -- the embalming, between the robes ---------------- */
   FIG._define("mem-embalm", "svg", function (svg) {
-    const F = memFrame(svg, "HALL OF MEMORY / WEAR: STUDIED", 6);
+    const F = memFrame(svg, "HALL OF MEMORY / WEAR: KEPT LOW", 6);
     const I1 = "#1b4055", I2 = "#25567a", I3 = "#33739c", I4 = "#4a97c6";
-    const HEADS = ["BABOON", "HUMAN", "MANTIS", "FALCON", "JACKAL"];
-    const jarAt = (x, y, kind, fill) => {
-      el(F.ghost, "polygon", { points: `${x - 15},${y + 26} ${x + 15},${y + 26} ` +
-        `${x + 11},${y} ${x - 11},${y}`, fill });
-      el(F.ghost, "rect", { x: x - 12, y: y - 4, width: 24, height: 5, fill });
-      el(F.ghost, "circle", { cx: x, cy: y - 13, r: 7, fill });
-      if (kind === "BABOON") el(F.ghost, "path", { fill: "none", stroke: BG,
-        "stroke-width": 1.4, d: `M ${x - 5} ${y - 12} Q ${x} ${y - 7} ${x + 5} ${y - 12}` });
-      if (kind === "HUMAN") [[x - 2.5, y - 14], [x + 2.5, y - 14]].forEach(([ex, ey]) =>
-        el(F.ghost, "circle", { cx: ex, cy: ey, r: 1, fill: BG }));
-      if (kind === "MANTIS") [[-4, -26], [4, -26]].forEach(([dx, dy]) =>
-        el(F.ghost, "line", { x1: x + dx * .4, y1: y - 18, x2: x + dx, y2: y + dy,
-          stroke: fill, "stroke-width": 1.4 }));
-      if (kind === "FALCON") el(F.ghost, "path", { fill: "none", stroke: BG,
-        "stroke-width": 1.4, d: `M ${x + 3} ${y - 15} q 5 2 1 6` });
-      if (kind === "JACKAL") [[-5, 0], [5, 0]].forEach(([dx]) =>
-        el(F.ghost, "polygon", { points: `${x + dx - 3},${y - 18} ${x + dx},${y - 27} ` +
-          `${x + dx + 3},${y - 18}`, fill }));
-    };
-    // the bier, and the old king supine
-    el(F.ghost, "rect", { x: 196, y: 224, width: 244, height: 9, fill: I1 });
-    [[212, 233], [424, 233]].forEach(([lx, ly]) => el(F.ghost, "line",
-      { x1: lx, y1: ly, x2: lx, y2: ly + 18, stroke: I1, "stroke-width": 4 }));
-    el(F.ghost, "circle", { cx: 216, cy: 210, r: 11, fill: I4 });   // his head
+    // what the gap shows: the bier, the king, the priest, one jar
+    el(F.ghost, "rect", { x: 244, y: 232, width: 152, height: 8, fill: I1 });
+    el(F.ghost, "circle", { cx: 256, cy: 220, r: 9, fill: I4 });
     el(F.ghost, "path", { fill: I3, d:
-      "M 228 204 L 380 206 Q 420 208 430 216 L 430 222 L 228 222 Z" });
-    el(F.ghost, "path", { fill: I3, d: "M 292 197 Q 304 192 314 198 L 312 205 L 294 205 Z" });
-    // the organs, marked where they wait
-    const OPOS = [[266, 213], [292, 213], [222, 206], [324, 214], [210, 203]];
-    OPOS.forEach(([ox, oy]) => el(F.ghost, "circle", { cx: ox, cy: oy, r: 2.6, fill: I4 }));
-    // the five jars, ranked -- each tagged with what it takes (CCB: the
-    // organ in place of the number), per the lattice's canon order
-    const ORGANS = ["LUNGS", "LIVER", "EYES", "INTESTINES", "BRAIN"];
-    const JX = [184, 252, 320, 388, 456];
-    JX.forEach((jx, i) => jarAt(jx, 262, HEADS[i], I2));
-    const tags = JX.map(jx => { const n = label(svg, jx, 302, 7.5, FUNGUS);
-      n.setAttribute("text-anchor", "middle"); return n; });
-    // the boy, small, watching
-    el(F.ghost, "circle", { cx: 158, cy: 276, r: 8, fill: I2 });
-    el(F.ghost, "path", { fill: I2, d: "M 146 296 Q 148 284 158 283 Q 168 284 170 296 Z" });
+      "M 266 216 L 356 218 Q 384 220 390 226 L 390 230 L 266 230 Z" });
+    el(F.ghost, "path", { fill: I2, d:                          // the priest, presiding
+      "M 306 170 Q 302 148 320 146 Q 338 148 334 170 L 342 232 L 298 232 Z" });
+    el(F.ghost, "path", { d: "M 306 186 Q 292 200 300 214", fill: "none",
+      stroke: I2, "stroke-width": 6, "stroke-linecap": "round" });  // his arms, at work
+    el(F.ghost, "path", { d: "M 334 186 Q 352 202 360 220", fill: "none",
+      stroke: I2, "stroke-width": 6, "stroke-linecap": "round" });
+    // one jar, falcon-headed, on its stand
+    el(F.ghost, "polygon", { points: "361,276 391,276 387,250 365,250", fill: I2 });
+    el(F.ghost, "rect", { x: 364, y: 246, width: 24, height: 5, fill: I2 });
+    el(F.ghost, "circle", { cx: 376, cy: 237, r: 7, fill: I2 });
+    el(F.ghost, "path", { fill: "none", stroke: BG, "stroke-width": 1.4,
+      d: "M 379 235 q 5 2 1 6" });
+    el(F.ghost, "line", { x1: 362, y1: 278, x2: 390, y2: 278, stroke: I1,
+      "stroke-width": 4 });                                     // its stand
+    // the robes, and the back of a small head: his whole view of it
+    el(F.ghost, "path", { fill: I1, d:
+      "M 130 100 L 240 100 Q 224 200 216 296 L 130 296 Z" });
+    el(F.ghost, "path", { fill: I1, d:
+      "M 510 100 L 404 100 Q 418 200 426 296 L 510 296 Z" });
+    [[168, 130, 160, 280], [196, 120, 190, 286], [472, 130, 480, 280], [444, 120, 450, 286]]
+      .forEach(([x1, y1, x2, y2]) => el(F.ghost, "path", { fill: "none", stroke: BG,
+        "stroke-width": 1.2, opacity: .5, d: `M ${x1} ${y1} Q ${(x1 + x2) / 2 - 6} ${(y1 + y2) / 2} ${x2} ${y2}` }));
+    el(F.ghost, "circle", { cx: 320, cy: 300, r: 17, fill: I1 });   // the boy, this close
+    el(F.ghost, "path", { d: "M 331 296 Q 336 300 331 305", fill: "none",
+      stroke: BG, "stroke-width": 1.3 });                       // one small ear
+    const lesson = label(svg, 320, 126, 9, FUNGUS); lesson.setAttribute("text-anchor", "middle");
+    const LESSONS = ["THE BABOON TAKES THE LUNGS", "THE HUMAN TAKES THE LIVER",
+      "THE MANTIS TAKES THE EYES", "THE FALCON TAKES THE INTESTINES",
+      "THE JACKAL -- STRANGELY -- THE BRAIN"];
     const payload = el(svg, "circle", { r: 3, fill: PH_BRIGHT, opacity: 0 });
     const doWipe = wipe(svg, 640, 360, 2, 10);
     clock(t => {
@@ -2946,17 +2940,17 @@
       doWipe(T);
       typeOn(F.hdr, "REMEMBER: THE EMBALMING", T, 4, 1.4);
       F.tick(t);
-      const step = Math.floor((T - 24) / 30), f = ((T - 24) % 30) / 30;
-      if (step >= 0 && step < 5 && f < .6) {                   // the payload, arcing
-        const k = f / .6;
-        const [ox, oy] = OPOS[step], jx = JX[step];
-        payload.setAttribute("cx", ox + (jx - ox) * k);
-        payload.setAttribute("cy", oy + (246 - oy) * k - Math.sin(k * Math.PI) * 34);
-        payload.setAttribute("opacity", 1);
-      } else payload.setAttribute("opacity", 0);
-      tags.forEach((n, i) => { n.textContent =
-        (step > i || (step === i && f >= .6)) && T >= 24 ? ORGANS[i] : ""; });
-      typeOn(F.foot, "HIS FATHER'S INNARDS FORETOLD HIS FATE.", T, 162, 1.9);
+      const pass = Math.floor((T - 20) / 34), f = ((T - 20) % 34) / 34;
+      if (pass >= 0 && pass < 5) {
+        typeOn(lesson, LESSONS[pass], T, 20 + pass * 34, 2);
+        if (f < .5) {                                           // the payload, crossing
+          const k = f / .5;
+          payload.setAttribute("cx", 300 + (376 - 300) * k);
+          payload.setAttribute("cy", 222 + (236 - 222) * k - Math.sin(k * Math.PI) * 28);
+          payload.setAttribute("opacity", 1);
+        } else payload.setAttribute("opacity", 0);
+      } else { payload.setAttribute("opacity", 0); if (T < 20) lesson.textContent = ""; }
+      typeOn(F.foot, "WATCHED FROM BETWEEN THE COURTIERS' ROBES.", T, 168, 1.5);
     });
   });
 
