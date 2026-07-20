@@ -416,6 +416,18 @@ def test_the_lattice_banks_deal_their_memory_cards():
     assert cap.texts(Channel.FIGURE).count("mem-bath") == 2
 
 
+def test_examining_the_lattice_deals_the_memory_cards_too():
+    """The lattice's own sifting (EXAMINE draws unseen days first) plays
+    each carded bank's memory as it comes up -- no REMEMBER required."""
+    g, cap = _game()
+    g.relocate(g.player, g.locations["Hall of Memory"])
+    for _ in range(10):
+        g.do_command("examine lattice")
+    figs = set(cap.texts(Channel.FIGURE))
+    assert {"mem-mother", "mem-bath", "mem-kestrel",
+            "mem-raising", "mem-embalm"} <= figs
+
+
 def test_a_purged_fungus_also_retires_the_gift_card():
     """The other road to a dead network -- the Horror slain in the sphere --
     must also retire 19-B at the summit (CCB: don't replay the gift once
