@@ -301,17 +301,61 @@ function chip(word, cls, withSpace) {
   const el = document.createElement("span");
   el.className = "chip " + cls;
   el.textContent = word;
-  el.addEventListener("pointerdown", (e) => {
-    e.preventDefault(); // keep the keyboard where it is
+  // Composing by chip must not summon OR dismiss the keyboard (CCB) -- tap
+  // the input line when you want to type -- so the tap never changes focus.
+  const append = () => {
     ensureAudio();
     click();
     const sep = cmd.value && !cmd.value.endsWith(" ") ? " " : "";
     cmd.value += sep + word + (withSpace ? " " : "");
-    // No focus here: composing by chip should not summon the keyboard
-    // (CCB) -- tap the input line when you want to type.
+  };
+  el._append = append;
+  // Mouse taps append here; touch is routed through the row's drag-scroll
+  // (dragScroll) so a drag scrolls the row instead of composing or selecting.
+  el.addEventListener("pointerdown", (e) => {
+    if (e.pointerType !== "mouse") return;
+    e.preventDefault();
+    append();
   });
   return el;
 }
+
+// iOS Safari reads a drag across the chips as a text selection even with
+// user-select:none, and the browser's own pan claims the gesture before we
+// can veto it. So on touch we own the gesture outright: preventDefault on
+// touchmove kills the selection and we scroll the row by hand; a touch that
+// never really moves is a tap and composes the chip under it (CCB).
+function dragScroll(row) {
+  let startX = 0, startScroll = 0, moved = false, active = false;
+  row.addEventListener("touchstart", (e) => {
+    active = e.touches.length === 1;
+    if (!active) return;
+    moved = false;
+    startX = e.touches[0].clientX;
+    startScroll = row.scrollLeft;
+  }, { passive: true });
+  row.addEventListener("touchmove", (e) => {
+    if (!active) return;
+    const dx = e.touches[0].clientX - startX;
+    if (!moved && Math.abs(dx) > 6) moved = true;
+    if (moved) {
+      e.preventDefault();
+      row.scrollLeft = startScroll - dx;
+    }
+  }, { passive: false });
+  row.addEventListener("touchend", (e) => {
+    if (!active) return;
+    active = false;
+    if (moved) return; // a drag scrolled the row -- don't compose
+    const el = e.target.closest && e.target.closest(".chip");
+    if (el && el._append) {
+      e.preventDefault(); // a tap: compose without disturbing the keyboard
+      el._append();
+    }
+  });
+}
+dragScroll(chipsVerbs);
+dragScroll(chipsNouns);
 
 function renderChips(sug) {
   chipsVerbs.replaceChildren(

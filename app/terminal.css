@@ -103,9 +103,10 @@ body, input {
   overflow-x: auto;
   padding: 0.15rem 0.25rem;
   scrollbar-width: none;
-  /* Drag the row to scroll through verbs -- don't let iOS Safari read the
-     horizontal drag as a text selection (CCB). */
-  touch-action: pan-x;
+  /* The drag-to-scroll gesture is driven from JS (terminal.js): touch-action
+     none keeps touchmove cancelable so we can veto iOS's text-selection and
+     scroll the row by hand instead (CCB). */
+  touch-action: none;
 }
 .chip-row::-webkit-scrollbar { display: none; }
 .chip {
@@ -117,6 +118,7 @@ body, input {
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+  touch-action: none;
   text-transform: uppercase;
   font-size: 13px;
 }
