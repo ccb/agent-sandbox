@@ -646,8 +646,52 @@ def test_call_tools_records_offered_and_chosen():
     assert rec.tool_offered == ["study", "travel"]
     assert rec.tool_chosen == "study"
     assert rec.tool_choice == "any"
-    assert rec.args_digest and "chem" in rec.args_digest
+    assert rec.args_digest == '{"subject": "chem"}'
     assert rec.round is None  # single-shot call, not in a loop
+
+
+def test_run_tool_loop_stamps_round_and_cleans_up():
+    """run_tool_loop (#355) stamps the in-progress round onto client.context
+    before each call_tools round-trip -- so the funnel (#359) can record it onto
+    the CallRecord -- and pops it again once the loop returns, so a caller that
+    reuses the client afterward doesn't see a stale round left behind."""
+    from text_adventure_games.llm_client import run_tool_loop
+    from text_adventure_games.usage import UsageLedger
+
+    ledger = UsageLedger()
+    client = MockLlmClient(
+        ledger=ledger,
+        tool_calls_responses=[
+            {"tool_calls": [{"name": "study", "arguments": {"subject": "chem"}}]},
+            {"tool_calls": [{"name": "study", "arguments": {"subject": "bio"}}]},
+        ],
+    )
+    client.context = {"actor": "Maya"}
+    tools = [
+        {
+            "name": "study",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": True,
+            },
+        }
+    ]
+    messages = [{"role": "user", "content": "study"}]
+    executed = []
+
+    def execute(name, arguments):
+        executed.append((name, arguments))
+        # Terminal only on the 2nd call, so the loop must run 2 rounds.
+        return "ok", False, len(executed) >= 2
+
+    run_tool_loop(client, messages, tools, execute, tool_choice="any")
+
+    assert len(executed) == 2  # the loop actually iterated twice
+    assert len(ledger.records) == 2
+    for i, rec in enumerate(ledger.records):
+        assert rec.round == i  # 0, 1, ... in call order
+    assert "round" not in client.context  # popped once the loop returns
 
 
 if __name__ == "__main__":
