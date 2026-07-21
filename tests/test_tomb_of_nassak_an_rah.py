@@ -1182,6 +1182,23 @@ def test_lick_boots_earns_the_title():
     assert "magnetic boots" in game.player.carried_items()
 
 
+def test_tasting_the_igniter_burns_for_a_point():
+    """TASTE / LICK PLASMA-IGNITER (CCB): the thumb-flame burns the tongue and
+    costs a point of damage, every time -- the plate is always live."""
+    game = _game()
+    igniter = _hand(game, "Hall of Warriors", "orange cylinder", "plasma-igniter")
+    cap = _texts(game)
+    before = len(game.player.wounds)
+    game.do_command("taste plasma-igniter")
+    assert "You burn your tongue on the plasma-igniter." in " ".join(
+        cap.texts(Channel.NARRATION)
+    )
+    assert any(w.name == "Burned Tongue" for w in game.player.wounds)
+    assert len(game.player.wounds) == before + 1
+    game.do_command("lick igniter")  # hot every time
+    assert len(game.player.wounds) == before + 2
+
+
 def test_every_organ_keeps_its_own_taste():
     """Each canopic organ tastes distinct (CCB) -- the intestines taste of
     OFFAL -- and an open jar standing on a plinth is still within reach of

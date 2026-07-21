@@ -3239,6 +3239,12 @@ def build_game(seed=None):
     )
     igniter.add_alias("igniter")
     igniter.set_property("ignition_source", True)
+    # A thumb-flame is a poor lollipop (CCB): TASTE/LICK burns and costs a
+    # point of damage (the igniter_taste trigger, below, does the wounding).
+    igniter.perceptible_by(
+        perception.Sense.TASTE,
+        "You burn your tongue on the plasma-igniter.",
+    )
     boots = things.Item(
         "magnetic boots",
         "a pair of magnetic boots",
@@ -5696,6 +5702,26 @@ def build_game(seed=None):
                 g.emit_sound(loc, 6, "a tuneless insect song")
 
     game.add_trigger("mantis_snap", _jar_violated, _mantis_snaps, repeatable=True)
+
+    # Tasting the plasma-igniter burns (CCB): the flavour line is authored on
+    # the igniter (perceptible_by TASTE); this pays the point of damage it
+    # earns. It burns every time -- the plate is always live.
+    def _igniter_tasted(g):
+        return any(
+            e.actor == g.player.name
+            and e.action == "taste"
+            and "igniter" in (e.summary or "").lower()
+            for e in g.events[g._round_event_start :]
+        )
+
+    def _igniter_burns(g):
+        fatal = _wound_player(
+            g, "Burned Tongue", 1, ("a blister the shape of the striker-plate.",)
+        )
+        if fatal:
+            _die(g, "You die as you lived: licking things you should not. THE END.")
+
+    game.add_trigger("igniter_taste", _igniter_tasted, _igniter_burns, repeatable=True)
 
     # Win: escape to the surface carrying both Exotica (the Dagger + the Box).
     def _escape(g):
