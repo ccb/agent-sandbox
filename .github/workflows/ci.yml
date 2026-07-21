@@ -128,20 +128,13 @@ jobs:
     # so a broken .tmj/tileset/scene — or a root-script parse error — fails CI.
     env:
       # Match the editor the team runs locally (project.godot targets 4.6). Bump
-      # this to a newer 4.6.x and the cache refills on the next run.
+      # this to a newer 4.6.x when the project does.
       GODOT_VERSION: "4.6.3"
     steps:
       - uses: actions/checkout@v4
-      # Cache the headless editor so we don't re-pull ~45 MB from GitHub releases
-      # every run; the version is in the key, so a bump refetches automatically.
-      - name: Cache Godot ${{ env.GODOT_VERSION }}
-        id: cache-godot
-        uses: actions/cache@v4
-        with:
-          path: ~/.local/bin/godot
-          key: godot-${{ env.GODOT_VERSION }}-linux-headless
+      # No cache: the 45 MB download + unzip measures ~1s (vs ~3s to save a cache),
+      # so caching would cost more than it saves. The 4.6.3 release URL is pinned.
       - name: Install Godot ${{ env.GODOT_VERSION }} (headless)
-        if: steps.cache-godot.outputs.cache-hit != 'true'
         run: |
           url="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
           curl -fsSL -o godot.zip "$url"
