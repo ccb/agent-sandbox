@@ -1417,7 +1417,9 @@ def kind_counts_for_persona(agent) -> dict[str, int]:
     return counts
 
 
-def remember_outcome(char, command: str, step: int) -> None:
+def remember_outcome(
+    char, command: str, step: int, fail_reason: str | None = None
+) -> None:
     """Record ``char``'s own successful action as a first-person memory.
 
     Only the *actor's own* memory is added here. The :class:`GameEvent` that
@@ -1432,6 +1434,21 @@ def remember_outcome(char, command: str, step: int) -> None:
     """
     agent = char.agent
     verb, _, rest = command.partition(" ")
+
+    # #636: a gate-blocked (or otherwise failed) attempt. Record it so the next
+    # decide's retrieval can steer away instead of re-choosing the same blocked
+    # action indefinitely. apply_effects never ran on a failure, so none of the
+    # success-only one-shot markers below (just_sickened / just_studied_minutes)
+    # were set -- safe to return before that logic. Modest importance (3.0):
+    # above routine 2.0 successes so "what didn't work" surfaces in retrieval,
+    # below the 6-8 causal signals; NOT locked, so #583's score_new_memories
+    # re-scores it for a real brain -- this is only the pre-score floor. The
+    # mock brain's authored commands always parse, so this branch is never taken
+    # under the mock and the bundled replay stays byte-identical by vacuity.
+    if fail_reason is not None:
+        text = render("reflection", failed=True, command=command, reason=fail_reason)
+        agent.memory.add_observation(text, turn=step, importance=3.0)
+        return
 
     # The #300 water arc marks the sicken/recover *transition* with one-shot
     # properties set inside DrinkPenn.apply_effects. Consume them by their

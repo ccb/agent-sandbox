@@ -83,3 +83,35 @@ def test_failure_phrasing_overrides_the_verb():
         )
         == 'I tried to "travel to Mars" but it didn\'t work: No path.'
     )
+
+
+# -------------------------------------------------------- remember_outcome
+
+
+def test_failed_action_writes_a_failure_memory():
+    game, chars = _world(["Ada"])
+    ada = chars["Ada"]
+    remember_outcome(
+        ada,
+        "get the golden axe",
+        5,
+        fail_reason="There's no golden axe here.",
+    )
+    recs = [r for r in ada.agent.memory.records if "golden axe" in r.text]
+    assert len(recs) == 1
+    assert (
+        recs[0].text
+        == "I tried to \"get the golden axe\" but it didn't work: There's no golden axe here."
+    )
+    assert recs[0].importance == 3.0
+
+
+def test_no_fail_reason_keeps_the_normal_outcome_memory():
+    # Backward compatibility: the default (fail_reason=None) path is unchanged --
+    # a successful `get` still routes through the existing verb branch.
+    game, chars = _world(["Ada"])
+    ada = chars["Ada"]
+    remember_outcome(ada, "get the golden axe", 5)  # no fail_reason
+    texts = [r.text for r in ada.agent.memory.records]
+    assert 'I did "get the golden axe".' in texts
+    assert not any("didn't work" in t for t in texts)
