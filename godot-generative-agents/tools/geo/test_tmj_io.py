@@ -139,3 +139,10 @@ def test_committed_map_round_trips_semantically():
     assert (
         abs(out.count("\n") - committed_lines) <= 5
     ), "serializer format drifted far from the committed Tiled layout"
+
+
+def test_committed_map_is_serializer_canonical():
+    """After the one-time reformat, the committed map is byte-identical to
+    dump_tiled of itself -- so a script re-run changes only the cells it edits."""
+    text = open(COMMITTED_TMJ).read()
+    assert tmj_io.dump_tiled(json.loads(text)) == text
