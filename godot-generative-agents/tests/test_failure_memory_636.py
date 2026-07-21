@@ -115,3 +115,70 @@ def test_no_fail_reason_keeps_the_normal_outcome_memory():
     texts = [r.text for r in ada.agent.memory.records]
     assert 'I did "get the golden axe".' in texts
     assert not any("didn't work" in t for t in texts)
+
+
+# ------------------------------------------------------ step() integration
+
+
+class _FailingBrain:
+    """Real-brain stand-in that always picks a gate-failing command -- talk_to
+    an absent person -- so step() routes through its blocked-action branch.
+    (decide_with_action_tools reassembles the tool call without checking the
+    verb against the offered set, so an unoffered talk_to still routes.)"""
+
+    def __init__(self):
+        self.context: dict = {}
+
+    def call_tools(self, messages, tools, **kwargs):
+        return ToolCallResult(
+            text=None,
+            tool_calls=[
+                {
+                    "id": "c1",
+                    "name": "talk_to",
+                    "arguments": {"reasoning": "say hi", "person": "Ghost"},
+                }
+            ],
+        )
+
+
+class _StubMap:
+    def walk_path(self, src, address, furniture=None):
+        return []
+
+
+def test_blocked_command_in_step_writes_a_failure_memory():
+    # Ada is alone, so `talk_to Ghost` fails the gate ("no one here").
+    game, chars = _world(
+        ["Ada"], extra=list(PENN_ACTION_VERBS), llm_client=_FailingBrain()
+    )
+    ada = chars["Ada"]
+    state = {
+        "Ada": {
+            "tile": (0, 0),
+            "path": [],
+            "pron": "\U0001f9d1",
+            "desc": "idling",
+            "performing": False,
+            "perform_until": None,
+            "reasoning": "",
+            "memories": [],
+            "chat": None,
+            "stop_since": 0,
+        }
+    }
+    step(
+        game,
+        {"Ada": ada},
+        state,
+        0,
+        order=["Ada"],
+        world_map=_StubMap(),
+        emoji={"Ada": "\U0001f9d1"},
+        clock=None,
+        cog=CognitionConfig(),
+    )
+    texts = [r.text for r in ada.agent.memory.records]
+    assert any(
+        t.startswith('I tried to "talk_to Ghost" but it didn\'t work') for t in texts
+    )
