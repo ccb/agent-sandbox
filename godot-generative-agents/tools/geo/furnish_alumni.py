@@ -469,8 +469,8 @@ def main():
 
     if args.dry_run:
         return
-    write_tmj(args.tmj, tmj)
-    print(f"wrote {args.tmj} (backup {args.tmj}.bak)")
+    bak = write_tmj(args.tmj, tmj)
+    print(f"wrote {args.tmj}" + (f" (backup {bak})" if bak else ""))
     write_collision(args.matrix, interior, block, tmj["width"])
     print(f"wrote collision_maze ({len(block)} cells blocked, {doors} doors open)")
 

@@ -75,9 +75,11 @@ def backup_once(path: str) -> str | None:
     return bak
 
 
-def write_tmj(path: str, tmj: dict, backup: bool = True) -> None:
-    """Back up (first-run-wins) then write `tmj` in Tiled-pretty format."""
-    if backup:
-        backup_once(path)
+def write_tmj(path: str, tmj: dict, backup: bool = True) -> str | None:
+    """Back up (first-run-wins) then write `tmj` in Tiled-pretty format.
+    Returns the .bak path if a backup was taken this call, else None (so a
+    caller's log can tell the truth: first-run-wins means no backup on re-runs)."""
+    bak = backup_once(path) if backup else None
     with open(path, "w") as fh:
         fh.write(dump_tiled(tmj))
+    return bak

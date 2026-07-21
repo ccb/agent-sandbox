@@ -105,6 +105,16 @@ def test_write_tmj_writes_pretty_and_backs_up(tmp_path):
     assert open(str(p) + ".bak").read() == "seed"
 
 
+def test_write_tmj_returns_backup_path_only_on_first_run(tmp_path):
+    """First-run-wins: write_tmj returns the .bak path when it takes a backup,
+    None on a re-run -- so a caller's log doesn't falsely claim a fresh backup."""
+    p = tmp_path / "map.tmj"
+    p.write_text("seed")
+    assert tmj_io.write_tmj(str(p), _fixture()) == str(p) + ".bak"
+    # second run: .bak already exists, so no backup is taken this call
+    assert tmj_io.write_tmj(str(p), _fixture()) is None
+
+
 def test_dump_tiled_indents_nested_bare_dict_value():
     """A bare dict-valued property (e.g. Tiled's tileoffset on a tileset) must
     round-trip exactly and stay pretty: its keys nest one level deeper than

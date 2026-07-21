@@ -583,8 +583,8 @@ def main():
     print(f"college_hall_furniture: placed {fplaced}/{fprop} sprites")
     if args.dry_run:
         return
-    write_tmj(args.tmj, tmj)
-    print(f"wrote {args.tmj} (backup {args.tmj}.bak)")
+    bak = write_tmj(args.tmj, tmj)
+    print(f"wrote {args.tmj}" + (f" (backup {bak})" if bak else ""))
 
 
 if __name__ == "__main__":
