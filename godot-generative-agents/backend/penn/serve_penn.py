@@ -1435,7 +1435,9 @@ def _decide_workers_arg(value):
     return workers
 
 
-def main() -> int:
+def _build_parser() -> argparse.ArgumentParser:
+    """Build the serve_penn CLI parser (a seam so the arg defaults are testable
+    without booting a server)."""
     ap = argparse.ArgumentParser(
         description="Serve the live Penn sim for the Godot viewer (#263)."
     )
@@ -1515,10 +1517,12 @@ def main() -> int:
     ap.add_argument(
         "--persist",
         action=argparse.BooleanOptionalAction,
-        default=False,
-        help="record this run durably (#304): frames to runs/<run_id>/frames.jsonl,"
-        " agent memory + run metadata to runs/sim.db, under"
-        " godot-generative-agents/runs/. POST /reset starts a new run id",
+        default=True,
+        help="record this run durably (#304), ON BY DEFAULT: frames to "
+        "runs/<run_id>/frames.jsonl, agent memory + run metadata to runs/sim.db, "
+        "under godot-generative-agents/runs/. POST /reset starts a new run id. "
+        "--no-persist makes the run ephemeral (no runs/ rows, no store writes) "
+        "for dev/smoke/throwaway sessions",
     )
     ap.add_argument(
         "--resume",
@@ -1529,7 +1533,8 @@ def main() -> int:
         help="boot by picking a persisted run back up instead of opening a new "
         "one (#543): positions, schedules and agent memories come back from "
         "the store; transient world state starts fresh. Bare --resume means "
-        "the newest run. Requires --persist",
+        "the newest run. Needs a run store, present by default (do not combine "
+        "with --no-persist)",
     )
     ap.add_argument(
         "--cognition-tools",
@@ -1602,6 +1607,11 @@ def main() -> int:
         help="require 'Authorization: Bearer <token>' (defaults to the "
         "SIM_API_TOKEN env var; required for a non-loopback --host)",
     )
+    return ap
+
+
+def main() -> int:
+    ap = _build_parser()
     args = ap.parse_args()
 
     # A repo-root .env (git-ignored; template at .env.example) can supply
@@ -1721,6 +1731,11 @@ def main() -> int:
                 f"Persistence: ON -- run {stepper.run_id} recording to "
                 f"{stepper.run_store.root} (frames.jsonl + sim.db)."
             )
+    else:
+        print(
+            "Persistence: OFF (--no-persist) -- this run is ephemeral and cannot "
+            "be saved or resumed later."
+        )
     if args.cognition_tools:
         print(
             "Cognition tools: ON -- a decide tick may spend up to 3 model "
