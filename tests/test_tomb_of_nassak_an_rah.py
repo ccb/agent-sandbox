@@ -1036,6 +1036,8 @@ def test_the_mending_prayer_restores_the_coffin():
     assert "whole" in coffin.examine_text
     assert "whole again" in sphere.description
     assert "hangs whole" in " ".join(cap.texts(Channel.NARRATION))
+    # The laid-to-rest beat: the coffin whole again plays THE AUTARCH (13).
+    assert "autarch" in cap.texts(Channel.FIGURE)
 
 
 def test_prayers_listen_only_in_the_sphere():

@@ -437,11 +437,28 @@ def test_dates_tossed_under_open_sky_cue_the_wheel_of_bats():
     assert "wheel of bats" in g.player.location.items
 
 
-def test_talking_to_silas_is_a_backstop_cue():
+def test_talking_to_silas_plays_his_card_every_time():
+    """TALK TO SILAS forces his character card (09) -- every time, not just as
+    a first-look backstop (CCB)."""
     g, cap = _game()
     g.relocate(g.player, g.locations["Hall of Memory"])
     g.do_command("talk to silas")
     assert "silas" in cap.texts(Channel.FIGURE)
+    g.do_command("talk to silas")
+    assert cap.texts(Channel.FIGURE).count("silas") == 2  # forced, so it re-plays
+
+
+def test_the_coffin_reads_at_rest_once_the_tenant_is_dead():
+    """EXAMINE COFFIN: TENANTED (11-B, sphere-b) while the Horror lives, but
+    AT REST (11-D, sphere-d) once it is dead behind whole, unpried glass --
+    e.g. the mystic burned before the coffin was ever opened (CCB)."""
+    g, cap = _game()
+    sphere = g.locations["Burial Sphere of Nassak An-Rah"]
+    coffin = sphere.items["coffin"]
+    fig = coffin.get_property("figure")
+    assert fig(g) == "sphere-b"  # whole, unpried, the tenant alive
+    sphere.set_property("horror_dead", True)  # the mystic burned; it never erupted
+    assert fig(g) == "sphere-d"  # whole and unpried, but at rest now
 
 
 def test_arriving_at_the_summit_cues_the_mystic():

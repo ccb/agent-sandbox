@@ -1192,7 +1192,7 @@ class FixCoffin(actions.Action):
             "-- and beneath them a NEW line, deeper than the rest: the "
             "PRAYER OF PEACEFUL SLUMBER."
         )
-        self.game.show_figure("autarch")
+        self.game.show_figure("autarch", force=True)  # the laid-to-rest beat
 
 
 class PryCoffin(actions.Action):
@@ -1587,6 +1587,12 @@ class SayPrayer(actions.Action):
                 "symmetries, seams closing like water, until the coffin "
                 "hangs whole at the heart of the chamber."
             )
+            # The laid-to-rest beat (CCB): the coffin whole again, THE AUTARCH
+            # (13) in his beatific slumber -- forced, so a spent examine of the
+            # bones cannot mute it. Mending is only reachable with the Horror
+            # already dead (prying it alive wakes the boss instead), so this is
+            # always the beatific plate, never HOLLOWED.
+            self.game.show_figure("autarch", force=True)
         self.prayers.set_property(self.which + "_spent", True)
         self.prayers.set_property("read_text", _prayers_text(self.prayers))
 
@@ -2942,17 +2948,19 @@ def build_game(seed=None):
 
     coffin.make_container()
     coffin.set_property("is_closed", True)
-    # The card follows the vessel (CCB): tenanted (11-B) until the pry;
-    # shattered while the shards drift -- full-cut and vacant (11-E) if the
-    # Horror died first, full-cut with the tenant OUT among the pieces
-    # (11-F) if the pry came early; reforged (11-D) -- the slow blue pulse
-    # -- once a mending makes it whole again.
+    # The card follows the vessel (CCB): tenanted (11-B) while the tenant
+    # lives and the glass is whole; shattered while the shards drift -- full-cut
+    # and vacant (11-E) if the Horror died first, full-cut with the tenant OUT
+    # among the pieces (11-F) if the pry came early; and AT REST (11-D) -- the
+    # slow blue pulse -- once the tenant is dead behind whole glass, whether a
+    # mending reforged it or the mystic burned before it was ever opened (which
+    # quiets the tenant in place: whole, unpried, but no longer tenanted).
     def _coffin_card(g):
         if coffin.get_property("fixed"):
             return "sphere-d"
         if coffin.get_property("pried"):
             return "sphere-e" if sphere.get_property("horror_dead") else "sphere-f"
-        return "sphere-b"
+        return "sphere-d" if sphere.get_property("horror_dead") else "sphere-b"
 
     coffin.set_property("figure", _coffin_card)
     # ...and as a title plate on ARRIVAL and LOOK (the chamber is gloom: a
@@ -3376,8 +3384,19 @@ def build_game(seed=None):
         'softly."'
     )
 
+    def _silas_says(line):
+        """Wrap a fixed reply so TALK still plays his character card (09) --
+        used by the later trade states, which otherwise replace talk_text with
+        a bare string and would show no card (CCB)."""
+
+        def _talk(g):
+            g.show_figure("silas", force=True)
+            return line
+
+        return _talk
+
     def _silas_talk(g):
-        g.show_figure("silas")  # his card, if the arrival or a look hasn't
+        g.show_figure("silas", force=True)  # TALK always plays his card (CCB)
         g.award("silas", 5, "[+5 -- the archivist's acquaintance]")
         # With a living spawn in earshot, Silas will not perform the lecture.
         for name in ("spawn of guts", "spawn of brain"):
@@ -5134,7 +5153,7 @@ def build_game(seed=None):
             # hands -- its current state (unlit when handed over: 33-B), so the
             # player learns to LIGHT it. Light should be for the unread.
             _deal_item_state_card(g, lamp)
-        silas.talk_text = (
+        silas.talk_text = _silas_says(
             '"A friend," Silas says, warmly and a little vaguely, and returns '
             "to the lattice. The bright threads spool on."
         )
@@ -5181,7 +5200,7 @@ def build_game(seed=None):
             "a man holds water in the desert. The bright threads of the "
             "lattice spool around him in patterns like thought."
         )
-        silas.talk_text = (
+        silas.talk_text = _silas_says(
             '"He was afraid," Silas says, not looking up from the core. '
             '"Under the jars and the seal and all this keeping -- afraid '
             "that to be forgotten was to have never been. Most of what he "
