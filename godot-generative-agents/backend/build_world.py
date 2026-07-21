@@ -12,6 +12,8 @@ and patched by :mod:`penn.penn_world` (it reads ``world_data_upenn.yaml`` via
 Any world authored in the same YAML shape builds the same way.
 """
 
+import difflib
+
 import yaml
 from text_adventure_games.things.characters import Character
 from text_adventure_games.things.locations import Location
@@ -165,6 +167,30 @@ def build_world(
                 raise ValueError(
                     f"{spec['name']}'s scheduled place '{stop['place']}' "
                     "is not a known location"
+                )
+
+    # Catch a typo in a Location's tile_address early (issue #642): an address
+    # that resolves to no tiles builds cleanly, then walk_path returns [] and the
+    # agent is stuck re-issuing `travel` forever -- no error, just a frozen
+    # sprite burning live spend. Only checkable with a matrix in hand: a world
+    # built without a world_map perceives by room and never paths on
+    # tile_address, so it is unaffected. A falsy address (None/"") is an
+    # intentional label-only location -- the hub carries `address: null`
+    # (world_data_upenn.yaml) and a home can be "only ever a label"
+    # (WorldMap.tile_gap) -- so only a *non-empty* address that resolves to
+    # nothing is the typo we guard against.
+    # ponytail: checks the address has *some* tiles, not that any are unblocked;
+    # a fully-walled address is a map-authoring bug outside this typo's scope.
+    if world_map is not None:
+        known = getattr(world_map, "address_tiles", {})
+        for loc in locations.values():
+            if loc.tile_address and not world_map.tiles_for(loc.tile_address):
+                near = difflib.get_close_matches(loc.tile_address, known, n=1)
+                hint = f" Did you mean '{near[0]}'?" if near else ""
+                raise ValueError(
+                    f"Location '{loc.name}' has tile_address "
+                    f"'{loc.tile_address}', which resolves to no tiles in the "
+                    f"map.{hint}"
                 )
 
     # Wire every location to the hub so Game.__init__ discovers them all (it
