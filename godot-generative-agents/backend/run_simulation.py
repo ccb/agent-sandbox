@@ -609,6 +609,16 @@ def step(
                 # The mock never lands here (its travel/perform always parse), so
                 # this stays byte-identical; it's the seam a real brain needs.
                 remember_outcome(char, command, step_idx, fail_reason=reason)
+                # Score + (maybe) reflect on the failure memory now, mirroring
+                # the success branch (#583/#84): a repeatedly-blocked agent --
+                # exactly #636's target -- otherwise accretes unscored 3.0
+                # failures and inflates the reflection accumulator without ever
+                # scoring or reflecting them until it next succeeds. Both are
+                # no-ops under the mock (brain-identity gated), and this branch
+                # is unreachable under the mock anyway, so the bake stays
+                # byte-identical.
+                score_new_memories(char, step_idx)
+                maybe_reflect(char.agent, game)
                 # Offer its planner a chance to re-plan around the blocked action
                 # (design doc §8).
                 maybe_revise_plan(

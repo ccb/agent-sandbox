@@ -85,6 +85,23 @@ def test_failure_phrasing_overrides_the_verb():
     )
 
 
+def test_failure_line_drops_a_missing_reason():
+    # run_simulation falls back to the command itself as the "reason" when the
+    # parser left no fail message; the template must not restate it as a
+    # tautology ('...didn\'t work: activate stove'). An empty reason drops the
+    # clause too.
+    for reason in ("activate stove", ""):
+        assert (
+            render(
+                "reflection",
+                failed=True,
+                command="activate stove",
+                reason=reason,
+            )
+            == 'I tried to "activate stove" but it didn\'t work.'
+        )
+
+
 # -------------------------------------------------------- remember_outcome
 
 
