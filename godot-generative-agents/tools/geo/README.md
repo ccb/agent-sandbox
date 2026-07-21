@@ -289,14 +289,27 @@ authored `williams_arenas` unchanged. Everything downstream — the collision /
 arena / furniture matrices — is derived by `add_entrances.py` → `block_grass.py`
 → `block_furniture.py` → `gen_furniture_matrix.py`. Re-running the whole chain on
 the committed inputs reproduces the committed derived artifacts byte-for-byte
-(`test_williams_reproducible.py` guards this). Note: `add_entrances.py` and
-`gen_furniture_matrix.py` write the `.tmj` *minified*, but they do not touch the
+(`test_williams_reproducible.py` guards this). `add_entrances.py` writes the
+`.tmj` pretty via `tmj_io.write_tmj` (#641, below); it does not touch the
 Williams layers (only the matrices + other buildings' `entrance_floor`), so
-Williams' tmj reproducibility is unaffected — don't commit their minified tmj
-output.
+Williams' tmj reproducibility is unaffected. `gen_furniture_matrix.py`'s
+`--debug-overlay` output is a separate, gitignored dev-only file that stays
+minified — it's never committed.
 
 `--dry-run` reports each building's footprint/interior size and chosen door cell
 without writing.
+
+### Writing the committed map (#641)
+
+Scripts that rewrite `godot/maps/upenn_core_urban.tmj` must write through
+`tmj_io.write_tmj(path, tmj)`, not `json.dump(..., separators=(",", ":"))`.
+`write_tmj` keeps Tiled's pretty layout (tile-layer `data` wrapped one map-row
+per line, keys sorted) so a regen is a reviewable per-cell diff instead of an
+11 MB one-line diff, and takes a **first-run-wins** `.bak` (it never clobbers
+the pristine backup on a re-run). `furnish_williams.py` writes via a
+format-preserving text splice that emits the same canonical layout.
+`tmj_io.dump_tiled` byte-reproduces the committed map (pinned in
+`test_tmj_io.py`).
 
 ## Keeping agents off the lawns (`block_grass.py`)
 

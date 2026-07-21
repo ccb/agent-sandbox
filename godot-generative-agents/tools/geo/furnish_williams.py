@@ -11,11 +11,11 @@ import argparse
 import json
 import os
 import re
-import shutil
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import furnish_building as fb
+from tmj_io import backup_once
 
 GID_MASK = 0x1FFFFFFF
 WALL_GID = fb.WALL  # wall_brick (543)
@@ -346,7 +346,7 @@ def _object_layer_block(objects, layer_id, name, next_obj, k9):
         f'{k9}"draworder":"topdown",\n'
         f'{k9}"id":{layer_id},\n'
         f'{k9}"name":"{name}",\n'
-        f'{k9}"objects":[\n{ko}{objs}\n{k9}],\n'
+        f'{k9}"objects":[\n{ko}{objs}],\n'
         f'{k9}"opacity":1,\n'
         f'{k9}"type":"objectgroup",\n'
         f'{k9}"visible":true,\n'
@@ -408,7 +408,7 @@ def apply_to_file(tmj_path):
         obj_base = other_obj_max + 1
 
     text = open(tmj_path).read()
-    shutil.copy2(tmj_path, tmj_path + ".bak")
+    backup_once(tmj_path)
 
     # Idempotency: remove any prior spliced layers before re-inserting.
     text = _strip_layer(text, "williams_walls")
@@ -426,7 +426,7 @@ def apply_to_file(tmj_path):
     arenas_block = _object_layer_block(
         arena_objects, arenas_id, "williams_arenas", obj_base, k9
     )
-    insertion = walls_block + ",\n" + k8 + arenas_block + ",\n" + k8
+    insertion = walls_block + ", \n" + k8 + arenas_block + ", \n" + k8
     text = text[:line0] + k8 + insertion + text[line0 + len(k8) :]
 
     text = _bump_header(text, "nextlayerid", max(walls_id, arenas_id) + 1)
