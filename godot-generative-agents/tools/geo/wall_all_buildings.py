@@ -23,6 +23,7 @@ import json
 import os
 from collections import deque
 
+from tmj_io import write_tmj
 from wall_building import (
     ORANGE_FILLS,
     RED_FILLS,
@@ -96,8 +97,7 @@ def main():
             edged += 1
         print(f"thin kerb around {edged} building(s)")
         if not args.dry_run:
-            with open(args.tmj, "w") as fh:
-                json.dump(tmj, fh, separators=(",", ":"))
+            write_tmj(args.tmj, tmj)
             print(f"wrote {args.tmj}")
         return
 
@@ -139,8 +139,7 @@ def main():
     )
     if args.dry_run:
         return
-    with open(args.tmj, "w") as fh:
-        json.dump(tmj, fh, separators=(",", ":"))
+    write_tmj(args.tmj, tmj)
     print(f"wrote {args.tmj}")
 
 

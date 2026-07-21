@@ -61,6 +61,7 @@ import os
 # Reuse furnish_building's tile palette + .tmj helpers so our plain cutaway uses
 # the exact same interior tiles (and tilesets) as the Williams Hall one.
 import furnish_building as fb
+from tmj_io import write_tmj
 
 WORLD = "UPenn"
 GROUNDS = "grounds"  # the outside-edge arena every building already has
@@ -913,8 +914,7 @@ def main():
         floor, W
     )  # #556: closed doors are wall art, not open floor
     insert_entrance_layers(tmj, W, H, floor)
-    with open(args.tmj, "w") as fh:
-        json.dump(tmj, fh, separators=(",", ":"))
+    write_tmj(args.tmj, tmj)
     print(f"  wrote {os.path.relpath(args.tmj)} ({len(picture_jobs)} plain cutaways)")
 
 
