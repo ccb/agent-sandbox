@@ -5632,7 +5632,9 @@ def build_game(seed=None):
 
     # The mantis jar has teeth (CCB): a ONE-TIME defensive snap at the first
     # hand that opens it. It stays an alarm, not a combatant -- the bite
-    # teaches respect; the song it sings at noise delivers the sentence.
+    # teaches respect, and then, opened, it SINGS: the stridulation that any
+    # noise wakes, calling the Spawn (DrawnToSound) to the disturbance. First
+    # the bite, then the song.
     def _jar_violated(g):
         opened = any(
             e.actor == g.player.name
@@ -5649,12 +5651,13 @@ def build_game(seed=None):
         return open_due or reach_due
 
     def _mantis_snaps(g):
-        if any(
+        opened_now = any(
             e.actor == g.player.name
             and e.action == "open"
             and "mantis" in (e.summary or "").lower()
             for e in g.events[g._round_event_start :]
-        ):
+        )
+        if opened_now:
             mantis_jar.set_property("bit_for_open", True)
         if "fungal eyes" in g.player.inventory:
             mantis_jar.set_property("bit_for_eyes", True)
@@ -5678,6 +5681,19 @@ def build_game(seed=None):
         )
         if fatal:
             _die(g, "The jar sings on over what it has done. THE END.")
+            return
+        # ...and THEN it sings: opening the jar wakes the stridulation that
+        # carries the length of the tomb and calls the Spawn to the sound.
+        if opened_now:
+            loc = g.player.location
+            if loc is not None:
+                g.parser.ok(
+                    "A breath later the split gapes wider and the jar SINGS -- "
+                    "a tuneless, carrying stridulation, a thousand wing-cases "
+                    "rubbed to one note, and it fills the tomb. Somewhere, "
+                    "something turns toward the sound."
+                )
+                g.emit_sound(loc, 6, "a tuneless insect song")
 
     game.add_trigger("mantis_snap", _jar_violated, _mantis_snaps, repeatable=True)
 

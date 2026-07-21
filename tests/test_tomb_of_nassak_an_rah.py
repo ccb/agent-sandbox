@@ -2006,7 +2006,12 @@ def test_the_mantis_jar_bites_per_violation():
     cap = _texts(game)
     game.do_command("open mantis jar")
     assert sum(1 for w in game.player.wounds if w.name == "Mantis-Bitten") == 1
-    assert "mantis head STRIKES" in " ".join(cap.texts(Channel.NARRATION))
+    opening = " ".join(cap.texts(Channel.NARRATION))
+    assert "mantis head STRIKES" in opening
+    # ...and then it sings, calling the Spawn to the disturbance -- the bite
+    # narration lands before the song.
+    assert "SINGS" in opening
+    assert opening.index("STRIKES") < opening.index("SINGS")
     game.do_command("take fungal eyes")  # the reach is bitten too
     assert sum(1 for w in game.player.wounds if w.name == "Mantis-Bitten") == 2
     game.do_command("close mantis jar")
