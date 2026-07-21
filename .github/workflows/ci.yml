@@ -118,3 +118,35 @@ jobs:
         working-directory: godot-generative-agents/web
       - run: pnpm build
         working-directory: godot-generative-agents/web
+
+  godot:
+    name: godot (smoke)
+    runs-on: ubuntu-latest
+    # The Godot viewer is the most user-visible half of the project but had no
+    # automated gate (#639): the 15 godot/tests/*.gd unit tests + the scene smoke
+    # ran only when a human remembered to. This job runs run_smoke_test.sh headless
+    # so a broken .tmj/tileset/scene — or a root-script parse error — fails CI.
+    env:
+      # Match the editor the team runs locally (project.godot targets 4.6). Bump
+      # this to a newer 4.6.x when the project does.
+      GODOT_VERSION: "4.6.3"
+    steps:
+      - uses: actions/checkout@v4
+      # No cache: the 45 MB download + unzip measures ~1s (vs ~3s to save a cache),
+      # so caching would cost more than it saves. The 4.6.3 release URL is pinned.
+      - name: Install Godot ${{ env.GODOT_VERSION }} (headless)
+        run: |
+          url="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          curl -fsSL -o godot.zip "$url"
+          unzip -q godot.zip
+          mkdir -p "$HOME/.local/bin"
+          mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" "$HOME/.local/bin/godot"
+          chmod +x "$HOME/.local/bin/godot"
+      - name: Put Godot on PATH
+        run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      # run_smoke_test.sh does --headless --import, runs each .gd unit test (grepping
+      # a success sentinel to defeat Godot's exit-0-on-parse-error), then the scene
+      # smoke — which now also gates each scene's root script (#639). It finds Godot
+      # via `command -v godot`, so the PATH step above is enough.
+      - name: Godot smoke test
+        run: ./godot-generative-agents/run_smoke_test.sh
