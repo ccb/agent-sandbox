@@ -23,9 +23,9 @@ Idempotent: strips its own layers before re-inserting; backs up the .tmj first.
 import argparse
 import json
 import os
-import shutil
 
 from add_entrances import split_footprint
+from tmj_io import write_tmj
 
 COLLEGE_SECTOR = "8"  # UPenn:College Hall
 COLLEGE_LOBBY = "1008"  # INTERIOR_ARENA_BASE (1000) + sector 8
@@ -583,9 +583,7 @@ def main():
     print(f"college_hall_furniture: placed {fplaced}/{fprop} sprites")
     if args.dry_run:
         return
-    shutil.copy2(args.tmj, args.tmj + ".bak")
-    with open(args.tmj, "w") as fh:
-        json.dump(tmj, fh, separators=(",", ":"))
+    write_tmj(args.tmj, tmj)
     print(f"wrote {args.tmj} (backup {args.tmj}.bak)")
 
 

@@ -12,9 +12,10 @@ are clipped, so no sprite is placed on a wall or outside the building.
 Ordering requirement: must run AFTER add_entrances.py so that collision_maze.csv
 reflects any doorways punched through partition walls before phantom-wall clearing."""
 
-import argparse, json, os, shutil
+import argparse, json, os
 
 from add_entrances import read_flat, split_footprint
+from tmj_io import write_tmj
 
 ASSET = "van_pelt_interior.json"
 SECTOR = "30"  # Van Pelt Library
@@ -138,9 +139,7 @@ def main():
     print(f"transplanted {len(asset['layer_order'])} layers; clipped {clipped} cells")
     if args.dry_run:
         return
-    shutil.copy2(args.tmj, args.tmj + ".bak")
-    with open(args.tmj, "w") as fh:
-        json.dump(tmj, fh, separators=(",", ":"))
+    write_tmj(args.tmj, tmj)
     print(f"wrote {args.tmj} (backup {args.tmj}.bak)")
 
 

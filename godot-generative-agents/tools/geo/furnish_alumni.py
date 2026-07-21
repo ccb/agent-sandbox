@@ -43,10 +43,10 @@ import collections
 import json
 import os
 import re
-import shutil
 
 from add_entrances import split_footprint
 from furnish_irvine import _fill_rug, _new_layer, _runs, _stamp, _strip, load_sprites
+from tmj_io import write_tmj
 
 ARENA_LAYER = "alumni_arenas"
 WALL_LAYER = "alumni_walls"
@@ -469,9 +469,7 @@ def main():
 
     if args.dry_run:
         return
-    shutil.copy(args.tmj, args.tmj + ".bak")
-    with open(args.tmj, "w") as fh:
-        json.dump(tmj, fh, separators=(",", ":"))
+    write_tmj(args.tmj, tmj)
     print(f"wrote {args.tmj} (backup {args.tmj}.bak)")
     write_collision(args.matrix, interior, block, tmj["width"])
     print(f"wrote collision_maze ({len(block)} cells blocked, {doors} doors open)")
