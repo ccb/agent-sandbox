@@ -873,9 +873,10 @@ func _apply_record(rec: Variant) -> void:
 		return  # already applied
 	_last_cursor = maxi(_last_cursor, cursor)
 	var kind := String(record.get("kind", ""))
-	# A newer backend's record kind (an `intervention`, #371 conversation, ...)
-	# is still fail-soft-dropped, but leaves a one-shot breadcrumb so version
-	# drift isn't invisible (#638). `wish` (#622) is known as of #625.
+	# A newer backend's record kind (a #371 conversation, ...) is still
+	# fail-soft-dropped, but leaves a one-shot breadcrumb so version drift
+	# isn't invisible (#638). `wish` (#622) known as of #625; `intervention`
+	# (a human touching the run, #369) as of #687.
 	if not PayloadGuards.is_known_kind(kind) and not _warned_feed_kinds.has(kind):
 		_warned_feed_kinds[kind] = true
 		push_warning(
@@ -905,6 +906,11 @@ func _apply_record(rec: Variant) -> void:
 			# loader fills, so _update_agent_wish triggers identically either
 			# way) and, live-only, the HUD's request log (#625).
 			_apply_live_wish(record)
+		"intervention":
+			# A human touched the running sim (#369): a `say` to an agent or an
+			# injected `world_event`. Live-only (a bake has none), so it rides
+			# the HUD event log like the other live records (#687).
+			_apply_live_intervention(record)
 		"deciding":
 			# Per-agent thinking lifecycle (#551): update state, refresh the
 			# one affected agent's bubble.
@@ -922,6 +928,36 @@ func _apply_live_wish(record: Dictionary) -> void:
 	_index_wish(record)
 	if _hud_source != null:
 		_hud_source.note_wish(record)
+
+
+func _apply_live_intervention(record: Dictionary) -> void:
+	# A #369 intervention record. Both subtypes carry `text` + `turn`; a `say`
+	# also names speaker/target, a `world_event` an optional location. Fold
+	# those into one line and reuse add_engine_event's "turn · channel · text"
+	# row (channel "intervention") rather than a bespoke surface -- the HUD
+	# request log is hidden in baked replay, so this is effectively live-only,
+	# matching note_wish/note_engine_event.
+	if _hud_source == null:
+		return
+	var text := String(record.get("text", "")).strip_edges()
+	var prose := text
+	match String(record.get("intervention", "")):
+		"say":
+			prose = "%s → %s: %s" % [
+				String(record.get("speaker", "you")),
+				String(record.get("name", "")),
+				text,
+			]
+		"world_event":
+			var loc := String(record.get("location", ""))
+			if not loc.is_empty():
+				prose = "%s @ %s" % [text, loc]
+	_hud_source.note_engine_event({
+		"kind": "intervention",
+		"channel": "intervention",
+		"text": prose,
+		"turn": record.get("turn"),
+	})
 
 
 func _index_wish(wish: Dictionary) -> void:
