@@ -585,5 +585,30 @@ def test_llm_narration_receives_only_chat_keys(tiny_game):
             assert set(message) == {"role", "content"}
 
 
+def test_record_call_stamps_tool_metadata():
+    from text_adventure_games.usage import UsageLedger, record_call
+
+    ledger = UsageLedger()
+    ctx = {
+        "actor": "Maya",
+        "tool_offered": ["study", "travel"],
+        "tool_chosen": "study",
+        "tool_choice": "any",
+        "args_digest": '{"subject": "chem"}',
+        "round": 1,
+    }
+    rec = record_call(
+        ledger, ctx, "mock", "mock", None, [{"role": "user", "content": "hi"}], "{}"
+    )
+    assert rec.tool_offered == ["study", "travel"]
+    assert rec.tool_chosen == "study"
+    assert rec.tool_choice == "any"
+    assert rec.args_digest == '{"subject": "chem"}'
+    assert rec.round == 1
+    prim = rec.to_primitive()
+    assert prim["tool_chosen"] == "study" and prim["tool_choice"] == "any"
+    assert prim["round"] == 1
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))

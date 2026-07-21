@@ -151,6 +151,16 @@ class CallRecord:
     # summary() so a misbehaving model is visible, not mysterious.
     schema_invalid: bool = False
     schema_repaired: bool | None = None
+    # Per-call tool metadata (#359): which tools were offered / which the model
+    # chose, the choice mode ("auto"/"any"/"forced"), a truncated JSON digest of
+    # the chosen args (a digest, NOT the payload -- full args live in the RunLog),
+    # and the tool-loop round (None outside run_tool_loop). Stamped at the single
+    # tool-call funnel in llm_client and aggregated in summary().
+    tool_offered: list[str] | None = None
+    tool_chosen: str | None = None
+    tool_choice: str | None = None
+    args_digest: str | None = None
+    round: int | None = None
 
     def to_primitive(self) -> dict:
         """The flattened ``"call"`` line written to a :class:`RunLog`."""
@@ -161,6 +171,11 @@ class CallRecord:
             "actor": self.actor,
             "role": self.role,
             "attempt": self.attempt,
+            "tool_offered": self.tool_offered,
+            "tool_chosen": self.tool_chosen,
+            "tool_choice": self.tool_choice,
+            "args_digest": self.args_digest,
+            "round": self.round,
             "prompt_sha256": self.prompt_sha256,
             "provider": u.provider,
             "model": u.model,
@@ -402,6 +417,11 @@ def record_call(
             latency_ms=latency_ms,
             schema_invalid=context.get("schema_invalid", False),
             schema_repaired=context.get("schema_repaired"),
+            tool_offered=context.get("tool_offered"),
+            tool_chosen=context.get("tool_chosen"),
+            tool_choice=context.get("tool_choice"),
+            args_digest=context.get("args_digest"),
+            round=context.get("round"),
         )
         ledger.record(rec, messages=messages, response=response_text)
         return rec
