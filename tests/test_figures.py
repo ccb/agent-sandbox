@@ -144,7 +144,9 @@ def test_every_wired_key_exists_in_the_registry():
         seen.add(id(thing))
         fig = thing.properties.get("figure")
         if callable(fig):
-            wired.add(fig(g))
+            key = fig(g)
+            if key:  # a callable may return None ("no card in this state")
+                wired.add(key)
         elif fig:
             wired.add(fig)
         for inner in getattr(thing, "contents", {}).values():
@@ -279,6 +281,24 @@ def test_the_hall_of_youth_deals_by_light_and_the_bats_teach_the_lesson():
     g.do_command("light glowstone")
     g.do_command("douse glowstone")  # contrition is always current
     assert cap.texts(Channel.FIGURE).count("youth-d") == 2
+
+
+def test_the_ceiling_stops_playing_once_the_bats_are_gone():
+    """EXAMINE CEILING deals the residents (bats-c) only while the colony is
+    overhead. Once they follow the dates elsewhere (bats_flown), the vault is
+    bare and the card no longer plays (CCB)."""
+    g, cap = _game()
+    g.do_command("search merchant")
+    g.do_command("take glowstone")
+    youth = g.locations["Hall of Youth"]
+    g.relocate(g.player, youth)
+    g.do_command("light glowstone")
+    g.do_command("examine ceiling")
+    assert "bats-c" in cap.texts(Channel.FIGURE)  # the residents, present
+    before = len(cap.texts(Channel.FIGURE))
+    youth.set_property("bats_flown", True)  # the colony has followed the dates
+    g.do_command("examine ceiling")
+    assert cap.texts(Channel.FIGURE)[before:] == []  # bare vault: no card
 
 
 def test_the_tank_is_the_room_and_the_flood_plays_once():

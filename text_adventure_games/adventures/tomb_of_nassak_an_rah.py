@@ -2622,7 +2622,21 @@ def build_game(seed=None):
         "with roosting bats, packed wing to wing, thousands of them -- and "
         "the nearest have already let go of the stone.",
     )
-    ceiling.set_property("figure", "bats-c")  # RESIDENTS (THOUSANDS)
+    # The card follows the tenants (CCB): the seething RESIDENTS (bats-c) plays
+    # only while the colony is still overhead AND there is light to see it by.
+    # Once they follow the dates elsewhere (bats_flown), EXAMINE CEILING finds a
+    # bare, silent vault and plays nothing; a dark examine stays a hush either
+    # way (the callable owns light-awareness, so no lit litho leaks into the
+    # dark). The relocated colony's card lives on the `roost` scenery.
+    ceiling.set_property(
+        "figure",
+        lambda g: (
+            "bats-c"
+            if not youth.get_property("bats_flown")
+            and perception.sight_for(g.player, youth)[0] >= perception.Sight.CLEAR
+            else None
+        ),
+    )
     ceiling.perceptible_by(
         perception.Sense.HEARING,
         "You can't see a thing, but the vault overhead seethes -- a dry, "
