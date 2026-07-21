@@ -103,6 +103,32 @@ def test_write_tmj_writes_pretty_and_backs_up(tmp_path):
     assert open(str(p) + ".bak").read() == "seed"
 
 
+def test_dump_tiled_indents_nested_bare_dict_value():
+    """A bare dict-valued property (e.g. Tiled's tileoffset on a tileset) must
+    round-trip exactly and stay pretty: its keys nest one level deeper than
+    the parent key, and its closing brace sits at the parent's indent -- not
+    at column 0 (#641 review fix)."""
+    fx = _fixture()
+    fx["tilesets"] = [{"name": "t", "firstgid": 1, "tileoffset": {"x": 0, "y": -8}}]
+
+    out = tmj_io.dump_tiled(fx)
+    assert json.loads(out) == fx
+
+    lines = out.splitlines()
+    tileoffset_idx = next(i for i, l in enumerate(lines) if '"tileoffset":{' in l)
+    tileoffset_indent = len(lines[tileoffset_idx]) - len(
+        lines[tileoffset_idx].lstrip(" ")
+    )
+    x_line = lines[tileoffset_idx + 1]
+    assert '"x":0' in x_line
+    x_indent = len(x_line) - len(x_line.lstrip(" "))
+    assert x_indent > tileoffset_indent, "nested dict keys must indent deeper"
+
+    close_line = lines[tileoffset_idx + 3]
+    assert close_line.strip() == "}"
+    assert close_line != "}", "nested dict's closing brace must not sit at column 0"
+
+
 def test_committed_map_round_trips_semantically():
     """dump_tiled preserves the committed map's content exactly (formatting
     aside) and keeps it pretty -- not minified, not element-per-line exploded."""

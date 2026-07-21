@@ -34,7 +34,7 @@ def _fmt_data(data, width, cont):
 
 def _enc_value(value, keypad, key=None, width=None):
     if isinstance(value, dict):
-        return _enc_obj(value, keypad)
+        return _enc_obj(value, keypad + " ", brace_pad=keypad)
     if isinstance(value, list):
         if not value:
             return "[]"
@@ -64,7 +64,7 @@ def dump_tiled(tmj: dict) -> str:
     return _enc_obj(tmj, " ", top=True)
 
 
-def backup_once(path: str):
+def backup_once(path: str) -> str | None:
     """Copy `path` -> `path`.bak only if the .bak is absent (first-run-wins), so a
     re-run never overwrites the pristine backup with already-modified output.
     Returns the .bak path, or None if it already existed."""
