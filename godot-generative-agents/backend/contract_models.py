@@ -114,6 +114,10 @@ class AgentFrame(_ContractModel):
     reasoning: str | None = None
     chat: list[tuple[str, str]] | None = None
     memories: list[MemoryRecord] | None = None
+    # Per-decision cognition trace (#359): consults + the terminal action, as
+    # compact digests. [] under the mock (or when a decision made no consults);
+    # the #163 card renders it. No raw args payload -- digests only.
+    trace: list[dict] | None = None
 
 
 class Meta(_ContractModel):

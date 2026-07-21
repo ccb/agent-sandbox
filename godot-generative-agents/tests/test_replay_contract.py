@@ -63,6 +63,7 @@ _SAMPLE_RAW = {
             "created_turn": 2,
         }
     ],
+    "trace": [{"kind": "action", "tool": "read", "ok": True}],
 }
 
 
@@ -95,6 +96,17 @@ def test_unpinned_frame_field_is_rejected():
     bad = dict(replay_frame_entry(_SAMPLE_RAW), mood="pensive")
     with pytest.raises(ValidationError):
         AgentFrame.model_validate(bad)
+
+
+def test_trace_is_emitted_and_digest_only():
+    frame = replay_frame_entry(_SAMPLE_RAW)
+    assert frame["trace"] == [{"kind": "action", "tool": "read", "ok": True}]
+    # Absent trace -> empty list, never missing (order-pin stays intact).
+    bare = {k: v for k, v in _SAMPLE_RAW.items() if k != "trace"}
+    assert replay_frame_entry(bare)["trace"] == []
+    # Digest-only: an action entry carries no raw args payload.
+    for entry in frame["trace"]:
+        assert set(entry) <= {"kind", "arg", "hits", "tool", "ok"}
 
 
 def test_meta_defaults_cover_both_surfaces():
@@ -161,9 +173,10 @@ def test_replay_shape_validates():
     )
 
 
-def test_baked_replay_validates_against_contract(tmp_path):
-    # Run the REAL bake (3 mock steps) and validate the file it writes -- the
-    # emitter itself is under test, not a copy of its dict.
+def _bake_small_replay(tmp_path):
+    """Run the real bake (3 mock steps) and return the path to the replay file
+    it writes -- shared by tests that need a real baked replay, not a copy of
+    its dict."""
     out = tmp_path / "penn_replay.json"
     subprocess.run(
         [
@@ -176,12 +189,28 @@ def test_baked_replay_validates_against_contract(tmp_path):
         ],
         check=True,
     )
+    return out
+
+
+def test_baked_replay_validates_against_contract(tmp_path):
+    # Run the REAL bake (3 mock steps) and validate the file it writes -- the
+    # emitter itself is under test, not a copy of its dict.
+    out = _bake_small_replay(tmp_path)
     replay = Replay.model_validate(json.loads(out.read_text()))
     assert replay.meta.schema_version == SCHEMA_VERSION
     assert replay.meta.steps == len(replay.frames)
     assert replay.meta.llm is None  # the bake runs the mock brain
     # First key of meta on the wire is the version marker.
     assert next(iter(json.loads(out.read_text())["meta"])) == "schema_version"
+
+
+def test_baked_replay_frames_carry_trace(tmp_path):
+    # Reuse the same bake helper as test_baked_replay_validates_against_contract.
+    out = _bake_small_replay(tmp_path)
+    replay = json.loads(out.read_text())
+    for frame in replay["frames"]:
+        for persona in frame.values():
+            assert isinstance(persona["trace"], list)
 
 
 def test_live_meta_validates_against_contract():
