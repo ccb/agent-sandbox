@@ -87,6 +87,9 @@ export interface AgentFrame {
   /** The memories retrieval surfaced for THIS decision (issue #163) -- a
    * subset of memory_streams; carries forward unchanged between decisions. */
   memories?: MemoryRecord[] | null;
+  /** Per-decision cognition trace (#359): consults + terminal action, digests
+   *  only. [] under the mock; the #163 card renders it. */
+  trace?: Array<Record<string, unknown>> | null;
 }
 
 /** A step: persona name -> that persona's state. */

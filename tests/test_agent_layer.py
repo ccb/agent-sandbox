@@ -585,5 +585,140 @@ def test_llm_narration_receives_only_chat_keys(tiny_game):
             assert set(message) == {"role", "content"}
 
 
+def test_record_call_stamps_tool_metadata():
+    from text_adventure_games.usage import UsageLedger, record_call
+
+    ledger = UsageLedger()
+    ctx = {
+        "actor": "Maya",
+        "tool_offered": ["study", "travel"],
+        "tool_chosen": "study",
+        "tool_choice": "any",
+        "args_digest": '{"subject": "chem"}',
+        "round": 1,
+    }
+    rec = record_call(
+        ledger, ctx, "mock", "mock", None, [{"role": "user", "content": "hi"}], "{}"
+    )
+    assert rec.tool_offered == ["study", "travel"]
+    assert rec.tool_chosen == "study"
+    assert rec.tool_choice == "any"
+    assert rec.args_digest == '{"subject": "chem"}'
+    assert rec.round == 1
+    prim = rec.to_primitive()
+    assert prim["tool_chosen"] == "study" and prim["tool_choice"] == "any"
+    assert prim["round"] == 1
+
+
+def test_call_tools_records_offered_and_chosen():
+    """The funnel (#359): call_tools stamps offered/chosen/choice/args_digest
+    onto the CallRecord it writes, outside a run_tool_loop `round` stays None."""
+    from text_adventure_games.usage import UsageLedger
+
+    ledger = UsageLedger()
+    client = MockLlmClient(
+        ledger=ledger,
+        tool_calls_responses=[
+            {"tool_calls": [{"name": "study", "arguments": {"subject": "chem"}}]}
+        ],
+    )
+    client.context = {"actor": "Maya"}
+    tools = [
+        {
+            "name": "study",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": True,
+            },
+        },
+        {
+            "name": "travel",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": True,
+            },
+        },
+    ]
+    client.call_tools([{"role": "user", "content": "study"}], tools, tool_choice="any")
+    rec = ledger.records[-1]
+    assert rec.tool_offered == ["study", "travel"]
+    assert rec.tool_chosen == "study"
+    assert rec.tool_choice == "any"
+    assert rec.args_digest == '{"subject": "chem"}'
+    assert rec.round is None  # single-shot call, not in a loop
+
+
+def test_run_tool_loop_stamps_round_and_cleans_up():
+    """run_tool_loop (#355) stamps the in-progress round onto client.context
+    before each call_tools round-trip -- so the funnel (#359) can record it onto
+    the CallRecord -- and pops it again once the loop returns, so a caller that
+    reuses the client afterward doesn't see a stale round left behind."""
+    from text_adventure_games.llm_client import run_tool_loop
+    from text_adventure_games.usage import UsageLedger
+
+    ledger = UsageLedger()
+    client = MockLlmClient(
+        ledger=ledger,
+        tool_calls_responses=[
+            {"tool_calls": [{"name": "study", "arguments": {"subject": "chem"}}]},
+            {"tool_calls": [{"name": "study", "arguments": {"subject": "bio"}}]},
+        ],
+    )
+    client.context = {"actor": "Maya"}
+    tools = [
+        {
+            "name": "study",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": True,
+            },
+        }
+    ]
+    messages = [{"role": "user", "content": "study"}]
+    executed = []
+
+    def execute(name, arguments):
+        executed.append((name, arguments))
+        # Terminal only on the 2nd call, so the loop must run 2 rounds.
+        return "ok", False, len(executed) >= 2
+
+    run_tool_loop(client, messages, tools, execute, tool_choice="any")
+
+    assert len(executed) == 2  # the loop actually iterated twice
+    assert len(ledger.records) == 2
+    for i, rec in enumerate(ledger.records):
+        assert rec.round == i  # 0, 1, ... in call order
+    assert "round" not in client.context  # popped once the loop returns
+
+
+def test_summary_aggregates_by_tool_and_choice():
+    from text_adventure_games.usage import UsageLedger, CallRecord, Usage
+
+    ledger = UsageLedger()
+
+    def rec(**kw):
+        ledger.records.append(
+            CallRecord(usage=Usage.zero("mock", "mock"), cost_usd=0.0, **kw)
+        )
+
+    rec(tool_chosen="study", tool_choice="any")
+    rec(
+        tool_chosen="study",
+        tool_choice="any",
+        schema_invalid=True,
+        schema_repaired=True,
+    )
+    rec(tool_chosen="travel", tool_choice="forced")
+    rec(tool_chosen=None, tool_choice="auto")  # a no-tool reply
+    s = ledger.summary()
+    assert s["by_tool"]["study"] == {"calls": 2, "invalid": 1, "repairs": 1}
+    assert s["by_tool"]["travel"]["calls"] == 1
+    assert "None" not in s["by_tool"]  # None-chosen calls are not a tool
+    assert s["tool_choice_split"] == {"auto": 1, "any": 2, "forced": 1}
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))

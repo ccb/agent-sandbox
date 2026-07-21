@@ -423,6 +423,12 @@ def _anthropic_tool_choice(tool_choice):
     return {"type": "tool", "name": tool_choice["name"]}
 
 
+def _norm_tool_choice(tool_choice) -> str:
+    """The choice mode for the ledger: "auto"/"any" pass through; a
+    ``{"name": ...}`` forced pick becomes "forced" (#359)."""
+    return tool_choice if isinstance(tool_choice, str) else "forced"
+
+
 # Block-shaped message content (issue #355). A normalized message's ``content``
 # may be a plain string (as always) OR a list of blocks:
 #   {"type": "text",        "text": str}
@@ -727,15 +733,29 @@ def _record_tool_call(
     *,
     schema_invalid,
     schema_repaired,
+    tools,
+    tool_choice,
 ) -> None:
     """Record one tool-call round-trip on the client's ledger, skipping a pure
     decline (a None result bills nothing -- matches the prior per-adapter guard).
-    The schema outcome rides the context dict into the CallRecord (#357)."""
+    The schema outcome rides the context dict into the CallRecord (#357), as do
+    the offered tools / chosen tool / choice mode / args digest (#359)."""
     if result is None:
         return
     context = dict(getattr(client, "context", {}) or {})
     context["schema_invalid"] = schema_invalid
     context["schema_repaired"] = schema_repaired
+    context["tool_offered"] = [t.get("name") for t in tools]
+    context["tool_choice"] = _norm_tool_choice(tool_choice)
+    if result.tool_calls:
+        first = result.tool_calls[0]
+        context["tool_chosen"] = first.get("name")
+        context["args_digest"] = json.dumps(
+            first.get("arguments") or {}, ensure_ascii=False
+        )[:120]
+    else:
+        context["tool_chosen"] = None
+        context["args_digest"] = None
     record_call(
         getattr(client, "ledger", None),
         context,
@@ -749,7 +769,7 @@ def _record_tool_call(
 
 
 def _call_tools_with_validation(
-    client, messages, tools, once, *, provider, model, repair
+    client, messages, tools, once, *, provider, model, repair, tool_choice
 ) -> "ToolCallResult | None":
     """Validate a call_tools reply against the tool schemas, optionally repair it
     once, record the outcome, and return the valid result or None.
@@ -772,6 +792,8 @@ def _call_tools_with_validation(
         latency_ms,
         schema_invalid=invalid,
         schema_repaired=None,
+        tools=tools,
+        tool_choice=tool_choice,
     )
     if not invalid:
         return result
@@ -798,6 +820,8 @@ def _call_tools_with_validation(
         latency_ms,
         schema_invalid=False,
         schema_repaired=not still_invalid,
+        tools=tools,
+        tool_choice=tool_choice,
     )
     return None if still_invalid else result
 
@@ -1010,6 +1034,7 @@ class OpenAIClient:
                 provider="openai",
                 model=model,
                 repair=getattr(self, "_schema_repair", True),
+                tool_choice=tool_choice,
             )
         except Exception as e:
             if self._verbose:
@@ -1202,6 +1227,7 @@ class AnthropicClient:
                 provider="anthropic",
                 model=model,
                 repair=getattr(self, "_schema_repair", True),
+                tool_choice=tool_choice,
             )
         except Exception as e:
             if self._verbose:
@@ -1479,6 +1505,7 @@ class MockLlmClient:
             provider="mock",
             model="mock",
             repair=self.schema_repair,
+            tool_choice=tool_choice,
         )
 
     def count_tokens(self, text: str) -> int:
@@ -2036,45 +2063,52 @@ def run_tool_loop(
     :class:`ToolCallResult` (or None).
     """
     result = None
-    for _ in range(max_rounds):
-        result = client.call_tools(
-            messages,
-            tools,
-            tool_choice=tool_choice,
-            max_tokens=max_tokens,
-            temperature=temperature,
-        )
-        if result is None or not result.tool_calls:
-            break
-        assistant_blocks: list[dict] = []
-        if result.text:
-            assistant_blocks.append({"type": "text", "text": result.text})
-        for call in result.tool_calls:
-            assistant_blocks.append(
-                {
-                    "type": "tool_use",
-                    "id": call["id"],
-                    "name": call["name"],
-                    "arguments": call["arguments"],
-                }
+    ctx = getattr(client, "context", None)
+    try:
+        for i in range(max_rounds):
+            if isinstance(ctx, dict):
+                ctx["round"] = i
+            result = client.call_tools(
+                messages,
+                tools,
+                tool_choice=tool_choice,
+                max_tokens=max_tokens,
+                temperature=temperature,
             )
-        messages.append({"role": "assistant", "content": assistant_blocks})
-        result_blocks: list[dict] = []
-        stop = False
-        for call in result.tool_calls:
-            res, is_error, done = execute(call["name"], call["arguments"])
-            result_blocks.append(
-                {
-                    "type": "tool_result",
-                    "tool_use_id": call["id"],
-                    "content": res,
-                    "is_error": is_error,
-                }
-            )
-            stop = stop or done
-        messages.append({"role": "user", "content": result_blocks})
-        if stop:
-            break
+            if result is None or not result.tool_calls:
+                break
+            assistant_blocks: list[dict] = []
+            if result.text:
+                assistant_blocks.append({"type": "text", "text": result.text})
+            for call in result.tool_calls:
+                assistant_blocks.append(
+                    {
+                        "type": "tool_use",
+                        "id": call["id"],
+                        "name": call["name"],
+                        "arguments": call["arguments"],
+                    }
+                )
+            messages.append({"role": "assistant", "content": assistant_blocks})
+            result_blocks: list[dict] = []
+            stop = False
+            for call in result.tool_calls:
+                res, is_error, done = execute(call["name"], call["arguments"])
+                result_blocks.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": call["id"],
+                        "content": res,
+                        "is_error": is_error,
+                    }
+                )
+                stop = stop or done
+            messages.append({"role": "user", "content": result_blocks})
+            if stop:
+                break
+    finally:
+        if isinstance(ctx, dict):
+            ctx.pop("round", None)
     return result
 
 

@@ -745,17 +745,19 @@ def replay_frame_entry(raw):
 
     The one mapping the bake, the live server, and the equivalence tests share,
     so the wire contract can't drift between them. KEY ORDER IS PINNED --
-    x, y, act, e, reasoning, chat, memories -- because the bake's ``json.dump``
-    serializes insertion order and #297's acceptance is a byte-identical
-    replay file.
+    x, y, act, e, reasoning, chat, memories, trace -- because the bake's
+    ``json.dump`` serializes insertion order and #297's acceptance is a
+    byte-identical replay file.
 
-    The Godot canvas reads only x/y/act/e; reasoning/chat/memories are the
-    agent-card cognition extras (issue #163). The mock leaves reasoning a stub
-    and chat None; a real-LLM run fills them in. `memories` is the small set
-    retrieval surfaced for *this* decision (the card's "Memories retrieved"
-    shorthand) -- a subset of the run's full memory stream; it populates even
-    under the mock since retrieval still runs (the mock only ignores it when
-    deciding)."""
+    The Godot canvas reads only x/y/act/e; reasoning/chat/memories/trace are
+    the agent-card cognition extras (issue #163). The mock leaves reasoning a
+    stub and chat None; a real-LLM run fills them in. `memories` is the small
+    set retrieval surfaced for *this* decision (the card's "Memories
+    retrieved" shorthand) -- a subset of the run's full memory stream; it
+    populates even under the mock since retrieval still runs (the mock only
+    ignores it when deciding). `trace` is the per-decision cognition trace
+    (issue #359, Task 5) -- the brain's consults plus the terminal action,
+    as compact digests; [] when this frame carried no decision."""
     return {
         "x": int(raw["movement"][0]),
         "y": int(raw["movement"][1]),
@@ -764,4 +766,5 @@ def replay_frame_entry(raw):
         "reasoning": raw.get("reasoning"),
         "chat": raw.get("chat"),
         "memories": raw.get("memories"),
+        "trace": raw.get("trace") or [],
     }

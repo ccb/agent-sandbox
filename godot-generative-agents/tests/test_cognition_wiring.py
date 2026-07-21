@@ -342,3 +342,25 @@ def test_no_seed_memories_key_adds_nothing_extra():
     records = chars["Ada"].agent.memory.records
     # -- Only the t=0 plan memory (add_plan) -- no extra seeded observation.
     assert all("violently ill" not in r.text for r in records)
+
+
+def test_consult_entry_parses_toolset_summaries():
+    from backend.cognition import _consult_entry
+
+    assert _consult_entry("recall('coffee') -> 3 memories") == {
+        "kind": "recall",
+        "arg": "'coffee'",
+        "hits": 3,
+    }
+    assert _consult_entry("query_knowledge('library') -> 0 beliefs") == {
+        "kind": "query_knowledge",
+        "arg": "'library'",
+        "hits": 0,
+    }
+    assert _consult_entry("read_plan() -> 5 lines") == {
+        "kind": "read_plan",
+        "arg": "",
+        "hits": 5,
+    }
+    # Never crash on an unexpected shape.
+    assert _consult_entry("weird") == {"kind": "weird", "arg": "", "hits": 0}

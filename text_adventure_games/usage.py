@@ -151,6 +151,16 @@ class CallRecord:
     # summary() so a misbehaving model is visible, not mysterious.
     schema_invalid: bool = False
     schema_repaired: bool | None = None
+    # Per-call tool metadata (#359): which tools were offered / which the model
+    # chose, the choice mode ("auto"/"any"/"forced"), a truncated JSON digest of
+    # the chosen args (a digest, NOT the payload -- full args live in the RunLog),
+    # and the tool-loop round (None outside run_tool_loop). Stamped at the single
+    # tool-call funnel in llm_client and aggregated in summary().
+    tool_offered: list[str] | None = None
+    tool_chosen: str | None = None
+    tool_choice: str | None = None
+    args_digest: str | None = None
+    round: int | None = None
 
     def to_primitive(self) -> dict:
         """The flattened ``"call"`` line written to a :class:`RunLog`."""
@@ -161,6 +171,11 @@ class CallRecord:
             "actor": self.actor,
             "role": self.role,
             "attempt": self.attempt,
+            "tool_offered": self.tool_offered,
+            "tool_chosen": self.tool_chosen,
+            "tool_choice": self.tool_choice,
+            "args_digest": self.args_digest,
+            "round": self.round,
             "prompt_sha256": self.prompt_sha256,
             "provider": u.provider,
             "model": u.model,
@@ -266,6 +281,26 @@ class UsageLedger:
             ),
         }
 
+    def _by_tool(self) -> dict:
+        out: dict[str, dict] = {}
+        for r in self.records:
+            if r.tool_chosen is None:
+                continue
+            b = out.setdefault(r.tool_chosen, {"calls": 0, "invalid": 0, "repairs": 0})
+            b["calls"] += 1
+            if r.schema_invalid:
+                b["invalid"] += 1
+            if r.schema_repaired is not None:
+                b["repairs"] += 1
+        return out
+
+    def _tool_choice_split(self) -> dict:
+        split = {"auto": 0, "any": 0, "forced": 0}
+        for r in self.records:
+            if r.tool_choice in split:
+                split[r.tool_choice] += 1
+        return split
+
     def summary(self) -> dict:
         """The run footer: call count, total + per-actor cost, token totals."""
         return {
@@ -286,6 +321,12 @@ class UsageLedger:
             "repair_successes": sum(
                 1 for r in self.records if r.schema_repaired is True
             ),
+            # Per-tool health (#359): calls, schema failures, and repairs keyed
+            # by the tool the model chose (None-chosen replies aren't a tool).
+            "by_tool": self._by_tool(),
+            # Forced-vs-auto split (#359): how often the model was free to pick
+            # ("auto"/"any") vs pinned to one tool ("forced").
+            "tool_choice_split": self._tool_choice_split(),
             **self.token_totals(),
         }
 
@@ -402,6 +443,11 @@ def record_call(
             latency_ms=latency_ms,
             schema_invalid=context.get("schema_invalid", False),
             schema_repaired=context.get("schema_repaired"),
+            tool_offered=context.get("tool_offered"),
+            tool_chosen=context.get("tool_chosen"),
+            tool_choice=context.get("tool_choice"),
+            args_digest=context.get("args_digest"),
+            round=context.get("round"),
         )
         ledger.record(rec, messages=messages, response=response_text)
         return rec
