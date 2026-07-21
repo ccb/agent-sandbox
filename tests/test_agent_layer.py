@@ -610,5 +610,45 @@ def test_record_call_stamps_tool_metadata():
     assert prim["round"] == 1
 
 
+def test_call_tools_records_offered_and_chosen():
+    """The funnel (#359): call_tools stamps offered/chosen/choice/args_digest
+    onto the CallRecord it writes, outside a run_tool_loop `round` stays None."""
+    from text_adventure_games.usage import UsageLedger
+
+    ledger = UsageLedger()
+    client = MockLlmClient(
+        ledger=ledger,
+        tool_calls_responses=[
+            {"tool_calls": [{"name": "study", "arguments": {"subject": "chem"}}]}
+        ],
+    )
+    client.context = {"actor": "Maya"}
+    tools = [
+        {
+            "name": "study",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": True,
+            },
+        },
+        {
+            "name": "travel",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": True,
+            },
+        },
+    ]
+    client.call_tools([{"role": "user", "content": "study"}], tools, tool_choice="any")
+    rec = ledger.records[-1]
+    assert rec.tool_offered == ["study", "travel"]
+    assert rec.tool_chosen == "study"
+    assert rec.tool_choice == "any"
+    assert rec.args_digest and "chem" in rec.args_digest
+    assert rec.round is None  # single-shot call, not in a loop
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))
