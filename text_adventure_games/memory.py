@@ -532,14 +532,23 @@ class AgentMemory:
         :data:`PRESENCE_CAP` records per call so a crowd can't flood the stream.
         """
         turn = getattr(game, "turn", 0)
+        # The character-level gate (issue #662): a game may narrow perception
+        # below room granularity (e.g. tile distance within one huge location).
+        # Read duck-typed like the rest of this module; a game without the seam
+        # keeps the old everyone-in-the-room behavior.
+        can_perceive = getattr(game, "can_perceive", None)
         current: dict[str, str] = {}  # key -> sentence
         for loc in locations:
             room = getattr(loc, "name", "")
-            for name in getattr(loc, "characters", {}):
+            for name, other in getattr(loc, "characters", {}).items():
                 if name == self.owner:
                     continue  # the agent doesn't "see itself" nearby
+                if can_perceive is not None and not can_perceive(character, other):
+                    continue  # in the same room, but out of perception range
                 current[f"char:{name}@{room}"] = f"I see {name} nearby."
-            for name in getattr(loc, "items", {}):
+            for name, item in getattr(loc, "items", {}).items():
+                if can_perceive is not None and not can_perceive(character, item):
+                    continue
                 current[f"item:{name}@{room}"] = f"I see {name} nearby."
 
         fresh = [key for key in current if key not in self._perceived]

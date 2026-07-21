@@ -1107,18 +1107,26 @@ class Game:
                     lines.append(f" * {direction.capitalize()} to {dest.name}")
 
         if scene.sight >= perception.Sight.CLEAR:
-            # Items at location (hidden items are revealed only to those who know)
-            visible_items = [it for it in loc.items.values() if _visible_to(it)]
+            # Items at location (hidden items are revealed only to those who
+            # know; the can_perceive gate hides what's spatially out of range)
+            visible_items = [
+                it
+                for it in loc.items.values()
+                if _visible_to(it) and self.can_perceive(character, it)
+            ]
             if visible_items:
                 lines.append("Items here:")
                 for item in visible_items:
                     lines.append(f" * {_format_item(item)}")
 
-            # Other characters present (hidden ones revealed only to those who know)
+            # Other characters present (hidden ones revealed only to those who
+            # know, spatially distant ones gated by can_perceive -- issue #662)
             others = [
                 c
                 for name, c in loc.characters.items()
-                if name != character.name and _visible_to(c)
+                if name != character.name
+                and _visible_to(c)
+                and self.can_perceive(character, c)
             ]
             if others:
                 lines.append("Characters here:")
@@ -1250,6 +1258,27 @@ class Game:
             if not frontier:
                 break  # radius exceeds the map; nothing more to reach
         return result
+
+    def can_perceive(self, observer, thing) -> bool:
+        """Whether *observer* perceives *thing* (a character or item) standing in
+        a location it can see into (issue #662).
+
+        :meth:`perceivable_locations` decides which *rooms* an observer sees
+        into; this decides which of the things standing there it actually
+        notices. The default is True -- room granularity, so a room's occupants
+        are all mutually perceived and every existing game is unchanged.
+        **Override it** when one Location spans real distance and room
+        membership overstates proximity -- the Godot sim's ``TiledGame``, whose
+        outdoor hub is a single Location covering a whole campus, overrides
+        this with a tile-distance check so residents hundreds of tiles apart
+        stop perceiving each other.
+
+        Consulted by :meth:`describe_for` (the "Items here:"/"Characters here:"
+        observation lists) and ``AgentMemory._perceive_presence`` (the
+        "I see X nearby." records). It gates *spatial* awareness only; the
+        knowledge-based ``secret_topic`` gate is separate and still applies.
+        """
+        return True
 
     def audible_rooms(self, origin, radius) -> dict:
         """``{room_name: direction_back_toward_origin}`` for rooms within
