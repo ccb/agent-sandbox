@@ -48,6 +48,8 @@ import os
 import random
 import re
 
+from tmj_io import write_tmj
+
 # --------------------------------------------------------------------------- #
 # Tile GIDs. firstgid is 1 for the Kenney sheet, so a Tiled GID is the sheet
 # index + 1; these mirror URBAN_TILES / DASH_* in osm_to_tiled.py (index there +1).
@@ -466,8 +468,7 @@ def main() -> int:
     grow_tmj(tmj, args.pad)
     frame_tmj(tmj, args.pad, old_w, old_h)
     planted = plant_margins(tmj, args.pad)
-    with open(args.tmj, "w") as fh:
-        json.dump(tmj, fh, separators=(",", ":"))
+    write_tmj(args.tmj, tmj)
     print(f"  wrote {os.path.relpath(args.tmj, repo)} ({planted} margin plants)")
 
     grow_matrix(args.matrix, args.pad, old_w, old_h)

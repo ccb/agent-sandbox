@@ -25,9 +25,9 @@ import argparse
 import json
 import os
 import re
-import shutil
 
 from add_entrances import split_footprint
+from tmj_io import write_tmj
 
 IRVINE_SECTOR = "15"  # UPenn:Irvine Auditorium
 IRVINE_LOBBY = "1015"  # INTERIOR_ARENA_BASE (1000) + sector 15
@@ -561,10 +561,8 @@ def main():
     print(f"irvine_furniture: placed {fplaced}/{fprop} sprites")
     if args.dry_run:
         return
-    shutil.copy2(args.tmj, args.tmj + ".bak")
-    with open(args.tmj, "w") as fh:
-        json.dump(tmj, fh, separators=(",", ":"))
-    print(f"wrote {args.tmj} (backup {args.tmj}.bak)")
+    bak = write_tmj(args.tmj, tmj)
+    print(f"wrote {args.tmj}" + (f" (backup {bak})" if bak else ""))
 
 
 if __name__ == "__main__":

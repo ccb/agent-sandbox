@@ -41,6 +41,7 @@ import json
 import os
 
 from furnish_building import CATALOG, SHEETS, _FIRST, load_matrix_sector, tile_named
+from tmj_io import write_tmj
 
 
 # --------------------------------------------------------------------------- #
@@ -328,8 +329,7 @@ def main():
         )
         if args.dry_run:
             return
-        with open(args.tmj, "w") as fh:
-            json.dump(tmj, fh, separators=(",", ":"))
+        write_tmj(args.tmj, tmj)
         print(f"  wrote {args.tmj}")
         return
 
@@ -414,8 +414,7 @@ def main():
 
     if args.dry_run:
         return
-    with open(args.tmj, "w") as fh:
-        json.dump(tmj, fh, separators=(",", ":"))
+    write_tmj(args.tmj, tmj)
     print(f"  wrote {args.tmj}")
 
 
