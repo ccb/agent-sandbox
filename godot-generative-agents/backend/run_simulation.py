@@ -170,6 +170,16 @@ def _settles_in_place(game, command: str) -> bool:
     return "duration_minutes" in (getattr(action, "ARGUMENTS_SCHEMA", None) or {})
 
 
+def _decision_trace(agent, command: str, ok: bool) -> list:
+    """The per-decision cognition trace (#359): the consults the brain made this
+    decide (stashed on the agent by decide_with_action_tools) followed by the
+    terminal action entry. `ok` is the precondition-gate result the step loop
+    already computed. Digests only -- no raw args reach the frame."""
+    consults = list(getattr(agent, "last_trace", None) or [])
+    verb = command.split(" ", 1)[0] if command else ""
+    return consults + [{"kind": "action", "tool": verb, "ok": ok}]
+
+
 def step(
     game,
     chars: dict,
@@ -467,6 +477,7 @@ def step(
                         min(cog.duration_max_minutes, minutes),
                     )
             if command and game.parser.parse_command(command, actor=char):
+                st["trace"] = _decision_trace(char.agent, command, ok=True)
                 remember_outcome(char, command, step_idx)
                 # LLM-scored poignancy (issue #583): override this tick's new
                 # memories' importance with the model's 1-10 scores BEFORE the
@@ -603,6 +614,7 @@ def step(
             elif command:
                 # The agent chose a command but it failed the precondition gate.
                 reason = getattr(game.parser, "last_fail_message", "") or command
+                st["trace"] = _decision_trace(char.agent, command, ok=False)
                 # #636: leave a first-person failure memory BEFORE the revision
                 # so retrieval (and the planner) can see what didn't work, rather
                 # than the agent re-choosing the same blocked action every tick.
@@ -661,6 +673,10 @@ def step(
             # movement/<step>.json for the replay to render).
             "reasoning": st["reasoning"],
             "memories": st["memories"],
+            # .get(): some state dicts (PennStepper's own init, and test
+            # fixtures built before #359) don't carry this key -- same
+            # tolerance already given "on_plan" elsewhere in this file.
+            "trace": st.get("trace", []),
         }
 
     # Conversation (issue #86): after everyone has moved, let co-located, settled
@@ -883,6 +899,9 @@ def simulate(
             # the steps in between (like desc/pron), so the card is never blank.
             "reasoning": "(waking up)",
             "memories": [],
+            # Per-decision cognition trace (#359): consults + terminal action.
+            # Empty until the first decision; carries forward like reasoning.
+            "trace": [],
             # Latest dialogue line, surfaced on the replay's agent card (issue
             # #86). None until this agent has a conversation; then it persists
             # (like reasoning/desc) until the next one.
