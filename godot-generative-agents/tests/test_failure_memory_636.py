@@ -182,3 +182,7 @@ def test_blocked_command_in_step_writes_a_failure_memory():
     assert any(
         t.startswith('I tried to "talk_to Ghost" but it didn\'t work') for t in texts
     )
+    # A blocked talk_to must NOT leave a false dialogue-tier memory: the failure
+    # record makes no "I went to talk to ..." claim (that phrasing is written
+    # only by maybe_converse when a conversation actually opens).
+    assert not any("went to talk to" in t for t in texts)
