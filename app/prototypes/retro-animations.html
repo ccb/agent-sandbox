@@ -839,6 +839,17 @@
   </section>
 
   <section>
+    <div class="slate"><h2>33-B &mdash; THE ULFIRE LANTERN, UNLIT</h2><span class="kind">LITHO / EXOTICA</span></div>
+    <div class="screen">
+      <svg id="ulfire-u" viewBox="0 0 640 360" aria-label="The ulfire lantern, unlit"></svg>
+    </div>
+    <p class="spec">Card 33 with the light taken out: the same lantern held low at the
+       left, but cold -- no flame, no glow, no ray -- and the slab beside it stays SOLID
+       and still, its interior hidden, because nothing shines through it.
+       <span class="attach">Attaches: EXAMINE / GET the lantern while unlit; DOUSE ULFIRE LANTERN.</span></p>
+  </section>
+
+  <section>
     <div class="slate"><h2>34 &mdash; THE CRYSTAL SHARD</h2><span class="kind">LITHO / THE FORGING</span></div>
     <div class="screen">
       <svg id="shard" viewBox="0 0 640 360" aria-label="The crystal shard"></svg>
@@ -3130,6 +3141,55 @@
         call.textContent = c.text;
       } else { call.textContent = ""; callLead.setAttribute("points", ""); }
       typeOn(foot, "LEAD WOULD STOP IT. THE TOMB DID NOT THINK OF THAT.", T, 130, 1.9);
+    });
+  }
+
+  /* ---------------- 33-B: the ulfire lantern, UNLIT ---------------- */
+  {
+    const svg = document.getElementById("ulfire-u");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "THE TOMB, OPAQUE / DORMANT";
+    el(svg, "line", { x1: 0, y1: 306, x2: 640, y2: 306, stroke: PH, "stroke-width": 1.4 });
+    // the slab: SOLID stone. No x-ray window, no reveal, nothing moving.
+    el(svg, "polygon", { points: "240,306 500,306 480,88 366,60 260,88",
+      fill: "none", stroke: PH, "stroke-width": 1.8 });
+    const grain = stipple(svg, "dots-ulfire-u", PH, .7);
+    el(svg, "polygon", { points: "240,306 500,306 480,88 366,60 260,88",
+      fill: grain, "fill-opacity": .5, stroke: "none" });
+    // the lantern, classic, held low at the left -- but cold: same body, no
+    // flame, no glow, no ray.
+    const lg = el(svg, "g", { transform: "translate(92 306) scale(.92)" });
+    el(lg, "polygon", { points: "-26,0 26,0 20,-14 -20,-14", fill: "none",
+      stroke: PH, "stroke-width": 1.6 });
+    el(lg, "path", { fill: "none", stroke: PH, "stroke-width": 1.7,
+      d: "M -17 -16 Q -27 -44 -17 -70 L 17 -70 Q 27 -44 17 -16 Z" });
+    el(lg, "line", { x1: -17, y1: -18, x2: 17, y2: -68, stroke: PH_DIM });
+    el(lg, "line", { x1: 17, y1: -18, x2: -17, y2: -68, stroke: PH_DIM });
+    el(lg, "rect", { x: -13, y: -78, width: 26, height: 8, fill: "none",
+      stroke: PH, "stroke-width": 1.4 });
+    el(lg, "rect", { x: -16, y: -86, width: 32, height: 8, fill: "none",
+      stroke: PH, "stroke-width": 1.4 });
+    el(lg, "path", { fill: "none", stroke: PH, "stroke-width": 1.6,
+      d: "M -20 -86 Q 0 -104 20 -86 Z" });
+    [-8, 0, 8].forEach(x => el(lg, "line", { x1: x, y1: -90, x2: x, y2: -96, stroke: PH_DIM }));
+    el(lg, "path", { fill: "none", stroke: PH, "stroke-width": 1.3,
+      d: "M -14 -100 Q 0 -150 14 -100" });
+    el(lg, "path", { fill: "none", stroke: PH, "stroke-width": 1.4,
+      d: "M -22 -8 Q -38 -50 -20 -88" });
+    el(lg, "path", { fill: "none", stroke: PH, "stroke-width": 1.4,
+      d: "M 22 -8 Q 38 -50 20 -88" });
+    // the wick, cold: a dim stub where the flame would be -- unlit, not gone
+    el(lg, "line", { x1: 0, y1: -30, x2: 0, y2: -44, stroke: PH_DIM, "stroke-width": 1.4 });
+    const foot = label(svg, 320, 348, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 150;
+      doWipe(T);
+      typeOn(hdr, "THE ULFIRE LANTERN (UNLIT)", T, 4, 1.4);
+      typeOn(foot, "UNLIT, THE STONE KEEPS ITS SECRETS.", T, 60, 1.8);
     });
   }
 

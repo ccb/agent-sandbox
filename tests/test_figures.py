@@ -333,6 +333,43 @@ def test_the_box_finds_the_ninth_angle_by_lantern_light():
     assert "tesseract-u" in cap.texts(Channel.FIGURE)
 
 
+def test_the_ulfire_lantern_deals_lit_or_unlit_by_state():
+    """The lantern's card follows its flame: EXAMINE/GET pick lit (33, key
+    'ulfire') or unlit (33-B, 'ulfire-u') by state, and LIGHT / DOUSE deal the
+    plate for the state they leave it in."""
+    g, cap = _game()
+    keeper = next(c for c in g.characters.values() if "ulfire lantern" in c.inventory)
+    lantern = keeper.inventory["ulfire lantern"]
+    keeper.remove_from_inventory(lantern)
+    g.player.add_to_inventory(lantern)
+    g.relocate(g.player, keeper.location)
+    g.do_command("examine lantern")   # unlit at rest
+    assert cap.texts(Channel.FIGURE)[-1] == "ulfire-u"
+    g.do_command("light lantern")     # -> lit
+    assert cap.texts(Channel.FIGURE)[-1] == "ulfire"
+    g.do_command("examine lantern")   # still lit
+    assert cap.texts(Channel.FIGURE)[-1] == "ulfire"
+    g.do_command("douse lantern")     # -> unlit again
+    assert cap.texts(Channel.FIGURE)[-1] == "ulfire-u"
+
+
+def test_silas_hands_over_the_unlit_lantern_card():
+    """The archivist's gift arrives unlit, so the handover plays 33-B -- the
+    beat that teaches the player to LIGHT it."""
+    from text_adventure_games import things
+
+    g, cap = _game()
+    silas = g.characters["Silas"]
+    fungus = things.Item("friend's fungus", "a pouch of friend's fungus", "pink fungus")
+    fungus.set_property("gettable", True)
+    fungus.add_alias("fungus")
+    g.player.add_to_inventory(fungus)
+    g.relocate(g.player, silas.location)
+    g.do_command("give fungus to silas")
+    assert "ulfire-u" in cap.texts(Channel.FIGURE)
+    assert "ulfire lantern" in g.player.inventory
+
+
 def test_reading_the_ledger_deals_the_manifest():
     """READ deals a document's card (engine rule, like WEAR for wearables),
     forced -- paperwork earns its card every time it is consulted."""

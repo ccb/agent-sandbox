@@ -878,25 +878,40 @@ class Refill(actions.Action):
         )
 
 
+def _deal_item_state_card(game, item):
+    """Deal *item*'s figure for the state it is now in (its figure property is
+    a callable that reads IS_LIT). Used after a LIGHT/DOUSE toggle so the card
+    matches the result -- the ulfire lantern's lit (33) or unlit (33-B) plate."""
+    fig = item.get_property("figure")
+    if fig:
+        game.show_figure(fig(game) if callable(fig) else fig, force=True)
+
+
 class LightWithDemo(actions.Light):
     """LIGHT, plus the tutorial: throwing the glowstone's switch is the
     game's first lesson, so the interactive card (08, both states) plays
     over the toggle itself -- the state cards (08-B / 08-C) belong to
-    take and examine."""
+    take and examine. The ulfire lantern instead shows the plate for the
+    state it lands in (33 lit), so LIGHT reads as turning it on."""
 
     def apply_effects(self):
         if self.character is self.game.player and self.item.name == "glowstone":
             self.game.show_figure("glowstone", force=True)
         super().apply_effects()
+        if self.character is self.game.player and self.item.name == "ulfire lantern":
+            _deal_item_state_card(self.game, self.item)
 
 
 class DouseWithDemo(actions.Douse):
-    """DOUSE, with the same demo card as :class:`LightWithDemo`."""
+    """DOUSE, with the same demo card as :class:`LightWithDemo`; the ulfire
+    lantern shows its unlit plate (33-B) for the state DOUSE leaves it in."""
 
     def apply_effects(self):
         if self.character is self.game.player and self.item.name == "glowstone":
             self.game.show_figure("glowstone", force=True)
         super().apply_effects()
+        if self.character is self.game.player and self.item.name == "ulfire lantern":
+            _deal_item_state_card(self.game, self.item)
 
 
 class TieSilk(actions.Action):
@@ -3427,7 +3442,15 @@ def build_game(seed=None):
         "solid objects, and is stopped only by lead.",
     )
     ulfire_lantern.set_property(Property.FLAMMABLE, True)
-    ulfire_lantern.set_property("figure", "ulfire")
+    # The card follows the flame (CCB): lit, the x-ray litho (33); unlit, the
+    # dark twin (33-B). Examine/get pick by state; LIGHT/DOUSE deal the card of
+    # the state they leave it in (LightWithDemo / DouseWithDemo, below).
+    ulfire_lantern.set_property(
+        "figure",
+        lambda g: (
+            "ulfire" if ulfire_lantern.get_property(Property.IS_LIT) else "ulfire-u"
+        ),
+    )
     ulfire_lantern.add_alias("lantern")
     silas.add_to_inventory(ulfire_lantern)
     # A synth takes some breaking (vigor 2).
@@ -5087,9 +5110,10 @@ def build_game(seed=None):
         if lamp is not None:
             silas.remove_from_inventory(lamp)
             g.player.add_to_inventory(lamp)
-            # The gift is the beat (CCB): the lantern's card plays as it
-            # changes hands -- light should be for the unread.
-            g.show_figure("ulfire", force=True)
+            # The gift is the beat (CCB): the lantern's card plays as it changes
+            # hands -- its current state (unlit when handed over: 33-B), so the
+            # player learns to LIGHT it. Light should be for the unread.
+            _deal_item_state_card(g, lamp)
         silas.talk_text = (
             '"A friend," Silas says, warmly and a little vaguely, and returns '
             "to the lattice. The bright threads spool on."

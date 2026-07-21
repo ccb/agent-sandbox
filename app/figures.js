@@ -10,7 +10,7 @@
    and disconnected nodes drop off the clock automatically. */
 (() => {
   "use strict";
-  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "chimney-f": ["svg", 640, 360], "chimney-g": ["svg", 640, 360], "chimney-h": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-c": ["svg", 640, 400], "cyl-o": ["svg", 640, 400], "cyl-v": ["svg", 640, 400], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "ext1c": ["svg", 640, 400], "ext1e": ["svg", 640, 400], "flask": ["svg", 640, 360], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
+  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "chimney-f": ["svg", 640, 360], "chimney-g": ["svg", 640, 360], "chimney-h": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-c": ["svg", 640, 400], "cyl-o": ["svg", 640, 400], "cyl-v": ["svg", 640, 400], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "ext1c": ["svg", 640, 400], "ext1e": ["svg", 640, 400], "flask": ["svg", 640, 360], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
   const FIG = {
     _defs: {}, _uid: 0, _ticks: [], _timer: null, _target: null,
     MAX_LIVE: 3,
@@ -2181,6 +2181,54 @@
         call.textContent = c.text;
       } else { call.textContent = ""; callLead.setAttribute("points", ""); }
       typeOn(foot, "LEAD WOULD STOP IT. THE TOMB DID NOT THINK OF THAT.", T, 130, 1.9);
+    });
+  });
+
+  /* ---------------- 33-B: the ulfire lantern, UNLIT ---------------- */
+  FIG._define("ulfire-u", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "THE TOMB, OPAQUE / DORMANT";
+    el(svg, "line", { x1: 0, y1: 306, x2: 640, y2: 306, stroke: PH, "stroke-width": 1.4 });
+    // the slab: SOLID stone. No x-ray window, no reveal, nothing moving.
+    el(svg, "polygon", { points: "240,306 500,306 480,88 366,60 260,88",
+      fill: "none", stroke: PH, "stroke-width": 1.8 });
+    const grain = stipple(svg, "dots-ulfire-u", PH, .7);
+    el(svg, "polygon", { points: "240,306 500,306 480,88 366,60 260,88",
+      fill: grain, "fill-opacity": .5, stroke: "none" });
+    // the lantern, classic, held low at the left -- but cold: same body, no
+    // flame, no glow, no ray.
+    const lg = el(svg, "g", { transform: "translate(92 306) scale(.92)" });
+    el(lg, "polygon", { points: "-26,0 26,0 20,-14 -20,-14", fill: "none",
+      stroke: PH, "stroke-width": 1.6 });
+    el(lg, "path", { fill: "none", stroke: PH, "stroke-width": 1.7,
+      d: "M -17 -16 Q -27 -44 -17 -70 L 17 -70 Q 27 -44 17 -16 Z" });
+    el(lg, "line", { x1: -17, y1: -18, x2: 17, y2: -68, stroke: PH_DIM });
+    el(lg, "line", { x1: 17, y1: -18, x2: -17, y2: -68, stroke: PH_DIM });
+    el(lg, "rect", { x: -13, y: -78, width: 26, height: 8, fill: "none",
+      stroke: PH, "stroke-width": 1.4 });
+    el(lg, "rect", { x: -16, y: -86, width: 32, height: 8, fill: "none",
+      stroke: PH, "stroke-width": 1.4 });
+    el(lg, "path", { fill: "none", stroke: PH, "stroke-width": 1.6,
+      d: "M -20 -86 Q 0 -104 20 -86 Z" });
+    [-8, 0, 8].forEach(x => el(lg, "line", { x1: x, y1: -90, x2: x, y2: -96, stroke: PH_DIM }));
+    el(lg, "path", { fill: "none", stroke: PH, "stroke-width": 1.3,
+      d: "M -14 -100 Q 0 -150 14 -100" });
+    el(lg, "path", { fill: "none", stroke: PH, "stroke-width": 1.4,
+      d: "M -22 -8 Q -38 -50 -20 -88" });
+    el(lg, "path", { fill: "none", stroke: PH, "stroke-width": 1.4,
+      d: "M 22 -8 Q 38 -50 20 -88" });
+    // the wick, cold: a dim stub where the flame would be -- unlit, not gone
+    el(lg, "line", { x1: 0, y1: -30, x2: 0, y2: -44, stroke: PH_DIM, "stroke-width": 1.4 });
+    const foot = label(svg, 320, 348, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 150;
+      doWipe(T);
+      typeOn(hdr, "THE ULFIRE LANTERN (UNLIT)", T, 4, 1.4);
+      typeOn(foot, "UNLIT, THE STONE KEEPS ITS SECRETS.", T, 60, 1.8);
     });
   });
 
