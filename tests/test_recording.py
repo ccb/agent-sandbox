@@ -13,6 +13,8 @@ Run with pytest::
     uv run pytest tests/test_recording.py -v
 """
 
+import json
+
 import pytest
 
 from notebooks.hw1_llm import build_llm_game
@@ -291,3 +293,49 @@ def test_seed_world_makes_rose_scent_reproducible():
     second = _smell_the_rose_scent()
     assert first and isinstance(first, str)
     assert first == second
+
+
+# ----------------------------------------------------------------------
+# Section C: the headline contract -- record, replay, byte-identical state.
+#
+# build_llm_game(MockReActClient()) wires the NPCs as LLMAgents whose client has
+# call_tools, so react_behavior drives them through the native tool loop
+# (npc.py:_use_tool_loop). This run therefore exercises the call_tools cassette
+# path end-to-end: a chat-only recording would CassetteMiss here.
+# ----------------------------------------------------------------------
+
+FEED_TROLL = [
+    "get pole",
+    "go out",
+    "go south",
+    "catch fish with pole",
+    "go north",
+    "go north",
+    "go east",
+    "give fish to troll",
+]
+
+
+def _canonical(primitive):
+    """A canonical string for a world snapshot, key-order-independent."""
+    return json.dumps(primitive, sort_keys=True)
+
+
+def test_record_then_replay_is_byte_identical(tmp_path):
+    cassette = str(tmp_path / "action_castle.jsonl")
+
+    # Record: a real run through the mock-driven Action Castle, RNG seeded. The
+    # NPCs decide via call_tools, so those calls are what land in the cassette.
+    seed_world(0)
+    client = RecordingClient(MockReActClient(), cassette)
+    recorded = build_llm_game(client)
+    play(recorded, FEED_TROLL)
+    client.close()
+
+    # Replay: same seed, same commands, responses served from the cassette --
+    # no MockReActClient in sight, no network, no key.
+    seed_world(0)
+    replayed = build_llm_game(ReplayClient(cassette, strict=True))
+    play(replayed, FEED_TROLL)
+
+    assert _canonical(recorded.to_primitive()) == _canonical(replayed.to_primitive())
