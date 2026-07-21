@@ -1953,7 +1953,10 @@
       ctx.fillText(kk === 1 ? "LIGHT IS DEAR; ATTENTION DEARER" : "", 18, 24);
     }
     cv.addEventListener("pointerdown", () => { lit = !lit; if (reduced) draw(lastT + 1); });
-    clock(t => { if (t && t % 48 === 0) lit = !lit; draw(t); }); // it demos itself
+    // it demos itself, toggling every 48 ticks -- phase-shifted so the FIRST
+    // light-up lands at t=8 (a short beat of dark, not a 4-second wait) when
+    // the card plays from the top on LIGHT / DOUSE (CCB).
+    clock(t => { if ((t + 40) % 48 === 0) lit = !lit; draw(t); });
   }
 
   /* ---------------- 08-B: the glowstone, off ---------------- */
