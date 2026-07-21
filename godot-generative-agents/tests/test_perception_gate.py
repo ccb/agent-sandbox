@@ -12,10 +12,9 @@ things within the observer's ``vision_r`` in Chebyshev tiles (the same metric
 as ``WorldMap.tile_gap``). The silent Observer -- the engine's required
 "player", which never acts -- is gated out entirely.
 
-The presence/observation assertions also need the engine side of the seam
-(``Game.can_perceive``, the #662 PR to ``main``); until that syncs forward
-those tests skip, exactly like the #612 -> #613 pattern. Run from the repo
-root::
+The presence/observation assertions exercise the engine side of the seam
+(``Game.can_perceive``, landed on ``main`` via #668) end to end. Run from the
+repo root::
 
     uv run pytest godot-generative-agents/tests/test_perception_gate.py -v
 """
@@ -33,13 +32,7 @@ sys.path.insert(0, str(_SIM_DIR))
 from backend.cognition import DEFAULT_VISION_R, attach_agents  # noqa: E402
 from penn_world import build_penn_world  # noqa: E402
 from serve_penn import PennStepper  # noqa: E402
-from text_adventure_games import games  # noqa: E402
 from text_adventure_games.things import Character  # noqa: E402
-
-needs_engine_seam = pytest.mark.skipif(
-    not hasattr(games.Game, "can_perceive"),
-    reason="engine Game.can_perceive (#662 PR to main) not yet synced forward",
-)
 
 
 @pytest.fixture
@@ -136,10 +129,9 @@ def test_audience_excludes_out_of_range_residents(penn):
     assert "Professor Tanaka" in names
 
 
-# ------------------------- end-to-end spawn awareness (needs engine seam)
+# ------------------------- end-to-end spawn awareness
 
 
-@needs_engine_seam
 def test_spawn_first_perceive_records_no_cross_campus_sightings(penn):
     _pw, game, chars = penn
     sofia = chars["Sofia Ramirez"]
@@ -149,7 +141,6 @@ def test_spawn_first_perceive_records_no_cross_campus_sightings(penn):
     assert "I see Observer nearby." not in texts
 
 
-@needs_engine_seam
 def test_spawn_observation_omits_cross_campus_characters(penn):
     _pw, game, chars = penn
     sofia = chars["Sofia Ramirez"]
@@ -158,7 +149,6 @@ def test_spawn_observation_omits_cross_campus_characters(penn):
     assert "Observer" not in obs
 
 
-@needs_engine_seam
 def test_close_residents_still_perceive_each_other(penn):
     """The gate must not overshoot: residents inside vision_r stay mutually
     present in both memory and the observation text."""
