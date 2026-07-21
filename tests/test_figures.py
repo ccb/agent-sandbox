@@ -379,7 +379,8 @@ def test_reading_the_ledger_deals_the_manifest():
     assert "manifest" in cap.texts(Channel.FIGURE)
     text = " ".join(cap.texts(Channel.NARRATION))
     assert "You thumb through pages of freight" in text  # the card's echo
-    assert "SPIDER-SILK, ONE BOLT: LIGHT, AND KNOWS IT" in text
+    assert "SPIDER-SILK, ONE BOLT -- until the ribbon" in text
+    assert "AND KNOWS IT" not in text  # the spider-silk gloss was trimmed
     assert "Tomorrow, Gnomon" in text  # the clue survives the framing
     g.do_command("read ledger")
     assert cap.texts(Channel.FIGURE).count("manifest") == 2

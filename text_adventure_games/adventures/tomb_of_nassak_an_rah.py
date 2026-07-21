@@ -2302,7 +2302,7 @@ def build_game(seed=None):
         "read_text",
         "You thumb through pages of freight -- SAFFRON, ONE BALE: A "
         "SEASON'S WATER. DATES, ONE CRATE: A MONTH OF MEALS. SPIDER-SILK, "
-        "ONE BOLT: LIGHT, AND KNOWS IT -- until the ribbon stops you at "
+        "ONE BOLT -- until the ribbon stops you at "
         "the final page. The hand is neat. '...ninth day. Camped in the lee "
         "of the tomb the road-folk call the Three Mouths. Of it, Gnomon "
         "tells three things: that the boy's mouth is lightless within, and "
