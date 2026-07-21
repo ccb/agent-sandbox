@@ -21,6 +21,7 @@ mock is both brain and schedule driver and the replay is byte-identical.
 """
 
 import json
+import re
 import time
 from dataclasses import dataclass, replace
 
@@ -63,6 +64,20 @@ REACT_HOUR_FALLBACK_STEPS = 360
 # The encounter memory the cheap perceive pass writes -- same weight as a
 # travel/perform outcome: notable enough to retrieve, not a reflection driver.
 ENCOUNTER_IMPORTANCE = 2.0
+
+_CONSULT_RE = re.compile(r"^(\w+)\((.*)\) -> (\d+)\b")
+
+
+def _consult_entry(summary: str) -> dict:
+    """A cognition_toolset summary ("recall('x') -> 3 memories") -> a compact
+    trace entry (#359). Digest only -- the arg is the toolset's repr, never the
+    retrieved payload. Falls back gracefully so a decide never crashes on it."""
+    m = _CONSULT_RE.match(summary or "")
+    if m:
+        return {"kind": m.group(1), "arg": m.group(2), "hits": int(m.group(3))}
+    kind = (summary or "").split("(", 1)[0].strip() or "consult"
+    return {"kind": kind, "arg": "", "hits": 0}
+
 
 # Conversation consequences (issue #582). A backend-local revision reason -- the
 # engine's RevisionTrigger.reason is a plain string (planning.py), so an
@@ -853,6 +868,7 @@ def decide_with_action_tools(game, char, observation: str) -> str | None:
     # from the `perform` tool's optional `duration_minutes` slot (#581).
     agent.last_reasoning = None
     agent.last_duration = None
+    agent.last_trace = []
     messages = [
         # The same system message LLMAgent's structured path sends (persona +
         # goals, no free-text format instruction -- the tool schema is the
@@ -873,11 +889,16 @@ def decide_with_action_tools(game, char, observation: str) -> str | None:
         or "emoji" in t["parameters"]["properties"]
     }
     if getattr(agent, "cognition_tools", False):
+
+        def _trace(text):
+            game.parser.agent_reasoning(char.name, text)
+            agent.last_trace.append(_consult_entry(text))
+
         cog_tools, cognition_execute = cognition_toolset(
             agent,
             knowledge=getattr(char, "knowledge", None),
             turn=getattr(game, "turn", 0),
-            trace=lambda text: game.parser.agent_reasoning(char.name, text),
+            trace=_trace,
         )
         # A registered action verb keeps priority over a same-named cognition
         # tool (duplicate tool names would be rejected by real providers) --
