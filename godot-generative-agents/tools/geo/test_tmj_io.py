@@ -2,6 +2,8 @@
 
 import json
 import os
+import shutil
+import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -146,3 +148,31 @@ def test_committed_map_is_serializer_canonical():
     dump_tiled of itself -- so a script re-run changes only the cells it edits."""
     text = open(COMMITTED_TMJ).read()
     assert tmj_io.dump_tiled(json.loads(text)) == text
+
+
+def test_furnish_script_output_stays_pretty(tmp_path):
+    """Issue #641 bullet 3: run a furnish script on a copy of the committed map
+    and assert the result is pretty (has newlines, not minified) and stable
+    under re-serialization (already in canonical form)."""
+    dst = tmp_path / "map.tmj"
+    shutil.copy2(COMMITTED_TMJ, dst)
+    matrix = os.path.join(GGA, "backend", "penn", "the_upenn", "matrix")
+    r = subprocess.run(
+        [
+            sys.executable,
+            os.path.join(HERE, "furnish_van_pelt.py"),
+            "--tmj",
+            str(dst),
+            "--matrix",
+            matrix,
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert r.returncode == 0, r.stderr
+    text = dst.read_text()
+    assert text.count("\n") > 1000, "output was minified"
+    # canonical/stable: re-serializing the written file is a no-op
+    assert tmj_io.dump_tiled(json.loads(text)) == text
+    # first-run-wins backup exists and is the pristine committed map
+    assert open(str(dst) + ".bak").read() == open(COMMITTED_TMJ).read()
