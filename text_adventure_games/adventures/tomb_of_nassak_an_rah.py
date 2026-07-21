@@ -4222,10 +4222,12 @@ def build_game(seed=None):
                     )
                     g.parser.ok(warn_text)
                 else:
-                    # the close-up plays FIRST, then the blow lands (CCB);
-                    # forced on the FIRST blow only (later blows do not spam)
+                    # the blow's card plays FIRST, then the blow lands (CCB);
+                    # forced on the FIRST blow only (later blows do not spam).
+                    # Guts gets THE LASH (26-B) -- the arm actually striking,
+                    # which the prose describes -- rather than the DRIP close-up.
                     g.show_figure(
-                        "guts-b" if spawn is spawn_guts else "spawn-b",
+                        "guts-lash" if spawn is spawn_guts else "spawn-b",
                         force=(n == 2),
                     )
                     attack(g)

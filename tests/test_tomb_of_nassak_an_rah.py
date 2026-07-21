@@ -714,6 +714,7 @@ def test_striding_in_earns_a_warning_then_a_lash():
     assert not game.player.wounds  # the swing is the warning
     game.do_command("say hello")  # loud again while it listens -> the lash
     assert any(w.name == "Acid-Lashed" for w in game.player.wounds)
+    assert "guts-lash" in cap.texts(Channel.FIGURE)  # the arm actually strikes
     assert not game.is_game_over()
 
 
