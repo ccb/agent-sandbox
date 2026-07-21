@@ -694,5 +694,31 @@ def test_run_tool_loop_stamps_round_and_cleans_up():
     assert "round" not in client.context  # popped once the loop returns
 
 
+def test_summary_aggregates_by_tool_and_choice():
+    from text_adventure_games.usage import UsageLedger, CallRecord, Usage
+
+    ledger = UsageLedger()
+
+    def rec(**kw):
+        ledger.records.append(
+            CallRecord(usage=Usage.zero("mock", "mock"), cost_usd=0.0, **kw)
+        )
+
+    rec(tool_chosen="study", tool_choice="any")
+    rec(
+        tool_chosen="study",
+        tool_choice="any",
+        schema_invalid=True,
+        schema_repaired=True,
+    )
+    rec(tool_chosen="travel", tool_choice="forced")
+    rec(tool_chosen=None, tool_choice="auto")  # a no-tool reply
+    s = ledger.summary()
+    assert s["by_tool"]["study"] == {"calls": 2, "invalid": 1, "repairs": 1}
+    assert s["by_tool"]["travel"]["calls"] == 1
+    assert "None" not in s["by_tool"]  # None-chosen calls are not a tool
+    assert s["tool_choice_split"] == {"auto": 1, "any": 2, "forced": 1}
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))

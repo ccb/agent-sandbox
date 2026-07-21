@@ -281,6 +281,26 @@ class UsageLedger:
             ),
         }
 
+    def _by_tool(self) -> dict:
+        out: dict[str, dict] = {}
+        for r in self.records:
+            if r.tool_chosen is None:
+                continue
+            b = out.setdefault(r.tool_chosen, {"calls": 0, "invalid": 0, "repairs": 0})
+            b["calls"] += 1
+            if r.schema_invalid:
+                b["invalid"] += 1
+            if r.schema_repaired is not None:
+                b["repairs"] += 1
+        return out
+
+    def _tool_choice_split(self) -> dict:
+        split = {"auto": 0, "any": 0, "forced": 0}
+        for r in self.records:
+            if r.tool_choice in split:
+                split[r.tool_choice] += 1
+        return split
+
     def summary(self) -> dict:
         """The run footer: call count, total + per-actor cost, token totals."""
         return {
@@ -301,6 +321,12 @@ class UsageLedger:
             "repair_successes": sum(
                 1 for r in self.records if r.schema_repaired is True
             ),
+            # Per-tool health (#359): calls, schema failures, and repairs keyed
+            # by the tool the model chose (None-chosen replies aren't a tool).
+            "by_tool": self._by_tool(),
+            # Forced-vs-auto split (#359): how often the model was free to pick
+            # ("auto"/"any") vs pinned to one tool ("forced").
+            "tool_choice_split": self._tool_choice_split(),
             **self.token_totals(),
         }
 
