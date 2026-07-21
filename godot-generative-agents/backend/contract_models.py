@@ -115,8 +115,10 @@ class AgentFrame(_ContractModel):
     chat: list[tuple[str, str]] | None = None
     memories: list[MemoryRecord] | None = None
     # Per-decision cognition trace (#359): consults + the terminal action, as
-    # compact digests. [] under the mock (or when a decision made no consults);
-    # the #163 card renders it. No raw args payload -- digests only.
+    # compact digests -- e.g. under the mock, a DECIDING frame carries
+    # [{"kind":"action","tool":<verb>,"ok":true}]. [] only for a waking /
+    # carry-forward frame (no decision made this step); the #163 card
+    # renders it. No raw args payload -- digests only.
     trace: list[dict] | None = None
 
 

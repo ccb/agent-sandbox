@@ -63,7 +63,10 @@ _SAMPLE_RAW = {
             "created_turn": 2,
         }
     ],
-    "trace": [{"kind": "action", "tool": "read", "ok": True}],
+    "trace": [
+        {"kind": "recall", "arg": "'coffee'", "hits": 3},
+        {"kind": "action", "tool": "read", "ok": True},
+    ],
 }
 
 
@@ -100,7 +103,10 @@ def test_unpinned_frame_field_is_rejected():
 
 def test_trace_is_emitted_and_digest_only():
     frame = replay_frame_entry(_SAMPLE_RAW)
-    assert frame["trace"] == [{"kind": "action", "tool": "read", "ok": True}]
+    assert frame["trace"] == [
+        {"kind": "recall", "arg": "'coffee'", "hits": 3},
+        {"kind": "action", "tool": "read", "ok": True},
+    ]
     # Absent trace -> empty list, never missing (order-pin stays intact).
     bare = {k: v for k, v in _SAMPLE_RAW.items() if k != "trace"}
     assert replay_frame_entry(bare)["trace"] == []

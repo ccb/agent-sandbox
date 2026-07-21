@@ -476,6 +476,11 @@ def step(
                         cog.duration_min_minutes,
                         min(cog.duration_max_minutes, minutes),
                     )
+            # Unlike st["reasoning"]/st["memories"] above, the st["trace"]
+            # assignments in this branch and the failure branch below are NOT
+            # gated on decide_pending -- safely: a timed-out decision yields a
+            # falsy `command`, so neither branch runs, and st["trace"] is left
+            # to carry forward the last real decision's trace.
             if command and game.parser.parse_command(command, actor=char):
                 st["trace"] = _decision_trace(char.agent, command, ok=True)
                 remember_outcome(char, command, step_idx)
