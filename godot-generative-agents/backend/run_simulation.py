@@ -602,11 +602,25 @@ def step(
                         _settle_after_dead_talk(st, step_idx, cog)
             elif command:
                 # The agent chose a command but it failed the precondition gate.
-                # Offer its planner a chance to re-plan around the blocked action
-                # (design doc §8). The mock never lands here -- its travel/perform
-                # are always legal -- so this stays byte-identical; it's the seam a
-                # real planner needs.
                 reason = getattr(game.parser, "last_fail_message", "") or command
+                # #636: leave a first-person failure memory BEFORE the revision
+                # so retrieval (and the planner) can see what didn't work, rather
+                # than the agent re-choosing the same blocked action every tick.
+                # The mock never lands here (its travel/perform always parse), so
+                # this stays byte-identical; it's the seam a real brain needs.
+                remember_outcome(char, command, step_idx, fail_reason=reason)
+                # Score + (maybe) reflect on the failure memory now, mirroring
+                # the success branch (#583/#84): a repeatedly-blocked agent --
+                # exactly #636's target -- otherwise accretes unscored 3.0
+                # failures and inflates the reflection accumulator without ever
+                # scoring or reflecting them until it next succeeds. Both are
+                # no-ops under the mock (brain-identity gated), and this branch
+                # is unreachable under the mock anyway, so the bake stays
+                # byte-identical.
+                score_new_memories(char, step_idx)
+                maybe_reflect(char.agent, game)
+                # Offer its planner a chance to re-plan around the blocked action
+                # (design doc §8).
                 maybe_revise_plan(
                     char, RevisionTrigger(ACTION_FAILED, step_idx, reason), clock
                 )

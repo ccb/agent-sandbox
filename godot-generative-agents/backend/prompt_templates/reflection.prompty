@@ -9,6 +9,11 @@ description: >
   #614), studying or eating (#615), checking out or reading a library book
   (#616, the read phrasing quoting the book's content when there is any),
   or a quoted fallback for any other command.
+  A failed/blocked attempt (#636) is recorded instead as
+  I tried to "<command>" but it didn't work: <reason> -- the failed flag
+  overrides the verb-selected phrasing. The reason clause is dropped when
+  the parser left no message (run_simulation then passes the command back as
+  the reason, so "reason == command" reads as "no reason available").
   The memory's importance is chosen in Python (it is data, not text), so
   only the wording lives here.
 inputs:
@@ -45,6 +50,12 @@ inputs:
   command:
     type: string
     description: The raw command, quoted verbatim in the fallback (any other verb).
+  failed:
+    type: boolean
+    description: Whether this records a failed/blocked attempt (#636); selects the failure phrasing, overriding verb.
+  reason:
+    type: string
+    description: The parser's fail message for the blocked attempt (verb-agnostic; used when failed is true, #636).
 sample:
   verb: drink
   location: ""
@@ -54,7 +65,11 @@ sample:
   recovered: false
   command: ""
 ---
-{%- if verb == "travel" -%}
+{%- if failed and reason and reason != command -%}
+I tried to "{{ command }}" but it didn't work: {{ reason }}
+{%- elif failed -%}
+I tried to "{{ command }}" but it didn't work.
+{%- elif verb == "travel" -%}
 I traveled to {{ location }}.
 {%- elif verb == "perform" -%}
 I am {{ activity }}.
