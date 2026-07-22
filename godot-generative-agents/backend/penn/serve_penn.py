@@ -701,6 +701,14 @@ class PennStepper:
         # would nest a new RecordingClient around a client whose cassette a
         # reset just closed (every real _build() -- reset()/create_run() --
         # would re-enter this block, since only resume_run_id skips it).
+        # A skipped build (resume, replay, or no run store) must not leave the
+        # primary clients as a prior build's RecordingClient wrapping a cassette
+        # that _close_current_run() already closed. Reset to the raw clients
+        # first; the hook below re-wraps from raw only when recording. (The
+        # per-agent clients already re-derive from raw each build.)
+        self.llm_client = self._raw_llm_client
+        self.reflector_client = self._raw_reflector_client
+        self.planner_client = self._raw_planner_client
         if (
             self.run_store is not None
             and resume_run_id is None

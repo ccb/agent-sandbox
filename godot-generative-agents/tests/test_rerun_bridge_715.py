@@ -84,6 +84,32 @@ def test_finish_run_writes_run_record_with_matching_cassette_sha(tmp_path):
     assert record.cassette["sha256"] == file_sha256(str(run_dir / "cassette.jsonl"))
 
 
+def test_resume_after_reset_does_not_crash_on_a_scripted_run(tmp_path):
+    # Regression: a skipped (resume) build must reset the primary clients to
+    # raw, not leave them wrapping a closed cassette (would ValueError on the
+    # next decide). Existing resume tests use the mock brain, which skips the
+    # recording hook, so they never exercised this.
+    store = RunStore(tmp_path / "runs")
+    stepper = PennStepper(
+        num_steps=RERUN_STEPS,
+        world=build_penn_world(),
+        monitor=None,
+        llm=SCRIPTED,
+        run_store=store,
+        seed=0,
+        decide_workers=0,
+    )
+    run_a = stepper._run_id
+    stepper.tick()
+    stepper.tick()
+    stepper.reset()  # opens run B, closes run A's cassette writer
+    stepper.tick()
+    stepper.tick()
+    stepper.resume_run(run_a)  # skipped-hook build: clients must reset to raw
+    stepper.tick()  # the decide that used to crash on the closed file
+    # If we got here without ValueError, the primary clients were live.
+
+
 def test_mock_run_persists_provenance_without_a_cassette(tmp_path):
     # --brain mock: no funnel client, so no cassette, but seed+engine_sha still land.
     stepper = PennStepper(
