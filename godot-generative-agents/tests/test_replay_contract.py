@@ -223,8 +223,9 @@ def test_baked_replay_frames_carry_trace(tmp_path):
 def _bake_scenario_bytes(tmp_path, scenario, hashseed):
     """Run the REAL bake for one scenario under a fixed PYTHONHASHSEED and return
     the bytes of the replay file it writes. Two bakes of the same scenario at
-    *different* hashseeds must be byte-identical (#640): a stray set/dict-order
-    leak into the artifact (the #545 regression class) would differ between them,
+    *different* hashseeds must be byte-identical (#640): a stray set/frozenset
+    ordering leak into the artifact (the #545 regression class) would differ
+    between them (dicts serialize insertion-ordered, so they're seed-immune),
     and any random/time/uuid on the bake path would differ between any two runs."""
     out = tmp_path / f"{scenario}_{hashseed}.json"
     subprocess.run(
@@ -248,8 +249,8 @@ def _bake_scenario_bytes(tmp_path, scenario, hashseed):
 def test_bake_is_byte_identical(tmp_path, scenario):
     # #640: the mock bake must be deterministic. Bake the same scenario twice
     # (default --brain mock) under different PYTHONHASHSEEDs and byte-compare --
-    # catches nondeterminism (random/time/uuid) or a hash-order leak (a set/dict
-    # iterated into the artifact) directly, with no committed golden to maintain.
+    # catches nondeterminism (random/time/uuid) or a set/frozenset ordering leak
+    # (iterated into the artifact) directly, with no committed golden to maintain.
     first = _bake_scenario_bytes(tmp_path, scenario, 0)
     second = _bake_scenario_bytes(tmp_path, scenario, 1)
     assert (
