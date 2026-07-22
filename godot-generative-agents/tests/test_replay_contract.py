@@ -180,23 +180,31 @@ def test_replay_shape_validates():
     )
 
 
+def _run_bake(out, *, scenario="penn", steps=None, env=None):
+    """Invoke the real generate_penn_replay.py bake, writing to ``out`` (returned).
+
+    ``steps=None`` bakes the scenario's own default budget -- the real bundled
+    artifact size; pass a small ``steps`` for shape tests that don't need a full
+    run. ``env`` is forwarded to the subprocess (used to pin PYTHONHASHSEED)."""
+    cmd = [
+        sys.executable,
+        str(_SIM_DIR / "generate_penn_replay.py"),
+        "--scenario",
+        scenario,
+        "--out",
+        str(out),
+    ]
+    if steps is not None:
+        cmd += ["--steps", str(steps)]
+    subprocess.run(cmd, check=True, env=env)
+    return out
+
+
 def _bake_small_replay(tmp_path):
     """Run the real bake (3 mock steps) and return the path to the replay file
-    it writes -- shared by tests that need a real baked replay, not a copy of
-    its dict."""
-    out = tmp_path / "penn_replay.json"
-    subprocess.run(
-        [
-            sys.executable,
-            str(_SIM_DIR / "generate_penn_replay.py"),
-            "--steps",
-            "3",
-            "--out",
-            str(out),
-        ],
-        check=True,
-    )
-    return out
+    it writes -- shared by shape tests that need a real baked replay, not a copy
+    of its dict."""
+    return _run_bake(tmp_path / "penn_replay.json", steps=3)
 
 
 def test_baked_replay_validates_against_contract(tmp_path):
@@ -220,42 +228,30 @@ def test_baked_replay_frames_carry_trace(tmp_path):
             assert isinstance(persona["trace"], list)
 
 
-def _bake_scenario_bytes(tmp_path, scenario, hashseed):
-    """Run the REAL bake for one scenario under a fixed PYTHONHASHSEED and return
-    the bytes of the replay file it writes. Two bakes of the same scenario at
-    *different* hashseeds must be byte-identical (#640): a stray set/frozenset
-    ordering leak into the artifact (the #545 regression class) would differ
-    between them (dicts serialize insertion-ordered, so they're seed-immune),
-    and any random/time/uuid on the bake path would differ between any two runs."""
-    out = tmp_path / f"{scenario}_{hashseed}.json"
-    subprocess.run(
-        [
-            sys.executable,
-            str(_SIM_DIR / "generate_penn_replay.py"),
-            "--scenario",
-            scenario,
-            "--steps",
-            "3",
-            "--out",
-            str(out),
-        ],
-        check=True,
-        env={**os.environ, "PYTHONHASHSEED": str(hashseed)},
-    )
-    return out.read_bytes()
-
-
 @pytest.mark.parametrize("scenario", ["penn", "boil"])
 def test_bake_is_byte_identical(tmp_path, scenario):
-    # #640: the mock bake must be deterministic. Bake the same scenario twice
-    # (default --brain mock) under different PYTHONHASHSEEDs and byte-compare --
-    # catches nondeterminism (random/time/uuid) or a set/frozenset ordering leak
-    # (iterated into the artifact) directly, with no committed golden to maintain.
-    first = _bake_scenario_bytes(tmp_path, scenario, 0)
-    second = _bake_scenario_bytes(tmp_path, scenario, 1)
+    """#640: the mock bake of the bundled artifact must be deterministic.
+
+    Bake each scenario at its own default step budget -- the real bundled
+    artifact size, so a leak that only surfaces once the cast has walked and
+    accumulated memories/events is in scope, not just the opening steps -- three
+    times under different PYTHONHASHSEEDs and byte-compare. A set/frozenset
+    ordering leak into the artifact (the #545 regression class) or any
+    random/time/uuid on the bake path makes the bytes differ across seeds; dicts
+    serialize insertion-ordered, so they're seed-immune. Three seeds (matching
+    #715) keep even a two-element set leak from slipping past a lucky pair. No
+    committed golden to maintain."""
+    bakes = [
+        _run_bake(
+            tmp_path / f"{scenario}_{seed}.json",
+            scenario=scenario,
+            env={**os.environ, "PYTHONHASHSEED": str(seed)},
+        ).read_bytes()
+        for seed in (0, 1, 2)
+    ]
     assert (
-        first == second
-    ), f"{scenario} bake is not byte-identical across PYTHONHASHSEED 0 vs 1"
+        bakes[0] == bakes[1] == bakes[2]
+    ), f"{scenario} bake is not byte-identical across PYTHONHASHSEED 0/1/2"
 
 
 def test_live_meta_validates_against_contract():
