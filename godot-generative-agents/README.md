@@ -128,7 +128,7 @@ scene reads (the same split as the upstream Phaser replay):
 
 ```bash
 # 1. Run the sim -> maps/penn_replay.json (from the repo root, so uv finds the env):
-uv run python godot-generative-agents/backend/penn/generate_penn_replay.py --steps 400
+uv run python godot-generative-agents/backend/penn/generate_penn_replay.py
 
 # 2. Watch it:
 /Applications/Godot.app/Contents/MacOS/Godot --path . res://scenes/viewer.tscn

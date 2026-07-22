@@ -119,7 +119,7 @@ the standard macOS app bundle; live mode also needs `uv sync --extra server`.
 
 # Watch the bundled replay: bake it first (from the repo root), then "Play the bundled
 # replay" in the menu. It's a git-ignored artifact regenerated per checkout:
-LLM_PROVIDER=mock uv run python godot-generative-agents/backend/penn/generate_penn_replay.py --steps 400
+LLM_PROVIDER=mock uv run python godot-generative-agents/backend/penn/generate_penn_replay.py
 
 # Follow a live sim (mock brain: real requests, no keys, no spend). Serve it, then
 # point the viewer at it (or type the URL into the menu's "Run a live simulation"):
