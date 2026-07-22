@@ -1624,6 +1624,19 @@ def reproduce_run(store: RunStore, run_id: str, world=None) -> ReproResult:
             f"run {run_id} has no cassette -- only runs recorded with a real "
             "client (--brain scripted|llm) can be re-run"
         )
+    if manifest.get("plan_mode") == "llm":
+        # #715 review, Addition A: PennStepper.__init__ raises SystemExit for
+        # plan_mode="llm" unless the brain is paid (the re-run brain is
+        # always llm=None, i.e. unpaid) -- and that guard runs BEFORE the
+        # replay branch below, so a --plan llm run would otherwise escape as
+        # SystemExit. Inside the HTTP route's run_in_executor worker thread a
+        # BaseException like SystemExit is swallowed by threading's bootstrap
+        # and hangs the request instead of failing cleanly, so refuse it here
+        # first with the established ValueError vocabulary (404/409 upstream).
+        raise ValueError(
+            f"run {run_id} used --plan llm (a model-authored day); re-run of "
+            "model-planned runs is not supported yet"
+        )
     stored = store.read_frames(run_id)
     n = len(stored)
 
@@ -1858,6 +1871,15 @@ def _build_parser() -> argparse.ArgumentParser:
         "manifest so --re-run reproduces it byte-identically",
     )
     ap.add_argument(
+        "--re-run",
+        dest="re_run",
+        default=None,
+        metavar="RUN_ID",
+        help="reproduce a persisted run offline from its cassette + seed and "
+        "check it is byte-identical (#715), then exit; does not start a server. "
+        "Needs a run store (present by default)",
+    )
+    ap.add_argument(
         "--token",
         default=None,
         help="require 'Authorization: Bearer <token>' (defaults to the "
@@ -1896,6 +1918,21 @@ def main() -> int:
     # overrides either way.
     start_paused = args.start_paused if args.start_paused is not None else _is_paid(llm)
     store = RunStore(DEFAULT_RUNS_DIR) if args.persist else None
+    if args.re_run is not None:
+        if store is None:
+            raise SystemExit("--re-run needs a run store; drop --no-persist")
+        try:
+            result = reproduce_run(store, args.re_run)
+        except (KeyError, ValueError) as exc:
+            raise SystemExit(f"cannot re-run: {exc}")
+        verdict = "byte-identical" if result.match else "DIVERGED"
+        print(
+            f"re-run {result.run_id}: {verdict} over {result.steps} steps "
+            f"(recorded on {result.engine_sha_recorded}, now {result.engine_sha_current})"
+        )
+        if not result.match:
+            print(f"  first divergence at frame {result.first_divergence}")
+        return 0 if result.match else 1
     resume_id = resolve_resume(store, args.resume) if args.resume else None
     # 'auto' concurrency (#366): a real brain decides in parallel (LLM latency
     # is the whole point); the mock AND the scripted brain (#563) stay serial so

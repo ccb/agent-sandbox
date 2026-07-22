@@ -5,10 +5,12 @@ the cassette taps."""
 
 import json
 import os
+import sqlite3
 import sys
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
 from text_adventure_games.transcript import RunRecord, file_sha256
 
@@ -28,10 +30,17 @@ from serve_penn import (  # noqa: E402
     PennStepper,
     ReplayClient,
     ReproResult,
+    _GameProxy,
     reproduce_run,
 )
 from penn_world import build_penn_world  # noqa: E402
+from backend.api import create_app  # noqa: E402
 from backend.run_store import RunStore  # noqa: E402
+
+
+def _GameProxy_for(stepper):
+    return _GameProxy(stepper)
+
 
 RERUN_STEPS = 6  # enough for several scripted decides; fast under the mock clock
 
@@ -246,3 +255,101 @@ def test_rerun_of_a_react_run_reproduces(tmp_path):
     assert result.match is True
     assert result.first_divergence is None
     assert result.steps == RERUN_STEPS
+
+
+def test_reproduce_run_rejects_a_plan_mode_llm_run(tmp_path):
+    # Task 4 review, Addition A: a run recorded with --plan llm makes the
+    # re-run PennStepper's OWN guard raise SystemExit (llm=None is never
+    # "paid") before reproduce_run's replay branch ever executes. SystemExit
+    # is a BaseException that, inside the HTTP route's run_in_executor worker
+    # thread, is silently swallowed by threading's bootstrap and HANGS the
+    # request instead of failing cleanly. reproduce_run must refuse this case
+    # itself, with its established ValueError vocabulary (the route maps
+    # ValueError -> 409, the CLI catches it too).
+    store, run_id = _record_a_run(tmp_path)
+    manifest = store.get_run(run_id)["manifest"]
+    manifest["plan_mode"] = "llm"
+    con = sqlite3.connect(store.root / "sim.db")
+    con.execute(
+        "UPDATE runs SET manifest = ? WHERE id = ?",
+        (json.dumps(manifest), run_id),
+    )
+    con.commit()
+    con.close()
+
+    with pytest.raises(ValueError, match="plan llm"):
+        reproduce_run(store, run_id)
+
+
+def test_reproduce_run_threads_manifest_config_into_the_rerun_stepper(
+    tmp_path, monkeypatch
+):
+    # Prove reproduce_run threads the reconstructed config (react/
+    # cognition_tools/plan_mode, Finding 1) into the re-run PennStepper's
+    # kwargs directly -- independent of whether maybe_react actually fires
+    # in a short run (emergent, not guaranteed).
+    store = RunStore(tmp_path / "runs")
+    rec = PennStepper(
+        num_steps=RERUN_STEPS,
+        world=build_penn_world(),
+        monitor=None,
+        llm=SCRIPTED,
+        run_store=store,
+        seed=0,
+        decide_workers=0,
+        react=True,
+    )
+    run_id = rec._run_id
+    for _ in range(RERUN_STEPS):
+        rec.tick()
+    rec._finish_run()
+
+    captured = {}
+    orig = PennStepper.__init__
+
+    def spy(self, *a, **kw):
+        captured.update(kw)
+        return orig(self, *a, **kw)
+
+    monkeypatch.setattr(PennStepper, "__init__", spy)
+    reproduce_run(store, run_id)
+    assert captured["react"] is True
+    assert captured["cognition_tools"] is True  # scripted forces it on
+    assert captured["plan_mode"] == "schedule"
+
+
+def test_http_rerun_route_reports_match(tmp_path):
+    store, run_id = _record_a_run(tmp_path)
+    stepper = PennStepper(
+        num_steps=RERUN_STEPS,
+        world=build_penn_world(),
+        monitor=None,
+        llm=SCRIPTED,
+        run_store=store,
+        seed=0,
+        decide_workers=0,
+    )
+    app = create_app(_GameProxy_for(stepper), stepper=stepper, start_paused=True)
+    client = TestClient(app)
+    resp = client.post(f"/runs/{run_id}/rerun")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["run_id"] == run_id
+    assert body["match"] is True
+    assert body["steps"] == RERUN_STEPS
+
+
+def test_http_rerun_unknown_run_is_404(tmp_path):
+    store = RunStore(tmp_path / "runs")
+    stepper = PennStepper(
+        num_steps=RERUN_STEPS,
+        world=build_penn_world(),
+        monitor=None,
+        llm=SCRIPTED,
+        run_store=store,
+        seed=0,
+        decide_workers=0,
+    )
+    app = create_app(_GameProxy_for(stepper), stepper=stepper, start_paused=True)
+    client = TestClient(app)
+    assert client.post("/runs/run-nope/rerun").status_code == 404
