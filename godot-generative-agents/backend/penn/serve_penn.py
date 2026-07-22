@@ -678,6 +678,35 @@ class PennStepper:
             datetime.datetime.fromisoformat(SIM_START), sec_per_step=SEC_PER_STEP
         )
         self.game, self.chars = self.world.build_world_fn(self.world.world_map)
+        # Recording seam (#715): open this run and wrap every real client in a
+        # RecordingClient BEFORE attach_agents wires them onto agents, so the
+        # agents' decide/converse (agent.llm_client) and reflection
+        # (agent.reflector = LLMReflector(reflector_client)) both flow through
+        # the cassette without any post-hoc re-pointing. Skipped for: replay
+        # (re-run mode records nothing), resume (a resumed run keeps its own
+        # cassette), and the mock brain (self.llm_client is None -> no funnel
+        # traffic to capture; the run is deterministic by construction anyway).
+        if (
+            self.run_store is not None
+            and resume_run_id is None
+            and self._replay_cassette is None
+            and self.llm_client is not None
+        ):
+            self._run_id = self.run_store.create_run(self._store_manifest())
+            self._cassette_path = str(
+                self.run_store.root / self._run_id / "cassette.jsonl"
+            )
+            self._cassette_writer = CassetteWriter(self._cassette_path)
+            self.llm_client = RecordingClient(
+                self.llm_client, writer=self._cassette_writer
+            )
+            self.reflector_client = RecordingClient(
+                self.reflector_client, writer=self._cassette_writer
+            )
+            if self.planner_client is not None:
+                self.planner_client = RecordingClient(
+                    self.planner_client, writer=self._cassette_writer
+                )
         # How much of game.events drain_events() has already published
         # (#467). Lives in _build so reset() restarts it with the new game.
         self._events_seen = 0
@@ -764,7 +793,10 @@ class PennStepper:
             # conversation_enabled) and the serial fallback.
             for name, char in self.chars.items():
                 if name not in self._agent_clients:
-                    self._agent_clients[name] = self._decide_client()
+                    client = self._decide_client()
+                    if self._cassette_writer is not None:
+                        client = RecordingClient(client, writer=self._cassette_writer)
+                    self._agent_clients[name] = client
                 char.agent.llm_client = self._agent_clients[name]
         # Real conversations pace themselves through a per-pair cooldown that
         # must OUTLIVE each tick (simulate() keeps one for its whole run;
@@ -1194,7 +1226,29 @@ class PennStepper:
             and not self._run_finished
         ):
             self.run_store.update_run(self._run_id, status="finished")
+            self._write_run_record()
             self._run_finished = True
+
+    def _write_run_record(self) -> None:
+        """Save the run's reproducibility recipe next to its frames (#715).
+
+        The cassette sha is only knowable once the cassette is fully written, so
+        this runs at finish. engine_version is the git sha captured at __init__
+        -- never the literal "unknown" (#197 follow-up)."""
+        if self._cassette_writer is None:
+            return  # a mock run has no cassette; nothing to reproduce
+        self._cassette_writer.close()
+        record = RunRecord(
+            game="penn",
+            seed=self.seed,
+            cassette={
+                "path": "cassette.jsonl",
+                "sha256": file_sha256(self._cassette_path),
+            },
+            engine_version=self._engine_sha,
+            result={"steps": self._step_idx, "cost_usd": self._run_cost_usd()},
+        )
+        record.save(str(self.run_store.root / self._run_id / "run.yaml"))
 
     def _deciding_sink(self, name: str, state: str, step: int) -> None:
         """Called by run_simulation._decide_for at a decision's start/finish
@@ -1336,6 +1390,9 @@ class PennStepper:
         """
         self._persist_pending_events()
         self._persist_pending_wishes()
+        if self._cassette_writer is not None:
+            self._cassette_writer.close()
+            self._cassette_writer = None
         if (
             self.run_store is not None
             and self._run_id is not None

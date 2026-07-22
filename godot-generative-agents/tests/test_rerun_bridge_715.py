@@ -4,10 +4,13 @@ deterministic, and (unlike --brain mock) it routes through the real client seam
 the cassette taps."""
 
 import json
+import os
 import sys
 from pathlib import Path
 
 import pytest
+
+from text_adventure_games.transcript import RunRecord, file_sha256
 
 # The Penn sim modules live in the Godot tree and are imported the way the
 # scripts import each other -- flat, off the sim directory (serve_penn.py does
@@ -52,3 +55,51 @@ def test_persisted_run_manifest_carries_seed_and_engine_sha(tmp_path):
     manifest = json.loads((tmp_path / "runs" / run_id / "manifest.json").read_text())
     assert manifest["seed"] == 0
     assert isinstance(manifest["engine_sha"], str) and manifest["engine_sha"]
+
+
+def test_scripted_run_records_a_nonempty_cassette(tmp_path):
+    stepper = _scripted_stepper(tmp_path)
+    for _ in range(RERUN_STEPS):
+        stepper.tick()
+    cassette = tmp_path / "runs" / stepper._run_id / "cassette.jsonl"
+    assert cassette.exists()
+    lines = [l for l in cassette.read_text().splitlines() if l.strip()]
+    assert lines, "the scripted decides should have been recorded"
+    # Every line is a decodable cassette entry with a method tag.
+    assert all("method" in json.loads(l) for l in lines)
+
+
+def test_finish_run_writes_run_record_with_matching_cassette_sha(tmp_path):
+    stepper = _scripted_stepper(tmp_path)
+    for _ in range(RERUN_STEPS):
+        stepper.tick()
+    stepper._finish_run()
+
+    run_dir = tmp_path / "runs" / stepper._run_id
+    record = RunRecord.load(str(run_dir / "run.yaml"))
+    assert record.game == "penn"
+    assert record.seed == 0
+    assert record.engine_version and record.engine_version != "unknown"
+    assert record.cassette["path"] == "cassette.jsonl"
+    assert record.cassette["sha256"] == file_sha256(str(run_dir / "cassette.jsonl"))
+
+
+def test_mock_run_persists_provenance_without_a_cassette(tmp_path):
+    # --brain mock: no funnel client, so no cassette, but seed+engine_sha still land.
+    stepper = PennStepper(
+        num_steps=RERUN_STEPS,
+        world=build_penn_world(),
+        monitor=None,
+        llm=None,
+        run_store=RunStore(tmp_path / "runs"),
+        seed=0,
+        decide_workers=0,
+    )
+    for _ in range(RERUN_STEPS):
+        stepper.tick()
+    stepper._finish_run()
+    run_dir = tmp_path / "runs" / stepper._run_id
+    manifest = json.loads((run_dir / "manifest.json").read_text())
+    assert manifest["seed"] == 0 and manifest["engine_sha"]
+    assert not (run_dir / "cassette.jsonl").exists()
+    assert not (run_dir / "run.yaml").exists()
