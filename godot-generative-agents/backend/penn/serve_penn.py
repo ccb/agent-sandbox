@@ -70,6 +70,13 @@ from penn_world import (
     replay_frame_entry,
 )
 from text_adventure_games.llm_client import LlmConfig, create_llm_client
+from text_adventure_games.recording import (
+    CassetteWriter,
+    RecordingClient,
+    ReplayClient,
+    seed_world,
+)
+from text_adventure_games.transcript import RunRecord, file_sha256, git_sha
 from text_adventure_games.usage import UsageLedger
 
 # The bake's full campus day (generate_penn_replay.DEFAULT_STEPS): long enough
@@ -443,6 +450,8 @@ class PennStepper:
         stall_seconds=0.0,
         plan_mode="schedule",
         resume_run_id=None,
+        seed=0,
+        replay_cassette=None,
     ):
         self.num_steps = num_steps
         # The launch-configured budget, kept so a per-request create_run(steps=)
@@ -511,6 +520,11 @@ class PennStepper:
         if resume_run_id is not None and run_store is None:
             raise ValueError("resuming a run needs a run store (--persist)")
         self.run_store = run_store
+        self.seed = seed
+        self._engine_sha = git_sha()  # provenance snapshot, captured once
+        self._replay_cassette = replay_cassette
+        self._cassette_writer = None
+        self._cassette_path = None
         self._run_id = None
         self._run_finished = False
         self._mem_synced = {}
@@ -643,6 +657,10 @@ class PennStepper:
         resume_row=None,
         resume_frames=None,
     ):
+        # Pin the engine RNG so this build + its ticks are reproducible (#715).
+        # Runs every _build so a reset re-seeds from the same base; a straight
+        # start-to-finish run seeds once, which is what a re-run reproduces.
+        seed_world(self.seed)
         # Mirror simulate()'s pre-loop setup exactly (run_simulation.py; the
         # same reconstruction tests/test_penn_live.py::
         # test_stepper_matches_simulate_prefix pins). If simulate's setup ever
@@ -810,8 +828,8 @@ class PennStepper:
             self._cost_base = 0.0
             if resume_run_id is not None:
                 self._adopt_run(resume_run_id, row=resume_row, frames=resume_frames)
-            else:
-                self._run_id = self.run_store.create_run(self.meta())
+            elif self._run_id is None:
+                self._run_id = self.run_store.create_run(self._store_manifest())
 
     def _resumable_row(self, run_id: str) -> dict:
         # The one guard home for both resume entry paths (boot --resume and
@@ -1017,6 +1035,12 @@ class PennStepper:
                 else None
             ),
         }
+
+    def _store_manifest(self) -> dict:
+        """The manifest persisted to the store: the handshake meta() plus the
+        provenance a re-run needs (#715). Kept OFF meta() itself so the live
+        GET /live blob and the pinned replay contract are unchanged."""
+        return {**self.meta(), "seed": self.seed, "engine_sha": self._engine_sha}
 
     def tick(self) -> dict | None:
         """One sim step -> one replay-schema frame (called under the app lock).
@@ -1300,7 +1324,16 @@ class PennStepper:
 
     def _close_current_run(self) -> None:
         """Persist pending events and mark the live run 'reset' before a rebuild
-        (a finished day keeps 'finished'). Shared by reset/create_run/resume_run."""
+        (a finished day keeps 'finished'). Shared by reset/create_run/resume_run.
+
+        Clears self._run_id (#715 follow-up): the upcoming _build() rebuilds
+        for a NEW day, so the non-resume `elif self._run_id is None` guard
+        there must see None again to open a fresh run row -- without this, a
+        rebuild after the first would keep reusing the just-closed run's id
+        forever (caught by test_stepper_reset_closes_the_run_and_opens_a_new_one
+        et al.). A resumed rebuild is unaffected: it adopts an explicit
+        resume_run_id regardless of this attribute.
+        """
         self._persist_pending_events()
         self._persist_pending_wishes()
         if (
@@ -1309,6 +1342,7 @@ class PennStepper:
             and not self._run_finished
         ):
             self.run_store.update_run(self._run_id, status="reset")
+        self._run_id = None
 
     def reset(self) -> None:
         # A reset is a new day AND a new run: close the old run's row first
@@ -1602,6 +1636,13 @@ def _build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8080)
     ap.add_argument(
+        "--seed",
+        type=int,
+        default=0,
+        help="RNG seed pinned for this run (#715); recorded into the run's "
+        "manifest so --re-run reproduces it byte-identically",
+    )
+    ap.add_argument(
         "--token",
         default=None,
         help="require 'Authorization: Bearer <token>' (defaults to the "
@@ -1673,6 +1714,7 @@ def main() -> int:
             stall_seconds=args.stall_seconds,
             plan_mode=args.plan,
             resume_run_id=resume_id,
+            seed=args.seed,
         )
     except ImportError as e:
         raise SystemExit(f"{e}\n(--brain llm needs the LLM extra: uv sync --extra llm)")

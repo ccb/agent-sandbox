@@ -246,7 +246,10 @@ def test_stepper_persists_frames_memories_and_finish(tmp_path):
     assert store.read_frames(run_id) == frames
     run = store.get_run(run_id)
     assert run["status"] == "running" and run["steps"] == 5 and run["cost"] == 0.0
-    assert run["manifest"] == stepper.meta()
+    # The stored manifest is meta() PLUS seed/engine_sha (#715's
+    # _store_manifest); meta() itself (the live GET /live handshake blob)
+    # stays unchanged.
+    assert run["manifest"] == stepper._store_manifest()
     # The t=0 plan memory alone guarantees at least one row per persona.
     for name in stepper.order:
         assert store.last_memory_id(run_id, name) >= 0
