@@ -45,7 +45,7 @@ Pick the invocation from `$ARGUMENTS`:
 `godot/maps/penn_replay.json` (a git-ignored, per-checkout artifact) is absent or
 older than its inputs. Bake it from the **repo root**, then relaunch:
 ```
-LLM_PROVIDER=mock uv run python godot-generative-agents/backend/penn/generate_penn_replay.py --steps 400
+LLM_PROVIDER=mock uv run python godot-generative-agents/backend/penn/generate_penn_replay.py
 ```
 
 Do not commit or push anything — this command only launches the viewer.
