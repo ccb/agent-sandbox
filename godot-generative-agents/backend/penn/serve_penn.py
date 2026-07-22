@@ -610,6 +610,15 @@ class PennStepper:
         # owns a real connection pool, so rebuilding N of them per POST /reset
         # would orphan the old pools.
         self._agent_clients = {}
+        # Raw (unwrapped) real clients, stashed once (#715): the recording hook
+        # in _build() re-wraps FROM these on every build instead of wrapping
+        # self.llm_client/reflector_client/planner_client in place -- those
+        # attributes hold last build's RecordingClient after the first build,
+        # and re-wrapping THAT would nest a new RecordingClient around a
+        # client whose writer a reset just closed, crashing the next call.
+        self._raw_llm_client = self.llm_client
+        self._raw_reflector_client = self.reflector_client
+        self._raw_planner_client = self.planner_client
         self._build(world, resume_run_id=resume_run_id)
 
     def _decide_client(self):
@@ -686,11 +695,17 @@ class PennStepper:
         # (re-run mode records nothing), resume (a resumed run keeps its own
         # cassette), and the mock brain (self.llm_client is None -> no funnel
         # traffic to capture; the run is deterministic by construction anyway).
+        # Wraps the RAW clients stashed in __init__, not self.llm_client/
+        # reflector_client/planner_client themselves -- those hold the PRIOR
+        # build's RecordingClient after the first build, and re-wrapping that
+        # would nest a new RecordingClient around a client whose cassette a
+        # reset just closed (every real _build() -- reset()/create_run() --
+        # would re-enter this block, since only resume_run_id skips it).
         if (
             self.run_store is not None
             and resume_run_id is None
             and self._replay_cassette is None
-            and self.llm_client is not None
+            and self._raw_llm_client is not None
         ):
             self._run_id = self.run_store.create_run(self._store_manifest())
             self._cassette_path = str(
@@ -698,14 +713,14 @@ class PennStepper:
             )
             self._cassette_writer = CassetteWriter(self._cassette_path)
             self.llm_client = RecordingClient(
-                self.llm_client, writer=self._cassette_writer
+                self._raw_llm_client, writer=self._cassette_writer
             )
             self.reflector_client = RecordingClient(
-                self.reflector_client, writer=self._cassette_writer
+                self._raw_reflector_client, writer=self._cassette_writer
             )
-            if self.planner_client is not None:
+            if self._raw_planner_client is not None:
                 self.planner_client = RecordingClient(
-                    self.planner_client, writer=self._cassette_writer
+                    self._raw_planner_client, writer=self._cassette_writer
                 )
         # How much of game.events drain_events() has already published
         # (#467). Lives in _build so reset() restarts it with the new game.
@@ -791,13 +806,21 @@ class PennStepper:
             # attribution. Each instance records into the same base ledger;
             # self.llm_client stays as the mode flag (injector gate,
             # conversation_enabled) and the serial fallback.
+            #
+            # self._agent_clients holds the RAW client per agent (built once,
+            # ever -- its connection pool must survive a reset, see above).
+            # The RecordingClient wrapper is rebuilt fresh every _build() from
+            # that raw client, so a reset's new cassette writer is what this
+            # run's calls land in -- wrapping the STORED (dict) value instead
+            # would nest onto whatever a prior run already wrapped it with,
+            # and write into that run's closed cassette file.
             for name, char in self.chars.items():
                 if name not in self._agent_clients:
-                    client = self._decide_client()
-                    if self._cassette_writer is not None:
-                        client = RecordingClient(client, writer=self._cassette_writer)
-                    self._agent_clients[name] = client
-                char.agent.llm_client = self._agent_clients[name]
+                    self._agent_clients[name] = self._decide_client()
+                client = self._agent_clients[name]
+                if self._cassette_writer is not None:
+                    client = RecordingClient(client, writer=self._cassette_writer)
+                char.agent.llm_client = client
         # Real conversations pace themselves through a per-pair cooldown that
         # must OUTLIVE each tick (simulate() keeps one for its whole run;
         # step()'s default is a throwaway dict, which would let a settled pair
