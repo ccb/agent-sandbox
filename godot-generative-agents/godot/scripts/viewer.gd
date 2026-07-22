@@ -486,6 +486,11 @@ func _ready() -> void:
 	# fetches it over HTTP so a new sim never needs a re-export.
 	if _resolve_backend_url() != "":
 		_start_live()
+	elif LaunchConfig.mode == LaunchConfig.Mode.REPLAY and LaunchConfig.replay_text != "":
+		# Opened from the Past-runs browser (#716): the replay JSON was fetched by
+		# the menu and handed over as text -- load it directly (works on desktop and
+		# web, where the file/HTTP loaders diverge).
+		_load_replay_from_text(LaunchConfig.replay_text)
 	elif _is_web:
 		_load_replay_web()
 	else:
