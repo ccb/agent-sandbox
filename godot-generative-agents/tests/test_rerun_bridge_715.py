@@ -30,7 +30,6 @@ sys.path.insert(0, str(_SIM_DIR))
 from serve_penn import (  # noqa: E402
     SCRIPTED,
     PennStepper,
-    ReplayClient,
     ReproResult,
     _GameProxy,
     reproduce_run,

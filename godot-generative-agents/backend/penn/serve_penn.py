@@ -44,6 +44,7 @@ import concurrent.futures
 import datetime
 import json
 import os
+import random
 import threading
 import time
 import urllib.error
@@ -1640,25 +1641,33 @@ def reproduce_run(store: RunStore, run_id: str, world=None) -> ReproResult:
     stored = store.read_frames(run_id)
     n = len(stored)
 
-    stepper = PennStepper(
-        num_steps=n,
-        world=world if world is not None else build_penn_world(),
-        monitor=None,
-        llm=None,  # the replay branch below supplies the brain; llm is unused
-        run_store=None,  # ephemeral: never persist over the original
-        seed=seed,
-        replay_cassette=cassette_path,
-        decide_workers=0,  # sequential -> deterministic, no timeout races
-        cognition_tools=manifest.get("cognition_tools", False),
-        react=manifest.get("react", False),
-        plan_mode=manifest.get("plan_mode", "schedule"),
-    )
-    rerun = []
-    for _ in range(n):
-        frame = stepper.tick()
-        if frame is None:
-            break
-        rerun.append(frame)
+    # reproduce_run reseeds process-global RNG (seed_world in _build). This can
+    # run in an executor thread (POST /runs/{id}/rerun) concurrently with a live
+    # tick, so snapshot and restore global random state to isolate the re-run's
+    # determinism from the rest of the process.
+    _rng_state = random.getstate()
+    try:
+        stepper = PennStepper(
+            num_steps=n,
+            world=world if world is not None else build_penn_world(),
+            monitor=None,
+            llm=None,  # the replay branch below supplies the brain; llm is unused
+            run_store=None,  # ephemeral: never persist over the original
+            seed=seed,
+            replay_cassette=cassette_path,
+            decide_workers=0,  # sequential -> deterministic, no timeout races
+            cognition_tools=manifest.get("cognition_tools", False),
+            react=manifest.get("react", False),
+            plan_mode=manifest.get("plan_mode", "schedule"),
+        )
+        rerun = []
+        for _ in range(n):
+            frame = stepper.tick()
+            if frame is None:
+                break
+            rerun.append(frame)
+    finally:
+        random.setstate(_rng_state)
 
     first = None
     for i in range(min(len(stored), len(rerun))):
