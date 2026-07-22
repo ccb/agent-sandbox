@@ -22,9 +22,8 @@ from text_adventure_games.transcript import RunRecord, file_sha256
 # mirrors godot-generative-agents/tests/test_penn_live.py:26-47. `backend.*`
 # and `text_adventure_games.*` still import normally (editable install +
 # PYTHONPATH=.:godot-generative-agents in the run command).
-_SIM_DIR = (
-    Path(__file__).resolve().parents[2] / "godot-generative-agents" / "backend" / "penn"
-)
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_SIM_DIR = _REPO_ROOT / "godot-generative-agents" / "backend" / "penn"
 sys.path.insert(0, str(_SIM_DIR))
 
 from serve_penn import (  # noqa: E402
@@ -208,6 +207,44 @@ def test_rerun_without_cassette_raises(tmp_path):
     stepper._finish_run()
     with pytest.raises(ValueError, match="no cassette"):
         reproduce_run(store, stepper._run_id)
+
+
+def test_rerun_reports_divergence_instead_of_crashing_on_a_cassette_miss(tmp_path):
+    # A re-run that asks for a response the cassette never recorded IS a
+    # divergence (e.g. an engine change altered a decide prompt so the request
+    # key no longer matches), not a crash. reproduce_run must report
+    # match=False -- NOT let CassetteMiss (neither KeyError nor ValueError)
+    # escape, which the CLI/HTTP handlers would surface as a traceback / 500.
+    store, run_id = _record_a_run(tmp_path)
+    # Blank the cassette in place: the file still exists (so we clear the
+    # no-cassette guard), but the first recorded decide now misses.
+    open(tmp_path / "runs" / run_id / "cassette.jsonl", "w").close()
+
+    result = reproduce_run(store, run_id)  # must not raise
+    assert result.match is False
+    assert result.first_divergence is not None
+
+
+def test_http_rerun_reports_a_diverged_run_as_200_not_500(tmp_path):
+    # The route maps only KeyError->404 / ValueError->409, so before the fix a
+    # CassetteMiss on a diverged run 500'd. reproduce_run now folds the miss
+    # into the verdict, so the route returns 200 with match=False.
+    store, run_id = _record_a_run(tmp_path)
+    open(tmp_path / "runs" / run_id / "cassette.jsonl", "w").close()
+    stepper = PennStepper(
+        num_steps=RERUN_STEPS,
+        world=build_penn_world(),
+        monitor=None,
+        llm=SCRIPTED,
+        run_store=store,
+        seed=0,
+        decide_workers=0,
+    )
+    app = create_app(_GameProxy_for(stepper), stepper=stepper, start_paused=True)
+    client = TestClient(app)
+    resp = client.post(f"/runs/{run_id}/rerun")
+    assert resp.status_code == 200
+    assert resp.json()["match"] is False
 
 
 def test_manifest_persists_resolved_cognition_config(tmp_path):
@@ -403,6 +440,11 @@ def test_rerun_is_stable_across_hashseeds():
                 capture_output=True,
                 text=True,
                 env=env,
+                # Pin cwd to the repo root so the snippet's Path.cwd()-relative
+                # import path and the cwd-relative PYTHONPATH resolve no matter
+                # what directory pytest was invoked from (the rest of this file
+                # keys off Path(__file__), which is already cwd-independent).
+                cwd=str(_REPO_ROOT),
                 check=True,
             )
             .stdout.strip()

@@ -405,6 +405,22 @@ def test_count_tokens_is_recorded_and_replayed(tmp_path):
     assert replay.count_tokens("xxxxxxxx") == 2
 
 
+def test_count_tokens_records_each_distinct_text_once(tmp_path):
+    # The count never changes for a given text, so a repeated fact is written
+    # once, not once per call (#715): otherwise a long parallel-decide day
+    # grows the cassette without bound while replay only keeps the last.
+    cassette = str(tmp_path / "counts.jsonl")
+    rec = RecordingClient(_CountingStub(), cassette)
+    for _ in range(3):
+        rec.count_tokens("same")
+    rec.count_tokens("other")
+    rec.close()
+
+    lines = [json.loads(line) for line in open(cassette) if line.strip()]
+    counts = [line for line in lines if line.get("method") == "count_tokens"]
+    assert len(counts) == 2  # "same" once + "other" once, not four lines
+
+
 def test_replay_client_is_a_no_op_context_manager(tmp_path):
     cassette = str(tmp_path / "empty.jsonl")
     open(cassette, "w").close()

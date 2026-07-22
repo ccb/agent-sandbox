@@ -143,6 +143,12 @@ class RecordingClient:
         # the caller's when handed one (a whole run's clients -> one cassette, #715).
         self._owns_writer = writer is None
         self._writer = writer if writer is not None else CassetteWriter(path)
+        # count_tokens is deterministic per text, so record each distinct text
+        # once (#715): without this a repeated single-value fact appends a line
+        # every call -- unbounded over a long parallel-decide day -- while the
+        # replay map only ever keeps the last. Per-client set, so N per-agent
+        # clients sharing one writer stay bounded by N-per-text, not per-call.
+        self._counted: set[str] = set()
 
     @property
     def context(self):
@@ -237,9 +243,13 @@ class RecordingClient:
         # returned (#715 follow-up). llm_parser sizes max_tokens from
         # count_tokens("") and that number is hashed into the request key, so a
         # replay that guessed len//4 against a real tokenizer would CassetteMiss.
-        self._writer.write(
-            {"method": "count_tokens", "text_key": _text_key(text), "count": n}
-        )
+        # Write each distinct text once -- the count never changes for a text and
+        # the replay map keeps only the last, so re-writing it every call is pure
+        # cassette bloat.
+        key = _text_key(text)
+        if key not in self._counted:
+            self._counted.add(key)
+            self._writer.write({"method": "count_tokens", "text_key": key, "count": n})
         return n
 
     def preflight(self) -> None:

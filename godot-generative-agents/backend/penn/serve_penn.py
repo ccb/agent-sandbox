@@ -74,6 +74,7 @@ from penn_world import (
 )
 from text_adventure_games.llm_client import LlmConfig, create_llm_client
 from text_adventure_games.recording import (
+    CassetteMiss,
     CassetteWriter,
     RecordingClient,
     ReplayClient,
@@ -1661,8 +1662,21 @@ def reproduce_run(store: RunStore, run_id: str, world=None) -> ReproResult:
             plan_mode=manifest.get("plan_mode", "schedule"),
         )
         rerun = []
+        miss_at = None
         for _ in range(n):
-            frame = stepper.tick()
+            try:
+                frame = stepper.tick()
+            except CassetteMiss:
+                # A missing recorded response IS a divergence, not a crash: the
+                # re-run asked something the recording never captured (e.g. the
+                # engine changed the decide prompt, so the request key no longer
+                # matches). That is exactly what this check exists to report --
+                # so record the frame it happened at and fall through to the
+                # DIVERGED verdict instead of letting CassetteMiss escape (it is
+                # neither KeyError nor ValueError, so the CLI and the HTTP route
+                # would otherwise traceback / 500 instead of reporting match=False).
+                miss_at = len(rerun)
+                break
             if frame is None:
                 break
             rerun.append(frame)
@@ -1676,7 +1690,9 @@ def reproduce_run(store: RunStore, run_id: str, world=None) -> ReproResult:
             break
     if first is None and len(stored) != len(rerun):
         first = min(len(stored), len(rerun))
-    match = first is None and len(stored) == len(rerun)
+    if miss_at is not None and (first is None or miss_at < first):
+        first = miss_at
+    match = first is None and len(stored) == len(rerun) and miss_at is None
     return ReproResult(
         run_id=run_id,
         steps=n,

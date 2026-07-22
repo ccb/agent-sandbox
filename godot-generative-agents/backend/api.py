@@ -1350,8 +1350,20 @@ def create_app(
             raise HTTPException(
                 status_code=501, detail="this stepper cannot re-run persisted runs"
             )
+
+        # Hold the app lock for the re-run, exactly like /reset and
+        # /runs/{id}/resume do: the re-run reseeds process-global RNG
+        # (seed_world), so a live tick drawing from the same RNG concurrently
+        # would both corrupt the live run's determinism and perturb the
+        # re-run's own frames. Serializing against the tick loop is what makes
+        # reproduce_run's getstate/setstate restore actually sound -- with no
+        # concurrent tick, snapshotting and restoring the RNG is enough.
+        def _locked():
+            with lock:
+                return rerun(run_id)
+
         try:
-            return await asyncio.get_running_loop().run_in_executor(None, rerun, run_id)
+            return await asyncio.get_running_loop().run_in_executor(None, _locked)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc.args[0]))
         except ValueError as exc:
