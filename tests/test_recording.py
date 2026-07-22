@@ -26,6 +26,7 @@ from text_adventure_games.llm_client import (
 )
 from text_adventure_games.recording import (
     CassetteMiss,
+    CassetteWriter,
     RecordingClient,
     ReplayClient,
     request_key,
@@ -160,11 +161,13 @@ def test_clients_satisfy_the_llm_protocol(tmp_path):
     cassette = str(tmp_path / "run.jsonl")
     rec = RecordingClient(MockLlmClient(["x"]), cassette)
     rec.chat([{"role": "user", "content": "a"}])
+    # count_tokens now also writes to the cassette (#715), so it must run before
+    # close() -- a RecordingClient's writer is only alive up to that point.
+    assert rec.count_tokens("hello") == MockLlmClient(["x"]).count_tokens("hello")
     rec.close()
     replay = ReplayClient(cassette)
     assert isinstance(rec, LlmClient)
     assert isinstance(replay, LlmClient)
-    assert rec.count_tokens("hello") == MockLlmClient(["x"]).count_tokens("hello")
     assert replay.count_tokens("abcd") == 1
 
 
@@ -343,3 +346,84 @@ def test_record_then_replay_is_byte_identical(tmp_path):
     play(replayed, FEED_TROLL)
 
     assert _canonical(recorded.to_primitive()) == _canonical(replayed.to_primitive())
+
+
+# ----------------------------------------------------------------------
+# Section D: #715 extensions -- shared writer, count_tokens, lifecycle.
+# ----------------------------------------------------------------------
+
+
+class _CountingStub:
+    """A minimal LlmClient whose count_tokens is NOT the len//4 estimate, so a
+    replay that ignored the recorded value would visibly disagree."""
+
+    context = None
+
+    def chat(self, messages, max_tokens=256, temperature=0.0):
+        return "ok"
+
+    def call_tool(self, messages, tool, max_tokens=256, temperature=0.0):
+        return {}
+
+    def call_tools(
+        self, messages, tools, tool_choice="auto", max_tokens=256, temperature=0.0
+    ):
+        return None
+
+    def count_tokens(self, text):
+        return 999  # deliberately not len(text)//4
+
+    def preflight(self):
+        return None
+
+
+def test_shared_writer_merges_two_clients_into_one_cassette(tmp_path):
+    cassette = str(tmp_path / "shared.jsonl")
+    writer = CassetteWriter(cassette)
+    a = RecordingClient(_CountingStub(), writer=writer)
+    b = RecordingClient(_CountingStub(), writer=writer)
+    assert a.chat([{"role": "user", "content": "from-a"}]) == "ok"
+    assert b.chat([{"role": "user", "content": "from-b"}]) == "ok"
+    writer.close()
+
+    replay = ReplayClient(cassette, strict=True)
+    # Both clients' calls replay from the one cassette.
+    assert replay.chat([{"role": "user", "content": "from-a"}]) == "ok"
+    assert replay.chat([{"role": "user", "content": "from-b"}]) == "ok"
+
+
+def test_count_tokens_is_recorded_and_replayed(tmp_path):
+    cassette = str(tmp_path / "counts.jsonl")
+    rec = RecordingClient(_CountingStub(), cassette)
+    assert rec.count_tokens("anything") == 999
+    rec.close()
+
+    replay = ReplayClient(cassette, strict=True)
+    # Served from the recording, NOT the len//4 estimate (which would be 2).
+    assert replay.count_tokens("anything") == 999
+    # A text the recording never measured falls back to the estimate.
+    assert replay.count_tokens("xxxxxxxx") == 2
+
+
+def test_count_tokens_records_each_distinct_text_once(tmp_path):
+    # The count never changes for a given text, so a repeated fact is written
+    # once, not once per call (#715): otherwise a long parallel-decide day
+    # grows the cassette without bound while replay only keeps the last.
+    cassette = str(tmp_path / "counts.jsonl")
+    rec = RecordingClient(_CountingStub(), cassette)
+    for _ in range(3):
+        rec.count_tokens("same")
+    rec.count_tokens("other")
+    rec.close()
+
+    lines = [json.loads(line) for line in open(cassette) if line.strip()]
+    counts = [line for line in lines if line.get("method") == "count_tokens"]
+    assert len(counts) == 2  # "same" once + "other" once, not four lines
+
+
+def test_replay_client_is_a_no_op_context_manager(tmp_path):
+    cassette = str(tmp_path / "empty.jsonl")
+    open(cassette, "w").close()
+    with ReplayClient(cassette, strict=True) as client:
+        assert client.count_tokens("") == 0
+    client.close()  # idempotent, never raises

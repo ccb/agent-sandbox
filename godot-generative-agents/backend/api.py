@@ -1333,6 +1333,42 @@ def create_app(
             raise HTTPException(status_code=409, detail=str(exc))
         return _publish_adoption(run_id)
 
+    @app.post("/runs/{run_id}/rerun")
+    async def runs_rerun(run_id: str, _: None = Depends(require_auth)) -> dict:
+        """Re-run a persisted run offline from its cassette + seed and report
+        whether it reproduced byte-identically (#715). Ephemeral: builds a
+        throwaway world driven by a ReplayClient, compares frames, and returns
+        the verdict -- it does NOT touch the live run. No network, no spend.
+
+        Not to be confused with POST /runs/{id}/resume, which adopts a run as
+        the live one; this only checks reproducibility."""
+        store = _run_store()
+        if store is None:
+            raise HTTPException(status_code=404, detail=f"unknown run id: {run_id}")
+        rerun = getattr(stepper, "rerun_run", None)
+        if not callable(rerun):
+            raise HTTPException(
+                status_code=501, detail="this stepper cannot re-run persisted runs"
+            )
+
+        # Hold the app lock for the re-run, exactly like /reset and
+        # /runs/{id}/resume do: the re-run reseeds process-global RNG
+        # (seed_world), so a live tick drawing from the same RNG concurrently
+        # would both corrupt the live run's determinism and perturb the
+        # re-run's own frames. Serializing against the tick loop is what makes
+        # reproduce_run's getstate/setstate restore actually sound -- with no
+        # concurrent tick, snapshotting and restoring the RNG is enough.
+        def _locked():
+            with lock:
+                return rerun(run_id)
+
+        try:
+            return await asyncio.get_running_loop().run_in_executor(None, _locked)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc.args[0]))
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+
     @app.post("/command", response_model=CommandResponse)
     def command(req: CommandRequest, _: None = Depends(require_auth)):
         """Run exactly one command and return events + the new snapshot.

@@ -42,11 +42,14 @@ The pieces:
 import argparse
 import concurrent.futures
 import datetime
+import json
 import os
+import random
 import threading
 import time
 import urllib.error
 import urllib.request
+from dataclasses import dataclass
 
 from backend.api import run
 from backend.contract import SCHEMA_VERSION
@@ -70,6 +73,14 @@ from penn_world import (
     replay_frame_entry,
 )
 from text_adventure_games.llm_client import LlmConfig, create_llm_client
+from text_adventure_games.recording import (
+    CassetteMiss,
+    CassetteWriter,
+    RecordingClient,
+    ReplayClient,
+    seed_world,
+)
+from text_adventure_games.transcript import RunRecord, file_sha256, git_sha
 from text_adventure_games.usage import UsageLedger
 
 # The bake's full campus day (generate_penn_replay.DEFAULT_STEPS): long enough
@@ -443,6 +454,8 @@ class PennStepper:
         stall_seconds=0.0,
         plan_mode="schedule",
         resume_run_id=None,
+        seed=0,
+        replay_cassette=None,
     ):
         self.num_steps = num_steps
         # The launch-configured budget, kept so a per-request create_run(steps=)
@@ -511,6 +524,11 @@ class PennStepper:
         if resume_run_id is not None and run_store is None:
             raise ValueError("resuming a run needs a run store (--persist)")
         self.run_store = run_store
+        self.seed = seed
+        self._engine_sha = git_sha()  # provenance snapshot, captured once
+        self._replay_cassette = replay_cassette
+        self._cassette_writer = None
+        self._cassette_path = None
         self._run_id = None
         self._run_finished = False
         self._mem_synced = {}
@@ -565,7 +583,19 @@ class PennStepper:
         # guard above restricts to the paid --brain llm branch, else None ->
         # attach_agents uses MockPlanner, byte-identical).
         self.planner_client = None
-        if llm == SCRIPTED:
+        if replay_cassette is not None:
+            # Re-run mode (#715): serve every model call from the recorded
+            # cassette -- no key, no network. ONE shared instance across
+            # decide/converse/reflect: request keys differ by role/messages, so
+            # their FIFO queues never interleave. `llm` here is always None
+            # (reproduce_run never passes SCRIPTED or a paid dict -- the
+            # recorded cognition_tools/react/plan_mode are reconstructed
+            # explicitly from the manifest instead), so _is_paid stays False
+            # (no per-agent clients, sequential decide).
+            replay = ReplayClient(replay_cassette, strict=True)
+            self.llm_client = replay
+            self.reflector_client = replay
+        elif llm == SCRIPTED:
             # Free, key-free full-feature brain (#563): distinct client objects,
             # so the llm_client-gated paths open. Record each role through the
             # same _recording_ledger view the paid path uses, so --monitor tags
@@ -596,6 +626,15 @@ class PennStepper:
         # owns a real connection pool, so rebuilding N of them per POST /reset
         # would orphan the old pools.
         self._agent_clients = {}
+        # Raw (unwrapped) real clients, stashed once (#715): the recording hook
+        # in _build() re-wraps FROM these on every build instead of wrapping
+        # self.llm_client/reflector_client/planner_client in place -- those
+        # attributes hold last build's RecordingClient after the first build,
+        # and re-wrapping THAT would nest a new RecordingClient around a
+        # client whose writer a reset just closed, crashing the next call.
+        self._raw_llm_client = self.llm_client
+        self._raw_reflector_client = self.reflector_client
+        self._raw_planner_client = self.planner_client
         self._build(world, resume_run_id=resume_run_id)
 
     def _decide_client(self):
@@ -643,6 +682,10 @@ class PennStepper:
         resume_row=None,
         resume_frames=None,
     ):
+        # Pin the engine RNG so this build + its ticks are reproducible (#715).
+        # Runs every _build so a reset re-seeds from the same base; a straight
+        # start-to-finish run seeds once, which is what a re-run reproduces.
+        seed_world(self.seed)
         # Mirror simulate()'s pre-loop setup exactly (run_simulation.py; the
         # same reconstruction tests/test_penn_live.py::
         # test_stepper_matches_simulate_prefix pins). If simulate's setup ever
@@ -660,6 +703,49 @@ class PennStepper:
             datetime.datetime.fromisoformat(SIM_START), sec_per_step=SEC_PER_STEP
         )
         self.game, self.chars = self.world.build_world_fn(self.world.world_map)
+        # Recording seam (#715): open this run and wrap every real client in a
+        # RecordingClient BEFORE attach_agents wires them onto agents, so the
+        # agents' decide/converse (agent.llm_client) and reflection
+        # (agent.reflector = LLMReflector(reflector_client)) both flow through
+        # the cassette without any post-hoc re-pointing. Skipped for: replay
+        # (re-run mode records nothing), resume (a resumed run keeps its own
+        # cassette), and the mock brain (self.llm_client is None -> no funnel
+        # traffic to capture; the run is deterministic by construction anyway).
+        # Wraps the RAW clients stashed in __init__, not self.llm_client/
+        # reflector_client/planner_client themselves -- those hold the PRIOR
+        # build's RecordingClient after the first build, and re-wrapping that
+        # would nest a new RecordingClient around a client whose cassette a
+        # reset just closed (every real _build() -- reset()/create_run() --
+        # would re-enter this block, since only resume_run_id skips it).
+        # A skipped build (resume, replay, or no run store) must not leave the
+        # primary clients as a prior build's RecordingClient wrapping a cassette
+        # that _close_current_run() already closed. Reset to the raw clients
+        # first; the hook below re-wraps from raw only when recording. (The
+        # per-agent clients already re-derive from raw each build.)
+        self.llm_client = self._raw_llm_client
+        self.reflector_client = self._raw_reflector_client
+        self.planner_client = self._raw_planner_client
+        if (
+            self.run_store is not None
+            and resume_run_id is None
+            and self._replay_cassette is None
+            and self._raw_llm_client is not None
+        ):
+            self._run_id = self.run_store.create_run(self._store_manifest())
+            self._cassette_path = str(
+                self.run_store.root / self._run_id / "cassette.jsonl"
+            )
+            self._cassette_writer = CassetteWriter(self._cassette_path)
+            self.llm_client = RecordingClient(
+                self._raw_llm_client, writer=self._cassette_writer
+            )
+            self.reflector_client = RecordingClient(
+                self._raw_reflector_client, writer=self._cassette_writer
+            )
+            if self._raw_planner_client is not None:
+                self.planner_client = RecordingClient(
+                    self._raw_planner_client, writer=self._cassette_writer
+                )
         # How much of game.events drain_events() has already published
         # (#467). Lives in _build so reset() restarts it with the new game.
         self._events_seen = 0
@@ -744,10 +830,21 @@ class PennStepper:
             # attribution. Each instance records into the same base ledger;
             # self.llm_client stays as the mode flag (injector gate,
             # conversation_enabled) and the serial fallback.
+            #
+            # self._agent_clients holds the RAW client per agent (built once,
+            # ever -- its connection pool must survive a reset, see above).
+            # The RecordingClient wrapper is rebuilt fresh every _build() from
+            # that raw client, so a reset's new cassette writer is what this
+            # run's calls land in -- wrapping the STORED (dict) value instead
+            # would nest onto whatever a prior run already wrapped it with,
+            # and write into that run's closed cassette file.
             for name, char in self.chars.items():
                 if name not in self._agent_clients:
                     self._agent_clients[name] = self._decide_client()
-                char.agent.llm_client = self._agent_clients[name]
+                client = self._agent_clients[name]
+                if self._cassette_writer is not None:
+                    client = RecordingClient(client, writer=self._cassette_writer)
+                char.agent.llm_client = client
         # Real conversations pace themselves through a per-pair cooldown that
         # must OUTLIVE each tick (simulate() keeps one for its whole run;
         # step()'s default is a throwaway dict, which would let a settled pair
@@ -810,8 +907,8 @@ class PennStepper:
             self._cost_base = 0.0
             if resume_run_id is not None:
                 self._adopt_run(resume_run_id, row=resume_row, frames=resume_frames)
-            else:
-                self._run_id = self.run_store.create_run(self.meta())
+            elif self._run_id is None:
+                self._run_id = self.run_store.create_run(self._store_manifest())
 
     def _resumable_row(self, run_id: str) -> dict:
         # The one guard home for both resume entry paths (boot --resume and
@@ -1018,6 +1115,24 @@ class PennStepper:
             ),
         }
 
+    def _store_manifest(self) -> dict:
+        """The manifest persisted to the store: the handshake meta() plus the
+        provenance a re-run needs (#715). Kept OFF meta() itself so the live
+        GET /live blob and the pinned replay contract are unchanged.
+
+        cognition_tools/react/plan_mode are the RESOLVED values (post the
+        ``cognition_tools or (llm == SCRIPTED)`` coupling above), so
+        ``reproduce_run`` can reconstruct the exact cognition config a real
+        re-run needs instead of guessing it back from the ``llm`` sentinel."""
+        return {
+            **self.meta(),
+            "seed": self.seed,
+            "engine_sha": self._engine_sha,
+            "cognition_tools": self.cognition_tools,
+            "react": self.react,
+            "plan_mode": self.plan_mode,
+        }
+
     def tick(self) -> dict | None:
         """One sim step -> one replay-schema frame (called under the app lock).
 
@@ -1170,7 +1285,29 @@ class PennStepper:
             and not self._run_finished
         ):
             self.run_store.update_run(self._run_id, status="finished")
+            self._write_run_record()
             self._run_finished = True
+
+    def _write_run_record(self) -> None:
+        """Save the run's reproducibility recipe next to its frames (#715).
+
+        The cassette sha is only knowable once the cassette is fully written, so
+        this runs at finish. engine_version is the git sha captured at __init__
+        -- never the literal "unknown" (#197 follow-up)."""
+        if self._cassette_writer is None:
+            return  # a mock run has no cassette; nothing to reproduce
+        self._cassette_writer.close()
+        record = RunRecord(
+            game="penn",
+            seed=self.seed,
+            cassette={
+                "path": "cassette.jsonl",
+                "sha256": file_sha256(self._cassette_path),
+            },
+            engine_version=self._engine_sha,
+            result={"steps": self._step_idx, "cost_usd": self._run_cost_usd()},
+        )
+        record.save(str(self.run_store.root / self._run_id / "run.yaml"))
 
     def _deciding_sink(self, name: str, state: str, step: int) -> None:
         """Called by run_simulation._decide_for at a decision's start/finish
@@ -1300,15 +1437,28 @@ class PennStepper:
 
     def _close_current_run(self) -> None:
         """Persist pending events and mark the live run 'reset' before a rebuild
-        (a finished day keeps 'finished'). Shared by reset/create_run/resume_run."""
+        (a finished day keeps 'finished'). Shared by reset/create_run/resume_run.
+
+        Clears self._run_id (#715 follow-up): the upcoming _build() rebuilds
+        for a NEW day, so the non-resume `elif self._run_id is None` guard
+        there must see None again to open a fresh run row -- without this, a
+        rebuild after the first would keep reusing the just-closed run's id
+        forever (caught by test_stepper_reset_closes_the_run_and_opens_a_new_one
+        et al.). A resumed rebuild is unaffected: it adopts an explicit
+        resume_run_id regardless of this attribute.
+        """
         self._persist_pending_events()
         self._persist_pending_wishes()
+        if self._cassette_writer is not None:
+            self._cassette_writer.close()
+            self._cassette_writer = None
         if (
             self.run_store is not None
             and self._run_id is not None
             and not self._run_finished
         ):
             self.run_store.update_run(self._run_id, status="reset")
+        self._run_id = None
 
     def reset(self) -> None:
         # A reset is a new day AND a new run: close the old run's row first
@@ -1381,6 +1531,14 @@ class PennStepper:
         self.num_steps = self._launch_num_steps
         self._build(resume_run_id=run_id, resume_row=row, resume_frames=frames)
 
+    def rerun_run(self, run_id: str) -> dict:
+        """Re-run a persisted run and report whether it reproduced byte-identically
+        (#715). Ephemeral -- never touches the live run. Probed off the stepper by
+        POST /runs/{id}/rerun, the resume/create_run idiom."""
+        if self.run_store is None:
+            raise ValueError("this server has no run store (--persist)")
+        return reproduce_run(self.run_store, run_id).to_dict()
+
 
 class _GameProxy:
     """A stable façade over ``stepper.game`` for the API routes to close over.
@@ -1414,6 +1572,135 @@ def resolve_resume(run_store, resume):
             raise SystemExit("nothing to resume: the store has no runs yet")
         return runs[0]["id"]
     return resume
+
+
+@dataclass
+class ReproResult:
+    """Outcome of re-running a persisted run from its cassette (#715)."""
+
+    run_id: str
+    steps: int
+    match: bool
+    first_divergence: int | None
+    engine_sha_recorded: str | None
+    engine_sha_current: str
+
+    def to_dict(self) -> dict:
+        return {
+            "run_id": self.run_id,
+            "steps": self.steps,
+            "match": self.match,
+            "first_divergence": self.first_divergence,
+            "engine_sha_recorded": self.engine_sha_recorded,
+            "engine_sha_current": self.engine_sha_current,
+        }
+
+
+def _canonical_frame(frame) -> str:
+    """Key-order-independent string for one replay frame."""
+    return json.dumps(frame, sort_keys=True, ensure_ascii=False)
+
+
+def reproduce_run(store: RunStore, run_id: str, world=None) -> ReproResult:
+    """Re-run a persisted run offline from its cassette + seed and check the
+    frames come out byte-identical to what the store holds (#715).
+
+    Zero network: the world is driven by a ReplayClient over
+    runs/<id>/cassette.jsonl -- no provider, no key, no spend. The re-run
+    reconstructs the recorded cognition config (seed, cognition_tools, react,
+    plan_mode) from the manifest and always forces decide_workers=0, so
+    byte-identity holds for runs that were recorded under sequential decide
+    (the default for --brain scripted; opt-in via --decide-workers 0 for
+    --brain llm). A run recorded under parallel decide (--decide-workers > 0,
+    the paid default) may have resolved its agents' decisions in a different
+    order than a serial re-run would, so it is outside this guarantee.
+    """
+    row = store.get_run(run_id)
+    if row is None:
+        raise KeyError(f"unknown run id: {run_id}")
+    manifest = row["manifest"]
+    seed = int(manifest.get("seed", 0))
+    cassette_path = str(store.root / run_id / "cassette.jsonl")
+    if not os.path.exists(cassette_path):
+        raise ValueError(
+            f"run {run_id} has no cassette -- only runs recorded with a real "
+            "client (--brain scripted|llm) can be re-run"
+        )
+    if manifest.get("plan_mode") == "llm":
+        # #715 review, Addition A: PennStepper.__init__ raises SystemExit for
+        # plan_mode="llm" unless the brain is paid (the re-run brain is
+        # always llm=None, i.e. unpaid) -- and that guard runs BEFORE the
+        # replay branch below, so a --plan llm run would otherwise escape as
+        # SystemExit. Inside the HTTP route's run_in_executor worker thread a
+        # BaseException like SystemExit is swallowed by threading's bootstrap
+        # and hangs the request instead of failing cleanly, so refuse it here
+        # first with the established ValueError vocabulary (404/409 upstream).
+        raise ValueError(
+            f"run {run_id} used --plan llm (a model-authored day); re-run of "
+            "model-planned runs is not supported yet"
+        )
+    stored = store.read_frames(run_id)
+    n = len(stored)
+
+    # reproduce_run reseeds process-global RNG (seed_world in _build). This can
+    # run in an executor thread (POST /runs/{id}/rerun) concurrently with a live
+    # tick, so snapshot and restore global random state to isolate the re-run's
+    # determinism from the rest of the process.
+    _rng_state = random.getstate()
+    try:
+        stepper = PennStepper(
+            num_steps=n,
+            world=world if world is not None else build_penn_world(),
+            monitor=None,
+            llm=None,  # the replay branch below supplies the brain; llm is unused
+            run_store=None,  # ephemeral: never persist over the original
+            seed=seed,
+            replay_cassette=cassette_path,
+            decide_workers=0,  # sequential -> deterministic, no timeout races
+            cognition_tools=manifest.get("cognition_tools", False),
+            react=manifest.get("react", False),
+            plan_mode=manifest.get("plan_mode", "schedule"),
+        )
+        rerun = []
+        miss_at = None
+        for _ in range(n):
+            try:
+                frame = stepper.tick()
+            except CassetteMiss:
+                # A missing recorded response IS a divergence, not a crash: the
+                # re-run asked something the recording never captured (e.g. the
+                # engine changed the decide prompt, so the request key no longer
+                # matches). That is exactly what this check exists to report --
+                # so record the frame it happened at and fall through to the
+                # DIVERGED verdict instead of letting CassetteMiss escape (it is
+                # neither KeyError nor ValueError, so the CLI and the HTTP route
+                # would otherwise traceback / 500 instead of reporting match=False).
+                miss_at = len(rerun)
+                break
+            if frame is None:
+                break
+            rerun.append(frame)
+    finally:
+        random.setstate(_rng_state)
+
+    first = None
+    for i in range(min(len(stored), len(rerun))):
+        if _canonical_frame(stored[i]) != _canonical_frame(rerun[i]):
+            first = i
+            break
+    if first is None and len(stored) != len(rerun):
+        first = min(len(stored), len(rerun))
+    if miss_at is not None and (first is None or miss_at < first):
+        first = miss_at
+    match = first is None and len(stored) == len(rerun) and miss_at is None
+    return ReproResult(
+        run_id=run_id,
+        steps=n,
+        match=match,
+        first_divergence=first,
+        engine_sha_recorded=manifest.get("engine_sha"),
+        engine_sha_current=git_sha(),
+    )
 
 
 def _decide_workers_arg(value):
@@ -1602,6 +1889,22 @@ def _build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8080)
     ap.add_argument(
+        "--seed",
+        type=int,
+        default=0,
+        help="RNG seed pinned for this run (#715); recorded into the run's "
+        "manifest so --re-run reproduces it byte-identically",
+    )
+    ap.add_argument(
+        "--re-run",
+        dest="re_run",
+        default=None,
+        metavar="RUN_ID",
+        help="reproduce a persisted run offline from its cassette + seed and "
+        "check it is byte-identical (#715), then exit; does not start a server. "
+        "Needs a run store (present by default)",
+    )
+    ap.add_argument(
         "--token",
         default=None,
         help="require 'Authorization: Bearer <token>' (defaults to the "
@@ -1640,6 +1943,21 @@ def main() -> int:
     # overrides either way.
     start_paused = args.start_paused if args.start_paused is not None else _is_paid(llm)
     store = RunStore(DEFAULT_RUNS_DIR) if args.persist else None
+    if args.re_run is not None:
+        if store is None:
+            raise SystemExit("--re-run needs a run store; drop --no-persist")
+        try:
+            result = reproduce_run(store, args.re_run)
+        except (KeyError, ValueError) as exc:
+            raise SystemExit(f"cannot re-run: {exc}")
+        verdict = "byte-identical" if result.match else "DIVERGED"
+        print(
+            f"re-run {result.run_id}: {verdict} over {result.steps} steps "
+            f"(recorded on {result.engine_sha_recorded}, now {result.engine_sha_current})"
+        )
+        if not result.match:
+            print(f"  first divergence at frame {result.first_divergence}")
+        return 0 if result.match else 1
     resume_id = resolve_resume(store, args.resume) if args.resume else None
     # 'auto' concurrency (#366): a real brain decides in parallel (LLM latency
     # is the whole point); the mock AND the scripted brain (#563) stay serial so
@@ -1673,6 +1991,7 @@ def main() -> int:
             stall_seconds=args.stall_seconds,
             plan_mode=args.plan,
             resume_run_id=resume_id,
+            seed=args.seed,
         )
     except ImportError as e:
         raise SystemExit(f"{e}\n(--brain llm needs the LLM extra: uv sync --extra llm)")
