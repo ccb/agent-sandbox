@@ -79,7 +79,7 @@ render the real campus (or serve it live — see `godot-generative-agents/README
 
 ```bash
 # from the repo root -- bakes godot/maps/penn_replay.json for "Play the bundled replay":
-LLM_PROVIDER=mock uv run python godot-generative-agents/backend/penn/generate_penn_replay.py --steps 400
+LLM_PROVIDER=mock uv run python godot-generative-agents/backend/penn/generate_penn_replay.py
 ```
 
 ## Themes (the tile art)

@@ -51,7 +51,7 @@ terminal LLM-request log), `--model` (override the config's model), `--token` (o
 
 **Offline alternative — no server at all:** to just watch a *baked* replay, skip this
 command and bake a file with
-`LLM_PROVIDER=mock uv run python godot-generative-agents/backend/penn/generate_penn_replay.py --steps 400`,
+`LLM_PROVIDER=mock uv run python godot-generative-agents/backend/penn/generate_penn_replay.py`,
 then play it via `/run-viewer`'s landing menu.
 
 Do not commit or push anything — this command only serves the backend.
