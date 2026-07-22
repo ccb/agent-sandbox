@@ -23,13 +23,13 @@ _SIM_DIR = (
 )
 sys.path.insert(0, str(_SIM_DIR))
 
-from serve_penn import SCRIPTED, PennStepper  # noqa: E402
-
-# NOTE (#715 Task 2 vs Task 4): the brief's Step 1 header also names
-# `reproduce_run`, but that symbol is added in Task 4 -- importing it here
-# would ImportError before this task's own TypeError check ever runs (proven
-# empirically; cross-checked against task-3/4-brief.md, neither of which
-# expects it importable yet either). Left out here; Task 4 adds it back.
+from serve_penn import (  # noqa: E402
+    SCRIPTED,
+    PennStepper,
+    ReplayClient,
+    ReproResult,
+    reproduce_run,
+)
 from penn_world import build_penn_world  # noqa: E402
 from backend.run_store import RunStore  # noqa: E402
 
@@ -129,3 +129,72 @@ def test_mock_run_persists_provenance_without_a_cassette(tmp_path):
     assert manifest["seed"] == 0 and manifest["engine_sha"]
     assert not (run_dir / "cassette.jsonl").exists()
     assert not (run_dir / "run.yaml").exists()
+
+
+def _record_a_run(tmp_path):
+    store = RunStore(tmp_path / "runs")
+    stepper = PennStepper(
+        num_steps=RERUN_STEPS,
+        world=build_penn_world(),
+        monitor=None,
+        llm=SCRIPTED,
+        run_store=store,
+        seed=0,
+        decide_workers=0,
+    )
+    for _ in range(RERUN_STEPS):
+        stepper.tick()
+    stepper._finish_run()
+    return store, stepper._run_id
+
+
+def test_rerun_is_byte_identical(tmp_path):
+    store, run_id = _record_a_run(tmp_path)
+    result = reproduce_run(store, run_id)
+    assert isinstance(result, ReproResult)
+    assert result.match is True
+    assert result.first_divergence is None
+    assert result.steps == RERUN_STEPS
+
+
+def test_rerun_uses_a_replayclient_not_a_real_client(tmp_path):
+    # Zero-network proof: the re-run brain is a ReplayClient (offline by
+    # construction), and create_llm_client is never reached.
+    store, run_id = _record_a_run(tmp_path)
+    import serve_penn as sp
+
+    def _boom(*a, **k):
+        raise AssertionError("re-run must not build a live client")
+
+    orig = sp.create_llm_client
+    sp.create_llm_client = _boom
+    try:
+        result = reproduce_run(store, run_id)
+    finally:
+        sp.create_llm_client = orig
+    assert result.match is True
+
+
+def test_rerun_unknown_run_raises_keyerror(tmp_path):
+    store = RunStore(tmp_path / "runs")
+    with pytest.raises(KeyError):
+        reproduce_run(store, "run-does-not-exist")
+
+
+def test_rerun_without_cassette_raises(tmp_path):
+    # A mock run has no cassette -> not reproducible via the bridge.
+    store = RunStore(tmp_path / "runs")
+    stepper = PennStepper(
+        num_steps=RERUN_STEPS,
+        world=build_penn_world(),
+        monitor=None,
+        llm=None,
+        run_store=store,
+        seed=0,
+        decide_workers=0,
+    )
+    for _ in range(RERUN_STEPS):
+        stepper.tick()
+    stepper._finish_run()
+    with pytest.raises(ValueError, match="no cassette"):
+        reproduce_run(store, stepper._run_id)

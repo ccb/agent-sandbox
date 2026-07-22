@@ -42,11 +42,13 @@ The pieces:
 import argparse
 import concurrent.futures
 import datetime
+import json
 import os
 import threading
 import time
 import urllib.error
 import urllib.request
+from dataclasses import dataclass
 
 from backend.api import run
 from backend.contract import SCHEMA_VERSION
@@ -579,7 +581,18 @@ class PennStepper:
         # guard above restricts to the paid --brain llm branch, else None ->
         # attach_agents uses MockPlanner, byte-identical).
         self.planner_client = None
-        if llm == SCRIPTED:
+        if replay_cassette is not None:
+            # Re-run mode (#715): serve every model call from the recorded
+            # cassette -- no key, no network. ONE shared instance across
+            # decide/converse/reflect: request keys differ by role/messages, so
+            # their FIFO queues never interleave. `llm` here is never a paid
+            # dict (reproduce_run passes None or the SCRIPTED sentinel, only
+            # to match the recorded run's cognition_tools flag), so
+            # _is_paid stays False (no per-agent clients, sequential decide).
+            replay = ReplayClient(replay_cassette, strict=True)
+            self.llm_client = replay
+            self.reflector_client = replay
+        elif llm == SCRIPTED:
             # Free, key-free full-feature brain (#563): distinct client objects,
             # so the llm_client-gated paths open. Record each role through the
             # same _recording_ledger view the paid path uses, so --monitor tags
@@ -1503,6 +1516,14 @@ class PennStepper:
         self.num_steps = self._launch_num_steps
         self._build(resume_run_id=run_id, resume_row=row, resume_frames=frames)
 
+    def rerun_run(self, run_id: str) -> dict:
+        """Re-run a persisted run and report whether it reproduced byte-identically
+        (#715). Ephemeral -- never touches the live run. Probed off the stepper by
+        POST /runs/{id}/rerun, the resume/create_run idiom."""
+        if self.run_store is None:
+            raise ValueError("this server has no run store (--persist)")
+        return reproduce_run(self.run_store, run_id).to_dict()
+
 
 class _GameProxy:
     """A stable façade over ``stepper.game`` for the API routes to close over.
@@ -1536,6 +1557,100 @@ def resolve_resume(run_store, resume):
             raise SystemExit("nothing to resume: the store has no runs yet")
         return runs[0]["id"]
     return resume
+
+
+@dataclass
+class ReproResult:
+    """Outcome of re-running a persisted run from its cassette (#715)."""
+
+    run_id: str
+    steps: int
+    match: bool
+    first_divergence: int | None
+    engine_sha_recorded: str | None
+    engine_sha_current: str
+
+    def to_dict(self) -> dict:
+        return {
+            "run_id": self.run_id,
+            "steps": self.steps,
+            "match": self.match,
+            "first_divergence": self.first_divergence,
+            "engine_sha_recorded": self.engine_sha_recorded,
+            "engine_sha_current": self.engine_sha_current,
+        }
+
+
+def _canonical_frame(frame) -> str:
+    """Key-order-independent string for one replay frame."""
+    return json.dumps(frame, sort_keys=True, ensure_ascii=False)
+
+
+def reproduce_run(store: RunStore, run_id: str, world=None) -> ReproResult:
+    """Re-run a persisted run offline from its cassette + seed and check the
+    frames come out byte-identical to what the store holds (#715).
+
+    Zero network: the world is driven by a ReplayClient over
+    runs/<id>/cassette.jsonl -- no provider, no key, no spend. That is exactly
+    what lets a real-LLM run reproduce. Byte-identity is guaranteed for
+    sequential-decide runs; the re-run always forces decide_workers=0.
+    """
+    row = store.get_run(run_id)
+    if row is None:
+        raise KeyError(f"unknown run id: {run_id}")
+    manifest = row["manifest"]
+    seed = int(manifest.get("seed", 0))
+    cassette_path = str(store.root / run_id / "cassette.jsonl")
+    if not os.path.exists(cassette_path):
+        raise ValueError(
+            f"run {run_id} has no cassette -- only runs recorded with a real "
+            "client (--brain scripted|llm) can be re-run"
+        )
+    stored = store.read_frames(run_id)
+    n = len(stored)
+
+    # A recorded cassette (just confirmed above) rules out the mock brain --
+    # so this was either --brain scripted or --brain llm. The manifest's
+    # `llm` key (meta(), _is_paid-gated) is None for *both* the mock brain
+    # AND --brain scripted, but only the mock brain skips the cassette --
+    # so None here (with a cassette) means scripted. That distinction matters
+    # because cognition_tools is hard-wired on for scripted (`llm == SCRIPTED`
+    # in __init__): the recorded tool set included recall/read_plan, so the
+    # re-run must offer the same set or every request key misses.
+    llm_for_rerun = SCRIPTED if manifest.get("llm") is None else None
+    stepper = PennStepper(
+        num_steps=n,
+        world=world if world is not None else build_penn_world(),
+        monitor=None,
+        llm=llm_for_rerun,
+        run_store=None,  # ephemeral: never persist over the original
+        seed=seed,
+        replay_cassette=cassette_path,
+        decide_workers=0,  # sequential -> deterministic, no timeout races
+    )
+    rerun = []
+    for _ in range(n):
+        frame = stepper.tick()
+        if frame is None:
+            break
+        rerun.append(frame)
+
+    first = None
+    for i in range(min(len(stored), len(rerun))):
+        if _canonical_frame(stored[i]) != _canonical_frame(rerun[i]):
+            first = i
+            break
+    if first is None and len(stored) != len(rerun):
+        first = min(len(stored), len(rerun))
+    match = first is None and len(stored) == len(rerun)
+    return ReproResult(
+        run_id=run_id,
+        steps=n,
+        match=match,
+        first_divergence=first,
+        engine_sha_recorded=manifest.get("engine_sha"),
+        engine_sha_current=git_sha(),
+    )
 
 
 def _decide_workers_arg(value):
