@@ -299,9 +299,19 @@ class ReplayClient:
         return served
 
     def count_tokens(self, text: str) -> int:
-        """A cheap heuristic. Token counts aren't replayed -- nothing in the
-        decision path depends on them -- so an estimate satisfies the protocol."""
-        return max(1, len(text) // 4)
+        """The same ~4-chars/token heuristic the mock and Anthropic clients use.
+
+        Parity matters: ``llm_parser`` sizes a request's ``max_tokens`` from
+        ``count_tokens("")`` and that number is hashed into the request key, so a
+        replay must return what the *recorded* client returned for the same text
+        or it CassetteMisses. Hence no ``max(1, ...)`` floor -- that made
+        ``count_tokens("")`` return 1 where the mock/Anthropic client returns 0.
+
+        Caveat for #715: against a *real* tokenizer this is only an estimate, so a
+        request whose shape is derived from live token counts (e.g. llm_parser's
+        history trim) can still diverge on replay. Recording the counts alongside
+        the responses is that issue's job."""
+        return len(text) // 4
 
     def preflight(self) -> None:
         """A replay needs no key and never touches the network -- a no-op."""
@@ -309,7 +319,11 @@ class ReplayClient:
 
     def _miss(self, messages):
         if self._strict:
-            preview = messages[-1]["content"][:200] if messages else ""
+            # Content may be a str (chat) or a list of tool blocks (tool loop),
+            # so stringify before slicing -- the diagnostic must never itself
+            # raise and mask the real CassetteMiss.
+            last = messages[-1].get("content", "") if messages else ""
+            preview = str(last)[:200]
             raise CassetteMiss(
                 f"No recorded response for this request in {self._path!r}. "
                 f"The replayed run diverged from the recording. Last message: {preview!r}"

@@ -198,10 +198,12 @@ def test_request_key_distinguishes_methods_and_tools():
 
 def test_call_tools_result_round_trips(tmp_path):
     cassette = str(tmp_path / "run.jsonl")
-    rec = RecordingClient(_ToolStub(), cassette)
+    stub = _ToolStub()
+    rec = RecordingClient(stub, cassette)
     msgs = [{"role": "user", "content": "act"}]
     tools = [{"name": "choose_action"}]
     recorded = rec.call_tools(msgs, tools, tool_choice="any")
+    assert stub.calls == ["call_tools"]  # recording delegated to the inner client
     rec.close()
 
     replay = ReplayClient(cassette, strict=True)
@@ -215,10 +217,12 @@ def test_call_tools_result_round_trips(tmp_path):
 
 def test_call_tool_dict_round_trips(tmp_path):
     cassette = str(tmp_path / "run.jsonl")
-    rec = RecordingClient(_ToolStub(), cassette)
+    stub = _ToolStub()
+    rec = RecordingClient(stub, cassette)
     msgs = [{"role": "user", "content": "where"}]
     tool = {"name": "go"}
     recorded = rec.call_tool(msgs, tool)
+    assert stub.calls == ["call_tool"]  # recording delegated to the inner client
     rec.close()
 
     replay = ReplayClient(cassette, strict=True)

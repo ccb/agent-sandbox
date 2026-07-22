@@ -13,6 +13,8 @@ Run with pytest::
     uv run pytest tests/test_transcript.py -v
 """
 
+import hashlib
+
 import pytest
 
 from text_adventure_games.transcript import (
@@ -85,6 +87,7 @@ def test_file_sha256_and_git_sha(tmp_path):
     h = file_sha256(str(f))
     assert isinstance(h, str) and len(h) == 64
     assert file_sha256(str(f)) == h
+    assert h == hashlib.sha256(b"hello\n").hexdigest()  # known answer, not just length
     assert isinstance(git_sha(), str)  # best-effort, never raises
 
 
