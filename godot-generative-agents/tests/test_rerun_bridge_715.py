@@ -198,3 +198,51 @@ def test_rerun_without_cassette_raises(tmp_path):
     stepper._finish_run()
     with pytest.raises(ValueError, match="no cassette"):
         reproduce_run(store, stepper._run_id)
+
+
+def test_manifest_persists_resolved_cognition_config(tmp_path):
+    # Finding 1 (#715 review): react/plan_mode were never coupled to the
+    # SCRIPTED sentinel the way cognition_tools is (serve_penn.py:540), so a
+    # run recorded with --react must persist that fact for a re-run to
+    # reconstruct it -- not just inherit it from scripted's hard-wired default.
+    stepper = PennStepper(
+        num_steps=RERUN_STEPS,
+        world=build_penn_world(),
+        monitor=None,
+        llm=SCRIPTED,
+        run_store=RunStore(tmp_path / "runs"),
+        seed=0,
+        decide_workers=0,
+        react=True,
+    )
+    run_id = stepper._run_id
+    manifest = json.loads((tmp_path / "runs" / run_id / "manifest.json").read_text())
+    assert manifest["react"] is True
+    assert manifest["cognition_tools"] is True  # resolved: scripted forces it on
+    assert manifest["plan_mode"] == "schedule"
+
+
+def test_rerun_of_a_react_run_reproduces(tmp_path):
+    # Finding 1 (#715 review): a run recorded with --react must re-run with
+    # react reconstructed from the manifest, not the DEFAULT config -- else
+    # the offered tool set / decide path can diverge (CassetteMiss or
+    # match=False). Exercises the config-passing re-run path end to end.
+    store = RunStore(tmp_path / "runs")
+    stepper = PennStepper(
+        num_steps=RERUN_STEPS,
+        world=build_penn_world(),
+        monitor=None,
+        llm=SCRIPTED,
+        run_store=store,
+        seed=0,
+        decide_workers=0,
+        react=True,
+    )
+    for _ in range(RERUN_STEPS):
+        stepper.tick()
+    stepper._finish_run()
+
+    result = reproduce_run(store, stepper._run_id)
+    assert result.match is True
+    assert result.first_divergence is None
+    assert result.steps == RERUN_STEPS
