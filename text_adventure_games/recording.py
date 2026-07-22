@@ -28,6 +28,7 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+import threading
 from collections import deque
 
 from .llm_client import ToolCallResult
@@ -81,9 +82,41 @@ def _dump(response):
     return response
 
 
+def _text_key(text: str) -> str:
+    """Stable key for a count_tokens input (recorded and replayed by text)."""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
 # ---------------------------------------------------------------------------
 # Recording
 # ---------------------------------------------------------------------------
+
+
+class CassetteWriter:
+    """One append-only, thread-safe JSONL sink shared by every RecordingClient
+    that wraps the clients of a single run (decide, reflect, planner, per-agent).
+
+    A run has ONE cassette but several client instances; opening the same path
+    from two RecordingClients in ``"w"`` mode would truncate each other. Sharing
+    one writer keeps every call in one file, in call order. The lock guards the
+    paid parallel-decide path (#366) where N agent clients write concurrently;
+    under the free scripted brain the run is single-threaded, so it is
+    uncontended there.
+    """
+
+    def __init__(self, path: str):
+        self._file = open(path, "w", encoding="utf-8")
+        self._lock = threading.Lock()
+
+    def write(self, line: dict) -> None:
+        text = json.dumps(line, ensure_ascii=False) + "\n"
+        with self._lock:
+            self._file.write(text)
+            self._file.flush()  # a crashed run still leaves a usable cassette
+
+    def close(self) -> None:
+        if not self._file.closed:
+            self._file.close()
 
 
 class RecordingClient:
@@ -92,15 +125,30 @@ class RecordingClient:
     Behaves exactly like the client it wraps -- same return value (including
     ``None`` on failure, and a :class:`ToolCallResult` from ``call_tools``), same
     token counts -- and, as a side effect, appends each ``(request, response)`` to
-    a JSONL cassette at *path*. One call writes one line, flushed immediately so a
-    crashed run still leaves a usable cassette.
+    a JSONL cassette. One call writes one line, flushed immediately so a crashed
+    run still leaves a usable cassette.
+
+    Pass exactly one of *path* (the #197 single-client case -- this client owns
+    a private :class:`CassetteWriter`) or *writer* (a #715 whole-run cassette
+    shared by several clients, e.g. one per agent).
     """
 
-    def __init__(self, inner, path: str):
+    def __init__(
+        self, inner, path: str | None = None, *, writer: "CassetteWriter | None" = None
+    ):
+        if (path is None) == (writer is None):
+            raise ValueError("RecordingClient needs exactly one of path or writer")
         self._inner = inner
-        self._path = path
-        # Truncate any existing cassette so a fresh recording starts clean.
-        self._file = open(path, "w", encoding="utf-8")
+        # Own our writer when handed a path (#197's single-client case); share
+        # the caller's when handed one (a whole run's clients -> one cassette, #715).
+        self._owns_writer = writer is None
+        self._writer = writer if writer is not None else CassetteWriter(path)
+        # count_tokens is deterministic per text, so record each distinct text
+        # once (#715): without this a repeated single-value fact appends a line
+        # every call -- unbounded over a long parallel-decide day -- while the
+        # replay map only ever keeps the last. Per-client set, so N per-agent
+        # clients sharing one writer stay bounded by N-per-text, not per-call.
+        self._counted: set[str] = set()
 
     @property
     def context(self):
@@ -110,14 +158,14 @@ class RecordingClient:
         return getattr(self._inner, "context", None)
 
     def _write(self, key: str, method: str, request: dict, response) -> None:
-        line = {
-            "key": key,
-            "method": method,
-            "request": request,
-            "response": _dump(response),
-        }
-        self._file.write(json.dumps(line, ensure_ascii=False) + "\n")
-        self._file.flush()
+        self._writer.write(
+            {
+                "key": key,
+                "method": method,
+                "request": request,
+                "response": _dump(response),
+            }
+        )
 
     def chat(self, messages, max_tokens: int = 256, temperature: float = 0.0):
         response = self._inner.chat(messages, max_tokens, temperature)
@@ -190,16 +238,27 @@ class RecordingClient:
         return response
 
     def count_tokens(self, text: str) -> int:
-        """Delegate to the wrapped client -- recording is transparent."""
-        return self._inner.count_tokens(text)
+        n = self._inner.count_tokens(text)
+        # Record the count so a replay serves the EXACT value the recorded client
+        # returned (#715 follow-up). llm_parser sizes max_tokens from
+        # count_tokens("") and that number is hashed into the request key, so a
+        # replay that guessed len//4 against a real tokenizer would CassetteMiss.
+        # Write each distinct text once -- the count never changes for a text and
+        # the replay map keeps only the last, so re-writing it every call is pure
+        # cassette bloat.
+        key = _text_key(text)
+        if key not in self._counted:
+            self._counted.add(key)
+            self._writer.write({"method": "count_tokens", "text_key": key, "count": n})
+        return n
 
     def preflight(self) -> None:
         """Delegate to the wrapped client."""
         return self._inner.preflight()
 
     def close(self):
-        if not self._file.closed:
-            self._file.close()
+        if self._owns_writer:
+            self._writer.close()
 
     def __enter__(self):
         return self
@@ -240,12 +299,17 @@ class ReplayClient:
         self.context = None
         # key -> queue of raw responses, consumed in recorded order.
         self._responses: dict[str, deque] = {}
+        # text_key -> recorded token count (deterministic per text; a map, not a queue).
+        self._token_counts: dict[str, int] = {}
         with open(path, encoding="utf-8") as f:
             for raw in f:
                 raw = raw.strip()
                 if not raw:
                     continue
                 entry = json.loads(raw)
+                if entry.get("method") == "count_tokens":
+                    self._token_counts[entry["text_key"]] = entry["count"]
+                    continue
                 self._responses.setdefault(entry["key"], deque()).append(
                     entry["response"]
                 )
@@ -299,23 +363,33 @@ class ReplayClient:
         return served
 
     def count_tokens(self, text: str) -> int:
-        """The same ~4-chars/token heuristic the mock and Anthropic clients use.
+        """Serve the recorded count for a text the recording measured; otherwise
+        fall back to the ~4-chars/token estimate the mock/Anthropic clients use.
 
-        Parity matters: ``llm_parser`` sizes a request's ``max_tokens`` from
-        ``count_tokens("")`` and that number is hashed into the request key, so a
-        replay must return what the *recorded* client returned for the same text
-        or it CassetteMisses. Hence no ``max(1, ...)`` floor -- that made
-        ``count_tokens("")`` return 1 where the mock/Anthropic client returns 0.
-
-        Caveat for #715: against a *real* tokenizer this is only an estimate, so a
-        request whose shape is derived from live token counts (e.g. llm_parser's
-        history trim) can still diverge on replay. Recording the counts alongside
-        the responses is that issue's job."""
+        Recording the counts (#715) is what makes a run captured with a *real*
+        provider tokenizer replay byte-identically: llm_parser hashes
+        max_tokens (derived from count_tokens) into the request key, so the
+        replayed count must match the recorded one exactly."""
+        recorded = self._token_counts.get(_text_key(text))
+        if recorded is not None:
+            return recorded
         return len(text) // 4
 
     def preflight(self) -> None:
         """A replay needs no key and never touches the network -- a no-op."""
         return None
+
+    def close(self):
+        """No-op: a replay owns no file handle. Present so ReplayClient and
+        RecordingClient are lifecycle-interchangeable in a ``with client:`` /
+        ``client.close()`` re-run harness (#715 follow-up)."""
+        return None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
 
     def _miss(self, messages):
         if self._strict:
