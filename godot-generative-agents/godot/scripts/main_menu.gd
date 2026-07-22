@@ -240,6 +240,16 @@ func _build_panel() -> void:
 	_live_status.visible = false
 	col.add_child(_live_status)
 
+	# Past runs (#716): browse the backend's stored runs. GET /runs works on any
+	# persisted-store backend (even one with no live loop), so this doesn't probe
+	# /live first -- it just needs the URL above. We stash the normalized URL +
+	# token so past_runs.gd can read them back after the scene swap.
+	var past_btn := Button.new()
+	past_btn.text = "Past runs ▸"
+	past_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	past_btn.pressed.connect(_on_past_runs_pressed)
+	col.add_child(past_btn)
+
 	bundled_btn.grab_focus()
 
 
@@ -414,6 +424,21 @@ func _on_probe_completed(
 	else:
 		_show_live_status("Connected — following the running sim…", false)
 	_go_to_viewer()
+
+
+func _on_past_runs_pressed() -> void:
+	if _switching:
+		return
+	var url := _normalize_url(_url_edit.text)
+	if url == "":
+		_show_live_status("Enter the backend's URL first.", true)
+		return
+	# Stash for past_runs.gd (last_live_url survives; live_token too). No /live probe:
+	# GET /runs answers even on a store-only backend.
+	LaunchConfig.last_live_url = url
+	LaunchConfig.live_token = _token_edit.text.strip_edges()
+	_switching = true
+	get_tree().change_scene_to_file.call_deferred("res://scenes/past_runs.tscn")
 
 
 func _show_live_status(text: String, is_error: bool) -> void:
