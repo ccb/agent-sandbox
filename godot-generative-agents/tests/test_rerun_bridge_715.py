@@ -6,7 +6,9 @@ the cassette taps."""
 import json
 import os
 import sqlite3
+import subprocess
 import sys
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -352,4 +354,62 @@ def test_http_rerun_unknown_run_is_404(tmp_path):
     )
     app = create_app(_GameProxy_for(stepper), stepper=stepper, start_paused=True)
     client = TestClient(app)
-    assert client.post("/runs/run-nope/rerun").status_code == 404
+    resp = client.post("/runs/run-nope/rerun")
+    assert resp.status_code == 404
+    # Proves the route actually ran and 404'd on an unknown run id -- not
+    # FastAPI's generic "no matching route" 404 (a store exists here, so this
+    # exercises reproduce_run's KeyError -> the route's KeyError handler).
+    assert "unknown run id" in resp.json()["detail"]
+
+
+# A self-contained snippet: record a short scripted run, re-run it, and print
+# "<match>:<sha-of-rerun-frames>". Run under three PYTHONHASHSEEDs; all three
+# must report match=True AND the same frame hash -> reproduction is stable
+# across processes, not just within one (mirrors #545's determinism guard).
+_HASHSEED_SNIPPET = textwrap.dedent("""
+    import hashlib, json, sys, tempfile
+    from pathlib import Path
+    sys.path.insert(0, str(Path.cwd() / "godot-generative-agents" / "backend" / "penn"))
+    from serve_penn import SCRIPTED, PennStepper, reproduce_run
+    from penn_world import build_penn_world
+    from backend.run_store import RunStore
+
+    STEPS = 6
+    tmp = tempfile.mkdtemp()
+    store = RunStore(tmp + "/runs")
+    s = PennStepper(num_steps=STEPS, world=build_penn_world(), monitor=None,
+                    llm=SCRIPTED, run_store=store, seed=0, decide_workers=0)
+    run_id = s._run_id
+    for _ in range(STEPS):
+        s.tick()
+    s._finish_run()
+    result = reproduce_run(store, run_id)
+    frames = store.read_frames(run_id)
+    digest = hashlib.sha256(
+        json.dumps(frames, sort_keys=True, ensure_ascii=False).encode()
+    ).hexdigest()
+    print(f"{result.match}:{digest}")
+    """)
+
+
+def test_rerun_is_stable_across_hashseeds():
+    env = dict(os.environ)
+    env["PYTHONPATH"] = ".:godot-generative-agents"
+    outputs = []
+    for seed in ("0", "1", "2"):
+        env["PYTHONHASHSEED"] = seed
+        out = (
+            subprocess.run(
+                [sys.executable, "-c", _HASHSEED_SNIPPET],
+                capture_output=True,
+                text=True,
+                env=env,
+                check=True,
+            )
+            .stdout.strip()
+            .splitlines()[-1]
+        )
+        outputs.append(out)
+    # Every run reproduced, and produced the identical frame hash.
+    assert all(o.startswith("True:") for o in outputs), outputs
+    assert len(set(outputs)) == 1, outputs
