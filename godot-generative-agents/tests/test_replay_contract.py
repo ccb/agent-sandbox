@@ -12,6 +12,7 @@ Run from the repo root::
 """
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -217,6 +218,43 @@ def test_baked_replay_frames_carry_trace(tmp_path):
     for frame in replay["frames"]:
         for persona in frame.values():
             assert isinstance(persona["trace"], list)
+
+
+def _bake_scenario_bytes(tmp_path, scenario, hashseed):
+    """Run the REAL bake for one scenario under a fixed PYTHONHASHSEED and return
+    the bytes of the replay file it writes. Two bakes of the same scenario at
+    *different* hashseeds must be byte-identical (#640): a stray set/dict-order
+    leak into the artifact (the #545 regression class) would differ between them,
+    and any random/time/uuid on the bake path would differ between any two runs."""
+    out = tmp_path / f"{scenario}_{hashseed}.json"
+    subprocess.run(
+        [
+            sys.executable,
+            str(_SIM_DIR / "generate_penn_replay.py"),
+            "--scenario",
+            scenario,
+            "--steps",
+            "3",
+            "--out",
+            str(out),
+        ],
+        check=True,
+        env={**os.environ, "PYTHONHASHSEED": str(hashseed)},
+    )
+    return out.read_bytes()
+
+
+@pytest.mark.parametrize("scenario", ["penn", "boil"])
+def test_bake_is_byte_identical(tmp_path, scenario):
+    # #640: the mock bake must be deterministic. Bake the same scenario twice
+    # (default --brain mock) under different PYTHONHASHSEEDs and byte-compare --
+    # catches nondeterminism (random/time/uuid) or a hash-order leak (a set/dict
+    # iterated into the artifact) directly, with no committed golden to maintain.
+    first = _bake_scenario_bytes(tmp_path, scenario, 0)
+    second = _bake_scenario_bytes(tmp_path, scenario, 1)
+    assert (
+        first == second
+    ), f"{scenario} bake is not byte-identical across PYTHONHASHSEED 0 vs 1"
 
 
 def test_live_meta_validates_against_contract():
