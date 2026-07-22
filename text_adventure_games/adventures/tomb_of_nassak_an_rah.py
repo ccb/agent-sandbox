@@ -914,6 +914,31 @@ class DouseWithDemo(actions.Douse):
             _deal_item_state_card(self.game, self.item)
 
 
+class EatWithManners(actions.Eat):
+    """EAT, but an item carrying a ``consume_refusal`` (and not actually
+    edible) answers with its authored line instead of the flat 'That's not
+    edible.' -- so eating the water-debt tokens lands the joke (CCB)."""
+
+    def check_preconditions(self) -> bool:
+        refusal = self.item.get_property("consume_refusal") if self.item else None
+        if refusal and not self.item.get_property(Property.EDIBLE):
+            self.parser.fail(refusal)
+            return False
+        return super().check_preconditions()
+
+
+class DrinkWithManners(actions.Drink):
+    """DRINK, with the same ``consume_refusal`` courtesy as
+    :class:`EatWithManners`."""
+
+    def check_preconditions(self) -> bool:
+        refusal = self.item.get_property("consume_refusal") if self.item else None
+        if refusal and not self.item.get_property(Property.DRINKABLE):
+            self.parser.fail(refusal)
+            return False
+        return super().check_preconditions()
+
+
 class TieSilk(actions.Action):
     """Lash the drifting coffin fast with the merchant's spider-silk (CCB
     design) -- the bootless anchor. Cobweb-thin, and it holds like law."""
@@ -2228,6 +2253,15 @@ def build_game(seed=None):
     tokens.set_property("gettable", True)
     tokens.add_alias("purse")
     tokens.add_alias("tokens")
+    # You cannot eat or drink money, in Vaarn least of all (CCB). TASTE authors
+    # the line; EAT / DRINK reach the same joke via consume_refusal (the
+    # EatWithManners / DrinkWithManners actions).
+    _MONEY_LINE = (
+        "You lick the water-debt tokens. Worth their weight in water, "
+        "everywhere but your mouth."
+    )
+    tokens.perceptible_by(perception.Sense.TASTE, _MONEY_LINE)
+    tokens.set_property("consume_refusal", _MONEY_LINE)
     tokens.set_property(Property.IS_HIDDEN, True)
     merchant.add_item(tokens)
     crates = _scenery(
@@ -3615,6 +3649,8 @@ def build_game(seed=None):
             Butcher,
             DecantBlood,
             Feed,
+            EatWithManners,
+            DrinkWithManners,
         ],
     )
     game.max_score = 170

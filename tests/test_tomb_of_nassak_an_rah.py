@@ -1201,6 +1201,21 @@ def test_tasting_the_igniter_burns_for_a_point():
     assert len(game.player.wounds) == before + 2
 
 
+def test_you_cannot_eat_or_drink_the_water_debt_tokens():
+    """TASTE / EAT / DRINK the money all land the same joke (CCB) and never
+    consume it: worth their weight in water, everywhere but your mouth."""
+    game = _game()
+    game.do_command("search merchant")
+    game.do_command("take purse")
+    line = "everywhere but your mouth"
+    for verb in ("taste tokens", "eat tokens", "drink tokens", "lick purse"):
+        cap = _texts(game)
+        game.do_command(verb)
+        out = " ".join(cap.texts(Channel.NARRATION) + cap.texts(Channel.BLOCKED))
+        assert line in out, f"{verb!r} did not land the joke: {out!r}"
+        assert "purse of water-debt tokens" in game.player.carried_items()
+
+
 def test_every_organ_keeps_its_own_taste():
     """Each canopic organ tastes distinct (CCB) -- the intestines taste of
     OFFAL -- and an open jar standing on a plinth is still within reach of
