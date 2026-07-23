@@ -275,6 +275,37 @@ Recommended tiering: a stronger model for the low-volume reasoning sites
 `LLM_MAX_COST`-style budget ceiling (`max_cost_usd`) stays global across
 tiers.
 
+#### Tuning the live sim: `--config` (#564)
+
+Every sim knob lives in one declarative `SimulationConfig` file
+(`backend/sim_config.py`; see `docs/design/simulation-config.md`) — pass it to
+the live server instead of growing per-knob flags:
+
+```yaml
+# sim.yaml — every omitted field keeps today's default
+retrieval:            # memory-retrieval scoring at each decide
+  alpha_recency: 3.0  # recency-heavy: recent memories dominate
+  max_records: 2
+cognition:
+  vision_r: 4         # perception radius, in tiles
+game:
+  agent:
+    temperature: 0.0  # deterministic decides under --brain llm
+```
+
+    uv run python godot-generative-agents/backend/penn/serve_penn.py \
+        --brain llm --config sim.yaml
+
+The `retrieval:` weights change which memories surface at every decide (watch
+`role: decide` requests in the monitor, or the agent card's retrieved
+memories); `game.agent.temperature: 0.0` makes decisions deterministic;
+`reflection_threshold` rides along for when a reflector is wired. The
+batch-runner sections (`simulation:`, `embedding:`) are ignored on the live
+path, existing flags keep working (`--cognition-tools` / `--react` force their
+feature on over the file), and the config is recorded in the run's manifest so
+`--re-run` reproduces it. Without `--config`, behavior is byte-identical to
+before.
+
 **The Start/Stop button.** Under `--brain llm` the loop boots **paused**: the
 server is up and the viewer connects, but not a single model call is made
 until you press **▶ Start simulation** in the left sidebar (it sends

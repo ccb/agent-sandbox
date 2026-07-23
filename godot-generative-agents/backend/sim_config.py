@@ -178,7 +178,10 @@ class SimulationConfig:
                     "Reading a YAML config needs pyyaml (`pip install pyyaml`), "
                     "or use a .json config file instead."
                 ) from e
-            data = yaml.safe_load(text) or {}
+            try:
+                data = yaml.safe_load(text) or {}
+            except yaml.YAMLError as e:
+                raise ValueError(f"invalid YAML in {path!r}: {e}") from e
         elif lower.endswith(".json"):
             data = json.loads(text) if text.strip() else {}
         else:
