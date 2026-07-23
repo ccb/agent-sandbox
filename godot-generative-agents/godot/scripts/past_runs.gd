@@ -136,6 +136,7 @@ func _fetch_runs() -> void:
 	var err := _http.request("%s/runs" % _url, _headers())
 	if err != OK:
 		_pending = ""
+		_set_busy(false)
 		_set_status("Couldn't start the request (error %d)." % err, true)
 
 
