@@ -25,8 +25,6 @@ import os
 from dataclasses import dataclass, field
 from typing import Callable
 
-import yaml
-
 # Reuse the tested agent engine (not a fork). It's the installed top-level
 # `backend` package now, so a plain import works -- no sys.path juggling.
 from backend import path_finder
@@ -583,8 +581,10 @@ def build_penn_world(
     ``cast`` (#731) overrides the world YAML's ``cast:`` persona-reference
     list -- build the same world with a sub-cast (or with parked personas
     un-parked) without editing YAML. ``None`` (every existing call site)
-    means the YAML's own cast; worlds with inline ``personas:`` (the boil
-    demo) ignore it.
+    means the YAML's own cast. A ``cast`` passed against an inline-personas
+    world (the boil demo) is NOT ignored: it overrides the inline cast from
+    the adjacent ``personas/`` library, or raises ``ValueError`` on an
+    unknown id.
     """
     # One composed read (#731): personas/relationships/meetings resolved from
     # the cast (or passed through verbatim for inline-personas worlds), then
