@@ -2578,7 +2578,8 @@ def main() -> int:
     if start_paused:
         print(
             "Start gate: the loop boots PAUSED — press ▶ Start in the viewer "
-            "(or POST /resume) to begin the day."
+            "(or POST /resume) to begin the day. While paused at tick 0 the "
+            "run is configurable: GET/POST /config (#732)."
         )
     print(
         f"Live surface: GET /live, GET /events?since=0, ws://{args.host}:{args.port}/ws, "
