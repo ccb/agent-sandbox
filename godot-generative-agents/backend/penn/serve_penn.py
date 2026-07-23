@@ -52,6 +52,7 @@ import urllib.request
 from dataclasses import dataclass, replace
 
 from backend.api import run
+from backend.build_world import library_personas
 from backend.contract import SCHEMA_VERSION
 from backend.env import load_dotenv
 from backend.llm_monitor import LlmCallMonitor, RoleTaggedLedger
@@ -667,8 +668,10 @@ class PennStepper:
             )
         # Resolved LLM settings (resolve_llm), or None for the mock brain. The
         # ledger's cost ceiling comes from the same block, so GET /usage
-        # reports the budget and tick() can end the day at it.
-        self.llm = llm
+        # reports the budget and tick() can end the day at it. The ledger and
+        # monitor live HERE, not in _init_brain: they survive resets AND brain
+        # swaps (create_app captures `ledger` once at boot, and money spent
+        # stays spent).
         self.ledger = UsageLedger(  # backs GET /usage across resets
             max_cost_usd=(llm if _is_paid(llm) else {}).get("max_cost_usd")
         )
@@ -676,6 +679,21 @@ class PennStepper:
         # Like the ledger it lives here, not in _build(), so its call counter
         # survives resets.
         self.monitor = monitor
+        # What POST /config applied, or None for an unconfigured server; when
+        # set, _store_manifest records it as the manifest's `config` block (#732).
+        self._applied_config = None
+        self._init_brain(llm)
+        self._build(world, resume_run_id=resume_run_id)
+
+    def _init_brain(self, llm) -> None:
+        """Construct the brain clients for *llm* -- None (mock), SCRIPTED, or a
+        paid dict. Extracted from __init__ (#732) so apply_config can swap the
+        brain at apply time by re-running it; the ledger/monitor deliberately
+        stay in __init__ (they must survive brain swaps -- create_app captures
+        the ledger object once at boot). Clears the per-agent client pool: a
+        new brain's clients must not reuse the old model's.
+        """
+        self.llm = llm
         # The real-brain clients (issue #261): one shared by decide + converse,
         # one for reflection -- separate instances so the request monitor can
         # tag each role exactly, all recording into self.ledger. Built once
@@ -688,7 +706,7 @@ class PennStepper:
         # guard above restricts to the paid --brain llm branch, else None ->
         # attach_agents uses MockPlanner, byte-identical).
         self.planner_client = None
-        if replay_cassette is not None:
+        if self._replay_cassette is not None:
             # Re-run mode (#715): serve every model call from the recorded
             # cassette -- no key, no network. ONE shared instance across
             # decide/converse/reflect: request keys differ by role/messages, so
@@ -697,7 +715,7 @@ class PennStepper:
             # recorded cognition_tools/react/plan_mode are reconstructed
             # explicitly from the manifest instead), so _is_paid stays False
             # (no per-agent clients, sequential decide).
-            replay = ReplayClient(replay_cassette, strict=True)
+            replay = ReplayClient(self._replay_cassette, strict=True)
             self.llm_client = replay
             self.reflector_client = replay
         elif llm == SCRIPTED:
@@ -740,7 +758,6 @@ class PennStepper:
         self._raw_llm_client = self.llm_client
         self._raw_reflector_client = self.reflector_client
         self._raw_planner_client = self.planner_client
-        self._build(world, resume_run_id=resume_run_id)
 
     def _decide_client(self):
         """One decide/converse client recording into the shared ledger.
@@ -1330,6 +1347,54 @@ class PennStepper:
             # game.llm/embedding are stripped -- they can carry api_key
             # material and must never land in runs/ or GET /runs/{id}.
             "sim_config": self._sim_config_for_manifest(),
+        }
+
+    def _brain_name(self) -> str:
+        return (
+            "llm"
+            if _is_paid(self.llm)
+            else ("scripted" if self.llm == SCRIPTED else "mock")
+        )
+
+    def _stop_time(self) -> str:
+        """The in-game wall-clock the run ends at -- SIM_START plus the step
+        budget -- as a display string for the setup UI (#732). Read-only:
+        the wire knob is `steps` (the sim's native unit)."""
+        start = datetime.datetime.fromisoformat(SIM_START)
+        return str(start + datetime.timedelta(seconds=self.num_steps * SEC_PER_STEP))
+
+    def describe_config(self) -> dict:
+        """The pre-run config surface GET /config serves (#732); read-only.
+
+        `status` and `tick_seconds` are the loop's to report -- the route
+        composes them in (the stepper doesn't know paused). `knobs` is the
+        #564 SimulationConfig surface with the key-carrying sections
+        (game.llm, embedding) stripped, exactly like the manifest dump.
+        `llm` is advertised only when the server env holds a key -- keys
+        never travel over HTTP.
+        """
+        defaults = SimulationConfig().to_dict()
+        defaults.get("game", {}).pop("llm", None)
+        defaults.pop("embedding", None)
+        current = self._sim_config_for_manifest() or defaults
+        personas = (
+            library_personas(self.world.world_data) if self.world.world_data else []
+        )
+        active = {p["name"] for p in self.world.personas}
+        brains = ["mock", "scripted"]
+        if os.environ.get("ANTHROPIC_API_KEY"):
+            brains.append("llm")
+        return {
+            "personas": personas,
+            "cast": [e["id"] for e in personas if e["name"] in active],
+            "knobs": {"defaults": defaults, "current": current},
+            "brains": brains,
+            "run": {
+                "brain": self._brain_name(),
+                "steps": self.num_steps,
+                "stop_time": self._stop_time(),
+                "max_cost": self.ledger.max_cost_usd,
+            },
         }
 
     def tick(self) -> dict | None:

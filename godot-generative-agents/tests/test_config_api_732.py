@@ -59,3 +59,42 @@ def test_reset_keeps_a_configured_cast():
     stepper._cast = ["diego"]  # what apply_config records (Task 4)
     stepper.reset()
     assert stepper.order == ["Diego Torres"]
+
+
+def _mock_stepper(**kw):
+    kw.setdefault("num_steps", 6)
+    kw.setdefault("world", build_penn_world())
+    kw.setdefault("seed", 0)
+    return PennStepper(**kw)
+
+
+def test_describe_config_shape(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    stepper = _mock_stepper()
+    cfg = stepper.describe_config()
+    assert {e["id"] for e in cfg["personas"]} >= {"diego", "maya"}
+    assert cfg["cast"] == ["diego", "sofia", "tanaka"]  # sorted ids of the MVP cast
+    assert cfg["brains"] == ["mock", "scripted"]  # llm needs a key (below)
+    assert cfg["run"]["brain"] == "mock"
+    assert cfg["run"]["steps"] == 6
+    assert cfg["run"]["max_cost"] is None
+    # 6 steps x 10s from the 08:00 start
+    assert cfg["run"]["stop_time"] == "2023-02-13 08:01:00"
+    # knob defaults == an empty SimulationConfig, with the key-carrying
+    # sections stripped; an unconfigured server's current == defaults.
+    assert "llm" not in cfg["knobs"]["defaults"]["game"]
+    assert "embedding" not in cfg["knobs"]["defaults"]
+    assert cfg["knobs"]["current"] == cfg["knobs"]["defaults"]
+
+
+def test_llm_advertised_only_with_a_key(monkeypatch):
+    stepper = _mock_stepper()
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    assert "llm" in stepper.describe_config()["brains"]
+    monkeypatch.delenv("ANTHROPIC_API_KEY")
+    assert "llm" not in stepper.describe_config()["brains"]
+
+
+def test_scripted_boot_reports_scripted_brain():
+    stepper = _mock_stepper(llm=SCRIPTED)
+    assert stepper.describe_config()["run"]["brain"] == "scripted"
