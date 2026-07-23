@@ -2,13 +2,16 @@ extends Control
 ## The game's front door (issue #399): a landing page that lets you choose how to
 ## enter the viewer instead of baking the choice into the launch command.
 ##
-## Three ways in, all handed to the viewer via the LaunchConfig autoload and then
-## `scenes/viewer.tscn`:
+## The ways in, all handed to the viewer via the LaunchConfig autoload and then
+## `scenes/viewer.tscn`. Live is the primary path so it leads; every replay entry
+## (baked, on-disk, or pulled from a backend) is grouped below it:
+##   • Run a live simulation          — connect to a running backend/penn/serve_penn.py
 ##   • Play the bundled replay        — res://maps/penn_replay.json
 ##   • Play the boil-water demo        — res://maps/penn_replay_boil.json (#592; only
 ##                                       shown once baked with --scenario boil)
 ##   • Open a local replay file…      — any replay .json on disk (desktop only)
-##   • Run a live simulation          — connect to a running backend/penn/serve_penn.py
+##   • Past runs ▸                     — browse a backend's stored runs (#716) and
+##                                       open / resume / export / delete each
 ##
 ## Everything is built in code in _ready() (matching agent_panel.gd's house style),
 ## so the .tscn only carries the themed root. The backdrop is the REAL campus,
@@ -166,40 +169,7 @@ func _build_panel() -> void:
 	title.add_theme_font_size_override("font_size", 34)
 	col.add_child(title)
 
-	# --- Watch a replay ---
-	col.add_child(_ribbon("WATCH A REPLAY"))
-
-	var bundled_btn := Button.new()
-	bundled_btn.text = "▶  Play the bundled replay"
-	bundled_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bundled_btn.pressed.connect(_on_bundled_pressed)
-	col.add_child(bundled_btn)
-
-	# The boil-water demo (#592) is an optional extra bake, so its button only
-	# appears once that replay has been generated — otherwise it'd be a button that
-	# can only error. (The bundled replay above always shows and explains how to
-	# bake it, because it's the primary entry point.)
-	if FileAccess.file_exists(BOIL_REPLAY):
-		var boil_btn := Button.new()
-		boil_btn.text = "▶  Play the boil-water demo"
-		boil_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		boil_btn.pressed.connect(_on_boil_pressed)
-		col.add_child(boil_btn)
-
-	# The file picker is a native desktop dialog; there's no filesystem to browse
-	# in the browser, so the button only exists on desktop.
-	if not OS.has_feature("web"):
-		var open_btn := Button.new()
-		open_btn.text = "Open a local replay file…"
-		open_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		open_btn.pressed.connect(_on_open_file_pressed)
-		col.add_child(open_btn)
-
-	_replay_hint = _muted_label("")
-	_replay_hint.visible = false
-	col.add_child(_replay_hint)
-
-	# --- Run a live simulation ---
+	# --- Run a live simulation (the primary path, so it leads the menu) ---
 	col.add_child(_ribbon("RUN A LIVE SIMULATION"))
 
 	var url_row := HBoxContainer.new()
@@ -240,7 +210,54 @@ func _build_panel() -> void:
 	_live_status.visible = false
 	col.add_child(_live_status)
 
-	bundled_btn.grab_focus()
+	# --- Watch a replay (every path that opens a stored/baked run for playback) ---
+	col.add_child(_ribbon("WATCH A REPLAY"))
+
+	var bundled_btn := Button.new()
+	bundled_btn.text = "▶  Play the bundled replay"
+	bundled_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bundled_btn.pressed.connect(_on_bundled_pressed)
+	col.add_child(bundled_btn)
+
+	# The boil-water demo (#592) is an optional extra bake, so its button only
+	# appears once that replay has been generated — otherwise it'd be a button that
+	# can only error. (The bundled replay above always shows and explains how to
+	# bake it, because it's the primary entry point.)
+	if FileAccess.file_exists(BOIL_REPLAY):
+		var boil_btn := Button.new()
+		boil_btn.text = "▶  Play the boil-water demo"
+		boil_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		boil_btn.pressed.connect(_on_boil_pressed)
+		col.add_child(boil_btn)
+
+	# The file picker is a native desktop dialog; there's no filesystem to browse
+	# in the browser, so the button only exists on desktop.
+	if not OS.has_feature("web"):
+		var open_btn := Button.new()
+		open_btn.text = "Open a local replay file…"
+		open_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		open_btn.pressed.connect(_on_open_file_pressed)
+		col.add_child(open_btn)
+
+	# Past runs (#716): open a run stored on a backend as a replay, so it belongs
+	# with the other replay entries. It reads the backend URL/token from the live
+	# form above and stashes the normalized values (via _on_past_runs_pressed) for
+	# past_runs.gd to read back after the scene swap. GET /runs works on any
+	# persisted-store backend (even one with no live loop), so it doesn't probe
+	# /live first -- it just needs a URL entered above.
+	var past_btn := Button.new()
+	past_btn.text = "Past runs ▸"
+	past_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	past_btn.pressed.connect(_on_past_runs_pressed)
+	col.add_child(past_btn)
+
+	_replay_hint = _muted_label("")
+	_replay_hint.visible = false
+	col.add_child(_replay_hint)
+
+	# Live is the primary path now, so land the keyboard in the backend field:
+	# typing a URL and pressing Enter connects (text_submitted -> _on_connect_pressed).
+	_url_edit.grab_focus()
 
 
 func _ribbon(text: String) -> Label:
@@ -414,6 +431,21 @@ func _on_probe_completed(
 	else:
 		_show_live_status("Connected — following the running sim…", false)
 	_go_to_viewer()
+
+
+func _on_past_runs_pressed() -> void:
+	if _switching:
+		return
+	var url := _normalize_url(_url_edit.text)
+	if url == "":
+		_show_live_status("Enter the backend's URL first.", true)
+		return
+	# Stash for past_runs.gd (last_live_url survives; live_token too). No /live probe:
+	# GET /runs answers even on a store-only backend.
+	LaunchConfig.last_live_url = url
+	LaunchConfig.live_token = _token_edit.text.strip_edges()
+	_switching = true
+	get_tree().change_scene_to_file.call_deferred("res://scenes/past_runs.tscn")
 
 
 func _show_live_status(text: String, is_error: bool) -> void:
