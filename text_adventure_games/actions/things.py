@@ -1107,7 +1107,12 @@ class Craft(base.Action):
                 ):
                     self.recipe, self.named = r, True
                     return
-        # 3) bare verb: the first recipe satisfiable right here.
+        # 3) bare verb: the first recipe satisfiable right here. Only for a
+        #    truly bare verb (#686) -- a specific target that matched neither
+        #    path above falls through to the "don't know how" gap in
+        #    check_preconditions instead of silently crafting something else.
+        if self.target:
+            return
         for r in recipes:
             if self._satisfiable(r):
                 self.recipe = r
