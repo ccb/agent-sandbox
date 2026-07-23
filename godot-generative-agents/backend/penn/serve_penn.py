@@ -1333,8 +1333,11 @@ class PennStepper:
         cognition_tools/react/plan_mode are the RESOLVED values (post the
         ``cognition_tools or (llm == SCRIPTED)`` coupling above), so
         ``reproduce_run`` can reconstruct the exact cognition config a real
-        re-run needs instead of guessing it back from the ``llm`` sentinel."""
-        return {
+        re-run needs instead of guessing it back from the ``llm`` sentinel.
+
+        Also carries the applied pre-run ``config`` block (#732), when set --
+        see below."""
+        manifest = {
             **self.meta(),
             "seed": self.seed,
             "engine_sha": self._engine_sha,
@@ -1348,6 +1351,12 @@ class PennStepper:
             # material and must never land in runs/ or GET /runs/{id}.
             "sim_config": self._sim_config_for_manifest(),
         }
+        # The applied pre-run config (#732): persona ids + SimulationConfig
+        # dump + run knobs, present only on a run someone configured -- so
+        # every saved run records its setup (the E5 round-trip's source).
+        if self._applied_config is not None:
+            manifest["config"] = self._applied_config
+        return manifest
 
     def _brain_name(self) -> str:
         return (
@@ -1396,6 +1405,108 @@ class PennStepper:
                 "max_cost": self.ledger.max_cost_usd,
             },
         }
+
+    def apply_config(
+        self,
+        *,
+        cast: list[str] | None = None,
+        brain: str | None = None,
+        sim_config: dict | None = None,
+        steps: int | None = None,
+        max_cost: float | None = None,
+        tick_seconds: float | None = None,
+    ) -> dict:
+        """Apply a pre-run configuration by rebuilding through the reset path
+        (#732). Caller holds the app lock and has already checked the
+        paused-at-tick-0 gate; every field is optional (None = keep current).
+        ValueError on any bad input -> the route's 400; guard-before-teardown
+        (the create_run/resume_run discipline): everything that can fail is
+        validated/built BEFORE the current run is closed. tick_seconds is the
+        loop's knob, not this stepper's -- it rides through only so the echo
+        (and so the manifest's config block) records the full setup.
+        """
+        # ---- validate + build; no teardown yet ----
+        if cast is not None and not cast:
+            raise ValueError("cast: must name at least one persona")
+        new_sim_config = self.sim_config
+        if sim_config is not None:
+            new_sim_config = SimulationConfig.from_dict(sim_config)
+        new_llm = self.llm
+        if brain is not None:
+            if brain not in ("mock", "scripted", "llm"):
+                raise ValueError(
+                    f"unknown brain: {brain!r} (valid: mock, scripted, llm)"
+                )
+            if self.plan_mode == "llm" and brain != "llm":
+                raise ValueError(
+                    "this server launched with --plan llm, which needs the "
+                    "llm brain (the planner shares its client)"
+                )
+            try:
+                new_llm = resolve_llm(self.world.llm, brain, max_cost=max_cost)
+                if _is_paid(new_llm):
+                    # The boot path's fail-fast (#261): a present-but-rejected
+                    # key would otherwise serve a frozen, silent, $0 sim.
+                    check_anthropic_key()
+            except SystemExit as exc:
+                # resolve_llm/check_anthropic_key speak CLI (SystemExit);
+                # over HTTP the same message is a 400.
+                raise ValueError(str(exc))
+        elif max_cost is not None:
+            if not _is_paid(new_llm):
+                raise ValueError("max_cost needs the llm brain")
+            new_llm = dict(new_llm, max_cost_usd=max_cost)
+        effective_cast = cast if cast is not None else self._cast
+        world = (
+            self._world_builder(cast=effective_cast)
+            if effective_cast is not None
+            else self._world_builder()
+        )  # ValueError on an unknown persona id -- before any teardown
+        # ---- apply: the reset path, with the new knobs stamped on ----
+        self._close_current_run()
+        self._cast = effective_cast
+        self.sim_config = new_sim_config
+        self.retrieval = (
+            new_sim_config.retrieval if new_sim_config is not None else None
+        )
+        if brain is not None:
+            try:
+                self._init_brain(new_llm)
+            except ImportError as exc:
+                raise ValueError(f"{exc} (this server needs `uv sync --extra llm`)")
+            # The 'auto' concurrency rule main() applies at boot (#366):
+            # a paid brain decides in parallel, everything else serially.
+            self._decide_executor = (
+                _DecideThreads(len(world.personas)) if _is_paid(new_llm) else None
+            )
+        else:
+            self.llm = new_llm  # a max_cost-only change still lands in meta()
+        if _is_paid(self.llm):
+            self.ledger.max_cost_usd = self.llm.get("max_cost_usd")
+        self.cognition_tools = _resolve_cognition_tools(
+            self._cognition_tools_flag, self.sim_config, self.llm
+        )
+        self.react = _resolve_react(self._react_flag, self.sim_config)
+        if steps is not None:
+            # The configured budget is the run's new baseline: reset() must
+            # not quietly revert it (unlike create_run's one-shot override).
+            self.num_steps = self._launch_num_steps = steps
+        applied = {
+            # None = the world YAML's own default cast (never overridden).
+            "cast": effective_cast,
+            "brain": self._brain_name() if brain is None else brain,
+            "sim_config": self._sim_config_for_manifest(),
+            "run": {
+                "steps": self.num_steps,
+                "tick_seconds": tick_seconds,
+                "max_cost": self.ledger.max_cost_usd,
+            },
+        }
+        # Set BEFORE _build: the rebuild opens the new run row, and its
+        # manifest must carry this block.
+        self._applied_config = applied
+        self._build(world=world)
+        return applied
 
     def tick(self) -> dict | None:
         """One sim step -> one replay-schema frame (called under the app lock).

@@ -98,3 +98,70 @@ def test_llm_advertised_only_with_a_key(monkeypatch):
 def test_scripted_boot_reports_scripted_brain():
     stepper = _mock_stepper(llm=SCRIPTED)
     assert stepper.describe_config()["run"]["brain"] == "scripted"
+
+
+def test_apply_cast_subset_rebuilds_the_world(tmp_path):
+    stepper = _mock_stepper(run_store=RunStore(tmp_path / "runs"))
+    applied = stepper.apply_config(cast=["diego"], tick_seconds=0.1)
+    assert stepper.order == ["Diego Torres"]
+    assert applied["cast"] == ["diego"]
+    # the new run's manifest records the setup
+    manifest = stepper.run_store.get_run(stepper.run_id)["manifest"]
+    assert manifest["config"]["cast"] == ["diego"]
+    assert manifest["config"]["run"]["tick_seconds"] == 0.1
+    # and a later plain reset KEEPS the configured cast
+    stepper.reset()
+    assert stepper.order == ["Diego Torres"]
+
+
+def test_unconfigured_manifest_has_no_config_block(tmp_path):
+    stepper = _mock_stepper(run_store=RunStore(tmp_path / "runs"))
+    assert "config" not in stepper.run_store.get_run(stepper.run_id)["manifest"]
+
+
+def test_apply_brain_scripted_swaps_the_clients():
+    stepper = _mock_stepper()
+    assert stepper.llm_client is None
+    stepper.apply_config(brain="scripted")
+    assert stepper.llm == SCRIPTED
+    assert stepper.llm_client is not None
+    assert stepper.cognition_tools is True  # the scripted coupling re-resolved
+
+
+def test_apply_sim_config_reaches_the_knobs():
+    stepper = _mock_stepper()
+    stepper.apply_config(sim_config={"cognition": {"vision_r": 3}})
+    assert stepper.cog.vision_r == 3
+    assert stepper.describe_config()["knobs"]["current"]["cognition"]["vision_r"] == 3
+
+
+def test_apply_steps_is_the_new_baseline():
+    stepper = _mock_stepper()
+    stepper.apply_config(steps=3)
+    assert stepper.num_steps == 3
+    for _ in range(3):
+        assert stepper.tick() is not None
+    assert stepper.tick() is None  # day over at the configured budget
+
+
+def test_apply_rejects_bad_input():
+    stepper = _mock_stepper()
+    with pytest.raises(ValueError):
+        stepper.apply_config(cast=[])
+    with pytest.raises(ValueError):
+        stepper.apply_config(cast=["nobody"])
+    with pytest.raises(ValueError):
+        stepper.apply_config(brain="gpt")
+    with pytest.raises(ValueError):
+        stepper.apply_config(sim_config={"nope": {}})
+    with pytest.raises(ValueError):
+        stepper.apply_config(max_cost=1.0)  # cost ceiling needs the llm brain
+    # guard-before-teardown: every rejection above left the stepper serving
+    assert stepper.tick() is not None
+
+
+def test_apply_brain_llm_without_key_raises(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    stepper = _mock_stepper()
+    with pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):
+        stepper.apply_config(brain="llm")
