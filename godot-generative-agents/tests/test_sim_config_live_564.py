@@ -112,3 +112,50 @@ def test_config_can_switch_cognition_tools_and_react_on():
     assert stepper.cog.cognition_tools is True
     assert stepper.react is True
     assert stepper.cog.react_enabled is True
+
+
+# -- Task 3: retrieval reaches every live decide ------------------------------
+
+
+def _tick_with_step_spy(monkeypatch, stepper):
+    """Tick once with serve_penn.step wrapped so its kwargs are captured."""
+    captured = {}
+    real_step = serve_penn.step
+
+    def spy(*args, **kwargs):
+        captured.update(kwargs)
+        return real_step(*args, **kwargs)
+
+    monkeypatch.setattr(serve_penn, "step", spy)
+    stepper.tick()
+    return captured
+
+
+def test_tick_passes_the_config_retrieval_into_step(monkeypatch):
+    cfg = _cfg({"retrieval": {"max_records": 1, "alpha_recency": 3.0}})
+    stepper = PennStepper(num_steps=2, world=build_penn_world(), sim_config=cfg)
+    captured = _tick_with_step_spy(monkeypatch, stepper)
+    assert captured["retrieval"] is stepper.retrieval
+    assert captured["retrieval"].max_records == 1
+
+
+def test_tick_without_config_passes_retrieval_none(monkeypatch):
+    stepper = PennStepper(num_steps=2, world=build_penn_world())
+    captured = _tick_with_step_spy(monkeypatch, stepper)
+    assert captured["retrieval"] is None  # byte-identical default path
+
+
+def test_retrieval_config_visibly_changes_what_surfaces():
+    # The acceptance's offline half: with more memories than max_records, a
+    # tight retrieval config surfaces fewer memories at decide time than the
+    # default -- the same observe_and_decide call the live step loop makes.
+    stepper = PennStepper(num_steps=2, world=build_penn_world())
+    name = stepper.order[0]
+    char = stepper.chars[name]
+    for i in range(4):
+        char.agent.memory.add_observation(f"observation number {i}", turn=i + 1)
+
+    observe_and_decide(stepper.game, char, 5, retrieval=RetrievalConfig(max_records=1))
+    assert len(char.agent.last_retrieved) == 1
+    observe_and_decide(stepper.game, char, 5, retrieval=None)
+    assert len(char.agent.last_retrieved) > 1

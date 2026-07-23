@@ -1214,6 +1214,9 @@ class PennStepper:
             world_map=self.world.world_map,
             emoji=self.emoji,
             cog=self.cog,
+            # Memory-retrieval scoring from --config (#564); None = engine
+            # defaults. step() has threaded this into every decide since #296.
+            retrieval=self.retrieval,
             clock=self.clock,
             # Real conversations only when a real brain drives -- the same gate
             # simulate() applies (conversation_enabled = llm_client is not None).
