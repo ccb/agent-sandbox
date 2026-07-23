@@ -49,7 +49,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from backend.api import run
 from backend.contract import SCHEMA_VERSION
@@ -58,7 +58,7 @@ from backend.llm_monitor import LlmCallMonitor, RoleTaggedLedger
 from backend.run_simulation import step
 from backend.run_store import DEFAULT_RUNS_DIR, RunStore
 from backend.sim_clock import SimClock
-from backend.sim_config import CognitionConfig
+from backend.sim_config import CognitionConfig, SimulationConfig
 from backend.cognition import attach_agents
 from scripted_brain import build_scripted_brains
 from penn_world import (
@@ -456,6 +456,7 @@ class PennStepper:
         resume_run_id=None,
         seed=0,
         replay_cassette=None,
+        sim_config=None,
     ):
         self.num_steps = num_steps
         # The launch-configured budget, kept so a per-request create_run(steps=)
@@ -539,13 +540,31 @@ class PennStepper:
         # The #514 switch for the #512 wiring: agentic recall/query_knowledge/
         # read_plan before each decide. Held on the stepper -- not read from
         # argv -- so _build() re-applies it on every reset (POST /reset).
-        self.cognition_tools = cognition_tools or (llm == SCRIPTED)
+        # The #564 config seam: a SimulationConfig loaded from --config, or
+        # None (all defaults -- byte-identical to before by construction).
+        # Held on the stepper, like cognition_tools below, so _build()
+        # re-applies it on every reset (POST /reset).
+        self.sim_config = sim_config
+        # Memory-retrieval scoring for every live decide (#564): step() has
+        # threaded a retrieval= into observe_and_decide since #296; tick()
+        # passes this one. None -> the engine's default scoring, unchanged.
+        self.retrieval = sim_config.retrieval if sim_config is not None else None
+        # A boolean flag or the config file can each switch cognition tools
+        # on; neither can veto the other (same one-way coupling as the
+        # `llm == SCRIPTED` term).
+        self.cognition_tools = (
+            cognition_tools
+            or (sim_config is not None and sim_config.cognition.cognition_tools)
+            or (llm == SCRIPTED)
+        )
         # React-or-continue (#370): perception-driven interruption while
         # walking. Held on the stepper so _build() re-applies it on every
         # reset. Mock-inert: under the mock brain the react pass never runs
         # at all (step() gates it on conversation_enabled), so it is safe to
         # leave on for mechanics demos.
-        self.react = react
+        self.react = react or (
+            sim_config is not None and sim_config.cognition.react_enabled
+        )
         # Daily planning source (#397): "schedule" (default) keeps the authored
         # YAML day -- byte-identical, meeting overlaps intact. "llm" lets the
         # model author each day (LLMPlanner); free-play, so the hand-tuned
@@ -691,8 +710,19 @@ class PennStepper:
         # test_stepper_matches_simulate_prefix pins). If simulate's setup ever
         # drifts from this, the equivalence test fails -- on purpose.
         self.world = world if world is not None else build_penn_world()
-        self.cog = CognitionConfig(
-            cognition_tools=self.cognition_tools, react_enabled=self.react
+        # Cognition knobs (#564): start from the --config file's section (or
+        # today's defaults with no config) and stamp on the RESOLVED booleans
+        # from __init__ -- so the flag couplings hold and a reset re-derives
+        # the same values.
+        base_cog = (
+            self.sim_config.cognition
+            if self.sim_config is not None
+            else CognitionConfig()
+        )
+        self.cog = replace(
+            base_cog,
+            cognition_tools=self.cognition_tools,
+            react_enabled=self.react,
         )
         # The live analogue of the bake's meta start/sec_per_step (#580): one
         # SimClock so the decide-context block and the hourly BEHIND_SCHEDULE
@@ -786,6 +816,18 @@ class PennStepper:
             ledger=self._recording_ledger("decide"),
             vision_r=self.cog.vision_r,
             cognition_tools=self.cog.cognition_tools,
+            # Sampling temperature + reflection trigger from the --config file
+            # (#564); None -> LLMAgent's own defaults, unchanged.
+            temperature=(
+                self.sim_config.game.agent.temperature
+                if self.sim_config is not None
+                else None
+            ),
+            reflection_threshold=(
+                self.sim_config.game.agent.reflection_threshold
+                if self.sim_config is not None
+                else None
+            ),
             num_steps=self.num_steps,
             # The #261 swap: with a real client every agent's decide (and its
             # conversation lines) go through the model, and reflection passes

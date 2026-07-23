@@ -58,3 +58,57 @@ def test_attach_agents_defaults_are_unchanged():
         agent = chars[p["name"]].agent
         assert agent.temperature == 0.7  # LLMAgent's own default
         assert agent.reflection_threshold == 30.0  # DEFAULT_REFLECTION_THRESHOLD
+
+
+# -- Task 2: PennStepper holds the config and applies it at _build -----------
+
+
+def test_stepper_sim_config_threads_cognition_and_temperature():
+    cfg = _cfg(
+        {
+            "game": {"agent": {"temperature": 0.0, "reflection_threshold": 10.0}},
+            "cognition": {"vision_r": 2, "conversation_cooldown_steps": 5},
+            "retrieval": {"max_records": 1},
+        }
+    )
+    stepper = PennStepper(num_steps=2, world=build_penn_world(), sim_config=cfg)
+    assert stepper.cog.vision_r == 2
+    assert stepper.cog.conversation_cooldown_steps == 5
+    assert stepper.retrieval.max_records == 1
+    for char in stepper.chars.values():
+        assert char.agent.temperature == 0.0
+        assert char.agent.reflection_threshold == 10.0
+        assert char.vision_r == 2  # attach_agents' vision_r came from cog
+
+
+def test_stepper_sim_config_survives_reset():
+    cfg = _cfg({"cognition": {"vision_r": 2}})
+    stepper = PennStepper(num_steps=2, world=build_penn_world(), sim_config=cfg)
+    stepper.reset()  # POST /reset re-runs _build -- the config must re-apply
+    assert stepper.cog.vision_r == 2
+
+
+def test_stepper_without_config_keeps_todays_defaults():
+    stepper = PennStepper(num_steps=2, world=build_penn_world())
+    assert stepper.sim_config is None
+    assert stepper.retrieval is None
+    assert stepper.cog == CognitionConfig()  # mock brain: no flag couplings fire
+    for char in stepper.chars.values():
+        assert char.agent.temperature == 0.7
+
+
+def test_cli_flag_still_forces_cognition_tools_on_over_config():
+    cfg = _cfg({"cognition": {"cognition_tools": False}})
+    stepper = PennStepper(
+        num_steps=2, world=build_penn_world(), sim_config=cfg, cognition_tools=True
+    )
+    assert stepper.cog.cognition_tools is True
+
+
+def test_config_can_switch_cognition_tools_and_react_on():
+    cfg = _cfg({"cognition": {"cognition_tools": True, "react_enabled": True}})
+    stepper = PennStepper(num_steps=2, world=build_penn_world(), sim_config=cfg)
+    assert stepper.cognition_tools is True
+    assert stepper.cog.cognition_tools is True
+    assert stepper.react is True
+    assert stepper.cog.react_enabled is True
