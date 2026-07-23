@@ -41,8 +41,6 @@ import argparse
 import json
 import os
 
-import yaml
-
 from text_adventure_games.npc import LLMAgent, build_choose_action_tool
 
 # The world file serve_penn.py loads by default.
@@ -259,7 +257,9 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    data = yaml.safe_load(open(args.world))
+    from backend.build_world import load_world_yaml
+
+    data = load_world_yaml(args.world)
     personas = [p for p in (data.get("personas") or []) if p and p.get("persona")]
     if not personas:
         print(f"No active personas in {args.world} (all commented out?).")

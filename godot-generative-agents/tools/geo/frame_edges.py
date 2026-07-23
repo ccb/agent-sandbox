@@ -474,8 +474,19 @@ def main() -> int:
     grow_matrix(args.matrix, args.pad, old_w, old_h)
     print(f"  grew 5 matrix mazes + meta in {os.path.relpath(args.matrix, repo)}")
 
-    patch_world_data(args.world_data, args.pad)
-    print(f"  shifted start_tiles in {os.path.relpath(args.world_data, repo)}")
+    # start_tile spawns live in the world file (inline-personas worlds) AND in
+    # the persona library next to it (#731) -- patch every file that has them.
+    world_files = [args.world_data]
+    personas_dir = os.path.join(os.path.dirname(args.world_data), "personas")
+    if os.path.isdir(personas_dir):
+        world_files += sorted(
+            os.path.join(personas_dir, f)
+            for f in os.listdir(personas_dir)
+            if f.endswith(".yaml")
+        )
+    for wf in world_files:
+        patch_world_data(wf, args.pad)
+        print(f"  shifted start_tiles in {os.path.relpath(wf, repo)}")
 
     patch_scenes(args.scenes, new_w, new_h)
     print(f"  recentred {len(args.scenes)} scene camera(s)")
