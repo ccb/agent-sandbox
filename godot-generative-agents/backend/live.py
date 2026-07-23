@@ -331,13 +331,22 @@ async def run_loop(
             if result["agents"] is None:
                 controller.pause()  # run finished: stop ticking, keep serving
                 # A terminal tick publishes no frame, but tick_once still drained
-                # the deciding buffer into result["deciding"] -- and a parked #366
-                # straggler may have appended its `end` there after the last real
-                # tick. Publish those before "finished" (the buffer is already
-                # cleared, so it's here or nowhere), else the agent's thinking
-                # bubble stays stuck on the finished screen (#598 review). Engine
-                # events stay empty by construction (tick() returns None before it
-                # logs any), so only deciding needs republishing here.
+                # every buffer -- and each drained record is published here or
+                # nowhere (the buffers are already cleared). Publish them all
+                # before "finished", in the frame path's order (#644):
+                # * engine events -- a POST /world/event landing between the last
+                #   real tick and the day's close, or any end-of-run flush a
+                #   stepper does inside its finishing tick(). They are persisted
+                #   (the stepper's own tail flush), so dropping them here made
+                #   "watched live" disagree with the stored artifacts.
+                # * wishes (#622) -- the same end-of-run window.
+                # * deciding (#551) -- a parked #366 straggler's `end` may land
+                #   after the last real tick; without republishing, that agent's
+                #   thinking bubble stays stuck on the finished screen (#598).
+                for event in result["events"]:
+                    log.append("engine", step=result["step"], event=event)
+                for wish in result.get("wishes", ()):
+                    log.append("wish", **wish)
                 for rec in result.get("deciding", ()):
                     log.append("deciding", **rec)
                 log.append("status", reason="finished", **controller.status())

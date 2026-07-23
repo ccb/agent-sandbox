@@ -1367,9 +1367,11 @@ class PennStepper:
           identical to what the replay bake persists), e.g. the boil-water
           ``sickness`` events (#465).
 
-        Assumes a finishing tick (``tick()`` -> ``None``) logs no new
-        GameEvents -- backend.live drops drained rows for ``None`` ticks,
-        same as llm_call rows since #398.
+        A finishing tick (``tick()`` -> ``None``) can still drain rows -- a
+        ``POST /world/event`` landing between the last real tick and the
+        day's close is the live case -- and since #644 backend.live publishes
+        those before the ``finished`` status instead of dropping them, so the
+        feed shows everything ``_persist_pending_events`` stores.
         """
         rows = []
         if self.monitor is not None:
