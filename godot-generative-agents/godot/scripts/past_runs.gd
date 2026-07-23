@@ -183,16 +183,38 @@ func _build_row(entry: Dictionary) -> Control:
 	return box
 
 
-func _on_row_action(_op: String, _id: String) -> void:
-	# Filled in Task 7.
-	_set_status("(action wiring lands in Task 7)", false)
+func _on_row_action(op: String, id: String) -> void:
+	if _pending != "" or _switching or id == "":
+		return
+	_pending = op
+	_pending_id = id
+	_set_busy(true)
+	var err := OK
+	match op:
+		"open", "export":
+			_set_status("Fetching replay for %s…" % id, false)
+			err = _http.request("%s/runs/%s/replay" % [_url, id], _headers())
+		"resume":
+			_set_status("Resuming %s…" % id, false)
+			err = _http.request("%s/runs/%s/resume" % [_url, id], _headers(),
+				HTTPClient.METHOD_POST, "{}")
+		"delete":
+			_set_status("Deleting %s…" % id, false)
+			err = _http.request("%s/runs/%s" % [_url, id], _headers(),
+				HTTPClient.METHOD_DELETE)
+	if err != OK:
+		_pending = ""
+		_set_busy(false)
+		_set_status("Couldn't start the %s request (error %d)." % [op, err], true)
 
 
 func _on_http_completed(
 	_result: int, code: int, _headers_in: PackedStringArray, body: PackedByteArray
 ) -> void:
 	var stage := _pending
+	var id := _pending_id
 	_pending = ""
+	_pending_id = ""
 	match stage:
 		"list":
 			_set_busy(false)
@@ -208,8 +230,50 @@ func _on_http_completed(
 				_set_status("This backend isn't persisting runs (start it without --no-persist).", true)
 				return
 			_render((data as Dictionary).get("runs", []))
+		"open":
+			if code != 200:
+				_set_busy(false)
+				_set_status("Open failed (HTTP %d)." % code, true)
+				return
+			# Hand the RAW replay body to the viewer (byte-preserving); the scene
+			# swap tears us down, so no need to clear _busy.
+			LaunchConfig.set_replay_text(body.get_string_from_utf8())
+			_switching = true
+			get_tree().change_scene_to_file.call_deferred(VIEWER_SCENE)
+		"export":
+			_set_busy(false)
+			if code != 200:
+				_set_status("Export failed (HTTP %d)." % code, true)
+				return
+			var path := ReplaySave.save(body.get_string_from_utf8(), id)
+			if path == "":
+				_set_status("Export failed — see console.", true)
+			elif OS.has_feature("web"):
+				_set_status("Downloaded %s." % path, false)
+			else:
+				_set_status("Exported → %s" % path, false)
+		"resume":
+			if code >= 200 and code < 300:
+				# Adopted as the live run: follow it live, exactly like the menu's
+				# Connect flow. LaunchConfig keeps the URL + token we came in with.
+				LaunchConfig.set_live(_url, _token)
+				_switching = true
+				get_tree().change_scene_to_file.call_deferred(VIEWER_SCENE)
+			else:
+				_set_busy(false)
+				var why := "already live" if code == 409 else "HTTP %d" % code
+				_set_status("Resume failed (%s)." % why, true)
+		"delete":
+			_set_busy(false)
+			if code >= 200 and code < 300:
+				_set_status("Deleted %s." % id, false)
+				_fetch_runs()  # refresh the list
+			elif code == 409:
+				_set_status("Can't delete %s — it's the live run; stop it first." % id, true)
+			else:
+				_set_status("Delete failed (HTTP %d)." % code, true)
 		_:
-			pass  # other stages handled in Task 7
+			_set_busy(false)
 
 
 func _on_back_pressed() -> void:
