@@ -129,6 +129,8 @@ self-stepping loop when one is enabled ([live mode](#live-mode-the-loop-the-feed
 | `WS`   | `/ws`                      | Change-feed push: every record as it lands (#262)  |
 | `POST` | `/pause` `/resume` `/reset`| Run control over the loop (#349/#262)              |
 | `GET`  | `/usage`                   | `UsageLedger` summary (tokens/cost) for the HUD (#264) |
+| `GET`  | `/config`                  | Pre-run config surface: status/personas/knobs/brains/run (while paused at tick 0) (#732) |
+| `POST` | `/config`                  | Apply pre-run setup (cast/brain/sim_config/knobs) while paused at tick 0 (#732) |
 | `GET`  | `/runs`                    | Run history, newest first + the live id (#306)     |
 | `GET`  | `/runs/{run_id}`           | One run's row, parsed manifest included (#306)     |
 | `GET`  | `/runs/{run_id}/replay`    | The run as a viewer-loadable replay (#307)         |
