@@ -465,6 +465,8 @@ def attach_agents(
     out_plans: dict | None = None,
     extra_action_names: list[str] | None = None,
     cognition_tools: bool = False,
+    temperature: float | None = None,
+    reflection_threshold: float | None = None,
 ) -> None:
     """Wire one mock-driven :class:`LLMAgent` onto each persona character.
 
@@ -537,7 +539,13 @@ def attach_agents(
     ``read_plan`` before picking its action (:func:`decide_with_action_tools`)
     and before each dialogue line (the engine's converse path picks the flag up
     with no further wiring here). The default ``False`` -- and the mock brain,
-    which never reaches either tool loop -- keeps the run byte-identical."""
+    which never reaches either tool loop -- keeps the run byte-identical.
+
+    Pass ``temperature`` / ``reflection_threshold`` (issue #564) to set each
+    agent's sampling temperature and reflection trigger from a config (the
+    live server's ``--config`` reads them off ``SimulationConfig.game.agent``).
+    ``None`` -- the default, and what every existing caller passes -- keeps
+    :class:`LLMAgent`'s own defaults, so behavior is unchanged."""
     # Load the relationship table once (returns {} if the path is unset/missing).
     relationships = (
         seed.load_relationships(relationships_csv) if relationships_csv else {}
@@ -553,7 +561,19 @@ def attach_agents(
         brain = llm_client if llm_client is not None else schedule
         # Build the agent first so its memory exists and can be seeded before a
         # planner reasons over it. The planner (below) commits the schedule it wants.
-        agent = LLMAgent(brain, persona=char.persona, embedding_client=embedding_client)
+        # #564: forward temperature / reflection_threshold only when set, so
+        # LLMAgent's own defaults stay the single source of the fallbacks.
+        agent_kwargs = {}
+        if temperature is not None:
+            agent_kwargs["temperature"] = temperature
+        if reflection_threshold is not None:
+            agent_kwargs["reflection_threshold"] = reflection_threshold
+        agent = LLMAgent(
+            brain,
+            persona=char.persona,
+            embedding_client=embedding_client,
+            **agent_kwargs,
+        )
         # Cognition tools (issue #512): the engine flag both the decide seam
         # below and the engine's converse path read. Stamped (not passed to the
         # constructor) to match how the rest of this function decorates the
