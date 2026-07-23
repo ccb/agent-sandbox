@@ -129,14 +129,14 @@ def test_activate_rejects_a_non_device():
     assert not pot.get_property("is_on")
 
 
-# -- PennParser.determine_intent regression tests (#300) -------------------
+# -- device-verb intent routing regression tests (#300 -> #464) ------------
 #
-# PennParser overrides determine_intent only to catch "activate"/"deactivate"
-# before they'd otherwise fall into the engine's buggy "ate " substring check
-# (text_adventure_games/parsing.py ~line 296-302, which matches "ate " inside
-# "activate" and mis-routes it to EAT). Everything else must delegate to
-# Parser.determine_intent unchanged -- these tests pin both the new-verb
-# handling and that the delegated path still behaves like the engine parser.
+# These pins date from PennParser, a parser override that caught "activate"/
+# "deactivate" before the engine's old "ate " substring check could mis-route
+# them to EAT. #536's word-boundary matching fixed that engine-side, so #464
+# retired PennParser and Penn worlds run the stock engine parser -- these
+# tests now pin that the ENGINE routes the device verbs correctly and that
+# the neighboring keyword routes still behave.
 
 
 def test_activate_and_deactivate_are_routed_to_device_intents():

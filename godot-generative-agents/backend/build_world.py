@@ -19,7 +19,6 @@ from text_adventure_games.things.characters import Character
 from text_adventure_games.things.locations import Location
 
 from .actions import Act, Travel
-from .parser import PennParser
 from .tiled_game import TiledGame
 
 # The cast and locations come from a world YAML (e.g. ``penn/world_data_upenn.yaml``).
@@ -222,10 +221,9 @@ def build_world(
         world_map=world_map,
     )
 
-    # Wire up the custom parser that fixes the "ate " substring collision with
-    # "activate"/"deactivate" (see parser.py); delegates everything else to
-    # the engine parser unchanged.
-    game.set_parser(PennParser(game))
+    # No custom parser: the engine parser routes "activate stove" correctly
+    # since #536's word-boundary matching (plus its command-initial verb rule),
+    # which is what the retired PennParser existed to work around (#464).
 
     # Place each persona in their home location (Game only auto-places the player)
     # and stamp its spawn tile: characters carry their live map position so
