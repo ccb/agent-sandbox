@@ -243,3 +243,86 @@ def test_sub_cast_drops_orphaned_edges_and_meetings():
     assert [p["name"] for p in world.personas] == ["Maya Chen"]
     assert world.relationships == []
     assert world.meetings == []
+
+
+def test_composed_dict_records_effective_cast(library_world):
+    # #731 review deferral: after an override the composed dict must be
+    # self-describing -- data["cast"] is the ids that actually resolved.
+    data = load_world_yaml(library_world, cast=["ana"])
+    assert data["cast"] == ["ana"]
+
+
+def test_composed_dict_records_file_cast_without_override(library_world):
+    data = load_world_yaml(library_world)
+    assert data["cast"] == ["ana", "bo"]
+
+
+def test_duplicate_display_name_raises(library_world, tmp_path):
+    # Two persona files sharing one `name` would silently collapse into a
+    # single Character in build_world's dict -- fail the build instead.
+    _write_yaml(
+        tmp_path / "personas" / "ana2.yaml",
+        {
+            "name": "Ana",  # same display name as ana.yaml
+            "home": "Hub",
+            "persona": "I am also Ana.",
+            "emoji": "🅰️",
+            "start_tile": [2, 2],
+            "destination": "Hub",
+            "activity": "idling",
+        },
+    )
+    with pytest.raises(ValueError, match="duplicate display name"):
+        load_world_yaml(library_world, cast=["ana", "ana2"])
+
+
+def test_malformed_persona_file_raises_clearly(library_world, tmp_path):
+    # An empty file used to surface as an unhelpful TypeError deep in
+    # composition; now it's a ValueError naming the file.
+    (tmp_path / "personas" / "empty.yaml").write_text("", encoding="utf-8")
+    with pytest.raises(ValueError, match="empty.yaml"):
+        load_world_yaml(library_world, cast=["ana", "empty"])
+
+
+def test_cast_override_against_inline_personas_world(tmp_path):
+    # Pinning test (#731 review deferral): an explicit cast against a world
+    # whose personas are inline (like the boil demo) overrides from the
+    # ADJACENT personas/ library -- and raises on an unknown id.
+    world = tmp_path / "world.yaml"
+    _write_yaml(
+        world,
+        {
+            "personas": [
+                {
+                    "name": "Inline Ida",
+                    "home": "Hub",
+                    "persona": "I am inline.",
+                    "emoji": "🅸",
+                    "start_tile": [1, 1],
+                    "destination": "Hub",
+                    "activity": "idling",
+                }
+            ],
+            "locations": [
+                {"name": "Hub", "description": "hub", "address": None, "hub": True}
+            ],
+        },
+    )
+    lib = tmp_path / "personas"
+    lib.mkdir()
+    _write_yaml(
+        lib / "solo.yaml",
+        {
+            "name": "Solo",
+            "home": "Hub",
+            "persona": "I am Solo.",
+            "emoji": "🆂",
+            "start_tile": [1, 1],
+            "destination": "Hub",
+            "activity": "idling",
+        },
+    )
+    data = load_world_yaml(world, cast=["solo"])
+    assert [p["name"] for p in data["personas"]] == ["Solo"]
+    with pytest.raises(ValueError, match="no persona file"):
+        load_world_yaml(world, cast=["nobody"])

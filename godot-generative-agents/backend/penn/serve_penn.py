@@ -52,6 +52,7 @@ import urllib.request
 from dataclasses import dataclass, replace
 
 from backend.api import run
+from backend.build_world import library_personas
 from backend.contract import SCHEMA_VERSION
 from backend.env import load_dotenv
 from backend.llm_monitor import LlmCallMonitor, RoleTaggedLedger
@@ -133,14 +134,14 @@ SCRIPTED = "scripted"
 WORLD_BUILDERS = {"penn": build_penn_world}
 
 
-def _build_boil_hard_world() -> PennWorld:
+def _build_boil_hard_world(cast: list[str] | None = None) -> PennWorld:
     """A fresh #728 boil_hard world: the boil world plus its `Kitchen` location,
     with the stove relocated there at build time (`penn_world.
     relocate_stove_to_kitchen`) -- the murky pot stays visible from step 0, the
     boil Recipe's tool is a real 297-tick Travel away. Wraps build_world_fn
     rather than patching one game post-hoc so every rebuild -- including a POST
     /reset's -- carries the relocation."""
-    pw = build_penn_world(world_data=WORLD_DATA_BOIL_HARD)
+    pw = build_penn_world(world_data=WORLD_DATA_BOIL_HARD, cast=cast)
     inner = pw.build_world_fn
 
     def _relocated(world_map):
@@ -162,7 +163,9 @@ def _build_boil_hard_world() -> PennWorld:
 SCENARIOS = {
     "penn": {"world": build_penn_world, "vision_r": None},
     "boil": {
-        "world": lambda: build_penn_world(world_data=WORLD_DATA_BOIL),
+        "world": lambda cast=None: build_penn_world(
+            world_data=WORLD_DATA_BOIL, cast=cast
+        ),
         "vision_r": None,
     },
     "boil_hard": {"world": _build_boil_hard_world, "vision_r": 0},
@@ -529,6 +532,10 @@ class PennStepper:
         self._world_builder = (
             world_builder if world_builder is not None else build_penn_world
         )
+        # The configured cast (#732): persona ids applied by apply_config, or
+        # None for the world YAML's own cast. Held here so reset()'s default
+        # rebuild keeps the configured cast instead of silently reverting.
+        self._cast: list[str] | None = None
         # The scenario's pinned perception radius (#728), or None for the
         # config/default value; applied in _build after the config-derived cog.
         self.vision_r = vision_r
@@ -661,8 +668,10 @@ class PennStepper:
             )
         # Resolved LLM settings (resolve_llm), or None for the mock brain. The
         # ledger's cost ceiling comes from the same block, so GET /usage
-        # reports the budget and tick() can end the day at it.
-        self.llm = llm
+        # reports the budget and tick() can end the day at it. The ledger and
+        # monitor live HERE, not in _init_brain: they survive resets AND brain
+        # swaps (create_app captures `ledger` once at boot, and money spent
+        # stays spent).
         self.ledger = UsageLedger(  # backs GET /usage across resets
             max_cost_usd=(llm if _is_paid(llm) else {}).get("max_cost_usd")
         )
@@ -670,6 +679,21 @@ class PennStepper:
         # Like the ledger it lives here, not in _build(), so its call counter
         # survives resets.
         self.monitor = monitor
+        # What POST /config applied, or None for an unconfigured server; when
+        # set, _store_manifest records it as the manifest's `config` block (#732).
+        self._applied_config = None
+        self._init_brain(llm)
+        self._build(world, resume_run_id=resume_run_id)
+
+    def _init_brain(self, llm) -> None:
+        """Construct the brain clients for *llm* -- None (mock), SCRIPTED, or a
+        paid dict. Extracted from __init__ (#732) so apply_config can swap the
+        brain at apply time by re-running it; the ledger/monitor deliberately
+        stay in __init__ (they must survive brain swaps -- create_app captures
+        the ledger object once at boot). Clears the per-agent client pool: a
+        new brain's clients must not reuse the old model's.
+        """
+        self.llm = llm
         # The real-brain clients (issue #261): one shared by decide + converse,
         # one for reflection -- separate instances so the request monitor can
         # tag each role exactly, all recording into self.ledger. Built once
@@ -682,7 +706,7 @@ class PennStepper:
         # guard above restricts to the paid --brain llm branch, else None ->
         # attach_agents uses MockPlanner, byte-identical).
         self.planner_client = None
-        if replay_cassette is not None:
+        if self._replay_cassette is not None:
             # Re-run mode (#715): serve every model call from the recorded
             # cassette -- no key, no network. ONE shared instance across
             # decide/converse/reflect: request keys differ by role/messages, so
@@ -691,7 +715,7 @@ class PennStepper:
             # recorded cognition_tools/react/plan_mode are reconstructed
             # explicitly from the manifest instead), so _is_paid stays False
             # (no per-agent clients, sequential decide).
-            replay = ReplayClient(replay_cassette, strict=True)
+            replay = ReplayClient(self._replay_cassette, strict=True)
             self.llm_client = replay
             self.reflector_client = replay
         elif llm == SCRIPTED:
@@ -734,7 +758,6 @@ class PennStepper:
         self._raw_llm_client = self.llm_client
         self._raw_reflector_client = self.reflector_client
         self._raw_planner_client = self.planner_client
-        self._build(world, resume_run_id=resume_run_id)
 
     def _decide_client(self):
         """One decide/converse client recording into the shared ledger.
@@ -789,7 +812,13 @@ class PennStepper:
         # same reconstruction tests/test_penn_live.py::
         # test_stepper_matches_simulate_prefix pins). If simulate's setup ever
         # drifts from this, the equivalence test fails -- on purpose.
-        self.world = world if world is not None else self._world_builder()
+        if world is not None:
+            self.world = world
+        elif self._cast is not None:
+            self.world = self._world_builder(cast=self._cast)
+        else:
+            # Zero-arg call kept for test doubles that don't accept cast=.
+            self.world = self._world_builder()
         # Resume semantics (#564 review finding 1): a resumed run's OWN
         # recorded sim_config wins over whatever this server booted with
         # (its own --config, or None) -- otherwise the world silently
@@ -1304,8 +1333,11 @@ class PennStepper:
         cognition_tools/react/plan_mode are the RESOLVED values (post the
         ``cognition_tools or (llm == SCRIPTED)`` coupling above), so
         ``reproduce_run`` can reconstruct the exact cognition config a real
-        re-run needs instead of guessing it back from the ``llm`` sentinel."""
-        return {
+        re-run needs instead of guessing it back from the ``llm`` sentinel.
+
+        Also carries the applied pre-run ``config`` block (#732), when set --
+        see below."""
+        manifest = {
             **self.meta(),
             "seed": self.seed,
             "engine_sha": self._engine_sha,
@@ -1319,6 +1351,182 @@ class PennStepper:
             # material and must never land in runs/ or GET /runs/{id}.
             "sim_config": self._sim_config_for_manifest(),
         }
+        # The applied pre-run config (#732): persona ids + SimulationConfig
+        # dump + run knobs, present only on a run someone configured -- so
+        # every saved run records its setup (the E5 round-trip's source).
+        if self._applied_config is not None:
+            manifest["config"] = self._applied_config
+        return manifest
+
+    def _brain_name(self) -> str:
+        return (
+            "llm"
+            if _is_paid(self.llm)
+            else ("scripted" if self.llm == SCRIPTED else "mock")
+        )
+
+    def _stop_time(self) -> str:
+        """The in-game wall-clock the run ends at -- SIM_START plus the step
+        budget -- as a display string for the setup UI (#732). Read-only:
+        the wire knob is `steps` (the sim's native unit)."""
+        start = datetime.datetime.fromisoformat(SIM_START)
+        return str(start + datetime.timedelta(seconds=self.num_steps * SEC_PER_STEP))
+
+    def describe_config(self) -> dict:
+        """The pre-run config surface GET /config serves (#732); read-only.
+
+        `status` and `tick_seconds` are the loop's to report -- the route
+        composes them in (the stepper doesn't know paused). `knobs` is the
+        #564 SimulationConfig surface with the key-carrying sections
+        (game.llm, embedding) stripped, exactly like the manifest dump.
+        `llm` is advertised only when the server env holds a key -- keys
+        never travel over HTTP.
+        """
+        defaults = SimulationConfig().to_dict()
+        defaults.get("game", {}).pop("llm", None)
+        defaults.pop("embedding", None)
+        current = self._sim_config_for_manifest() or defaults
+        personas = (
+            library_personas(self.world.world_data) if self.world.world_data else []
+        )
+        active = {p["name"] for p in self.world.personas}
+        brains = ["mock", "scripted"]
+        if os.environ.get("ANTHROPIC_API_KEY"):
+            brains.append("llm")
+        return {
+            "personas": personas,
+            "cast": [e["id"] for e in personas if e["name"] in active],
+            "knobs": {"defaults": defaults, "current": current},
+            "brains": brains,
+            "run": {
+                "brain": self._brain_name(),
+                "steps": self.num_steps,
+                "stop_time": self._stop_time(),
+                "max_cost": self.ledger.max_cost_usd,
+            },
+        }
+
+    def apply_config(
+        self,
+        *,
+        cast: list[str] | None = None,
+        brain: str | None = None,
+        sim_config: dict | None = None,
+        steps: int | None = None,
+        max_cost: float | None = None,
+        tick_seconds: float | None = None,
+    ) -> dict:
+        """Apply a pre-run configuration by rebuilding through the reset path
+        (#732). Caller holds the app lock and has already checked the
+        paused-at-tick-0 gate; every field is optional (None = keep current).
+        ValueError on any bad input -> the route's 400; guard-before-teardown
+        (the create_run/resume_run discipline): everything that can fail is
+        validated/built BEFORE the current run is closed. tick_seconds is the
+        loop's knob, not this stepper's -- it rides through only so the echo
+        (and so the manifest's config block) records the full setup.
+        """
+        # ---- validate + build; no teardown yet ----
+        if cast is not None and not cast:
+            raise ValueError("cast: must name at least one persona")
+        new_sim_config = self.sim_config
+        if sim_config is not None:
+            new_sim_config = SimulationConfig.from_dict(sim_config)
+        new_llm = self.llm
+        if brain is not None:
+            if brain not in ("mock", "scripted", "llm"):
+                raise ValueError(
+                    f"unknown brain: {brain!r} (valid: mock, scripted, llm)"
+                )
+            if self.plan_mode == "llm" and brain != "llm":
+                raise ValueError(
+                    "this server launched with --plan llm, which needs the "
+                    "llm brain (the planner shares its client)"
+                )
+            if max_cost is not None and brain != "llm":
+                raise ValueError("max_cost needs the llm brain")
+            try:
+                new_llm = resolve_llm(self.world.llm, brain, max_cost=max_cost)
+                if _is_paid(new_llm):
+                    # create_llm_client imports anthropic lazily -- _init_brain
+                    # is the first place that actually happens, which is AFTER
+                    # teardown. Probe here, before any teardown, so a server
+                    # missing the extra fails clean instead of half-torn-down;
+                    # before the network check_anthropic_key too, so a missing
+                    # extra never even attempts the probe.
+                    try:
+                        import anthropic  # noqa: F401
+                    except ImportError as exc:
+                        raise ValueError(
+                            f"{exc} (this server needs `uv sync --extra llm`)"
+                        ) from exc
+                    # The boot path's fail-fast (#261): a present-but-rejected
+                    # key would otherwise serve a frozen, silent, $0 sim.
+                    check_anthropic_key()
+            except SystemExit as exc:
+                # resolve_llm/check_anthropic_key speak CLI (SystemExit);
+                # over HTTP the same message is a 400.
+                raise ValueError(str(exc)) from exc
+        elif max_cost is not None:
+            if not _is_paid(new_llm):
+                raise ValueError("max_cost needs the llm brain")
+            new_llm = dict(new_llm, max_cost_usd=max_cost)
+        effective_cast = cast if cast is not None else self._cast
+        world = (
+            self._world_builder(cast=effective_cast)
+            if effective_cast is not None
+            else self._world_builder()
+        )  # ValueError on an unknown persona id -- before any teardown
+        # ---- apply: the reset path, with the new knobs stamped on ----
+        self._close_current_run()
+        self._cast = effective_cast
+        self.sim_config = new_sim_config
+        self.retrieval = (
+            new_sim_config.retrieval if new_sim_config is not None else None
+        )
+        if brain is not None:
+            self._init_brain(new_llm)
+        else:
+            self.llm = new_llm  # a max_cost-only change still lands in meta()
+        if brain is not None or (cast is not None and _is_paid(self.llm)):
+            # The boot 'auto' rule (#366) re-derived on a brain or paid-cast
+            # change: one slot per persona under a paid brain, serial
+            # otherwise. A launch --decide-workers value is deliberately
+            # superseded -- the config session is the run's setup authority.
+            self._decide_executor = (
+                _DecideThreads(len(world.personas)) if _is_paid(self.llm) else None
+            )
+        # The ceiling always mirrors the active brain (#732 final review):
+        # a paid ceiling left armed after a switch to a free brain would
+        # keep over_budget() true and finish every new day on its first
+        # tick. The ledger OBJECT is never replaced -- create_app captured
+        # it at boot -- only its ceiling is reconciled.
+        self.ledger.max_cost_usd = (
+            self.llm.get("max_cost_usd") if _is_paid(self.llm) else None
+        )
+        self.cognition_tools = _resolve_cognition_tools(
+            self._cognition_tools_flag, self.sim_config, self.llm
+        )
+        self.react = _resolve_react(self._react_flag, self.sim_config)
+        if steps is not None:
+            # The configured budget is the run's new baseline: reset() must
+            # not quietly revert it (unlike create_run's one-shot override).
+            self.num_steps = self._launch_num_steps = steps
+        applied = {
+            # None = the world YAML's own default cast (never overridden).
+            "cast": effective_cast,
+            "brain": self._brain_name(),
+            "sim_config": self._sim_config_for_manifest(),
+            "run": {
+                "steps": self.num_steps,
+                "tick_seconds": tick_seconds,
+                "max_cost": self.ledger.max_cost_usd,
+            },
+        }
+        # Set BEFORE _build: the rebuild opens the new run row, and its
+        # manifest must carry this block.
+        self._applied_config = applied
+        self._build(world=world)
+        return applied
 
     def tick(self) -> dict | None:
         """One sim step -> one replay-schema frame (called under the app lock).
@@ -1714,6 +1922,12 @@ class PennStepper:
             # "finished"), then rebuild on the new world -- _build's non-resume
             # path opens the next run row via create_run(self.meta()).
             self._close_current_run()
+            # A named-world create is a fresh setup: the pre-run config
+            # (#732) described the run it configured, not this one -- a
+            # stale block here would stamp this manifest with a cast that
+            # isn't running.
+            self._cast = None
+            self._applied_config = None
             # attach_agents reads num_steps inside _build. A per-request steps is
             # a one-shot override; without one, fall back to the launch budget so
             # a prior reduced create_run does not leak forward.
@@ -1745,6 +1959,11 @@ class PennStepper:
         # lines on a long day, all of this under the app lock -- is parsed
         # once, not twice.
         self._close_current_run()
+        # the resumed run's own recorded config is authoritative (#564
+        # adopt); this server's pre-run config belongs to the run it
+        # configured.
+        self._cast = None
+        self._applied_config = None
         # A resumed run must not inherit a prior create_run's reduced budget;
         # the launch default is the safe non-leaking value.
         self.num_steps = self._launch_num_steps
@@ -2381,7 +2600,8 @@ def main() -> int:
     if start_paused:
         print(
             "Start gate: the loop boots PAUSED — press ▶ Start in the viewer "
-            "(or POST /resume) to begin the day."
+            "(or POST /resume) to begin the day. While paused at tick 0 the "
+            "run is configurable: GET/POST /config (#732)."
         )
     print(
         f"Live surface: GET /live, GET /events?since=0, ws://{args.host}:{args.port}/ws, "

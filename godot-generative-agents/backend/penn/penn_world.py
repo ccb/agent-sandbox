@@ -338,6 +338,10 @@ class PennWorld:
     build_world_fn: Callable
     llm: dict | None = None
     relationships: list = field(default_factory=list)
+    # The world YAML this world was built from (#732): lets the live config
+    # surface enumerate the adjacent personas/ library. None for a PennWorld
+    # assembled by hand in tests.
+    world_data: str | None = None
 
 
 def make_boil_sink() -> Item:
@@ -666,6 +670,7 @@ def build_penn_world(
         # Validated once here, so an authoring typo fails the bake / the live
         # server's boot loudly instead of drawing a wrong graph.
         relationships=relationships_meta(personas, data.get("relationships") or []),
+        world_data=world_data,
     )
 
 

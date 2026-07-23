@@ -180,6 +180,33 @@ class CreateRunRequest(BaseModel):
     )
 
 
+class ConfigRequest(BaseModel):
+    """POST /config body (#732): the pre-run setup. Every field is optional --
+    apply only what's given, keep the rest. Accepted only while the loop is
+    paused at tick 0 (409 otherwise)."""
+
+    cast: list[str] | None = Field(
+        default=None,
+        description="persona ids from the library (GET /config's `personas`); "
+        "an empty list is a 400, omitted keeps the current cast",
+    )
+    brain: str | None = Field(
+        default=None,
+        description="one of GET /config's advertised `brains`; "
+        "'llm' constructs the client at apply time (keys stay server-side)",
+    )
+    sim_config: dict | None = Field(
+        default=None, description="a SimulationConfig mapping (#564 sections)"
+    )
+    steps: int | None = Field(default=None, gt=0, description="run step budget")
+    tick_seconds: float | None = Field(
+        default=None, gt=0, description="wall-clock seconds per sim step"
+    )
+    max_cost: float | None = Field(
+        default=None, gt=0, description="cost ceiling in USD (llm brain only)"
+    )
+
+
 class SayRequest(BaseModel):
     """The body of ``POST /agents/{name}/say`` (#369): a human speaks to an agent."""
 
@@ -579,6 +606,8 @@ def create_app(
         if stepper is not None
         else None
     )
+    if controller is not None:
+        controller.tick_seconds = tick_seconds
     ledger = getattr(stepper, "ledger", None)
     if controller is not None:
         # Out-of-band deciding publish (#605): a decide that begins AND ends
@@ -958,7 +987,7 @@ def create_app(
                 "paused": controller.paused,
                 "step": stepper.step,
                 "cursor": log.latest_cursor(),
-                "tick_seconds": tick_seconds,
+                "tick_seconds": controller.tick_seconds,
                 "meta": stepper.meta(),
                 "boot_id": boot_id,
             }
@@ -1162,6 +1191,86 @@ def create_app(
             if callable(run_usage):
                 summary.update(run_usage())
             return summary
+
+    # ----------------------------------------------------------- config (#732)
+    # The pre-run config session: while the loop is paused at tick 0 a client
+    # may read the config surface and apply a setup (cast + knobs + run
+    # controls); the first Start (POST /resume) closes the gate. Probed off
+    # the stepper like the registry family, so a stepper without the surface
+    # 404s and everything else is unchanged.
+
+    def _configurable() -> bool:
+        return controller is not None and controller.paused and stepper.step == 0
+
+    @app.get("/config")
+    def get_config(_: None = Depends(require_auth)) -> dict:
+        """The pre-run config surface (#732): what can be configured and what
+        is currently set. `status` is "configurable" only while the loop is
+        paused at tick 0 (before the first Start); "locked" after."""
+        describe = getattr(stepper, "describe_config", None)
+        if controller is None or describe is None:
+            raise HTTPException(
+                status_code=404, detail="this server has no config surface"
+            )
+        with lock:
+            body = describe()
+            body["status"] = "configurable" if _configurable() else "locked"
+            body["run"]["tick_seconds"] = controller.tick_seconds
+        return body
+
+    @app.post("/config")
+    async def post_config(req: ConfigRequest, _: None = Depends(require_auth)) -> dict:
+        """Apply a pre-run setup (#732): rebuild the world with the requested
+        cast/knobs/brain through the stepper's reset path and echo what was
+        applied. Accepted only while paused at tick 0 (409 after the run
+        starts); bad input (empty cast, unknown persona id, unknown or
+        unavailable brain, bad sim_config) is a 400. Followers see the same
+        status(reason="reset") + run_id record every world rebuild publishes."""
+        apply_config = getattr(stepper, "apply_config", None)
+        if controller is None or apply_config is None:
+            raise HTTPException(
+                status_code=404, detail="this server has no config surface"
+            )
+        if req.cast is not None and not req.cast:
+            raise HTTPException(
+                status_code=400, detail="cast: must name at least one persona"
+            )
+
+        def _apply():
+            # The create_run/resume_run pattern: rebuild under the app lock in
+            # a worker thread; the gate check is atomic with the swap.
+            with lock:
+                if not _configurable():
+                    raise HTTPException(
+                        status_code=409,
+                        detail="run already started; /config is pre-start only "
+                        "(pause, then POST /reset re-opens the gate)",
+                    )
+                tick = (
+                    req.tick_seconds
+                    if req.tick_seconds is not None
+                    else controller.tick_seconds
+                )
+                applied = apply_config(
+                    cast=req.cast,
+                    brain=req.brain,
+                    sim_config=req.sim_config,
+                    steps=req.steps,
+                    max_cost=req.max_cost,
+                    tick_seconds=tick,
+                )
+                controller.tick_seconds = tick
+                controller.generation += 1
+                return applied
+
+        try:
+            applied = await asyncio.get_running_loop().run_in_executor(None, _apply)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        return {
+            **_publish_adoption(getattr(stepper, "run_id", None)),
+            "applied": applied,
+        }
 
     # ---------------------------------------------------------- run registry
     # The #306 registry half: browse/fetch/export/delete the #304 RunStore's
