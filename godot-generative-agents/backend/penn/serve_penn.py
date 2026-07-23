@@ -1173,6 +1173,12 @@ class PennStepper:
             "cognition_tools": self.cognition_tools,
             "react": self.react,
             "plan_mode": self.plan_mode,
+            # The #564 --config, so a re-run rebuilds the same retrieval/
+            # temperature/cognition and the cassette's request keys line up.
+            # A default run stores None; pre-#564 manifests simply lack the key.
+            "sim_config": (
+                self.sim_config.to_dict() if self.sim_config is not None else None
+            ),
         }
 
     def tick(self) -> dict | None:
@@ -1646,6 +1652,13 @@ def _canonical_frame(frame) -> str:
     return json.dumps(frame, sort_keys=True, ensure_ascii=False)
 
 
+def _sim_config_from_manifest(manifest: dict) -> SimulationConfig | None:
+    """The run's recorded #564 SimulationConfig, or None for a default run
+    (including runs recorded before the key existed)."""
+    data = manifest.get("sim_config")
+    return SimulationConfig.from_dict(data) if data else None
+
+
 def reproduce_run(store: RunStore, run_id: str, world=None) -> ReproResult:
     """Re-run a persisted run offline from its cassette + seed and check the
     frames come out byte-identical to what the store holds (#715).
@@ -1653,7 +1666,7 @@ def reproduce_run(store: RunStore, run_id: str, world=None) -> ReproResult:
     Zero network: the world is driven by a ReplayClient over
     runs/<id>/cassette.jsonl -- no provider, no key, no spend. The re-run
     reconstructs the recorded cognition config (seed, cognition_tools, react,
-    plan_mode) from the manifest and always forces decide_workers=0, so
+    plan_mode, sim_config) from the manifest and always forces decide_workers=0, so
     byte-identity holds for runs that were recorded under sequential decide
     (the default for --brain scripted; opt-in via --decide-workers 0 for
     --brain llm). A run recorded under parallel decide (--decide-workers > 0,
@@ -1705,6 +1718,7 @@ def reproduce_run(store: RunStore, run_id: str, world=None) -> ReproResult:
             cognition_tools=manifest.get("cognition_tools", False),
             react=manifest.get("react", False),
             plan_mode=manifest.get("plan_mode", "schedule"),
+            sim_config=_sim_config_from_manifest(manifest),
         )
         rerun = []
         miss_at = None

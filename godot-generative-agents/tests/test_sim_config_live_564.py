@@ -159,3 +159,30 @@ def test_retrieval_config_visibly_changes_what_surfaces():
     assert len(char.agent.last_retrieved) == 1
     observe_and_decide(stepper.game, char, 5, retrieval=None)
     assert len(char.agent.last_retrieved) > 1
+
+
+# -- Task 4: the config rides the manifest so #715 re-runs reproduce it -------
+
+
+def test_manifest_records_sim_config_and_roundtrips():
+    cfg = _cfg(
+        {"retrieval": {"max_records": 1}, "game": {"agent": {"temperature": 0.0}}}
+    )
+    stepper = PennStepper(num_steps=2, world=build_penn_world(), sim_config=cfg)
+    manifest = stepper._store_manifest()
+    assert manifest["sim_config"]["retrieval"]["max_records"] == 1
+    rebuilt = serve_penn._sim_config_from_manifest(manifest)
+    assert rebuilt.retrieval.max_records == 1
+    assert rebuilt.game.agent.temperature == 0.0
+
+
+def test_manifest_sim_config_is_none_without_config():
+    stepper = PennStepper(num_steps=2, world=build_penn_world())
+    manifest = stepper._store_manifest()
+    assert manifest["sim_config"] is None
+    assert serve_penn._sim_config_from_manifest(manifest) is None
+
+
+def test_sim_config_from_manifest_tolerates_old_manifests():
+    # Runs recorded before #564 have no sim_config key at all.
+    assert serve_penn._sim_config_from_manifest({"seed": 0}) is None
