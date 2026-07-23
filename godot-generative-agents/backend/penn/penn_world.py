@@ -25,8 +25,6 @@ import os
 from dataclasses import dataclass, field
 from typing import Callable
 
-import yaml
-
 # Reuse the tested agent engine (not a fork). It's the installed top-level
 # `backend` package now, so a plain import works -- no sys.path juggling.
 from backend import path_finder
@@ -40,7 +38,7 @@ from backend.actions import (
     TalkTo,
     WaitPenn,
 )
-from backend.build_world import build_world, load_world_data
+from backend.build_world import _normalize_personas, build_world, load_world_yaml
 from backend.world_map import WorldMap
 from text_adventure_games.actions.things import Craft
 from text_adventure_games.crafting import Recipe
@@ -321,43 +319,6 @@ def _gate_conversations_by_perception(built):
     return game, characters
 
 
-def _load_meetings(path):
-    """Read the authored `meetings` block from the world YAML (or [] if absent).
-
-    `load_world_data` only returns personas + locations, so we read the file
-    ourselves for this Godot-only extra. Each meeting is
-    ``{label?, at, participants: [name...], dialogue: [[speaker, text], ...]}``.
-    """
-    with open(path, encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
-    return data.get("meetings", []) or []
-
-
-def _load_relationships(path):
-    """Read the authored `relationships` block from the world YAML (or [] if absent).
-
-    Another Godot-only extra `load_world_data` doesn't return: the seed social
-    graph (who knows whom at t=0) the viewer's social-graph pop-up draws (#252).
-    Each edge is ``{a, b, kind, closeness, description}`` -- see the YAML block's
-    comment for the authoring contract. Raw here; validated/normalized by
-    :func:`relationships_meta` at build time.
-    """
-    with open(path, encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
-    return data.get("relationships", []) or []
-
-
-def _load_llm(path):
-    """Read the authored `llm` block from the world YAML (or None if absent).
-
-    Another Godot-only extra `load_world_data` doesn't return: the provider/
-    model/cost-ceiling settings `serve_penn --brain llm` runs on. ``None``
-    (no block) simply means the world declares no LLM configuration."""
-    with open(path, encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
-    return data.get("llm") or None
-
-
 @dataclass
 class PennWorld:
     """Everything the configured Penn sim is made of, ready to run.
@@ -629,7 +590,11 @@ def _furnish_van_pelt(game) -> None:
 
 
 def build_penn_world(
-    world_data=WORLD_DATA, upenn_dir=UPENN_DIR, *, withhold_boil: bool = False
+    world_data=WORLD_DATA,
+    upenn_dir=UPENN_DIR,
+    *,
+    withhold_boil: bool = False,
+    cast: list[str] | None = None,
 ) -> PennWorld:
     """Load + patch the Penn world, exactly as the replay bake configures it.
 
@@ -649,9 +614,22 @@ def build_penn_world(
     an explicit builder parameter is the direct, unambiguous wiring. Every
     other call site (the bake, the live server, #595's experiment) passes the
     default ``False`` and is unaffected.
+
+    ``cast`` (#731) overrides the world YAML's ``cast:`` persona-reference
+    list -- build the same world with a sub-cast (or with parked personas
+    un-parked) without editing YAML. ``None`` (every existing call site)
+    means the YAML's own cast. A ``cast`` passed against an inline-personas
+    world (the boil demo) is NOT ignored: it overrides the inline cast from
+    the adjacent ``personas/`` library, or raises ``ValueError`` on an
+    unknown id.
     """
-    personas, locations = load_world_data(world_data)
-    meetings = _load_meetings(world_data)
+    # One composed read (#731): personas/relationships/meetings resolved from
+    # the cast (or passed through verbatim for inline-personas worlds), then
+    # the same file normalized into the (personas, locations) build pair.
+    data = load_world_yaml(world_data, cast)
+    personas = _normalize_personas(data["personas"])
+    locations = data["locations"]
+    meetings = data.get("meetings") or []
 
     world_map = _pin_building_meeting_points(WorldMap(upenn_dir))
     # Route each meeting's participants to a tight rendezvous cluster inside its
@@ -684,10 +662,10 @@ def build_penn_world(
         locations=locations,
         meetings=meetings,
         build_world_fn=_build,
-        llm=_load_llm(world_data),
+        llm=data.get("llm") or None,
         # Validated once here, so an authoring typo fails the bake / the live
         # server's boot loudly instead of drawing a wrong graph.
-        relationships=relationships_meta(personas, _load_relationships(world_data)),
+        relationships=relationships_meta(personas, data.get("relationships") or []),
     )
 
 
@@ -702,8 +680,9 @@ def relationships_meta(personas, relationships):
     Validates against the *active* cast and normalizes for determinism: names
     are sorted within each edge, edges are sorted by ``(a, b)``, and the output
     carries exactly ``{a, b, kind, closeness, description}``. Raises
-    ``ValueError`` on an unknown name (parked personas' edges must stay
-    commented out in the YAML), a self-edge, a duplicate pair, or a
+    ``ValueError`` on an unknown name (cast composition already drops edges
+    that leave the cast, #731, so a raise here means an inline-authored world
+    names someone who doesn't exist), a self-edge, a duplicate pair, or a
     ``closeness`` outside 1..5 -- authoring mistakes should fail the build,
     not render a misleading graph.
     """
