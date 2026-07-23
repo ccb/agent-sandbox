@@ -186,3 +186,14 @@ def test_manifest_sim_config_is_none_without_config():
 def test_sim_config_from_manifest_tolerates_old_manifests():
     # Runs recorded before #564 have no sim_config key at all.
     assert serve_penn._sim_config_from_manifest({"seed": 0}) is None
+
+
+# -- Task 5: the --config CLI flag --------------------------------------------
+
+
+def test_config_flag_defaults_to_none():
+    assert _build_parser().parse_args([]).config is None
+
+
+def test_config_flag_takes_a_path():
+    assert _build_parser().parse_args(["--config", "sim.yaml"]).config == "sim.yaml"

@@ -1955,6 +1955,19 @@ def _build_parser() -> argparse.ArgumentParser:
         "manifest so --re-run reproduces it byte-identically",
     )
     ap.add_argument(
+        "--config",
+        default=None,
+        metavar="PATH",
+        help="load a SimulationConfig (.yaml/.json, #564) and tune the live "
+        "sim with it: the retrieval: section (memory-scoring weights), the "
+        "cognition: section (vision_r, conversation pacing, ...), and "
+        "game.agent's temperature / reflection_threshold are honored. The "
+        "batch-runner sections (simulation:, embedding:) are ignored here "
+        "-- live runs keep --steps/--tick-seconds. Boolean flags "
+        "(--cognition-tools, --react) still force their feature ON over "
+        "the file. Recorded into the run manifest so --re-run reproduces it",
+    )
+    ap.add_argument(
         "--re-run",
         dest="re_run",
         default=None,
@@ -1992,6 +2005,14 @@ def main() -> int:
         max_cost=args.max_cost,
         model_for=_parse_model_for(args.model_for),
     )
+    # The #564 config source: one file for the sim's tuning surface instead of
+    # N per-knob flags. A bad path/parse aborts before any world state exists.
+    sim_config = None
+    if args.config:
+        try:
+            sim_config = SimulationConfig.from_file(args.config)
+        except (OSError, ValueError, ImportError) as e:
+            raise SystemExit(f"cannot load --config {args.config}: {e}")
     if _is_paid(llm):
         # The key exists (resolve_llm gates that); now prove the API accepts
         # it, or an invalid key would serve a frozen, silent, $0 all-day sim.
@@ -2051,6 +2072,7 @@ def main() -> int:
             plan_mode=args.plan,
             resume_run_id=resume_id,
             seed=args.seed,
+            sim_config=sim_config,
         )
     except ImportError as e:
         raise SystemExit(f"{e}\n(--brain llm needs the LLM extra: uv sync --extra llm)")
@@ -2114,7 +2136,18 @@ def main() -> int:
             "Persistence: OFF (--no-persist) -- this run is ephemeral and cannot "
             "be saved or resumed later."
         )
-    if args.cognition_tools:
+    if sim_config is not None:
+        r = sim_config.retrieval
+        print(
+            f"Sim config: {args.config} -- retrieval "
+            f"recency={r.alpha_recency:g}/importance={r.alpha_importance:g}/"
+            f"relevance={r.alpha_relevance:g} (max {r.max_records}), "
+            f"temperature={sim_config.game.agent.temperature:g}, "
+            f"vision_r={stepper.cog.vision_r}."
+        )
+    if args.cognition_tools or (
+        sim_config is not None and sim_config.cognition.cognition_tools
+    ):
         print(
             "Cognition tools: ON -- a decide tick may spend up to 3 model "
             "requests (recall/query_knowledge/read_plan before acting)."
@@ -2122,7 +2155,7 @@ def main() -> int:
             else "Cognition tools: ON, but the mock brain never reaches the "
             "tool loop -- pair it with --brain llm for any effect."
         )
-    if args.react:
+    if args.react or (sim_config is not None and sim_config.cognition.react_enabled):
         print(
             "React gate: ON -- a mid-walk encounter may consult the brain "
             "(continue/greet/replan, #370), capped per agent per sim hour."
