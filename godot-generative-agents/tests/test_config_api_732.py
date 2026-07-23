@@ -44,6 +44,16 @@ def test_library_personas_no_library_is_empty(tmp_path):
     assert library_personas(world) == []
 
 
+def test_library_personas_skips_syntax_broken_files(tmp_path):
+    world = tmp_path / "w.yaml"
+    world.write_text("cast: [ok]\nlocations: []\n", encoding="utf-8")
+    lib = tmp_path / "personas"
+    lib.mkdir()
+    (lib / "ok.yaml").write_text("name: Ok\npersona: I am Ok.\n", encoding="utf-8")
+    (lib / "broken.yaml").write_text("name: [unclosed\n", encoding="utf-8")
+    assert [e["id"] for e in library_personas(world)] == ["ok"]
+
+
 def test_penn_world_carries_its_yaml_path():
     assert build_penn_world().world_data == WORLD_DATA
 
@@ -105,6 +115,7 @@ def test_apply_cast_subset_rebuilds_the_world(tmp_path):
     applied = stepper.apply_config(cast=["diego"], tick_seconds=0.1)
     assert stepper.order == ["Diego Torres"]
     assert applied["cast"] == ["diego"]
+    assert stepper._decide_executor is None  # a mock brain stays serial (#732 fix 6)
     # the new run's manifest records the setup
     manifest = stepper.run_store.get_run(stepper.run_id)["manifest"]
     assert manifest["config"]["cast"] == ["diego"]
@@ -156,6 +167,8 @@ def test_apply_rejects_bad_input():
         stepper.apply_config(sim_config={"nope": {}})
     with pytest.raises(ValueError):
         stepper.apply_config(max_cost=1.0)  # cost ceiling needs the llm brain
+    with pytest.raises(ValueError):
+        stepper.apply_config(brain="mock", max_cost=1.0)  # explicit free brain, too
     # guard-before-teardown: every rejection above left the stepper serving
     assert stepper.tick() is not None
 
@@ -179,6 +192,32 @@ def test_apply_brain_llm_without_extra_fails_before_teardown(monkeypatch, tmp_pa
         stepper.apply_config(brain="llm")
     assert stepper.run_id == run_id
     assert stepper.tick() is not None
+
+
+def test_switching_to_a_free_brain_clears_a_tripped_ceiling():
+    # A paid run that hit its budget finishes every tick; after the gate
+    # re-opens, reconfiguring to a free brain must actually run (#732
+    # final review finding 1): the stale ceiling would otherwise keep
+    # over_budget() true forever (an empty ledger's total is 0.0 >= 0.0).
+    stepper = _mock_stepper()
+    stepper.ledger.max_cost_usd = 0.0
+    assert stepper.tick() is None  # ceiling tripped: day ends immediately
+    stepper.apply_config(brain="mock")
+    assert stepper.ledger.max_cost_usd is None
+    assert stepper.tick() is not None
+
+
+def test_create_run_drops_a_prior_applied_config(tmp_path):
+    stepper = _mock_stepper(run_store=RunStore(tmp_path / "runs"))
+    stepper.apply_config(cast=["diego"])
+    assert stepper.order == ["Diego Torres"]
+    new_id = stepper.create_run("penn")
+    # the named-world create is a fresh default-cast setup: full cast back,
+    # no stale config block claiming otherwise (#732 final review finding 2)
+    assert len(stepper.order) == 3
+    assert "config" not in stepper.run_store.get_run(new_id)["manifest"]
+    stepper.reset()  # and the configured cast must not resurface
+    assert len(stepper.order) == 3
 
 
 pytest.importorskip("fastapi")

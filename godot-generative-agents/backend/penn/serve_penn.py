@@ -1442,6 +1442,8 @@ class PennStepper:
                     "this server launched with --plan llm, which needs the "
                     "llm brain (the planner shares its client)"
                 )
+            if max_cost is not None and brain != "llm":
+                raise ValueError("max_cost needs the llm brain")
             try:
                 new_llm = resolve_llm(self.world.llm, brain, max_cost=max_cost)
                 if _is_paid(new_llm):
@@ -1483,15 +1485,24 @@ class PennStepper:
         )
         if brain is not None:
             self._init_brain(new_llm)
-            # The 'auto' concurrency rule main() applies at boot (#366):
-            # a paid brain decides in parallel, everything else serially.
-            self._decide_executor = (
-                _DecideThreads(len(world.personas)) if _is_paid(new_llm) else None
-            )
         else:
             self.llm = new_llm  # a max_cost-only change still lands in meta()
-        if _is_paid(self.llm):
-            self.ledger.max_cost_usd = self.llm.get("max_cost_usd")
+        if brain is not None or (cast is not None and _is_paid(self.llm)):
+            # The boot 'auto' rule (#366) re-derived on a brain or paid-cast
+            # change: one slot per persona under a paid brain, serial
+            # otherwise. A launch --decide-workers value is deliberately
+            # superseded -- the config session is the run's setup authority.
+            self._decide_executor = (
+                _DecideThreads(len(world.personas)) if _is_paid(self.llm) else None
+            )
+        # The ceiling always mirrors the active brain (#732 final review):
+        # a paid ceiling left armed after a switch to a free brain would
+        # keep over_budget() true and finish every new day on its first
+        # tick. The ledger OBJECT is never replaced -- create_app captured
+        # it at boot -- only its ceiling is reconciled.
+        self.ledger.max_cost_usd = (
+            self.llm.get("max_cost_usd") if _is_paid(self.llm) else None
+        )
         self.cognition_tools = _resolve_cognition_tools(
             self._cognition_tools_flag, self.sim_config, self.llm
         )
@@ -1911,6 +1922,12 @@ class PennStepper:
             # "finished"), then rebuild on the new world -- _build's non-resume
             # path opens the next run row via create_run(self.meta()).
             self._close_current_run()
+            # A named-world create is a fresh setup: the pre-run config
+            # (#732) described the run it configured, not this one -- a
+            # stale block here would stamp this manifest with a cast that
+            # isn't running.
+            self._cast = None
+            self._applied_config = None
             # attach_agents reads num_steps inside _build. A per-request steps is
             # a one-shot override; without one, fall back to the launch budget so
             # a prior reduced create_run does not leak forward.
@@ -1942,6 +1959,11 @@ class PennStepper:
         # lines on a long day, all of this under the app lock -- is parsed
         # once, not twice.
         self._close_current_run()
+        # the resumed run's own recorded config is authoritative (#564
+        # adopt); this server's pre-run config belongs to the run it
+        # configured.
+        self._cast = None
+        self._applied_config = None
         # A resumed run must not inherit a prior create_run's reduced budget;
         # the launch default is the safe non-leaking value.
         self.num_steps = self._launch_num_steps

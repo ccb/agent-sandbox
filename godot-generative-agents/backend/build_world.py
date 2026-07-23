@@ -177,7 +177,10 @@ def library_personas(path) -> list[dict]:
             if not fname.endswith(".yaml"):
                 continue
             with open(os.path.join(library, fname), encoding="utf-8") as f:
-                spec = yaml.safe_load(f)
+                try:
+                    spec = yaml.safe_load(f)
+                except yaml.YAMLError:
+                    continue  # syntax-broken PARKED file -- browsing must not break
             if not isinstance(spec, dict) or not spec.get("name"):
                 continue
             pid = fname[:-5]

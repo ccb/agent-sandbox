@@ -1244,7 +1244,7 @@ def create_app(
                     raise HTTPException(
                         status_code=409,
                         detail="run already started; /config is pre-start only "
-                        "(POST /reset re-opens the gate)",
+                        "(pause, then POST /reset re-opens the gate)",
                     )
                 tick = (
                     req.tick_seconds
