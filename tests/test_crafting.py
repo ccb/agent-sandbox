@@ -386,3 +386,22 @@ def test_unlearned_recipe_logs_no_wish():
     game.do_command("make bow")
     assert _said(cap, "haven't learned")
     assert game.wishes == []
+
+
+# --- bare-verb fallback fires for bare verbs only (#686) --------------------
+
+
+def test_specific_non_matching_target_does_not_craft_via_bare_verb_fallback():
+    # #686: with string+stick in hand, "make boiled water" matches the bow
+    # recipe on neither path #1 (by name) nor #2 (by ingredients) -- and the
+    # bare-verb fallback (path #3) used to fire anyway, silently crafting a
+    # bow. A specific target that names no recipe must instead fall through
+    # to "don't know how" and log the #628 craft_gap wish.
+    game, player, cap = _game(recipes=[_bow_recipe()], inv=_string_and_stick())
+    game.do_command("make boiled water")
+    assert "bow" not in player.inventory  # nothing silently crafted
+    assert "string" in player.inventory and "stick" in player.inventory
+    assert _said(cap, "don't know how")
+    [wish] = game.wishes
+    assert wish.trigger == "craft_gap"
+    assert wish.desired == "make boiled water"
