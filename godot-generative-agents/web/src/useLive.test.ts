@@ -57,6 +57,7 @@ const idle = (): LiveState => ({
   step: 0,
   frame: null,
   calls: [],
+  events: [],
 });
 
 const call = (call_no: number, cursor: number): FeedRecord => ({
@@ -64,6 +65,31 @@ const call = (call_no: number, cursor: number): FeedRecord => ({
   kind: "engine",
   event: { kind: "llm_call", actor: "a", call_no },
 });
+
+// A game_event engine record (#467) and a top-level wish record (#622), in
+// their wire shapes — the rows #644 makes visible in the web feed.
+const gameEvent = (cursor: number, summary: string): FeedRecord => ({
+  cursor,
+  kind: "engine",
+  step: 1,
+  event: { kind: "game_event", turn: 3, actor: "Maya", action: "drink", summary, payload: {} },
+});
+
+const wish = (cursor: number, desired: string): FeedRecord =>
+  ({
+    cursor,
+    kind: "wish",
+    actor: "Maya",
+    turn: 4,
+    location: null,
+    desired,
+    reason: "mine keeps getting stolen",
+    trigger: "proposed",
+    goals: [],
+    scope: [],
+    raw_command: "",
+    meta: {},
+  }) as unknown as FeedRecord;
 
 describe("applyFeedRecords", () => {
   it("keeps llm_call rows and tracks the newest frame/status", () => {
@@ -104,6 +130,38 @@ describe("applyFeedRecords", () => {
   it("returns the same state when a connected client sees an empty batch", () => {
     const s = { ...idle(), connected: true };
     expect(applyFeedRecords(s, [], 0)).toBe(s);
+  });
+
+  it("keeps game_event and wish rows in feed order (#644)", () => {
+    // Before #644 these rows were invisible: only engine/llm_call was handled,
+    // so the web HUD disagreed with the Godot HUD about what happened.
+    const s = applyFeedRecords(idle(), [gameEvent(1, "felt ill"), wish(2, "a bike rack")], 55);
+    expect(s.events.map((e) => e.kind)).toEqual(["game_event", "wish"]);
+    expect(s.events[0]).toMatchObject({ actor: "Maya", summary: "felt ill", receivedAt: 55 });
+    expect(s.events[1]).toMatchObject({ desired: "a bike rack", trigger: "proposed" });
+    // ...without leaking into the llm_call log.
+    expect(s.calls).toEqual([]);
+  });
+
+  it("a reset status drops retained events and the batch's earlier rows", () => {
+    const held = applyFeedRecords(idle(), [gameEvent(1, "old run")], 0);
+    const s = applyFeedRecords(
+      held,
+      [
+        gameEvent(2, "also dead"),
+        { cursor: 3, kind: "status", reason: "reset", step: 0 },
+        wish(4, "fresh"),
+      ],
+      0,
+    );
+    expect(s.events.map((e) => (e.kind === "wish" ? e.desired : e.summary))).toEqual(["fresh"]);
+  });
+
+  it("caps the retained event rows so a chatty run can't grow without bound", () => {
+    let s = idle();
+    for (let i = 1; i <= 205; i++) s = applyFeedRecords(s, [gameEvent(i, `e${i}`)], 0);
+    expect(s.events).toHaveLength(200);
+    expect(s.events[0]).toMatchObject({ summary: "e6" }); // oldest 5 evicted
   });
 });
 

@@ -8,7 +8,7 @@ import type {
   MemoryStreamResponse,
   UsageSummary,
 } from "./types/live";
-import type { Frame, MemoryRecord } from "./types/replay";
+import type { EventState, Frame, MemoryRecord, WishState } from "./types/replay";
 
 // Live mode is opt-in: the companion stays a static page until it's pointed at
 // a running backend — by a `?api=http://127.0.0.1:8080` query param, a
@@ -25,10 +25,20 @@ export function initialApiBase(): string | null {
 
 const POLL_MS = 1000; // ~the loop's pace; a missed tick just arrives next poll
 const MAX_ROWS_PER_AGENT = 200; // plenty for a day (~55-60 calls); keeps re-renders cheap
+const MAX_EVENT_ROWS = 200; // world-level rows are rarer than calls; one shared cap
 
 /** A stream record plus the client wall-clock ms it reached the page — the LLM
  * dashboard's recency signal (the wire record carries only a "HH:MM:SS" time). */
 export type ReceivedLlmCall = LlmCallRecord & { receivedAt: number };
+
+/** One run-event row kept for the feed panel (#644): a `game_event` payload
+ * (the #305 EventState shape, off an `engine` record) or a top-level `wish`
+ * record (#622). `cursor` is the feed cursor — a stable render key — and
+ * `receivedAt` mirrors ReceivedLlmCall's recency stamp. */
+export type ReceivedFeedEvent = { cursor: number; receivedAt: number } & (
+  | ({ kind: "game_event" } & EventState)
+  | ({ kind: "wish" } & WishState)
+);
 
 // Retention is capped per actor (actor: null is its own bucket), not globally,
 // so one chatty agent can't evict everyone else's rows off the dashboard (#519).
@@ -57,6 +67,7 @@ export interface LiveState {
   step: number; // latest completed sim step seen on the feed
   frame: Frame | null; // the latest frame record's agents (same shape as replay.frames[i])
   calls: ReceivedLlmCall[]; // oldest → newest, capped per agent
+  events: ReceivedFeedEvent[]; // game_event + wish rows, oldest → newest, capped
 }
 
 const IDLE: LiveState = {
@@ -71,6 +82,7 @@ const IDLE: LiveState = {
   step: 0,
   frame: null,
   calls: [],
+  events: [],
 };
 
 /**
@@ -80,6 +92,9 @@ const IDLE: LiveState = {
  *
  * - `engine` records whose payload is `kind: "llm_call"` — the same rows the
  *   backend's terminal monitor prints and the Godot HUD's request log shows;
+ * - `engine` records whose payload is `kind: "game_event"` plus top-level
+ *   `wish` records (#644) — the run-event rows the Godot HUD log shows, so the
+ *   two instruments agree about what happened;
  * - the latest `frame` record (step + per-agent state, the live counterpart of
  *   `replay.frames[step]`);
  * - the latest `status` record (running / paused, from the run controls).
@@ -90,16 +105,34 @@ export function applyFeedRecords(
   receivedAt: number,
 ): LiveState {
   // Walk the batch in feed order: a status record with reason "reset"
-  // (the documented new-run signal) drops every call before it — the
+  // (the documented new-run signal) drops every call/event before it — the
   // retained log and this batch's earlier rows describe the dead run.
   let wasReset = false;
   const fresh: ReceivedLlmCall[] = [];
+  const freshEvents: ReceivedFeedEvent[] = [];
   for (const r of records) {
     if (r.kind === "status" && r.reason === "reset") {
       wasReset = true;
       fresh.length = 0;
+      freshEvents.length = 0;
     } else if (r.kind === "engine" && r.event?.kind === "llm_call") {
       fresh.push({ ...(r.event as unknown as LlmCallRecord), receivedAt });
+    } else if (r.kind === "engine" && r.event?.kind === "game_event") {
+      freshEvents.push({
+        ...(r.event as unknown as EventState),
+        kind: "game_event",
+        cursor: r.cursor,
+        receivedAt,
+      });
+    } else if (r.kind === "wish") {
+      // A wish rides its own top-level kind — its WishState fields sit beside
+      // cursor/kind on the record itself, not inside an `event` payload.
+      freshEvents.push({
+        ...(r as unknown as WishState),
+        kind: "wish",
+        cursor: r.cursor,
+        receivedAt,
+      });
     }
   }
   // Only the newest frame/status matter — the panel shows "now", not history.
@@ -109,11 +142,20 @@ export function applyFeedRecords(
   const lastStatus = statuses[statuses.length - 1];
   // Skip the state update when nothing changed, so an idle (or paused)
   // backend doesn't re-render the panel once a second.
-  if (s.connected && fresh.length === 0 && !lastFrame && !lastStatus) return s;
+  if (s.connected && fresh.length === 0 && freshEvents.length === 0 && !lastFrame && !lastStatus)
+    return s;
+  const heldEvents = wasReset ? [] : s.events;
   return {
     ...s,
     connected: true,
     calls: wasReset ? fresh : fresh.length ? capPerAgent([...s.calls, ...fresh]) : s.calls,
+    events: freshEvents.length
+      ? [...heldEvents, ...freshEvents].slice(-MAX_EVENT_ROWS)
+      : heldEvents,
+    // frame is deliberately NOT dropped on reset: calls/events are append-only
+    // logs (stale rows would linger beside new ones), but frame is wholesale-
+    // replaced by the new run's first frame within one tick — keeping the
+    // last-known agents until then beats flashing an empty campus.
     frame: lastFrame?.agents ?? s.frame,
     step: lastFrame?.step ?? lastStatus?.step ?? s.step,
     running: lastStatus?.running ?? s.running,
@@ -211,6 +253,7 @@ export function followLive(
       // /live *snapshot*, not a feed record: the reducer folds records, and a
       // synthetic one would have to carry the whole meta/usage/step snapshot too.
       calls: restarted ? [] : s.calls,
+      events: restarted ? [] : s.events,
     }));
   };
 
