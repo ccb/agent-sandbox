@@ -157,6 +157,53 @@ def test_live_feed_publishes_deciding_records():
     assert any(r["state"] == "end" and r.get("elapsed_ms") == 12 for r in deciding)
 
 
+def test_deciding_sink_publishes_begin_out_of_band_when_wired():
+    # #605: with a live publisher wired (api.create_app does this at boot), the
+    # sink sends `begin` the moment the decide starts -- before the decide
+    # returns, before any tick-boundary drain -- and must NOT also surface it
+    # at the drain (that would double-publish). `end` keeps the boundary path.
+    from serve_penn import PennStepper
+    from penn_world import build_penn_world
+
+    published = []
+    stepper = PennStepper(num_steps=5, world=build_penn_world())
+    stepper.set_deciding_publisher(published.append)
+
+    stepper._deciding_sink("Maya", "begin", 3)
+    assert published == [{"agent": "Maya", "state": "begin", "step": 3}]  # immediate
+    assert stepper.drain_deciding() == []  # and NOT buffered for the drain
+
+    stepper._deciding_sink("Maya", "end", 3)
+    assert len(published) == 1  # ends stay boundary-published
+    rows = stepper.drain_deciding()
+    assert [(r["agent"], r["state"], r["step"]) for r in rows] == [("Maya", "end", 3)]
+    assert isinstance(rows[0]["elapsed_ms"], int) and rows[0]["elapsed_ms"] >= 0
+
+
+def test_llm_stepper_publishes_begins_out_of_band_and_drains_only_ends(monkeypatch):
+    # #605 end-to-end through the real serial decide path (--brain llm,
+    # decide_workers=0): _decide_for's sink call publishes each begin through
+    # the wired publisher inside tick(), and the boundary drain then carries
+    # only the matching ends -- one per begin, no duplicates.
+    import test_penn_live_llm as tll
+
+    stepper = tll._llm_stepper(monkeypatch)
+    published = []
+    stepper.set_deciding_publisher(published.append)
+    drained = []
+    for _ in range(6):
+        stepper.tick()
+        drained.extend(stepper.drain_deciding())
+        if published and drained:
+            break
+    assert published and all(r["state"] == "begin" for r in published)
+    assert drained and all(r["state"] == "end" for r in drained)
+    # Every out-of-band begin has exactly one boundary end, and vice versa.
+    assert sorted((r["agent"], r["step"]) for r in published) == sorted(
+        (r["agent"], r["step"]) for r in drained
+    )
+
+
 def test_deciding_sink_drops_an_orphan_end():
     # #598 review: an `end` with no matching `begin` this run -- a #366 straggler
     # finishing after a reset cleared _deciding_started -- is dropped, so a stray
