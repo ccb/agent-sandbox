@@ -154,6 +154,44 @@ def load_world_yaml(path, cast: list[str] | None = None) -> dict:
     return data
 
 
+def library_personas(path) -> list[dict]:
+    """Enumerate the persona library adjacent to world YAML *path* (#732).
+
+    The catalog the pre-run config surface (GET /config) serves: one entry
+    per ``personas/<id>.yaml`` next to the world file, sorted by id --
+    ``{"id", "name", "blurb", "in_default_cast"}``. ``blurb`` is the
+    persona's first-person ``persona`` text verbatim (frontends truncate);
+    ``in_default_cast`` reflects the world file's own ``cast:`` list. A
+    world with no adjacent library (or inline personas only) enumerates to
+    ``[]``. Tolerant of malformed library files -- this is a read surface;
+    a broken PARKED persona must not break browsing (putting it in a cast
+    still fails the build loudly, see load_world_yaml).
+    """
+    with open(path, encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    default_cast = set(data.get("cast") or [])
+    library = os.path.join(os.path.dirname(os.path.abspath(path)), "personas")
+    entries = []
+    if os.path.isdir(library):
+        for fname in sorted(os.listdir(library)):
+            if not fname.endswith(".yaml"):
+                continue
+            with open(os.path.join(library, fname), encoding="utf-8") as f:
+                spec = yaml.safe_load(f)
+            if not isinstance(spec, dict) or not spec.get("name"):
+                continue
+            pid = fname[:-5]
+            entries.append(
+                {
+                    "id": pid,
+                    "name": str(spec["name"]),
+                    "blurb": str(spec.get("persona", "")),
+                    "in_default_cast": pid in default_cast,
+                }
+            )
+    return entries
+
+
 def load_world_data(
     path, cast: list[str] | None = None
 ) -> tuple[list[dict], list[dict]]:

@@ -133,14 +133,14 @@ SCRIPTED = "scripted"
 WORLD_BUILDERS = {"penn": build_penn_world}
 
 
-def _build_boil_hard_world() -> PennWorld:
+def _build_boil_hard_world(cast: list[str] | None = None) -> PennWorld:
     """A fresh #728 boil_hard world: the boil world plus its `Kitchen` location,
     with the stove relocated there at build time (`penn_world.
     relocate_stove_to_kitchen`) -- the murky pot stays visible from step 0, the
     boil Recipe's tool is a real 297-tick Travel away. Wraps build_world_fn
     rather than patching one game post-hoc so every rebuild -- including a POST
     /reset's -- carries the relocation."""
-    pw = build_penn_world(world_data=WORLD_DATA_BOIL_HARD)
+    pw = build_penn_world(world_data=WORLD_DATA_BOIL_HARD, cast=cast)
     inner = pw.build_world_fn
 
     def _relocated(world_map):
@@ -162,7 +162,9 @@ def _build_boil_hard_world() -> PennWorld:
 SCENARIOS = {
     "penn": {"world": build_penn_world, "vision_r": None},
     "boil": {
-        "world": lambda: build_penn_world(world_data=WORLD_DATA_BOIL),
+        "world": lambda cast=None: build_penn_world(
+            world_data=WORLD_DATA_BOIL, cast=cast
+        ),
         "vision_r": None,
     },
     "boil_hard": {"world": _build_boil_hard_world, "vision_r": 0},
@@ -529,6 +531,10 @@ class PennStepper:
         self._world_builder = (
             world_builder if world_builder is not None else build_penn_world
         )
+        # The configured cast (#732): persona ids applied by apply_config, or
+        # None for the world YAML's own cast. Held here so reset()'s default
+        # rebuild keeps the configured cast instead of silently reverting.
+        self._cast: list[str] | None = None
         # The scenario's pinned perception radius (#728), or None for the
         # config/default value; applied in _build after the config-derived cog.
         self.vision_r = vision_r
@@ -789,7 +795,13 @@ class PennStepper:
         # same reconstruction tests/test_penn_live.py::
         # test_stepper_matches_simulate_prefix pins). If simulate's setup ever
         # drifts from this, the equivalence test fails -- on purpose.
-        self.world = world if world is not None else self._world_builder()
+        if world is not None:
+            self.world = world
+        elif self._cast is not None:
+            self.world = self._world_builder(cast=self._cast)
+        else:
+            # Zero-arg call kept for test doubles that don't accept cast=.
+            self.world = self._world_builder()
         # Resume semantics (#564 review finding 1): a resumed run's OWN
         # recorded sim_config wins over whatever this server booted with
         # (its own --config, or None) -- otherwise the world silently
