@@ -1,16 +1,21 @@
 """The pinned replay data-contract (#305).
 
-Three families of guarantee:
+Four families of guarantee:
 * the Pydantic models match the pinned field orders (byte-identity, #297);
 * the real emitters (the bake, the live meta) produce dicts that validate,
   with ``extra="forbid"`` catching any unpinned field (Task 2);
-* ``replay.ts`` mirrors the models field-for-field (Task 3).
+* ``replay.ts`` mirrors the models field-for-field (Task 3);
+* ``live.ts`` mirrors the live HTTP surface the same way (#644) -- the
+  ``GET /usage`` payload, the monitor's ``llm_call`` row, and the api.py
+  response models -- so the web companion can't silently drift off fields
+  the backend serves (the way the run-scoped usage fields went missing).
 
 Run from the repo root::
 
     uv run pytest godot-generative-agents/tests/test_replay_contract.py -v
 """
 
+import functools
 import json
 import os
 import re
@@ -318,8 +323,11 @@ def test_wish_state_contract_accepts_a_null_actor():
     WishState.model_validate(sample.to_primitive())
 
 
-def _ts_interface_fields() -> dict[str, set[str]]:
-    src = _REPLAY_TS.read_text()
+@functools.lru_cache(maxsize=None)
+def _ts_interface_fields(path: Path = _REPLAY_TS) -> dict[str, set[str]]:
+    # Cached: the mirror tests below re-check several interfaces apiece, so
+    # each TS file is read and comment-stripped once per session, not per pair.
+    src = path.read_text()
     src = re.sub(r"/\*.*?\*/", "", src, flags=re.S)  # block comments
     src = re.sub(r"//[^\n]*", "", src)  # line comments
     fields = {}
@@ -339,3 +347,90 @@ def test_replay_ts_mirrors_contract_models():
             f"ts-only={interfaces[ts_name] - set(model.model_fields)}, "
             f"py-only={set(model.model_fields) - interfaces[ts_name]}"
         )
+
+
+# ---------------------------------------------------------------- live.ts
+# The web companion's OTHER types file mirrors the live HTTP surface (#644).
+# Same discipline as replay.ts above -- the TS is a mirror, the backend is the
+# definition -- but the sources of truth here are the real wire emitters (the
+# ledger summary + /usage extras, the monitor's kept row) and api.py's pydantic
+# response models, not backend.contract. FeedRecord and LiveMeta stay unpinned:
+# the first is an open envelope (`kind` + per-kind fields), the second a
+# derived alias of the already-mirrored ReplayMeta.
+
+_LIVE_TS = _REPO / "godot-generative-agents" / "web" / "src" / "types" / "live.ts"
+
+
+def _assert_ts_matches(ts_name: str, wire_fields: set[str]) -> None:
+    interfaces = _ts_interface_fields(_LIVE_TS)
+    assert ts_name in interfaces, f"live.ts is missing interface {ts_name}"
+    assert interfaces[ts_name] == wire_fields, (
+        f"live.ts {ts_name} drifted from the wire shape: "
+        f"ts-only={interfaces[ts_name] - wire_fields}, "
+        f"wire-only={wire_fields - interfaces[ts_name]}"
+    )
+
+
+def test_live_ts_usage_summary_mirrors_the_usage_route():
+    # GET /usage assembles its payload inline in the route (api.py): the
+    # ledger summary, extras added in the route body (available/over_budget +
+    # the budget pair when a ceiling is armed), the stepper's run_usage()
+    # merge (#526/#569), and a hand-rolled no-ledger fallback shape. A literal
+    # re-statement of those extras here couldn't catch the next field added
+    # inline in the route body, so drive the REAL route through both branches
+    # -- a budget-armed ledger on a run_usage-bearing stepper puts every
+    # conditional field on the wire at once -- and mirror the union. live.ts
+    # marks the conditionally-present ones optional, but must NAME them all --
+    # omitting run_calls/run_cost_usd is exactly how the dashboard fell back
+    # to lifetime counters (#644).
+    api = pytest.importorskip("backend.api")
+    from fastapi.testclient import TestClient
+
+    from text_adventure_games.usage import UsageLedger
+
+    stepper = PennStepper(num_steps=2, world=build_penn_world())
+    stepper.ledger = UsageLedger(max_cost_usd=1.0)  # arm the budget pair
+    armed_app = api.create_app(stepper.game, stepper=stepper, start_paused=True)
+    with TestClient(armed_app) as client:
+        armed = client.get("/usage").json()
+    with TestClient(api.create_app(stepper.game)) as client:  # no stepper: no ledger
+        fallback = client.get("/usage").json()
+    # Self-check both branches really fired -- a silently un-armed ledger
+    # would narrow the mirror without failing it.
+    assert armed["available"] is True and fallback["available"] is False
+    assert {"max_cost_usd", "remaining_budget_usd", "run_calls"} <= set(armed)
+    _assert_ts_matches("UsageSummary", set(armed) | set(fallback))
+
+
+def test_live_ts_llm_call_record_mirrors_the_monitor_row():
+    # The llm_call feed row is the monitor's kept record -- a flattened
+    # CallRecord.to_primitive() plus the printed row's extras -- with
+    # serve_penn.drain_events stamping kind="llm_call" on the way out. Drive
+    # the real monitor so a new CallRecord field (the #359 tool metadata was
+    # one) can't reach the wire without live.ts naming it.
+    import io
+
+    from backend.llm_monitor import LlmCallMonitor
+    from text_adventure_games.usage import CallRecord, Usage, UsageLedger
+
+    monitor = LlmCallMonitor(stream=io.StringIO(), color=False)
+    rec = CallRecord(usage=Usage.zero("mock", "mock-model"), cost_usd=0.0)
+    monitor.on_call(rec, "decide", UsageLedger())
+    (kept,) = monitor.drain()
+    wire = dict(kept, kind="llm_call")  # serve_penn.drain_events's stamp
+    _assert_ts_matches("LlmCallRecord", set(wire))
+
+
+def test_live_ts_mirrors_api_response_models():
+    # The typed responses (handshake, feed envelope, memory stream) already
+    # have pydantic definitions in api.py -- pair them directly, like the
+    # replay.ts pairs above. Needs the server extra (fastapi), same skip
+    # contract as test_live_seam.py.
+    api = pytest.importorskip("backend.api")
+    pairs = {
+        "LiveStatusResponse": api.LiveStatusResponse,
+        "EventsResponse": api.EventsResponse,
+        "MemoryStreamResponse": api.MemoryStreamResponse,
+    }
+    for ts_name, model in pairs.items():
+        _assert_ts_matches(ts_name, set(model.model_fields))

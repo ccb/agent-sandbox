@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { Replay } from "../types/replay";
 import type { LiveState, ReceivedLlmCall } from "../useLive";
 import { ConversationFeed } from "./ConversationFeed";
+import { EventFeed } from "./EventFeed";
 import { LlmCallLog } from "./LlmCallLog";
 import { SpritePreview } from "./SpritePreview";
 import "./AgentPanel.css"; // the llm-log row/pill styles LlmCallLog renders with
@@ -174,10 +175,15 @@ export function LlmDashboard({
 
   // Run totals: the monitor numbers calls and carries the cumulative cost on
   // every record, so the newest row is exact even after old rows fall off; the
-  // handshake's /usage read covers the stretch before any record arrives.
+  // handshake's /usage read covers the stretch before any record arrives. That
+  // fallback prefers the RUN-scoped fields (#644): the lifetime `calls`/
+  // `total_cost_usd` tick with the mock brain's $0 pacing records, re-inflating
+  // the headline #601 fixed server-side ("27 calls over a 3-row log"). Older
+  // backends without the run fields still fall through to the lifetime pair.
   const newest = live.calls.length ? live.calls[live.calls.length - 1] : null;
-  const totalCalls = newest?.call_no ?? live.usage?.calls ?? 0;
-  const totalCost = newest?.cum_cost_usd ?? live.usage?.total_cost_usd ?? 0;
+  const totalCalls = newest?.call_no ?? live.usage?.run_calls ?? live.usage?.calls ?? 0;
+  const totalCost =
+    newest?.cum_cost_usd ?? live.usage?.run_cost_usd ?? live.usage?.total_cost_usd ?? 0;
   const budget = live.usage?.max_cost_usd;
 
   // The current step's frame map for the conversation feed (#534): the live feed's
@@ -245,6 +251,11 @@ export function LlmDashboard({
       </header>
 
       <ConversationFeed frame={feedFrame} personas={personas} onOpenAgent={onOpenAgent} />
+
+      {/* Run events (#644): the game_event/wish rows off the live feed — the
+          same records the Godot HUD logs. Live-only: a baked replay has no
+          feed, and its events already live in the replay file. */}
+      {live.enabled && <EventFeed events={live.events} connected={live.connected} />}
 
       <div className="llm-grid">
         {cells.map((cell) => {

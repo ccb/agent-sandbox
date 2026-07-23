@@ -238,6 +238,65 @@ def test_run_loop_finished_stepper_auto_pauses():
     assert asyncio.run(scenario())
 
 
+def test_run_loop_publishes_finishing_tick_events_and_wishes():
+    # #644: tick_once drains the stepper's buffers even on the finishing tick
+    # (agents is None), and those records are published here or nowhere -- e.g.
+    # a POST /world/event (or an end-of-run wish flush) landing between the
+    # last real tick and the day's close. They were already persisted by the
+    # stepper's own tail flush; before the fix the live feed silently dropped
+    # them, so "watched live" disagreed with the stored artifacts.
+    class WishingStepper(ScriptedStepper):
+        def __init__(self):
+            # A CALLABLE frame source: one real frame at step 0, then None ->
+            # the loop takes the finishing path on the second tick. on_tick
+            # still runs on that finishing tick, so it drains one last event.
+            super().__init__(
+                frames=lambda step: {"a": {"x": 0}} if step == 0 else None,
+                on_tick=lambda step: [{"channel": "narration", "text": f"tick {step}"}],
+            )
+            self._wish_drains = 0
+
+        def drain_wishes(self):
+            # The wish surfaces on the SECOND drain -- the finishing tick.
+            self._wish_drains += 1
+            if self._wish_drains == 2:
+                return [{"actor": "a", "desired": "a bike rack"}]
+            return []
+
+    async def scenario():
+        log = EventLog()
+        controller = LiveRunController(WishingStepper(), threading.Lock())
+        await _drive(
+            controller,
+            log,
+            lambda l: any(
+                r["kind"] == "status" and r["reason"] == "finished" for r in l.since(0)
+            ),
+        )
+        return log.since(0)
+
+    records = asyncio.run(scenario())
+    engine = [r for r in records if r["kind"] == "engine"]
+    # BOTH ticks' events made the feed: step 0 (the real frame) AND step 1
+    # (the finishing tick, which publishes no frame).
+    assert [e["event"]["text"] for e in engine] == ["tick 0", "tick 1"]
+    assert engine[1]["step"] == 1
+    wishes = [r for r in records if r["kind"] == "wish"]
+    assert [w["desired"] for w in wishes] == ["a bike rack"]
+    # ...and everything landed BEFORE the finished status, mirroring the frame
+    # path's publish order, so a follower sees the full run by "finished".
+    finished_at = next(
+        i
+        for i, r in enumerate(records)
+        if r["kind"] == "status" and r.get("reason") == "finished"
+    )
+    assert all(
+        i < finished_at
+        for i, r in enumerate(records)
+        if r["kind"] in ("engine", "wish")
+    )
+
+
 def test_run_loop_appends_engine_events_when_stepper_drains():
     async def scenario():
         log = EventLog()
