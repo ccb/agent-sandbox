@@ -13,6 +13,7 @@ Any world authored in the same YAML shape builds the same way.
 """
 
 import difflib
+import os
 
 import yaml
 from text_adventure_games.things.characters import Character
@@ -47,16 +48,71 @@ from .tiled_game import TiledGame
 # for the hub), and optionally hub: true for the world's center.
 
 
-def load_world_data(path) -> tuple[list[dict], list[dict]]:
+def load_world_yaml(path, cast: list[str] | None = None) -> dict:
+    """Read a world YAML into a dict, resolving a cast-by-reference world (#731).
+
+    A world either carries its cast inline (a ``personas:`` list -- e.g. the
+    boil demo, ``world_data_boil.yaml``) or names it by reference: a
+    ``cast: [diego, tanaka, sofia]`` list of persona ids, each resolved to
+    ``personas/<id>.yaml`` next to the world file. A persona file holds the
+    persona's own fields plus optional ``relationships:`` / ``meetings:``
+    blocks (see ``penn/personas/README.md``); composition lifts those into the
+    world's top-level blocks, dropping any entry that references a persona
+    outside the cast -- an edge needs both ends present, a meeting needs all
+    its participants.
+
+    ``cast`` overrides the file's list, so the pre-run config seam (#730) can
+    pick a sub-cast without editing YAML. Inline-personas worlds ignore it.
+    """
+    with open(path, encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    ids = cast if cast is not None else data.get("cast")
+    if not ids:
+        return data
+    if len(ids) != len(set(ids)):
+        raise ValueError(f"cast: duplicate persona ids in {ids}")
+    library = os.path.join(os.path.dirname(os.path.abspath(path)), "personas")
+    entries = []
+    for pid in ids:
+        persona_path = os.path.join(library, f"{pid}.yaml")
+        if not os.path.exists(persona_path):
+            raise ValueError(
+                f"cast: no persona file for {pid!r} (expected {persona_path})"
+            )
+        with open(persona_path, encoding="utf-8") as f:
+            entries.append(yaml.safe_load(f))
+    names = {entry["name"] for entry in entries}
+    data["personas"] = [
+        {k: v for k, v in entry.items() if k not in ("relationships", "meetings")}
+        for entry in entries
+    ]
+    data["relationships"] = [
+        edge
+        for entry in entries
+        for edge in entry.get("relationships") or []
+        if edge.get("a") in names and edge.get("b") in names
+    ]
+    data["meetings"] = [
+        meeting
+        for entry in entries
+        for meeting in entry.get("meetings") or []
+        if set(meeting.get("participants") or []) <= names
+    ]
+    return data
+
+
+def load_world_data(
+    path, cast: list[str] | None = None
+) -> tuple[list[dict], list[dict]]:
     """Load + normalize a world YAML into ``(personas, locations)``.
 
     Every persona is given a uniform ``schedule`` (see :func:`_normalize_personas`)
     so downstream code has a single path. ``path`` points at a YAML with
-    ``personas:`` and ``locations:`` lists -- e.g. the UPenn campus
-    (``world_data_upenn.yaml``). The result is what :func:`build_world` expects.
+    ``locations:`` and either an inline ``personas:`` list or a ``cast:``
+    persona-reference list (resolved by :func:`load_world_yaml`, #731). The
+    result is what :func:`build_world` expects.
     """
-    with open(path, encoding="utf-8") as f:
-        data = yaml.safe_load(f)
+    data = load_world_yaml(path, cast)
     return _normalize_personas(data["personas"]), data["locations"]
 
 
