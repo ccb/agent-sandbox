@@ -4,6 +4,7 @@ import { type LiveState, type ReceivedLlmCall, useThinking } from "../useLive";
 import { ConversationFeed } from "./ConversationFeed";
 import { EventFeed } from "./EventFeed";
 import { LlmCallLog } from "./LlmCallLog";
+import { MostTakenActions } from "./MostTakenActions";
 import { SpritePreview } from "./SpritePreview";
 import "./AgentPanel.css"; // the llm-log row/pill styles LlmCallLog renders with
 import "./LlmDashboard.css";
@@ -271,6 +272,11 @@ export function LlmDashboard({
       </header>
 
       <ConversationFeed frame={feedFrame} personas={personas} onOpenAgent={onOpenAgent} />
+
+      {/* The most-taken-actions tally (#701): works from both sources — the
+          baked replay's events through the cursor, or the live feed's
+          game_event rows — so it renders in replay mode too, unlike EventFeed. */}
+      <MostTakenActions replay={replay} live={live} replayStep={replayStep} />
 
       {/* Run events (#644): the game_event/wish rows off the live feed — the
           same records the Godot HUD logs. Live-only: a baked replay has no
