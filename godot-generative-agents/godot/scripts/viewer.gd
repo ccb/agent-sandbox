@@ -158,6 +158,7 @@ const RestartDetect := preload("res://scripts/restart_detect.gd")
 const RunState := preload("res://scripts/run_state.gd")
 const PayloadGuards := preload("res://scripts/payload_guards.gd")
 const DecidingState := preload("res://scripts/deciding_indicator.gd")
+const ReplaySave := preload("res://scripts/replay_save.gd")
 
 # The replay/live contract schema this viewer renders (backend.contract
 # SCHEMA_VERSION). A payload declaring a different one still renders, but warns
@@ -317,6 +318,13 @@ var _live_started := false          # first backfill applied -> jump to the live
 var _reconnect_delay := 1.0         # doubles per failure, capped; reset on connect
 var _retry_pending := false
 var _handshake_http: HTTPRequest    # GET /live (its own node: HTTPRequest is one-shot)
+# Save this run (#716): a two-step chain over one HTTPRequest node. The current
+# live run id is NOT in the /live handshake -- it's the "current" field of
+# GET /runs -- so we fetch the list, read `current`, then fetch that run's replay
+# and hand the raw body (byte-preserving) to ReplaySave.
+var _save_http: HTTPRequest = null
+var _save_stage := ""       # "" idle | "runs" awaiting the list | "replay" awaiting the export
+var _save_run_id := ""
 var _events_http: HTTPRequest       # GET /events backfill
 var _reset_http: HTTPRequest = null
 var _live_buildings := {}           # Focus-dropdown entries discovered so far (a set)
@@ -392,6 +400,9 @@ func _ready() -> void:
 	# the current campus view into the gallery; the gallery button toggles the pop-up of
 	# captures taken this session. Both live only in memory (no file export yet).
 	_panel.snapshot_requested.connect(_take_snapshot)
+	# Save this run (#716): live-mode only; fetches the current run's replay and
+	# writes it to a local penn_replay JSON.
+	_panel.save_run_requested.connect(_on_save_run_requested)
 	# The live "thinking…" overlay (issue #372) lives on the same UI layer as the
 	# sidebar so it draws in screen space above the world; hidden until a stall.
 	_thinking_badge = preload("res://scripts/thinking_badge.gd").new()
@@ -475,6 +486,11 @@ func _ready() -> void:
 	# fetches it over HTTP so a new sim never needs a re-export.
 	if _resolve_backend_url() != "":
 		_start_live()
+	elif LaunchConfig.mode == LaunchConfig.Mode.REPLAY and LaunchConfig.replay_text != "":
+		# Opened from the Past-runs browser (#716): the replay JSON was fetched by
+		# the menu and handed over as text -- load it directly (works on desktop and
+		# web, where the file/HTTP loaders diverge).
+		_load_replay_from_text(LaunchConfig.replay_text)
 	elif _is_web:
 		_load_replay_web()
 	else:
@@ -1974,6 +1990,72 @@ func _render_and_save_clip(a: int, b: int, kind: String) -> void:
 				count[0], gdir, ClipExport.ffmpeg_command(dir)], gdir)
 		else:
 			_panel.set_clip_status("ffmpeg failed — see console; frames → %s" % gdir, gdir)
+
+
+func _on_save_run_requested() -> void:
+	# Save this run (#716). Only meaningful live -- a baked replay is already a
+	# file on disk. Ignore a re-press while a save is in flight.
+	if not _is_live:
+		return
+	if _save_stage != "":
+		return
+	if _save_http == null:
+		_save_http = HTTPRequest.new()
+		_save_http.timeout = 10.0
+		_save_http.request_completed.connect(_on_save_http_completed)
+		add_child(_save_http)
+	_save_stage = "runs"
+	_panel.set_save_status("Saving…", "")
+	var err := _save_http.request("%s/runs" % _live_url, _live_headers())
+	if err != OK:
+		_save_stage = ""
+		_panel.set_save_status("Save failed (request error %d)." % err, "")
+
+
+func _on_save_http_completed(
+	result: int, code: int, _headers: PackedStringArray, body: PackedByteArray
+) -> void:
+	# A transport failure (unreachable backend, timeout) arrives with code == 0, so
+	# check the RESULT before the HTTP code -- otherwise it reads as "HTTP 0".
+	if result != HTTPRequest.RESULT_SUCCESS:
+		_save_stage = ""
+		_panel.set_save_status("Save failed — couldn't reach the backend (down or timed out).", "")
+		return
+	if code != 200:
+		_save_stage = ""
+		_panel.set_save_status("Save failed (HTTP %d)." % code, "")
+		return
+	match _save_stage:
+		"runs":
+			var data: Variant = JSON.parse_string(body.get_string_from_utf8())
+			if typeof(data) != TYPE_DICTIONARY or not bool((data as Dictionary).get("available", false)):
+				_save_stage = ""
+				_panel.set_save_status("This backend isn't persisting runs.", "")
+				return
+			var current: Variant = (data as Dictionary).get("current")
+			if not (current is String) or String(current) == "":
+				_save_stage = ""
+				_panel.set_save_status("No saved run yet — let the sim run a moment.", "")
+				return
+			_save_run_id = String(current)
+			_save_stage = "replay"
+			var err := _save_http.request(
+				"%s/runs/%s/replay" % [_live_url, _save_run_id], _live_headers())
+			if err != OK:
+				_save_stage = ""
+				_panel.set_save_status("Save failed (request error %d)." % err, "")
+		"replay":
+			_save_stage = ""
+			# Pass the RAW body text (no JSON round-trip) so the saved file stays
+			# byte-identical to the backend's build_replay output.
+			var path := ReplaySave.save(body.get_string_from_utf8(), _save_run_id)
+			if path == "":
+				_panel.set_save_status("Save failed — see console.", "")
+			else:
+				_panel.set_save_status("Saved → %s" % path,
+					"" if OS.has_feature("web") else path)
+		_:
+			_save_stage = ""  # stray completion; ignore
 
 
 func _flash() -> void:

@@ -38,10 +38,14 @@ func _ready() -> void:
 	# to count — it gets its own check (does it paint any buttons?) rather than a
 	# spot in SCENES, which would trip the tile-cells assertion.
 	failures += await _check_menu()
+	# The Past-runs browser (issue #716) is a code-built menu-like scene with no
+	# campus tiles, so — like the landing menu — it gets its own check (root script
+	# attached + it builds without a backend) rather than a spot in SCENES.
+	failures += await _check_past_runs()
 	# The snapshot gallery (issue #253) is a code-built pop-up, not a scene in SCENES;
 	# check that it builds and accepts snapshots (the capture path it feeds is GPU-only).
 	failures += _check_gallery()
-	var checks := SCENES.size() + 2
+	var checks := SCENES.size() + 3
 	if failures == 0:
 		print("smoke_test: PASS — %d scene(s) OK" % checks)
 	else:
@@ -131,6 +135,37 @@ func _check_menu() -> int:
 		printerr("  %s: menu painted 0 buttons (broken _ready?)" % path)
 		return 1
 	print("  %s: OK (%d menu button(s))" % [path, buttons])
+	return 0
+
+
+# Returns 0 if the Past-runs browser (issue #716) is healthy, 1 if not. With no
+# backend URL set it renders the "connect first" state -- we only assert the root
+# script attached (parse gate, #639) and that it built its buttons (Back + rows).
+func _check_past_runs() -> int:
+	var path := "res://scenes/past_runs.tscn"
+	var packed: PackedScene = load(path)
+	if packed == null:
+		printerr("  %s: could not load scene (missing file or broken script ref)" % path)
+		return 1
+	var inst: Node = packed.instantiate()
+	if inst == null:
+		printerr("  %s: could not instantiate scene" % path)
+		return 1
+	add_child(inst)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if inst.get_script() == null:
+		printerr("  %s: root script failed to load (parse/compile error?)" % path)
+		inst.queue_free()
+		await get_tree().process_frame
+		return 1
+	var buttons := _count_buttons(inst)
+	inst.queue_free()
+	await get_tree().process_frame
+	if buttons <= 0:
+		printerr("  %s: built 0 buttons (broken _ready?)" % path)
+		return 1
+	print("  %s: OK (%d button(s))" % [path, buttons])
 	return 0
 
 

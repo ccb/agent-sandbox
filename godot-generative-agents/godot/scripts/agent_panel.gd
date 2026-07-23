@@ -55,6 +55,9 @@ signal filter_changed(location: String)
 # backend's run state and pushes it back via set_live_run — the button flips
 # when the backend confirms, not when clicked.
 signal live_run_toggle_requested
+# Save this run (issue #716): the live "Save this run" button. The viewer fetches
+# the current run's replay from the backend registry and writes it to disk.
+signal save_run_requested
 # The "Back to menu" button was pressed: return to the landing page (issue #399).
 # The viewer handles it without shutting a live backend down (see _on_back_to_menu).
 signal back_to_menu_requested
@@ -262,6 +265,9 @@ var _dimmed := {}                   # names the filter has dimmed (set: name -> 
 var _live_badge: Label = null
 var _live_status: Label = null
 var _live_run_btn: Button = null    # backend Start/Stop toggle (set_live_run)
+var _save_run_btn: Button = null     # "Save this run" (live mode; #716)
+var _save_status: Label = null       # its result line ("Saved → …")
+var _save_reveal_btn: Button = null  # reveal the saved file (desktop only)
 
 
 func _ready() -> void:
@@ -696,10 +702,39 @@ func set_live(live: bool) -> void:
 		_live_run_btn.pressed.connect(func(): live_run_toggle_requested.emit())
 		_col.add_child(_live_run_btn)
 		_col.move_child(_live_run_btn, _live_status.get_index())
+		# Save this run (#716): fetch the current run's replay and write it to a
+		# local penn_replay JSON. Lives just below the Start/Stop toggle; its
+		# result line + a Reveal button mirror the clip-export status row.
+		_save_run_btn = Button.new()
+		_save_run_btn.text = "Save this run"
+		_save_run_btn.tooltip_text = "Fetch this run's replay from the backend and save it as a local penn_replay JSON you can re-open"
+		_save_run_btn.focus_mode = Control.FOCUS_NONE
+		_save_run_btn.pressed.connect(func() -> void: save_run_requested.emit())
+		_col.add_child(_save_run_btn)
+		_col.move_child(_save_run_btn, _live_run_btn.get_index() + 1)
+
+		_save_status = Label.new()
+		_save_status.text = ""
+		_save_status.visible = false
+		_save_status.add_theme_color_override("font_color", STATUS_COLOR)
+		_save_status.add_theme_font_size_override("font_size", 14)
+		_save_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_col.add_child(_save_status)
+		_col.move_child(_save_status, _save_run_btn.get_index() + 1)
+
+		_save_reveal_btn = Button.new()
+		_save_reveal_btn.text = "Reveal saved file"
+		_save_reveal_btn.focus_mode = Control.FOCUS_NONE
+		_save_reveal_btn.visible = false
+		_col.add_child(_save_reveal_btn)
+		_col.move_child(_save_reveal_btn, _save_status.get_index() + 1)
 	if _live_badge != null:
 		_live_badge.visible = live
 		_live_status.visible = live
 		_live_run_btn.visible = _live_run_btn.visible and live
+		_save_run_btn.visible = live
+		_save_status.visible = _save_status.visible and live
+		_save_reveal_btn.visible = _save_reveal_btn.visible and live
 
 
 func set_live_status(text: String) -> void:
@@ -730,6 +765,22 @@ func set_live_run(state: String) -> void:
 			_live_run_btn.text = "▶  Resume simulation"
 		_:
 			_live_run_btn.visible = false
+
+
+func set_save_status(text: String, reveal_path: String) -> void:
+	## The result of a "Save this run" (#716). Shows the message + a Reveal button
+	## when a desktop path is given. Mirrors set_clip_status: rewire Reveal to the
+	## newest path (disconnect any prior binding first).
+	if _save_status == null:
+		return
+	_save_status.text = text
+	_save_status.visible = text != ""
+	_save_reveal_btn.visible = reveal_path != ""
+	for c in _save_reveal_btn.pressed.get_connections():
+		_save_reveal_btn.pressed.disconnect(c["callable"])
+	if reveal_path != "":
+		_save_reveal_btn.pressed.connect(func() -> void:
+			OS.shell_show_in_file_manager(reveal_path))
 
 
 func set_progress(step: int, total: int) -> void:

@@ -21,6 +21,8 @@ extends PanelContainer
 ## worked just because the button was pressed.
 signal stop_requested
 
+const Money := preload("res://scripts/money.gd")
+
 # Same footprint idiom as the sidebar (agent_panel sets 300); the HUD hugs the
 # top-right corner with this width and grows downward as rows appear.
 const PANEL_WIDTH := 250.0
@@ -263,7 +265,7 @@ func set_usage(summary: Dictionary) -> void:
 	_values["calls"].text = _fmt_int(int(summary.get("calls", 0)))
 	_values["tokens_in"].text = _fmt_int(prompt_total)
 	_values["tokens_out"].text = _fmt_int(output)
-	_values["cost"].text = _fmt_usd(cost)
+	_values["cost"].text = Money.usd(cost)
 	_update_rate(prompt_total + output)
 
 	# The ledger's cost ceiling (#183), when the source reports one. TRIPPED is
@@ -275,7 +277,7 @@ func set_usage(summary: Dictionary) -> void:
 			_values["budget"].text = "TRIPPED"
 			_values["budget"].add_theme_color_override("font_color", TRIPPED_COLOR)
 		else:
-			_values["budget"].text = "%s left" % _fmt_usd(maxf(0.0, ceiling - cost))
+			_values["budget"].text = "%s left" % Money.usd(maxf(0.0, ceiling - cost))
 			_values["budget"].remove_theme_color_override("font_color")
 	else:
 		_budget_row.visible = false
@@ -454,12 +456,6 @@ func _fmt_int(n: int) -> String:
 		out = "," + s.right(3) + out
 		s = s.substr(0, s.length() - 3)
 	return s + out
-
-
-func _fmt_usd(x: float) -> String:
-	# Four decimals below $10 (early-run costs are fractions of a cent), two
-	# above (where the tail digits stop mattering).
-	return ("$%.4f" if x < 10.0 else "$%.2f") % x
 
 
 func _fmt_tok(n: int) -> String:
