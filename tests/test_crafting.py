@@ -337,6 +337,45 @@ def test_gated_recipe_without_a_name_is_rejected():
         Recipe(inputs=["string", "stick"], output=_bow, known=False)
 
 
+# --- save/load: learned recipes persist (issue #184) ------------------------
+#
+# Recipes themselves are runtime-only (their output is a factory callable,
+# like triggers) and must be re-registered after a load -- but WHICH gated
+# recipes the player has discovered is plain player progress and must survive
+# a save/load round trip alongside turn/game_over.
+
+
+def test_learned_recipes_survive_a_save_load_round_trip():
+    game, player, cap = _game(
+        recipes=[_bow_recipe(known=False)], inv=_string_and_stick()
+    )
+    game.learn_recipe("bow")
+    restored = games.Game.from_json(game.to_json())
+    assert restored.learned_recipes == {"bow"}
+    # End to end: re-register the (runtime-only) recipe and the learned gate
+    # stays open -- the loaded player crafts without re-reading the book.
+    restored.add_recipe(_bow_recipe(known=False))
+    restored.parser.set_renderer(CaptureRenderer())
+    restored.do_command("make bow")
+    assert "bow" in restored.player.inventory
+
+
+def test_learned_recipes_serialize_as_a_sorted_list():
+    # JSON has no sets; a sorted list keeps dumps hash-seed-stable (#545).
+    game, player, cap = _game()
+    game.learn_recipe("raft")
+    game.learn_recipe("bow")
+    assert game.to_primitive()["learned_recipes"] == ["bow", "raft"]
+
+
+def test_loading_an_old_save_without_learned_recipes_defaults_empty():
+    game, player, cap = _game()
+    data = game.to_primitive()
+    data.pop("learned_recipes", None)  # a save written before issue #184
+    restored = games.Game.from_primitive(data)
+    assert restored.learned_recipes == set()
+
+
 # --- craft_gap wish capture (#628, Option B) --------------------------------
 #
 # A recipe-ful world's "make <target-with-no-matching-recipe>" used to die

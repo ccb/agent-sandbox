@@ -1335,7 +1335,9 @@ class Game:
         Note: the clock's configuration is saved, but triggers (including
         scheduled events) are not — their conditions and actions are arbitrary
         functions and can't be serialized. Games that rely on them should
-        re-register them after loading.
+        re-register them after loading. Recipes are runtime-only the same way
+        (their output is a factory callable), but which gated recipes the
+        player has *learned* is plain progress data and is saved (issue #184).
         """
         data = {
             "player": self.player.name,
@@ -1345,6 +1347,8 @@ class Game:
             "game_history": self.game_history,  # TODO this is empty?
             "game_over": self.game_over,
             "game_over_description": self.game_over_description,
+            # Sorted so dumps stay hash-seed-stable (issue #545).
+            "learned_recipes": sorted(self.learned_recipes),
             "characters": [c.to_primitive() for c in self.characters.values()],
             "locations": [l.to_primitive() for l in self.locations.values()],
             "actions": sorted([a for a in self.parser.actions]),
@@ -1539,6 +1543,8 @@ class Game:
         instance.game_history = data["game_history"]
         instance.game_over = data["game_over"]
         instance.game_over_description = data["game_over_description"]
+        # Missing from saves written before issue #184: default to none learned.
+        instance.learned_recipes = set(data.get("learned_recipes", []))
 
         return instance
 
