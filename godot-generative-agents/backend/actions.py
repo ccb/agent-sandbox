@@ -184,173 +184,79 @@ class WaitPenn(base.Wait):
 
 
 class DrinkPenn(consume.Drink):
-    """The engine's Drink, plus the Penn boil-water twist (#300): drinking a
-    liquid that ``requires_boiling`` and is not ``is_boiled`` sets ``is_sick``
-    on the drinker and logs a ``sickness`` GameEvent -- the measurable
-    motivation signal the self-coding experiment (#299) needs. The pair is
-    deliberate: properties default to False, so gating on ``is_boiled`` alone
-    would sicken every future drinkable; ``requires_boiling`` scopes the rule
-    to raw water, and a (self-coded, #301) boil action clears it by setting
-    ``is_boiled``. Registered with the same "drink" action name, so it
-    overrides the built-in for this game only. Drinking specifically *boiled*
-    water (``is_boiled``) while ``is_sick`` clears the sickness and logs a
-    ``recovery`` event, so a full drink -> sicken -> boil -> drink -> recover arc
-    is watchable. The cure is gated on ``is_boiled`` (not "any safe drink") on
-    purpose: the #301 comparison asks whether an agent *learned to boil*, which
-    a cure that any beverage could trigger would erase (upstreaming the generic
-    slice is #464)."""
+    """The engine's Drink with Penn's boil-experiment specifics kept local.
 
-    def apply_effects(self):
-        super().apply_effects()
-        # If the drink just killed the drinker (the engine's Drink sets is_dead
-        # on a poisonous item), the #300 health twist is moot: don't sicken or
-        # "recover" a corpse -- a recovery on a dead agent would log the event
-        # and a feel-better memory for someone who just died.
+    The generic sickness arc -- a sickening drink sets ``is_sick`` (+ a
+    ``sickness`` GameEvent), safe water cures it (+ ``recovery``) -- was
+    upstreamed into the engine's Drink by #464; this subclass overrides only
+    the engine's ``_sickens``/``_cures`` gates and effect hooks to pin what
+    stays Penn's (#300):
+
+    * the gates: raw water (``requires_boiling`` and not ``is_boiled``)
+      sickens -- the pair is deliberate: properties default to False, so
+      gating on ``is_boiled`` alone would sicken every future drinkable --
+      and only *boiled* water cures, NOT the engine's "any safe water":
+      the #301 comparison asks whether an agent *learned to boil*, which a
+      cure any beverage could trigger would erase;
+    * the authoritative outcome counters (#595): ``drank_unboiled`` /
+      ``drank_safe``, read directly by the experiment harness instead of
+      parsing the event log;
+    * the one-shot transition markers ``just_sickened`` / ``just_recovered``
+      consumed by ``cognition.remember_outcome``, and the vivid
+      ``sick_self_description`` wording the engine's #634 self-line emits.
+
+    Registered with the same "drink" action name, so it overrides the
+    built-in for this game only."""
+
+    def _sickens(self) -> bool:
+        # Penn's rule: this drink is raw water the agent did NOT boil first.
+        return self.item.get_property(
+            "requires_boiling"
+        ) and not self.item.get_property("is_boiled")
+
+    def _cures(self) -> bool:
+        # Narrower than the engine's "boiled, or never needed boiling".
+        return bool(self.item.get_property("is_boiled"))
+
+    def _apply_health_effects(self):
         if self.character.get_property("is_dead"):
+            # The engine skips the arc on a corpse too; checked here as well
+            # so the #595 counters below never stamp a drink that just killed.
             return
-        if self.item.get_property("requires_boiling") and not self.item.get_property(
-            "is_boiled"
-        ):
-            # Authoritative outcome (#595): this drink was raw water -- the
-            # agent did NOT boil first. The harness reads this counter
-            # directly instead of parsing the event log.
+        # Authoritative outcome (#595): stamp which kind of drink this was.
+        # "safe", not "boiled", for the else-branch: it also counts outside
+        # the boil world, where safe drinks needn't involve a stove.
+        if self._sickens():
             self.character.set_property(
                 "drank_unboiled",
                 (self.character.get_property("drank_unboiled") or 0) + 1,
             )
-            self.character.set_property("is_sick", True)
-            # Wording for the engine's is_sick self-line (#634): describe_for
-            # emits this while sick, replacing the Penn-local append cognition
-            # used to add (#594) -- one line, Penn's vivid phrasing.
-            self.character.set_property(
-                "sick_self_description",
-                "You feel violently ill -- your stomach is cramping.",
-            )
-            # One-shot marker: this drink is what just sickened the character,
-            # as opposed to an already-sick character drinking something clean.
-            # Consumed (and cleared) by cognition.remember_outcome so
-            # the high-importance memory attaches to the actual transition.
-            self.character.set_property("just_sickened", True)
-            self.parser.ok(
-                f"{self.character.name} clutches their stomach -- "
-                "that water was foul."
-            )
-            self.game.log_event(
-                self.character.name,
-                "sickness",
-                summary=(f"{self.character.name} got sick drinking {self.item.name}"),
-                payload={
-                    "item": self.item.name,
-                    "location": getattr(self.character.location, "name", None),
-                },
-            )
         else:
-            # Authoritative outcome (#595): any other successful, non-fatal
-            # drink is safe -- boiled water, or water that never required
-            # boiling -- hence "safe", not "boiled": this counter also stamps
-            # outside the boil world, where safe drinks needn't involve a
-            # stove. The harness reads it directly instead of parsing the
-            # event log.
             self.character.set_property(
                 "drank_safe",
                 (self.character.get_property("drank_safe") or 0) + 1,
             )
-            if self.character.get_property("is_sick") and self.item.get_property(
-                "is_boiled"
-            ):
-                # The recovery half of the arc: drinking the *boiled* water
-                # cures a sick drinker. Gated on is_boiled (not merely "not
-                # raw") so an unrelated safe beverage can't stand in for
-                # boiling -- that's the behavior the #301 "did it learn to
-                # boil?" comparison rests on. Only fires on the sick->well
-                # transition, so a healthy drinker logs nothing.
-                self.character.set_property("is_sick", False)
-                # One-shot marker mirroring just_sickened: cognition.remember_outcome
-                # keys off it to write the "feel better" memory to the agent's card.
-                self.character.set_property("just_recovered", True)
-                self.parser.ok(
-                    f"{self.character.name} drinks deep -- the clean "
-                    "water settles their stomach, and the sickness passes."
-                )
-                self.game.log_event(
-                    self.character.name,
-                    "recovery",
-                    summary=(
-                        f"{self.character.name} recovered after drinking {self.item.name}"
-                    ),
-                    payload={
-                        "item": self.item.name,
-                        "location": getattr(self.character.location, "name", None),
-                    },
-                )
+        super()._apply_health_effects()
 
-
-class Activate(base.Action):
-    """Switch on a fixed device -- a stove, a sink (#300). Devices are room
-    fixtures (in scope, not necessarily held), marked with ``is_device``; the
-    only effect is the ``is_on`` flag. Deliberately no downstream process: the
-    stove heats nothing until the self-coding experiment (#299) writes one.
-    Distinct verb from the engine's Light ("turn on" alias) -- no flame here."""
-
-    ACTION_NAME = "activate"
-    ACTION_DESCRIPTION = "Switch on a device (a stove, a sink)"
-
-    def __init__(self, game, command: str, actor=None):
-        super().__init__(game, actor=actor)
-        self.character = self.acting_character(command, hint="operator")
-        self.item = self.parser.match_item(
-            command, self.parser.get_items_in_scope(self.character), hint="device"
+    def _sicken(self):
+        super()._sicken()
+        # Wording for the engine's is_sick self-line (#634): describe_for
+        # emits this while sick -- one line, Penn's vivid phrasing.
+        self.character.set_property(
+            "sick_self_description",
+            "You feel violently ill -- your stomach is cramping.",
         )
+        # One-shot marker: this drink is what just sickened the character,
+        # as opposed to an already-sick character drinking something clean.
+        # Consumed (and cleared) by cognition.remember_outcome so the
+        # high-importance memory attaches to the actual transition.
+        self.character.set_property("just_sickened", True)
 
-    def check_preconditions(self) -> bool:
-        if not self.was_matched(
-            self.item, error_message="I don't know what you want to switch on."
-        ):
-            return False
-        if not self.item.get_property("is_device"):
-            self.parser.fail(f"The {self.item.name} isn't something you can switch on.")
-            return False
-        if self.item.get_property("is_on"):
-            self.parser.fail(f"The {self.item.name} is already on.")
-            return False
-        return True
-
-    def apply_effects(self):
-        self.item.set_property("is_on", True)
-        return self.parser.ok(f"The {self.item.name} hums to life.")
-
-
-class Deactivate(base.Action):
-    """Switch off a device -- the inverse of :class:`Activate`."""
-
-    ACTION_NAME = "deactivate"
-    ACTION_DESCRIPTION = "Switch off a device (a stove, a sink)"
-
-    def __init__(self, game, command: str, actor=None):
-        super().__init__(game, actor=actor)
-        self.character = self.acting_character(command, hint="operator")
-        self.item = self.parser.match_item(
-            command, self.parser.get_items_in_scope(self.character), hint="device"
-        )
-
-    def check_preconditions(self) -> bool:
-        if not self.was_matched(
-            self.item, error_message="I don't know what you want to switch off."
-        ):
-            return False
-        if not self.item.get_property("is_device"):
-            self.parser.fail(
-                f"The {self.item.name} isn't something you can switch off."
-            )
-            return False
-        if not self.item.get_property("is_on"):
-            self.parser.fail(f"The {self.item.name} is already off.")
-            return False
-        return True
-
-    def apply_effects(self):
-        self.item.set_property("is_on", False)
-        return self.parser.ok(f"The {self.item.name} winds down and goes quiet.")
+    def _recover(self):
+        super()._recover()
+        # One-shot marker mirroring just_sickened: cognition.remember_outcome
+        # keys off it to write the "feel better" memory to the agent's card.
+        self.character.set_property("just_recovered", True)
 
 
 class TalkTo(base.Action):

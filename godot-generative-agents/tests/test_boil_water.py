@@ -6,7 +6,8 @@ Spec: godot-generative-agents/docs/specs/2026-07-09-boil-water-action-layer.md
 import pytest
 
 from backend.build_world import _normalize_personas, build_world
-from backend.actions import DrinkPenn, Activate, Deactivate
+from backend.actions import DrinkPenn
+from text_adventure_games.actions import Activate, Deactivate
 from backend.penn.penn_world import (
     PENN_EXTRA_ACTIONS,
     WORLD_DATA_BOIL,

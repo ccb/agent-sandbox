@@ -31,9 +31,7 @@ import yaml
 # `backend` package now, so a plain import works -- no sys.path juggling.
 from backend import path_finder
 from backend.actions import (
-    Activate,
     CheckOutBook,
-    Deactivate,
     DrinkPenn,
     ReadPenn,
     Study,
@@ -68,11 +66,12 @@ UPENN_DIR = os.path.join(_SIM_DIR, "the_upenn")
 # The Penn-local verb set (#300): registered on top of Travel/Act via
 # build_world(extra_actions=...). DrinkPenn overrides the engine's "drink"; Craft is
 # the engine crafting action that drives the boil-water Recipe (see _boil_recipe) --
-# boiling is now a declarative transform, not a bespoke action. Upstreaming these
-# into the engine library is #464.
+# boiling is now a declarative transform, not a bespoke action. The device verbs
+# (activate/deactivate) and the generic sicken/cure drink pair were upstreamed
+# into the engine by #464: the engine now registers Activate/Deactivate by
+# default, so they need no entry here, and DrinkPenn keeps only Penn's
+# experiment bookkeeping on top of the engine's arc.
 PENN_EXTRA_ACTIONS = [
-    Activate,
-    Deactivate,
     DrinkPenn,
     Craft,
     WaitPenn,
