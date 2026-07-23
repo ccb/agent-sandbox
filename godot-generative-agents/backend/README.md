@@ -51,6 +51,7 @@ door), controlled by `POST /pause|/resume|/reset`. See
   - [`WS /ws`](#ws-ws)
   - [`POST /pause`, `/resume`, `/reset`](#post-pause-resume-reset)
   - [`GET /usage`](#get-usage)
+  - [`GET /config`, `POST /config`](#get-config-post-config)
 - [Status codes](#status-codes)
 - [The `world_state` snapshot](#the-world_state-snapshot)
 - [The `events` change feed](#the-events-change-feed)
@@ -107,7 +108,7 @@ with a lock, since FastAPI runs the sync handlers in a thread pool and
 
 ## Endpoint reference
 
-Twenty-two endpoints. `GET`s are read-only; `POST /command` advances the game by
+Twenty-four endpoints. `GET`s are read-only; `POST /command` advances the game by
 exactly one command (one turn); the live routes observe and steer the
 self-stepping loop when one is enabled ([live mode](#live-mode-the-loop-the-feed-run-control-349262)).
 
@@ -128,6 +129,8 @@ self-stepping loop when one is enabled ([live mode](#live-mode-the-loop-the-feed
 | `WS`   | `/ws`                      | Change-feed push: every record as it lands (#262)  |
 | `POST` | `/pause` `/resume` `/reset`| Run control over the loop (#349/#262)              |
 | `GET`  | `/usage`                   | `UsageLedger` summary (tokens/cost) for the HUD (#264) |
+| `GET`  | `/config`                  | Pre-run config surface: status/personas/knobs/brains/run (while paused at tick 0) (#732) |
+| `POST` | `/config`                  | Apply pre-run setup (cast/brain/sim_config/knobs) while paused at tick 0 (#732) |
 | `GET`  | `/runs`                    | Run history, newest first + the live id (#306)     |
 | `GET`  | `/runs/{run_id}`           | One run's row, parsed manifest included (#306)     |
 | `GET`  | `/runs/{run_id}/replay`    | The run as a viewer-loadable replay (#307)         |
@@ -868,6 +871,32 @@ preamble in the system block). To check *before* a run whether caching will fire
 and to prove the wiring end-to-end once a prefix does clear the floor, use
 `backend/penn/cache_prefix_check.py` (offline go/no-go table; `--live` makes two
 real calls and asserts write→read).
+
+### `GET /config`, `POST /config`
+
+The pre-run config session (#732, epic #730). While the live loop is **paused
+at tick 0** — a `--start-paused` boot, before anyone presses Start — `GET
+/config` reports `status: "configurable"` plus the whole setup surface: the
+persona library adjacent to the world YAML (`personas`, with `in_default_cast`
+and the currently active `cast` ids), the #564 `SimulationConfig` knobs
+(`knobs.defaults` / `knobs.current`, key-carrying sections stripped), the
+advertised `brains` (`llm` appears only when the server env holds
+`ANTHROPIC_API_KEY` — keys never travel over HTTP), and the `run` controls
+(`brain`, `steps`, derived `stop_time`, `max_cost`, `tick_seconds`).
+
+`POST /config` (any subset of `{cast, brain, sim_config, steps, tick_seconds,
+max_cost}`) applies the setup by rebuilding through the stepper's reset path
+and echoes it back (`applied`), alongside the standard rebuild signal
+(`status` record, `reason: "reset"`, additive `run_id`). After the first
+`POST /resume` the gate closes: `status` reads `"locked"` and `POST /config`
+answers `409` (on a paused loop — e.g. after the day finishes — `POST /reset`
+returns it to tick 0 and re-opens it). Bad
+input — empty cast, unknown persona id, unknown or key-less brain, a bad
+`sim_config` mapping — is a `400`. The applied config also lands in the run
+manifest as its `config` block, so every saved run records its setup.
+
+Servers without the surface (no live loop, or a stepper that doesn't offer
+`describe_config`/`apply_config`) answer `404` on both.
 
 ## Status codes
 

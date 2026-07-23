@@ -68,6 +68,10 @@ def load_world_yaml(path, cast: list[str] | None = None) -> dict:
     pick a sub-cast without editing YAML. A ``cast`` passed against a world
     with no persona library, or an empty cast, fails loudly (ValueError)
     rather than being ignored.
+
+    The composed dict's ``cast`` field records the effective ids that resolved
+    to persona files. Duplicate display names (two files sharing a ``name``) or
+    malformed persona files (empty or missing ``name`` field) raise ValueError.
     """
     with open(path, encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
@@ -95,8 +99,24 @@ def load_world_yaml(path, cast: list[str] | None = None) -> dict:
                 f"cast: no persona file for {pid!r} "
                 f"(expected {os.path.join(library, pid + '.yaml')})"
             )
-        entries.append(catalog[pid])
+        spec = catalog[pid]
+        if not isinstance(spec, dict) or not spec.get("name"):
+            raise ValueError(
+                f"personas/{pid}.yaml is empty or not a persona mapping "
+                "(it needs at least a 'name' field)"
+            )
+        entries.append(spec)
     names = {entry["name"] for entry in entries}
+    if len(names) != len(entries):
+        seen: dict = {}
+        for entry in entries:
+            seen[entry["name"]] = seen.get(entry["name"], 0) + 1
+        dupes = sorted(n for n, c in seen.items() if c > 1)
+        raise ValueError(
+            f"cast: duplicate display name(s) {dupes} -- two persona files "
+            "share a `name`, and build_world would silently collapse them "
+            "into one character"
+        )
     known = {
         spec["name"]
         for spec in catalog.values()
@@ -106,6 +126,7 @@ def load_world_yaml(path, cast: list[str] | None = None) -> dict:
         {k: v for k, v in entry.items() if k not in ("relationships", "meetings")}
         for entry in entries
     ]
+    data["cast"] = list(ids)
     relationships, meetings = [], []
     for pid, entry in zip(ids, entries):
         for edge in entry.get("relationships") or []:
@@ -131,6 +152,47 @@ def load_world_yaml(path, cast: list[str] | None = None) -> dict:
     data["relationships"] = relationships
     data["meetings"] = meetings
     return data
+
+
+def library_personas(path) -> list[dict]:
+    """Enumerate the persona library adjacent to world YAML *path* (#732).
+
+    The catalog the pre-run config surface (GET /config) serves: one entry
+    per ``personas/<id>.yaml`` next to the world file, sorted by id --
+    ``{"id", "name", "blurb", "in_default_cast"}``. ``blurb`` is the
+    persona's first-person ``persona`` text verbatim (frontends truncate);
+    ``in_default_cast`` reflects the world file's own ``cast:`` list. A
+    world with no adjacent library (or inline personas only) enumerates to
+    ``[]``. Tolerant of malformed library files -- this is a read surface;
+    a broken PARKED persona must not break browsing (putting it in a cast
+    still fails the build loudly, see load_world_yaml).
+    """
+    with open(path, encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    default_cast = set(data.get("cast") or [])
+    library = os.path.join(os.path.dirname(os.path.abspath(path)), "personas")
+    entries = []
+    if os.path.isdir(library):
+        for fname in sorted(os.listdir(library)):
+            if not fname.endswith(".yaml"):
+                continue
+            with open(os.path.join(library, fname), encoding="utf-8") as f:
+                try:
+                    spec = yaml.safe_load(f)
+                except yaml.YAMLError:
+                    continue  # syntax-broken PARKED file -- browsing must not break
+            if not isinstance(spec, dict) or not spec.get("name"):
+                continue
+            pid = fname[:-5]
+            entries.append(
+                {
+                    "id": pid,
+                    "name": str(spec["name"]),
+                    "blurb": str(spec.get("persona", "")),
+                    "in_default_cast": pid in default_cast,
+                }
+            )
+    return entries
 
 
 def load_world_data(

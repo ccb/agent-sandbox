@@ -7,6 +7,10 @@ One file per persona. A world YAML names its cast by reference —
 the `cast:` list (or pass a `cast=` override to `build_penn_world`) to put a
 persona in the run; nothing here runs unless a cast names it.
 
+The live server also serves this catalog over HTTP — `GET /config` (#732)
+lists every persona here with `in_default_cast`, and `POST /config {"cast":
+[ids...]}` picks the run's cast while the backend is paused at tick 0.
+
 ## Catalog
 
 | id | persona | in default cast? |
