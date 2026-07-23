@@ -19,6 +19,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SIM_DIR = _REPO_ROOT / "godot-generative-agents" / "backend" / "penn"
 sys.path.insert(0, str(_SIM_DIR))
 
+import serve_penn  # noqa: E402
 from penn_world import WORLD_DATA, build_penn_world  # noqa: E402
 from serve_penn import SCENARIOS, SCRIPTED, PennStepper, _GameProxy  # noqa: E402
 
@@ -165,3 +166,17 @@ def test_apply_brain_llm_without_key_raises(monkeypatch):
     stepper = _mock_stepper()
     with pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):
         stepper.apply_config(brain="llm")
+
+
+def test_apply_brain_llm_without_extra_fails_before_teardown(monkeypatch, tmp_path):
+    # A keyed server missing the llm extra must reject brain="llm" BEFORE
+    # closing the live run: the probe import fails pre-teardown, so the
+    # stepper keeps serving and the run row is untouched.
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setitem(sys.modules, "anthropic", None)  # import -> ImportError
+    stepper = _mock_stepper(run_store=RunStore(tmp_path / "runs"))
+    run_id = stepper.run_id
+    with pytest.raises(ValueError, match="extra llm"):
+        stepper.apply_config(brain="llm")
+    assert stepper.run_id == run_id
+    assert stepper.tick() is not None

@@ -1445,13 +1445,25 @@ class PennStepper:
             try:
                 new_llm = resolve_llm(self.world.llm, brain, max_cost=max_cost)
                 if _is_paid(new_llm):
+                    # create_llm_client imports anthropic lazily -- _init_brain
+                    # is the first place that actually happens, which is AFTER
+                    # teardown. Probe here, before any teardown, so a server
+                    # missing the extra fails clean instead of half-torn-down;
+                    # before the network check_anthropic_key too, so a missing
+                    # extra never even attempts the probe.
+                    try:
+                        import anthropic  # noqa: F401
+                    except ImportError as exc:
+                        raise ValueError(
+                            f"{exc} (this server needs `uv sync --extra llm`)"
+                        ) from exc
                     # The boot path's fail-fast (#261): a present-but-rejected
                     # key would otherwise serve a frozen, silent, $0 sim.
                     check_anthropic_key()
             except SystemExit as exc:
                 # resolve_llm/check_anthropic_key speak CLI (SystemExit);
                 # over HTTP the same message is a 400.
-                raise ValueError(str(exc))
+                raise ValueError(str(exc)) from exc
         elif max_cost is not None:
             if not _is_paid(new_llm):
                 raise ValueError("max_cost needs the llm brain")
@@ -1470,10 +1482,7 @@ class PennStepper:
             new_sim_config.retrieval if new_sim_config is not None else None
         )
         if brain is not None:
-            try:
-                self._init_brain(new_llm)
-            except ImportError as exc:
-                raise ValueError(f"{exc} (this server needs `uv sync --extra llm`)")
+            self._init_brain(new_llm)
             # The 'auto' concurrency rule main() applies at boot (#366):
             # a paid brain decides in parallel, everything else serially.
             self._decide_executor = (
@@ -1494,7 +1503,7 @@ class PennStepper:
         applied = {
             # None = the world YAML's own default cast (never overridden).
             "cast": effective_cast,
-            "brain": self._brain_name() if brain is None else brain,
+            "brain": self._brain_name(),
             "sim_config": self._sim_config_for_manifest(),
             "run": {
                 "steps": self.num_steps,
