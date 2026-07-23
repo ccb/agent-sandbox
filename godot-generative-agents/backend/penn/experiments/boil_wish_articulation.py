@@ -12,6 +12,12 @@ Runs N trials per arm on the single-persona boil world, boiling WITHHELD:
   * seeded   -- the persona carries the #595 t=0 "the unboiled water made me
                 sick" memory (``_AVERSION``, reused verbatim);
   * control  -- identical, minus that memory.
+Both arms additionally get the #692 scenario fixes (a first keyed re-run came
+back 0%/0% in both arms; the plumbing wasn't the problem -- nothing created
+goal pressure toward `propose`): an explicit persona goal to drink without
+getting sick (populating the wish's ``goals`` snapshot too), and de-scripted
+schedule wording, so the sickness/recovery stops aren't read by a live brain
+as its own authored plan (see ``_configure``/``_NEUTRAL_ACTIVITY`` below).
 Each trial reads the run's ActionWish log (via ``simulate(..., out_wishes=)``
 -- never the event log) and classifies it with :func:`classify_wish`: a
 `proposed` wish whose ``desired`` names a boil/heat/purify/sterilize/make-safe
@@ -19,14 +25,11 @@ fix for the water AND whose ``reason`` names the sickness is the articulation
 signal. The per-arm articulation rate is printed, mirroring #595's summary;
 the seeded arm clearly above control is the #624 result.
 
-A secondary, free metric: non-`proposed` wishes (today only `parse_gap`,
-#621) that still show the agent TRYING to boil/purify the water without
-articulating it as a wish -- e.g. an unparsed "make boiled water" attempt (no
-recipe is registered, so CRAFT never matches). ``craft_gap`` (#628) is NOT on
-this branch: a bare "boil the water" the parser WOULD route to CRAFT (were
-some other recipe registered) can die silently today, with no wish record at
-all -- so this secondary count is partial until #628 syncs forward. Said
-explicitly in the printed output.
+A secondary, free metric: non-`proposed` wishes -- `parse_gap` (#621) or
+`craft_gap` (#628, now on `main`) -- that still show the agent TRYING to
+boil/purify the water without articulating it as a wish, e.g. an unparsed
+"make boiled water" attempt, or a "boil the water" CRAFT correctly rejects for
+the missing recipe.
 
 The propose tool must be reachable: Penn's live entry points only expose
 ``PENN_ACTION_VERBS`` (get/drink/activate/deactivate/make) to a real brain's
@@ -64,7 +67,9 @@ sys.path.insert(0, str(_SIM_DIR))
 _TOOLS_DIR = Path(__file__).resolve().parents[3] / "tools"
 sys.path.insert(0, str(_TOOLS_DIR))
 
-from backend.penn.experiments.boil_from_memory import _configure  # noqa: E402
+from backend.penn.experiments.boil_from_memory import (
+    _configure as _seed_aversion_memory,
+)  # noqa: E402
 from backend.run_simulation import simulate  # noqa: E402
 from penn_world import (
     PENN_ACTION_VERBS,
@@ -72,14 +77,15 @@ from penn_world import (
     build_penn_world,
 )  # noqa: E402
 from text_adventure_games.llm_client import LlmConfig, create_llm_client  # noqa: E402
+from text_adventure_games.things.characters import GoalType  # noqa: E402
 from text_adventure_games.usage import UsageLedger  # noqa: E402
 from text_adventure_games.wishes import TRIGGER_PROPOSED  # noqa: E402
 
 import most_wanted_actions as mwa  # noqa: E402
 
-# `_configure` is #595's t=0 aversion memory ("Last time I drank the unboiled
-# water at Houston Hall I got violently ill.") applied verbatim: seeded ->
-# persona carries it, control -> doesn't. Reused, not re-derived, so the two
+# `_seed_aversion_memory` is #595's t=0 aversion memory ("Last time I drank the
+# unboiled water at Houston Hall I got violently ill.") applied verbatim: seeded
+# -> persona carries it, control -> doesn't. Reused, not re-derived, so the two
 # experiments' "seeded" arms are directly comparable.
 
 PROPOSE_VERB = "propose"
@@ -87,6 +93,41 @@ PROPOSE_VERB = "propose"
 # device/drink verbs plus "propose" (see the module docstring -- Penn's live
 # entry points never add it, so we do here).
 EXTRA_ACTION_NAMES = [*PENN_ACTION_VERBS, PROPOSE_VERB]
+
+# #692: the withheld-boil scenario ran 0%/0% in both arms across two keyed
+# runs. The plumbing wasn't the problem -- nothing created goal pressure
+# toward `propose`. Two scenario fixes, applied to BOTH arms (they're
+# properties of the persona's situation, not the seeded aversion memory):
+_EXPLICIT_GOAL = "find a way to drink water without getting sick"
+# The world YAML's schedule (`world_data_boil.yaml`) is authored so the mock
+# brain's bake/replay narrates a sickness arc -- but `decide_context_block`
+# (cognition.py) surfaces every stop's `activity` text to a LIVE brain too, as
+# "your plan's current stop". Read verbatim, "feeling ill at the table" /
+# "hoping the queasiness passes" / "recovered and back at the union" tell the
+# live agent that getting sick (and getting better) is ITS OWN AUTHORED PLAN,
+# not a problem to solve -- undermining the aversive tension the experiment
+# measures. Neutralized here, not in the shared YAML: that file is also #595's
+# fixture and is wording-pinned by test_boil_demo.py, and the mock brain never
+# reads `activity` text (issue #300), so this only changes what a live brain
+# sees in THIS experiment.
+_NEUTRAL_ACTIVITY = {
+    "feeling ill at the table": "at the table",
+    "hoping the queasiness passes": "still at the table",
+    "recovered and back at the union": "back at the union",
+}
+
+
+def _configure(personas, *, seeded):
+    """#595's ``_configure`` (thirst + the seeded aversion memory) plus the
+    #692 scenario fixes: an explicit goal and de-scripted schedule wording,
+    both applied to every arm."""
+    out = _seed_aversion_memory(personas, seeded=seeded)
+    for p in out:
+        for stop in p.get("schedule", []):
+            if stop.get("activity") in _NEUTRAL_ACTIVITY:
+                stop["activity"] = _NEUTRAL_ACTIVITY[stop["activity"]]
+    return out
+
 
 # --- classify_wish (keyword-based, no LLM; mirrors #595's classify_outcome) -
 
@@ -145,11 +186,9 @@ def classify_wish(wish: dict) -> str:
       the missing action, reasoning from the aversive memory.
     * ``"attempted"`` -- any OTHER (non-``proposed``) wish that still names a
       boil-intent fix for the water -- e.g. an unparsed "make boiled water"
-      attempt (``trigger="parse_gap"``, #621) in the withheld world. A free,
-      PARTIAL secondary signal: ``craft_gap`` (#628) is not on this branch,
-      so a bare "boil the water" the parser WOULD route to CRAFT (were
-      another recipe registered) can die silently today without leaving a
-      record at all -- this only catches attempts that DO leave one.
+      attempt (``trigger="parse_gap"``, #621), or a "boil the water" CRAFT
+      correctly rejects for the missing recipe (``trigger="craft_gap"``,
+      #628) -- both leave a wish record in the withheld world.
     * ``"unrelated"`` -- neither of the above (a wish about something else,
       a boil-intent proposal with no sickness reason, or no boil-relevant
       wish at all).
@@ -215,12 +254,24 @@ def run_arm(*, seeded, trials, steps, make_client, out_wishes_all=None):
         ledger = UsageLedger()
         out_wishes: list = []
 
+        # #692 fix (a): the persona otherwise starts with `goals == []` -- no
+        # blocked-goal tension for the wish channel to record. Set on the
+        # built Character (there's no persona-dict -> Character.goals wiring
+        # to lean on), same tally as _configure's single-persona assertion.
+        def build_world_with_goal(world_map):
+            game, chars = pw.build_world_fn(world_map)
+            assert (
+                len(chars) == 1
+            ), f"boil world must stay single-persona, got {len(chars)}"
+            next(iter(chars.values())).add_goal(_EXPLICIT_GOAL, GoalType.SHORT)
+            return game, chars
+
         simulate(
             pw.world_map,
             steps,
             ledger=ledger,
             personas=personas,
-            build_world_fn=pw.build_world_fn,
+            build_world_fn=build_world_with_goal,
             llm_client=make_client(ledger),
             extra_action_names=EXTRA_ACTION_NAMES,
             out_wishes=out_wishes,
@@ -279,19 +330,13 @@ def main() -> int:
         print(
             f"[{arm:8}] articulation rate: {result['rate']:.0%}  "
             f"({result['articulated']} articulated / {result['attempted']} attempted "
-            f"(parse-gap secondary, partial until #628) / {result['neither']} "
+            f"(parse-gap + craft-gap secondary) / {result['neither']} "
             f"neither of {args.trials})"
         )
     print(f"ledger spend: ${ledger.total_cost_usd():.4f}")
 
     print()
     print(mwa.render_markdown(demand_report(all_wishes)))
-    print(
-        "note: 'attempted' / the report's non-'proposed' rows are a PARTIAL "
-        "secondary signal -- craft_gap (#628) is not on this branch, so a bare "
-        "boil attempt the parser would route to CRAFT (were another recipe "
-        "registered) can die silently without leaving a wish record at all."
-    )
     return 0
 
 

@@ -288,7 +288,7 @@ def test_propose_appears_in_help():
     game.parser.parse_command("help")
     listing = "\n".join(cap.texts(Channel.NARRATION))
     assert "propose" in listing
-    assert "Record a request for an action the game doesn't offer" in listing
+    assert "NONE of your other actions can do what you need" in listing
 
 
 # ----------------------------------------------------------------------

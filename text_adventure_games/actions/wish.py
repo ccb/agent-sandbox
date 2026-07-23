@@ -17,7 +17,11 @@ from .base import Action
 
 class Propose(Action):
     ACTION_NAME = ActionName.PROPOSE
-    ACTION_DESCRIPTION = "Record a request for an action the game doesn't offer"
+    ACTION_DESCRIPTION = (
+        "Use this when NONE of your other actions can do what you need — e.g. no "
+        "action exists to purify, treat, or otherwise make something unsafe safe. "
+        "Records your request so the world's designers see it."
+    )
     ARGUMENTS_SCHEMA = {
         "desired": {
             "type": "string",
