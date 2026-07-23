@@ -1995,6 +1995,15 @@ def main() -> int:
     if load_dotenv():
         print("Loaded .env from the repo root (already-exported variables win).")
 
+    # The #564 config source: one file for the sim's tuning surface instead of
+    # N per-knob flags. A bad path/parse aborts before any world state exists.
+    sim_config = None
+    if args.config:
+        try:
+            sim_config = SimulationConfig.from_file(args.config)
+        except (OSError, ValueError, ImportError) as e:
+            raise SystemExit(f"cannot load --config {args.config}: {e}")
+
     # Build the world once: resolve_llm reads its llm: block, the stepper
     # steps it (a second build would waste the map load and fork patch state).
     world = build_penn_world()
@@ -2005,14 +2014,6 @@ def main() -> int:
         max_cost=args.max_cost,
         model_for=_parse_model_for(args.model_for),
     )
-    # The #564 config source: one file for the sim's tuning surface instead of
-    # N per-knob flags. A bad path/parse aborts before any world state exists.
-    sim_config = None
-    if args.config:
-        try:
-            sim_config = SimulationConfig.from_file(args.config)
-        except (OSError, ValueError, ImportError) as e:
-            raise SystemExit(f"cannot load --config {args.config}: {e}")
     if _is_paid(llm):
         # The key exists (resolve_llm gates that); now prove the API accepts
         # it, or an invalid key would serve a frozen, silent, $0 all-day sim.
