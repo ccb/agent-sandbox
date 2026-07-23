@@ -38,7 +38,7 @@ from backend.actions import (
     TalkTo,
     WaitPenn,
 )
-from backend.build_world import build_world, load_world_data, load_world_yaml
+from backend.build_world import _normalize_personas, build_world, load_world_yaml
 from backend.world_map import WorldMap
 from text_adventure_games.actions.things import Craft
 from text_adventure_games.crafting import Recipe
@@ -590,7 +590,8 @@ def build_penn_world(
     # the cast (or passed through verbatim for inline-personas worlds), then
     # the same file normalized into the (personas, locations) build pair.
     data = load_world_yaml(world_data, cast)
-    personas, locations = load_world_data(world_data, cast)
+    personas = _normalize_personas(data["personas"])
+    locations = data["locations"]
     meetings = data.get("meetings") or []
 
     world_map = _pin_building_meeting_points(WorldMap(upenn_dir))

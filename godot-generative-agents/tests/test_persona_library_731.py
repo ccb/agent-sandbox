@@ -163,6 +163,33 @@ def test_duplicate_persona_id_raises(library_world):
         load_world_yaml(library_world, cast=["ana", "ana"])
 
 
+def test_empty_cast_raises(library_world):
+    # cast=[] must not silently fall into the no-cast pass-through (the raw
+    # dict has no personas key -> obscure KeyError downstream).
+    with pytest.raises(ValueError, match="empty cast"):
+        load_world_yaml(library_world, cast=[])
+
+
+def test_edge_naming_unknown_persona_raises(library_world):
+    # A typo'd name matches NO library persona: that's an authoring bug, not a
+    # parked persona, so composition must fail loudly instead of dropping it.
+    lib = library_world.parent / "personas"
+    spec = yaml.safe_load((lib / "ana.yaml").read_text())
+    spec["relationships"][0]["b"] = "Bob"  # typo of "Bo"
+    _write_yaml(lib / "ana.yaml", spec)
+    with pytest.raises(ValueError, match="Bob"):
+        load_world_yaml(library_world)
+
+
+def test_meeting_naming_unknown_persona_raises(library_world):
+    lib = library_world.parent / "personas"
+    spec = yaml.safe_load((lib / "ana.yaml").read_text())
+    spec["meetings"][0]["participants"] = ["Ana", "Sy"]  # typo of "Cy"
+    _write_yaml(lib / "ana.yaml", spec)
+    with pytest.raises(ValueError, match="Sy"):
+        load_world_yaml(library_world)
+
+
 def test_load_world_data_resolves_cast_and_normalizes(library_world):
     personas, locations = load_world_data(library_world)
     assert [p["name"] for p in personas] == ["Ana", "Bo"]

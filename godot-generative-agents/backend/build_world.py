@@ -8,7 +8,7 @@ agents ``travel`` and ``perform`` through the normal precondition gate.
 The builder is world-agnostic -- it takes a ``(personas, locations)`` pair and
 constructs the game. The project's primary world is the **UPenn campus**, loaded
 and patched by :mod:`penn.penn_world` (it reads ``world_data_upenn.yaml`` via
-:func:`load_world_data` and hands the normalized pair to :func:`build_world`).
+:func:`load_world_yaml` and hands the normalized pair to :func:`build_world`).
 Any world authored in the same YAML shape builds the same way.
 """
 
@@ -59,46 +59,77 @@ def load_world_yaml(path, cast: list[str] | None = None) -> dict:
     blocks (see ``penn/personas/README.md``); composition lifts those into the
     world's top-level blocks, dropping any entry that references a persona
     outside the cast -- an edge needs both ends present, a meeting needs all
-    its participants.
+    its participants. Dropping only applies to personas that exist in the
+    library but sit outside the cast (parked); a name that matches *no*
+    library persona is an authoring typo and raises ValueError, keeping the
+    old inline-YAML fail-loud contract.
 
     ``cast`` overrides the file's list, so the pre-run config seam (#730) can
     pick a sub-cast without editing YAML. A ``cast`` passed against a world
-    with no persona library fails loudly (ValueError) rather than being ignored.
+    with no persona library, or an empty cast, fails loudly (ValueError)
+    rather than being ignored.
     """
     with open(path, encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
     ids = cast if cast is not None else data.get("cast")
-    if not ids:
+    if ids is None:
         return data
+    if not ids:
+        raise ValueError(f"cast: empty cast for {path}")
     if len(ids) != len(set(ids)):
         raise ValueError(f"cast: duplicate persona ids in {ids}")
     library = os.path.join(os.path.dirname(os.path.abspath(path)), "personas")
+    # Load the WHOLE library, not just the cast: edge/meeting endpoints are
+    # validated against every library name so a typo'd name fails the build
+    # instead of being silently filtered out with the parked personas.
+    catalog: dict[str, dict] = {}
+    if os.path.isdir(library):
+        for fname in sorted(os.listdir(library)):
+            if fname.endswith(".yaml"):
+                with open(os.path.join(library, fname), encoding="utf-8") as f:
+                    catalog[fname[:-5]] = yaml.safe_load(f)
     entries = []
     for pid in ids:
-        persona_path = os.path.join(library, f"{pid}.yaml")
-        if not os.path.exists(persona_path):
+        if pid not in catalog:
             raise ValueError(
-                f"cast: no persona file for {pid!r} (expected {persona_path})"
+                f"cast: no persona file for {pid!r} "
+                f"(expected {os.path.join(library, pid + '.yaml')})"
             )
-        with open(persona_path, encoding="utf-8") as f:
-            entries.append(yaml.safe_load(f))
+        entries.append(catalog[pid])
     names = {entry["name"] for entry in entries}
+    known = {
+        spec["name"]
+        for spec in catalog.values()
+        if isinstance(spec, dict) and spec.get("name")
+    }
     data["personas"] = [
         {k: v for k, v in entry.items() if k not in ("relationships", "meetings")}
         for entry in entries
     ]
-    data["relationships"] = [
-        edge
-        for entry in entries
-        for edge in entry.get("relationships") or []
-        if edge.get("a") in names and edge.get("b") in names
-    ]
-    data["meetings"] = [
-        meeting
-        for entry in entries
-        for meeting in entry.get("meetings") or []
-        if set(meeting.get("participants") or []) <= names
-    ]
+    relationships, meetings = [], []
+    for pid, entry in zip(ids, entries):
+        for edge in entry.get("relationships") or []:
+            ends = [edge.get("a"), edge.get("b")]
+            for name in ends:
+                if name not in known:
+                    raise ValueError(
+                        f"personas/{pid}.yaml: relationship references "
+                        f"unknown persona {name!r}"
+                    )
+            if all(name in names for name in ends):
+                relationships.append(edge)
+        for meeting in entry.get("meetings") or []:
+            participants = meeting.get("participants") or []
+            for name in participants:
+                if name not in known:
+                    raise ValueError(
+                        f"personas/{pid}.yaml: meeting references "
+                        f"unknown persona {name!r}"
+                    )
+            if set(participants) <= names:
+                meetings.append(meeting)
+    data["relationships"] = relationships
+    data["meetings"] = meetings
     return data
 
 
