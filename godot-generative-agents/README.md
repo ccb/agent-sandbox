@@ -146,8 +146,10 @@ LLM_PROVIDER=mock uv run python godot-generative-agents/backend/penn/generate_pe
 ```
 
 The Penn world lives in [`backend/penn/`](backend/penn/): `world_data_upenn.yaml`
-(the cast — 3 active personas while the live-LLM MVP keeps runs cheap; 4 more are
-parked in comments, ready to uncomment) and `the_upenn/` (the OSM-derived navigation
+(the world: locations, the `llm:` block, and a `cast: [diego, tanaka, sofia]` list
+resolved from the `personas/` library — 7 personas total, 3 in the default cast
+while the live-LLM MVP keeps runs cheap; see `backend/penn/personas/README.md`)
+and `the_upenn/` (the OSM-derived navigation
 grid from `godot-generative-agents/tools/geo/osm_to_ville.py`). The agent *engine* (deciding, pathfinding) is
 the surrounding `backend` package, so this is the same simulation that runs there —
 just rendered here instead of in Phaser. `scripts/viewer.gd` eases each persona
@@ -160,7 +162,7 @@ Two pop-ups let you interrogate the run at any point while it plays: the
 has spent their time so far, and the **social graph** (`G`, or the three-linked-nodes
 button; issue #252) shows *who has talked to whom* so far — edges thicken with more
 and more-recent conversations, and `←`/`→` flips to the authored t=0 **seed
-relationships** (the `relationships:` block in `world_data_upenn.yaml`) so you can
+relationships** (the `relationships:` blocks in `backend/penn/personas/*.yaml`) so you can
 compare who *started out* knowing whom against who actually met during the day.
 
 You can also **snapshot the campus** as it plays (issue #253): the sidebar's camera

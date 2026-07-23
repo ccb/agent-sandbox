@@ -1,0 +1,55 @@
+# Sofia Ramirez -- wide-eyed first-year. Default-cast member (#731).
+# Deliberately no `relationships:` block: she is a first-year who knows nobody
+# at t=0 -- the social-graph pop-up shows her graph forming over the day. Her
+# two meetings live with their first-named participants (diego.yaml, tanaka.yaml).
+name: Sofia Ramirez
+home: Penn campus
+persona: I am Sofia Ramirez, 18, a first-year still finding my way around Penn. I
+  am wide-eyed, friendly, and curious about everything on campus.
+emoji: 🗺️
+# Starts in the north of campus near Meyerson, then drifts into Van Pelt's gallery
+# and on to the guest lecture at Irvine.
+start_tile:
+- 191
+- 63
+schedule:
+- place: Van Pelt — Kamin Gallery
+  activity: wandering the gallery exhibits
+  emoji: 🖼️
+  # Lingers in the gallery long enough that Diego (who arrives much later, after
+  # his Meyerson studio session and the cross-campus walk) overlaps with her here
+  # through their whole exchange (see diego.yaml's `meetings`).
+  steps: 220
+- place: Irvine Auditorium
+  activity: sitting in on a guest lecture
+  emoji: 🎤
+  steps: 60
+# The boil-water arc (#300), watchable end-to-end, as three same-place Houston
+# Hall stops. The mock brain issues one authored command per step and then
+# `perform`s the stop's activity for the rest of its `steps:`, so splitting the
+# arc across stops spaces the sickness / boiled / recovery events ~20 steps
+# apart on the timeline -- WITHOUT filler `wait` commands (each of which logged
+# a 1.0 "I did wait" memory and a GameEvent onto this showcase card). Same-place
+# stops advance fine: the planner's positional carry-over handles distinct
+# activities at one place -- there is no same-place merge to work around.
+# Activities stay free of action verbs so the terminal `perform` can't re-parse
+# one as a command (#535). Boiling is the engine crafting Recipe (#300): `make
+# boiled water` consumes the murky pot and PRODUCES a `pot of boiled water`, so
+# she drinks the murky pot raw (sickness) and the boiled pot after (recovery).
+# (The arc still sits late in Sofia's long day; a fully de-clumped short demo is
+# the dedicated boil replay, #592.)
+- place: Houston Hall
+  activity: settling in for dinner at the union
+  steps: 20
+  commands:
+  - get pot of murky water
+  - drink pot of murky water   # -> sickness (raw water)
+- place: Houston Hall
+  activity: feeling queasy at the table
+  steps: 20
+  commands:
+  - make boiled water          # -> boiled (consumes murky pot, produces boiled pot)
+- place: Houston Hall
+  activity: feeling much better at last
+  commands:
+  - drink pot of boiled water  # -> recovery (the produced boiled pot)
