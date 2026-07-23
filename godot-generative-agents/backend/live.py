@@ -69,6 +69,18 @@ class SimStepper(Protocol):
       ``tick()`` (#551); when present, the loop appends each as its own
       ``kind: "deciding"`` record, so a viewer can show which agent is
       currently thinking rather than just a step-level decider count.
+    * ``set_deciding_publisher(publish)`` -- the out-of-band ``deciding``
+      channel (#605): when present, whoever owns the live :class:`EventLog`
+      (``api.create_app``) injects ``publish(record)``, which appends the
+      record to the feed IMMEDIATELY -- mid-tick, from whatever thread the
+      decide runs on (``append`` is thread-safe) -- instead of waiting for
+      the tick-boundary drain. This is what lights a viewer's per-agent
+      thinking bubble for a decide that begins AND ends within one tick; the
+      boundary drain alone delivered its begin+end together, after the fact.
+      A record sent through ``publish`` must NOT also be returned from
+      ``drain_deciding()`` (that would double-publish it). Without a wired
+      publisher the stepper buffers as before, so bare :func:`run_loop`
+      embeddings are unchanged.
     * ``run_usage() -> dict`` -- additive per-run usage fields
       (``run_calls``/``run_cost_usd``/``run_by_actor``) merged into
       ``GET /usage`` beside the lifetime summary (#526, #569); the ledger itself
@@ -128,10 +140,17 @@ class EventLog:
 
     * ``since()`` / ``latest_cursor()`` / ``oldest_cursor()`` -- any thread
       (the sync HTTP handlers run in a thread pool); guarded by an internal lock.
-    * ``append()`` and ``subscribe()``/``unsubscribe()`` -- **event loop only**
-      (the ``run_loop`` task and the async run-control handlers). That invariant
-      makes waking subscribers a plain ``asyncio.Event.set()`` with no
-      cross-thread handoff.
+    * ``append()`` -- any thread (#605): the record write is guarded by the
+      internal lock, and a call from off the subscribers' event loop hands the
+      wake to that loop via ``call_soon_threadsafe``. This is what lets a
+      decide publish its ``deciding: begin`` mid-tick, from the tick's own
+      worker thread (serial mode) or a decide worker (#366), while the tick
+      still holds the app lock -- the feed doors read only THIS lock, never
+      the app lock, so the record is visible to them immediately.
+    * ``subscribe()``/``unsubscribe()`` -- **event loop only** (the ``WS /ws``
+      handlers); ``subscribe()`` captures that loop, and every wake runs on it
+      (directly, or scheduled there by an off-loop ``append``), so the
+      subscriber set is never touched from two threads at once.
     """
 
     def __init__(self, max_records: int = 10_000):
@@ -139,17 +158,34 @@ class EventLog:
         self._records: collections.deque[dict] = collections.deque(maxlen=max_records)
         self._next_cursor = 1
         self._subscribers: set[asyncio.Event] = set()
+        self._loop: asyncio.AbstractEventLoop | None = None  # the subscribers'
 
     def append(self, kind: str, **fields) -> dict:
         """Stamp the next cursor onto a ``{cursor, kind, **fields}`` record,
-        retain it, and wake every waiting subscriber. Event loop only."""
+        retain it, and wake every waiting subscriber. Safe from any thread."""
         with self._lock:
             record = {"cursor": self._next_cursor, "kind": kind, **fields}
             self._next_cursor += 1
             self._records.append(record)
+        loop = self._loop
+        try:
+            on_loop = loop is None or asyncio.get_running_loop() is loop
+        except RuntimeError:  # no running loop on this thread
+            on_loop = loop is None  # true only when nobody ever subscribed
+        if on_loop:
+            self._wake_subscribers()
+        else:
+            try:
+                loop.call_soon_threadsafe(self._wake_subscribers)
+            except RuntimeError:
+                pass  # that loop already closed (shutdown); nobody left to wake
+        return record
+
+    def _wake_subscribers(self) -> None:
+        # Always runs on the subscribers' event loop (directly, or scheduled
+        # there by append), so it never races subscribe()/unsubscribe().
         for waiter in list(self._subscribers):
             waiter.set()
-        return record
 
     def since(self, cursor: int) -> list[dict]:
         """Every retained record with ``cursor >`` the given one, oldest first.
@@ -173,6 +209,7 @@ class EventLog:
         The subscriber loop is: ``clear()``, drain ``since(cursor)``, and only
         then ``await wait()`` -- clearing before reading makes the race benign
         (a record appended in between just makes ``wait()`` return at once)."""
+        self._loop = asyncio.get_running_loop()  # where off-loop appends wake us
         waiter = asyncio.Event()
         self._subscribers.add(waiter)
         return waiter

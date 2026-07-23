@@ -580,6 +580,21 @@ def create_app(
         else None
     )
     ledger = getattr(stepper, "ledger", None)
+    if controller is not None:
+        # Out-of-band deciding publish (#605): a decide that begins AND ends
+        # within one tick used to surface only at the tick-boundary drain, so
+        # the viewer's per-agent thinking bubble never lit for it. A stepper
+        # offering set_deciding_publisher gets a direct line onto the feed:
+        # its `begin` lands mid-tick, from the decide's own thread. That is
+        # visible to a concurrent poll because GET /events and WS /ws read
+        # only the EventLog's internal lock -- never `lock`, which the
+        # in-flight tick holds -- and EventLog.append is thread-safe. (A begin
+        # whose tick a reset later drops is cleared by the `status
+        # reason="reset"` record that always follows; the folds clear bubbles
+        # on it.)
+        set_publisher = getattr(stepper, "set_deciding_publisher", None)
+        if set_publisher is not None:
+            set_publisher(lambda record: log.append("deciding", **record))
 
     lifespan = None
     if controller is not None:

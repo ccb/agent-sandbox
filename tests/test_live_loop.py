@@ -105,6 +105,30 @@ def test_event_log_append_wakes_subscribers():
     assert asyncio.run(scenario())
 
 
+def test_event_log_append_from_a_worker_thread_wakes_subscribers():
+    # #605: append is safe from any thread -- the record write is lock-guarded
+    # and the subscriber wake is handed to the subscribers' event loop. This is
+    # what lets a decide publish its `deciding: begin` mid-tick from the tick's
+    # worker thread (serial mode) or a #366 decide worker, and still wake every
+    # WS reader immediately.
+    async def scenario():
+        log = EventLog()
+        waiter = log.subscribe()
+        waiter.clear()
+        thread = threading.Thread(
+            target=lambda: log.append("deciding", agent="a", state="begin", step=0)
+        )
+        thread.start()
+        await asyncio.wait_for(waiter.wait(), timeout=2.0)
+        thread.join(timeout=2.0)
+        log.unsubscribe(waiter)
+        return log.since(0)
+
+    records = asyncio.run(scenario())
+    assert [r["kind"] for r in records] == ["deciding"]
+    assert records[0]["cursor"] == 1  # cursor stamping is unchanged off-loop
+
+
 # ------------------------------------------------------ LiveRunController
 
 
@@ -312,6 +336,100 @@ def test_run_loop_appends_engine_events_when_stepper_drains():
         return True
 
     assert asyncio.run(scenario())
+
+
+def test_deciding_begin_published_mid_tick_is_visible_before_the_boundary():
+    # #605: SERIAL MODE (--brain llm's default) -- the decide runs synchronously
+    # inside tick(), on run_loop's executor thread, under the app lock. Its
+    # `begin`, published out-of-band through the injected publisher (the wiring
+    # api.create_app does), must be readable from the log WHILE the decide is
+    # still blocked and the lock still held -- the log has its own lock, so the
+    # feed doors never queue behind the tick. The `end` keeps the boundary
+    # drain, and the begin must not be re-emitted there.
+    class MidTickDecider:
+        """Shaped like PennStepper's serial --brain llm path."""
+
+        def __init__(self):
+            self._step = 0
+            self._publish = None
+            self._pending = []
+            self.mid_decide = threading.Event()  # set once begin is published
+            self.release = threading.Event()  # the test ends the "decide"
+
+        @property
+        def step(self):
+            return self._step
+
+        def meta(self):
+            return {}
+
+        def set_deciding_publisher(self, publish):
+            self._publish = publish
+
+        def tick(self):
+            if self._step == 0:
+                # The synchronous decide: begin goes out NOW, mid-tick...
+                self._publish({"agent": "a", "state": "begin", "step": 0})
+                self.mid_decide.set()
+                # ...and the brain "thinks" until the test releases it.
+                assert self.release.wait(timeout=5)
+                self._pending.append(
+                    {"agent": "a", "state": "end", "step": 0, "elapsed_ms": 12}
+                )
+            frame = {"a": {"x": self._step, "y": 0, "act": "idle", "e": "x"}}
+            self._step += 1
+            return frame
+
+        def drain_deciding(self):
+            drained, self._pending = self._pending, []
+            return drained
+
+        def reset(self):
+            self._step = 0
+
+    async def scenario():
+        log = EventLog()
+        lock = threading.Lock()
+        stepper = MidTickDecider()
+        # The exact wiring api.create_app performs at boot (#605).
+        stepper.set_deciding_publisher(lambda record: log.append("deciding", **record))
+        controller = LiveRunController(stepper, lock)
+        task = asyncio.create_task(run_loop(controller, log, TICK))
+        loop = asyncio.get_running_loop()
+        # Wait OFF the event loop for the decide to be in flight (waiting on
+        # the loop's thread would wedge run_loop, which needs it to tick).
+        assert await loop.run_in_executor(
+            None, lambda: stepper.mid_decide.wait(timeout=5)
+        )
+        # The decide is still blocked inside tick() -- nothing can proceed
+        # until release -- so these reads genuinely race an in-flight tick.
+        mid = log.since(0)
+        lock_was_held = lock.locked()
+        stepper.release.set()
+        async with asyncio.timeout(5):
+            while not any(
+                r["kind"] == "deciding" and r["state"] == "end" for r in log.since(0)
+            ):
+                await asyncio.sleep(TICK)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        return mid, lock_was_held, log.since(0)
+
+    mid, lock_was_held, records = asyncio.run(scenario())
+    assert lock_was_held  # serial mode's shape: the tick held the app lock
+    assert any(
+        r["kind"] == "deciding" and r["state"] == "begin" for r in mid
+    ), "begin was not visible mid-tick"
+    assert not any(r["kind"] == "frame" for r in mid)  # truly before the boundary
+    deciding = [r for r in records if r["kind"] == "deciding"]
+    assert [r["state"] for r in deciding] == ["begin", "end"]  # exactly one each
+    begin, end = deciding
+    frame = next(r for r in records if r["kind"] == "frame")
+    # Cursor order: begin (mid-tick) < the tick's frame < end (boundary drain).
+    assert begin["cursor"] < frame["cursor"] < end["cursor"]
 
 
 # ---------------------------------------------------------- ScriptedStepper
