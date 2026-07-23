@@ -68,6 +68,10 @@ def load_world_yaml(path, cast: list[str] | None = None) -> dict:
     pick a sub-cast without editing YAML. A ``cast`` passed against a world
     with no persona library, or an empty cast, fails loudly (ValueError)
     rather than being ignored.
+
+    The composed dict's ``cast`` field records the effective ids that resolved
+    to persona files. Duplicate display names (two files sharing a ``name``) or
+    malformed persona files (empty or missing ``name`` field) raise ValueError.
     """
     with open(path, encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
@@ -95,8 +99,24 @@ def load_world_yaml(path, cast: list[str] | None = None) -> dict:
                 f"cast: no persona file for {pid!r} "
                 f"(expected {os.path.join(library, pid + '.yaml')})"
             )
-        entries.append(catalog[pid])
+        spec = catalog[pid]
+        if not isinstance(spec, dict) or not spec.get("name"):
+            raise ValueError(
+                f"personas/{pid}.yaml is empty or not a persona mapping "
+                "(it needs at least a 'name' field)"
+            )
+        entries.append(spec)
     names = {entry["name"] for entry in entries}
+    if len(names) != len(entries):
+        seen: dict = {}
+        for entry in entries:
+            seen[entry["name"]] = seen.get(entry["name"], 0) + 1
+        dupes = sorted(n for n, c in seen.items() if c > 1)
+        raise ValueError(
+            f"cast: duplicate display name(s) {dupes} -- two persona files "
+            "share a `name`, and build_world would silently collapse them "
+            "into one character"
+        )
     known = {
         spec["name"]
         for spec in catalog.values()
@@ -106,6 +126,7 @@ def load_world_yaml(path, cast: list[str] | None = None) -> dict:
         {k: v for k, v in entry.items() if k not in ("relationships", "meetings")}
         for entry in entries
     ]
+    data["cast"] = list(ids)
     relationships, meetings = [], []
     for pid, entry in zip(ids, entries):
         for edge in entry.get("relationships") or []:
