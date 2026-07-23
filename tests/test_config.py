@@ -135,6 +135,16 @@ def test_from_file_yaml(tmp_path):
     assert c.agent.temperature == 0.2
 
 
+def test_from_file_malformed_yaml_raises_value_error(tmp_path):
+    # #564 review finding 6: match sim_config.py's SimulationConfig.from_file
+    # wrap exactly, so the two loaders' YAML-error contract doesn't diverge.
+    pytest.importorskip("yaml")
+    path = tmp_path / "bad.yaml"
+    path.write_text("engine: [unclosed", encoding="utf-8")
+    with pytest.raises(ValueError, match="invalid YAML"):
+        GameConfig.from_file(path)
+
+
 def test_from_file_unsupported_extension(tmp_path):
     path = tmp_path / "config.toml"
     path.write_text("nope")

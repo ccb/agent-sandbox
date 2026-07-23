@@ -136,6 +136,29 @@ def _is_paid(llm) -> bool:
     return isinstance(llm, dict)
 
 
+def _resolve_cognition_tools(flag: bool, sim_config, llm) -> bool:
+    """OR-resolution for cognition tools (#358/#512/#564): a CLI flag, either
+    config surface -- the sim-level ``cognition.cognition_tools`` or the
+    engine's own ``game.agent.cognition_tools`` (#564 review finding 4: the
+    same knob a plain ``GameConfig`` honors, silently dead here until this
+    was added) -- or the scripted brain (#563) can each switch it on; none
+    can veto another. Shared by ``__init__`` and the resume path (finding 1),
+    so a resumed run's adopted config re-derives the identical value."""
+    return bool(
+        flag
+        or (sim_config is not None and sim_config.cognition.cognition_tools)
+        or (sim_config is not None and sim_config.game.agent.cognition_tools)
+        or (llm == SCRIPTED)
+    )
+
+
+def _resolve_react(flag: bool, sim_config) -> bool:
+    """OR-resolution for the react gate (#370/#564): a CLI flag or the
+    config's ``cognition.react_enabled`` can each switch it on. Shared by
+    ``__init__`` and the resume path (finding 1)."""
+    return bool(flag or (sim_config is not None and sim_config.cognition.react_enabled))
+
+
 def resolve_llm(world_llm, brain, model=None, max_cost=None, model_for=None):
     """Resolve one run's LLM settings: ``None`` for the mock brain, else a dict.
 
@@ -549,22 +572,21 @@ class PennStepper:
         # threaded a retrieval= into observe_and_decide since #296; tick()
         # passes this one. None -> the engine's default scoring, unchanged.
         self.retrieval = sim_config.retrieval if sim_config is not None else None
-        # A boolean flag or the config file can each switch cognition tools
-        # on; neither can veto the other (same one-way coupling as the
-        # `llm == SCRIPTED` term).
-        self.cognition_tools = (
-            cognition_tools
-            or (sim_config is not None and sim_config.cognition.cognition_tools)
-            or (llm == SCRIPTED)
+        # Raw CLI flags, kept (not just folded into the resolved booleans
+        # below) so a resumed run's adopted manifest config (#564 review
+        # finding 1, see _build's resume-adopt block) can re-run the same
+        # OR-resolution without losing the "the flag always wins" coupling.
+        self._cognition_tools_flag = cognition_tools
+        self._react_flag = react
+        self.cognition_tools = _resolve_cognition_tools(
+            cognition_tools, sim_config, llm
         )
         # React-or-continue (#370): perception-driven interruption while
         # walking. Held on the stepper so _build() re-applies it on every
         # reset. Mock-inert: under the mock brain the react pass never runs
         # at all (step() gates it on conversation_enabled), so it is safe to
         # leave on for mechanics demos.
-        self.react = react or (
-            sim_config is not None and sim_config.cognition.react_enabled
-        )
+        self.react = _resolve_react(react, sim_config)
         # Daily planning source (#397): "schedule" (default) keeps the authored
         # YAML day -- byte-identical, meeting overlaps intact. "llm" lets the
         # model author each day (LLMPlanner); free-play, so the hand-tuned
@@ -710,6 +732,45 @@ class PennStepper:
         # test_stepper_matches_simulate_prefix pins). If simulate's setup ever
         # drifts from this, the equivalence test fails -- on purpose.
         self.world = world if world is not None else build_penn_world()
+        # Resume semantics (#564 review finding 1): a resumed run's OWN
+        # recorded sim_config wins over whatever this server booted with
+        # (its own --config, or None) -- otherwise the world silently
+        # continues under different knobs and a later --re-run of the SAME
+        # run reports DIVERGED (--re-run reconstructs the manifest's config;
+        # a mismatched resume would not have). Peeked here, before base_cog/
+        # attach_agents below derive from self.sim_config, from whichever row
+        # the caller already fetched (resume_run's guard-before-teardown
+        # read) or a fresh lookup on the boot --resume path -- either way the
+        # authoritative cast/map validation still happens once, unchanged,
+        # in _adopt_run's _resumable_row call at the end of this method; a
+        # bad run id/cast/map simply raises there and this speculative
+        # adoption is moot (the whole _build() call -- and the stepper
+        # construction -- aborts with it). Pre-#564 manifests (no sim_config
+        # key) leave this server's own config untouched, exactly like today.
+        if resume_run_id is not None:
+            peek_row = (
+                resume_row
+                if resume_row is not None
+                else self.run_store.get_run(resume_run_id)
+            )
+            recorded = (
+                _sim_config_from_manifest(peek_row["manifest"])
+                if peek_row is not None
+                else None
+            )
+            if recorded is not None:
+                if self.sim_config is not None:
+                    print(
+                        f"  - NOTE: resuming {resume_run_id} adopts its recorded "
+                        "sim_config -- this server's own --config is ignored "
+                        "for this run."
+                    )
+                self.sim_config = recorded
+                self.retrieval = recorded.retrieval
+                self.cognition_tools = _resolve_cognition_tools(
+                    self._cognition_tools_flag, recorded, self.llm
+                )
+                self.react = _resolve_react(self._react_flag, recorded)
         # Cognition knobs (#564): start from the --config file's section (or
         # today's defaults with no config) and stamp on the RESOLVED booleans
         # from __init__ -- so the flag couplings hold and a reset re-derives
@@ -1775,6 +1836,13 @@ def reproduce_run(store: RunStore, run_id: str, world=None) -> ReproResult:
     )
 
 
+def _fmt_or_default(value) -> str:
+    """``:g``-format *value*, or ``"default"`` when it's ``None`` (#564 review
+    finding 3): a config file can leave any numeric field unset (a blank
+    ``key:`` parses as YAML null), and ``f"{None:g}"`` raises ``TypeError``."""
+    return f"{value:g}" if value is not None else "default"
+
+
 def _decide_workers_arg(value):
     """argparse type for --decide-workers: 'auto' or a non-negative integer.
 
@@ -2041,6 +2109,16 @@ def main() -> int:
     if args.re_run is not None:
         if store is None:
             raise SystemExit("--re-run needs a run store; drop --no-persist")
+        if args.config:
+            # #564 review finding 5: reproduce_run reconstructs the SAME
+            # sim_config the run was recorded with (from its manifest) --
+            # a --config passed alongside --re-run would silently do nothing,
+            # so say so rather than let it look honored.
+            print(
+                f"NOTE: --config {args.config} is ignored for --re-run -- the "
+                "run's own recorded sim_config (if any) is reconstructed from "
+                "its manifest instead."
+            )
         try:
             result = reproduce_run(store, args.re_run)
         except (KeyError, ValueError) as exc:
@@ -2151,18 +2229,24 @@ def main() -> int:
             "Persistence: OFF (--no-persist) -- this run is ephemeral and cannot "
             "be saved or resumed later."
         )
-    if sim_config is not None:
-        r = sim_config.retrieval
+    # These three read stepper.sim_config/cognition_tools/react -- the
+    # RESOLVED values -- rather than the CLI's own sim_config/args.* (#564
+    # review findings 1 + 4): a resumed run may have adopted a different
+    # sim_config than what --config loaded, and cognition_tools already
+    # folds in game.agent.cognition_tools + the scripted-brain coupling, so
+    # re-deriving either from args here would drift from what is actually
+    # driving the sim.
+    if stepper.sim_config is not None:
+        r = stepper.sim_config.retrieval
         print(
-            f"Sim config: {args.config} -- retrieval "
-            f"recency={r.alpha_recency:g}/importance={r.alpha_importance:g}/"
-            f"relevance={r.alpha_relevance:g} (max {r.max_records}), "
-            f"temperature={sim_config.game.agent.temperature:g}, "
+            f"Sim config: {args.config or '(resumed run)'} -- retrieval "
+            f"recency={_fmt_or_default(r.alpha_recency)}/"
+            f"importance={_fmt_or_default(r.alpha_importance)}/"
+            f"relevance={_fmt_or_default(r.alpha_relevance)} (max {r.max_records}), "
+            f"temperature={_fmt_or_default(stepper.sim_config.game.agent.temperature)}, "
             f"vision_r={stepper.cog.vision_r}."
         )
-    if args.cognition_tools or (
-        sim_config is not None and sim_config.cognition.cognition_tools
-    ):
+    if stepper.cognition_tools:
         print(
             "Cognition tools: ON -- a decide tick may spend up to 3 model "
             "requests (recall/query_knowledge/read_plan before acting)."
@@ -2170,7 +2254,7 @@ def main() -> int:
             else "Cognition tools: ON, but the mock brain never reaches the "
             "tool loop -- pair it with --brain llm for any effect."
         )
-    if args.react or (sim_config is not None and sim_config.cognition.react_enabled):
+    if stepper.react:
         print(
             "React gate: ON -- a mid-walk encounter may consult the brain "
             "(continue/greet/replan, #370), capped per agent per sim hour."

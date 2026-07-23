@@ -29,11 +29,13 @@ from serve_penn import PennStepper, _build_parser  # noqa: E402
 
 from backend.cognition import attach_agents  # noqa: E402
 from backend.run_simulation import observe_and_decide  # noqa: E402
+from backend.run_store import RunStore  # noqa: E402
 from backend.sim_config import (  # noqa: E402
     CognitionConfig,
     RetrievalConfig,
     SimulationConfig,
 )
+from text_adventure_games.config import AgentConfig  # noqa: E402
 
 
 def _cfg(data: dict) -> SimulationConfig:
@@ -225,3 +227,165 @@ def test_from_file_malformed_yaml_raises_value_error(tmp_path):
     bad.write_text("retrieval: [unclosed", encoding="utf-8")
     with pytest.raises(ValueError, match="invalid YAML"):
         SimulationConfig.from_file(bad)
+
+
+# -- Post-review hardening (#564 review) --------------------------------------
+#
+# Finding 1: resume (boot --resume and mid-process resume_run()) adopts the
+# resumed run's OWN recorded sim_config over whatever this server booted
+# with -- otherwise the world silently continues under different knobs and a
+# later --re-run of the same run reports DIVERGED.
+
+
+def test_resume_adopts_manifest_sim_config_boot_path(tmp_path, capsys):
+    store = RunStore(tmp_path / "runs")
+    recorded_cfg = _cfg({"retrieval": {"max_records": 1}, "cognition": {"vision_r": 2}})
+    first = PennStepper(
+        num_steps=4, world=build_penn_world(), run_store=store, sim_config=recorded_cfg
+    )
+    run_id = first.run_id
+    first.tick()
+    del first  # crash case: the row is orphaned at "running"
+
+    # This server boots with a DIFFERENT config -- the recorded one must win.
+    other_cfg = _cfg({"cognition": {"vision_r": 8}})
+    resumed = PennStepper(
+        num_steps=4,
+        world=build_penn_world(),
+        run_store=store,
+        resume_run_id=run_id,
+        sim_config=other_cfg,
+    )
+    assert resumed.sim_config.to_dict() == recorded_cfg.to_dict()
+    assert resumed.cog.vision_r == 2
+    assert resumed.retrieval.max_records == 1
+    assert "adopts its recorded sim_config" in capsys.readouterr().out
+
+
+def test_resume_without_recorded_config_keeps_this_servers_own(tmp_path):
+    # Pre-#564 (or plain, unconfigured) manifests have no sim_config key at
+    # all -- resume must leave this server's own config untouched.
+    store = RunStore(tmp_path / "runs")
+    first = PennStepper(num_steps=4, world=build_penn_world(), run_store=store)
+    run_id = first.run_id
+    first.tick()
+    del first
+
+    own_cfg = _cfg({"cognition": {"vision_r": 3}})
+    resumed = PennStepper(
+        num_steps=4,
+        world=build_penn_world(),
+        run_store=store,
+        resume_run_id=run_id,
+        sim_config=own_cfg,
+    )
+    assert resumed.sim_config is own_cfg
+    assert resumed.cog.vision_r == 3
+
+
+def test_resume_cli_flag_still_forces_cognition_tools_on_over_recorded_config(
+    tmp_path,
+):
+    # The one-way rule (a boolean CLI flag always wins) must survive the
+    # resume-adoption re-derivation, not just the original __init__ one.
+    store = RunStore(tmp_path / "runs")
+    recorded_cfg = _cfg({"cognition": {"cognition_tools": False}})
+    first = PennStepper(
+        num_steps=4, world=build_penn_world(), run_store=store, sim_config=recorded_cfg
+    )
+    run_id = first.run_id
+    first.tick()
+    del first
+
+    resumed = PennStepper(
+        num_steps=4,
+        world=build_penn_world(),
+        run_store=store,
+        resume_run_id=run_id,
+        cognition_tools=True,
+    )
+    assert resumed.cognition_tools is True
+
+
+def test_resume_run_mid_process_adopts_manifest_sim_config(tmp_path, capsys):
+    # POST /runs/{id}/resume's stepper half (resume_run(), not just boot).
+    store = RunStore(tmp_path / "runs")
+    recorded_cfg = _cfg({"cognition": {"vision_r": 2}})
+    stepper = PennStepper(
+        num_steps=4, world=build_penn_world(), run_store=store, sim_config=recorded_cfg
+    )
+    a = stepper.run_id
+    stepper.tick()
+    stepper.reset()
+    stepper.tick()
+    # Pretend the live server is currently running under a DIFFERENT config
+    # than run `a` was recorded with (reset() does not itself change
+    # sim_config, so this stands in for a server that was reconfigured, or
+    # simply booted plain, between `a`'s day and this resume).
+    other_cfg = _cfg({"cognition": {"vision_r": 5}})
+    stepper.sim_config = other_cfg
+    stepper.retrieval = other_cfg.retrieval
+    stepper.resume_run(a)
+    assert stepper.cog.vision_r == 2  # run `a`'s OWN recorded config wins
+    assert "adopts its recorded sim_config" in capsys.readouterr().out
+
+
+# Finding 3: the boot "Sim config:" print must not crash on a config field
+# left blank (YAML null -> None), which `:g` formatting can't handle.
+
+
+def test_fmt_or_default_is_none_safe():
+    assert serve_penn._fmt_or_default(None) == "default"
+    assert serve_penn._fmt_or_default(1.5) == "1.5"
+
+
+def test_sim_config_with_blank_numeric_fields_is_none_safe(tmp_path):
+    path = tmp_path / "sim.yaml"
+    path.write_text(
+        "retrieval:\n  alpha_recency:\ngame:\n  agent:\n    temperature:\n",
+        encoding="utf-8",
+    )
+    cfg = SimulationConfig.from_file(path)
+    assert cfg.retrieval.alpha_recency is None
+    assert cfg.game.agent.temperature is None
+    # What the boot print does with these -- must not raise.
+    assert serve_penn._fmt_or_default(cfg.retrieval.alpha_recency) == "default"
+    assert serve_penn._fmt_or_default(cfg.game.agent.temperature) == "default"
+
+
+# Finding 4: the engine's own game.agent.cognition_tools (a plain GameConfig
+# key) must not be silently dead just because it rides inside a
+# SimulationConfig alongside the sim-level cognition.cognition_tools.
+
+
+def test_engine_agent_config_cognition_tools_defaults_false():
+    # The precondition finding 4's OR-resolution relies on: OR-ing in this
+    # key can never turn cognition tools on by default.
+    assert AgentConfig().cognition_tools is False
+
+
+def test_engine_agent_cognition_tools_key_also_switches_it_on():
+    cfg = _cfg({"game": {"agent": {"cognition_tools": True}}})
+    stepper = PennStepper(num_steps=2, world=build_penn_world(), sim_config=cfg)
+    assert stepper.cognition_tools is True
+    assert stepper.cog.cognition_tools is True
+
+
+# Finding 5: --config alongside --re-run is silently ignored (reproduce_run
+# always reconstructs the manifest's own config); main() must say so.
+
+
+def test_main_re_run_with_config_warns_and_is_ignored(tmp_path, monkeypatch, capsys):
+    # Redirect the run store so this stays offline with no real runs/ dir.
+    monkeypatch.setattr(serve_penn, "DEFAULT_RUNS_DIR", tmp_path / "runs")
+    cfg_path = tmp_path / "sim.yaml"
+    cfg_path.write_text("retrieval:\n  max_records: 1\n", encoding="utf-8")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["serve_penn.py", "--re-run", "run-does-not-exist", "--config", str(cfg_path)],
+    )
+    with pytest.raises(SystemExit):
+        serve_penn.main()
+    out = capsys.readouterr().out
+    assert f"--config {cfg_path} is ignored for --re-run" in out
