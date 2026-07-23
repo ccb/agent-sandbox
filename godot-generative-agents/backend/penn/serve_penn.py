@@ -1157,6 +1157,19 @@ class PennStepper:
             ),
         }
 
+    def _sim_config_for_manifest(self) -> dict | None:
+        """The #564 config as stored in the manifest: to_dict() minus the
+        sections the live path ignores (game.llm, embedding) -- they can
+        carry api_key material, which must never land in runs/ or be served
+        by GET /runs/{id}. from_dict treats the absent keys as None, so the
+        re-run reconstruction is unchanged."""
+        if self.sim_config is None:
+            return None
+        data = self.sim_config.to_dict()
+        data.get("game", {}).pop("llm", None)
+        data.pop("embedding", None)
+        return data
+
     def _store_manifest(self) -> dict:
         """The manifest persisted to the store: the handshake meta() plus the
         provenance a re-run needs (#715). Kept OFF meta() itself so the live
@@ -1176,9 +1189,9 @@ class PennStepper:
             # The #564 --config, so a re-run rebuilds the same retrieval/
             # temperature/cognition and the cassette's request keys line up.
             # A default run stores None; pre-#564 manifests simply lack the key.
-            "sim_config": (
-                self.sim_config.to_dict() if self.sim_config is not None else None
-            ),
+            # game.llm/embedding are stripped -- they can carry api_key
+            # material and must never land in runs/ or GET /runs/{id}.
+            "sim_config": self._sim_config_for_manifest(),
         }
 
     def tick(self) -> dict | None:
@@ -1962,8 +1975,9 @@ def _build_parser() -> argparse.ArgumentParser:
         "sim with it: the retrieval: section (memory-scoring weights), the "
         "cognition: section (vision_r, conversation pacing, ...), and "
         "game.agent's temperature / reflection_threshold are honored. The "
-        "batch-runner sections (simulation:, embedding:) are ignored here "
-        "-- live runs keep --steps/--tick-seconds. Boolean flags "
+        "batch-runner sections (simulation:, embedding:) and game.llm are "
+        "ignored here (the world YAML's llm: block drives the model) -- "
+        "live runs keep --steps/--tick-seconds. Boolean flags "
         "(--cognition-tools, --react) still force their feature ON over "
         "the file. Recorded into the run manifest so --re-run reproduces it",
     )

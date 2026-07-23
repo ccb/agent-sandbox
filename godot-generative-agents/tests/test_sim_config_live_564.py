@@ -9,8 +9,11 @@ today by construction. Fully offline (mock brain). Run from the repo root:
     uv run pytest godot-generative-agents/tests/test_sim_config_live_564.py -v
 """
 
+import json
 import sys
 from pathlib import Path
+
+import pytest
 
 # The Penn sim modules live in the Godot tree and are run as scripts (no
 # package); tests import them the way the scripts import each other -- off the
@@ -188,6 +191,24 @@ def test_sim_config_from_manifest_tolerates_old_manifests():
     assert serve_penn._sim_config_from_manifest({"seed": 0}) is None
 
 
+def test_manifest_sim_config_never_stores_api_keys():
+    cfg = _cfg(
+        {
+            "retrieval": {"max_records": 1},
+            "game": {"llm": {"provider": "anthropic", "api_key": "sk-SECRET"}},
+            "embedding": {"provider": "mock", "api_key": "sk-SECRET2"},
+        }
+    )
+    stepper = PennStepper(num_steps=2, world=build_penn_world(), sim_config=cfg)
+    manifest = stepper._store_manifest()
+    assert "sk-SECRET" not in json.dumps(manifest)
+    assert "llm" not in manifest["sim_config"]["game"]
+    assert "embedding" not in manifest["sim_config"]
+    # The stripped manifest still reconstructs (llm/embedding read back as None).
+    rebuilt = serve_penn._sim_config_from_manifest(manifest)
+    assert rebuilt.retrieval.max_records == 1
+
+
 # -- Task 5: the --config CLI flag --------------------------------------------
 
 
@@ -197,3 +218,10 @@ def test_config_flag_defaults_to_none():
 
 def test_config_flag_takes_a_path():
     assert _build_parser().parse_args(["--config", "sim.yaml"]).config == "sim.yaml"
+
+
+def test_from_file_malformed_yaml_raises_value_error(tmp_path):
+    bad = tmp_path / "bad.yaml"
+    bad.write_text("retrieval: [unclosed", encoding="utf-8")
+    with pytest.raises(ValueError, match="invalid YAML"):
+        SimulationConfig.from_file(bad)

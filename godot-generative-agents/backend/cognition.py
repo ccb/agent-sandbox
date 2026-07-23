@@ -582,7 +582,8 @@ def attach_agents(
             agent.cognition_tools = True
         # Periodic reflection (issue #84): an LLMReflector when a real client is
         # supplied, else None -- so the offline mock run never reflects and the
-        # replay stays byte-identical. The threshold rides on AgentConfig's default.
+        # replay stays byte-identical. The threshold is the agent's
+        # reflection_threshold (LLMAgent's default unless #564's config passed one).
         if reflector_client is not None:
             agent.reflector = LLMReflector(reflector_client)
         # The verbs the structured tool may offer; the mock ignores the enum but a
