@@ -187,6 +187,13 @@ uv run python godot-generative-agents/backend/penn/serve_penn.py --tick-seconds 
 SIM_API_URL=http://127.0.0.1:8080 ./godot-generative-agents/run.sh
 ```
 
+`--scenario` picks which world the live loop steps, using the bake's scenario
+names: `penn` (default, the full campus cast), `boil` (the #592 demo above), or
+`boil_hard` (#728 — the boil demo with the stove relocated to a separate Sweeten
+`Kitchen` and the perception radius pinned to 0, so finding it takes actually
+traveling there; the matching experiment harness is
+`backend/penn/experiments/boil_hard_connect_dots.py`).
+
 Or skip the env var entirely: launch the viewer normally so it opens the landing
 menu, type the backend's URL (and its token, if the server sets `SIM_API_TOKEN`)
 into **Run a live simulation**, and press **Connect**. The menu probes `GET /live`
