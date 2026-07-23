@@ -60,6 +60,11 @@ export interface FeedRecord {
   running?: boolean;
   paused?: boolean;
   event?: { kind?: string } & Record<string, unknown>;
+  // `deciding` records (#551): which agent, "begin" | "end", and (on end)
+  // how long the decision took.
+  agent?: string;
+  state?: string;
+  elapsed_ms?: number;
 }
 
 // The GET /events?since=N response envelope.

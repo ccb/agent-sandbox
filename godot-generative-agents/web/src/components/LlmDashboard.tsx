@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Replay } from "../types/replay";
-import type { LiveState, ReceivedLlmCall } from "../useLive";
+import { type LiveState, type ReceivedLlmCall, useThinking } from "../useLive";
 import { ConversationFeed } from "./ConversationFeed";
 import { EventFeed } from "./EventFeed";
 import { LlmCallLog } from "./LlmCallLog";
@@ -102,6 +102,11 @@ export function LlmDashboard({
   }, []);
   const [url, setUrl] = useState("http://127.0.0.1:8080");
 
+  // The global "thinking" cue (#525): per-agent `deciding` state OR'd with the
+  // stall heuristic, mirroring the Godot viewer's badge (#598). Edge-triggered
+  // in the hook, so it can't strobe at mock speeds.
+  const thinking = useThinking(live);
+
   // The roster: live personas when the handshake reported a loop (falling back
   // to the baked replay's cast), ∪ actors seen only on the stream, ∪ one
   // catch-all cell when unattributed records exist — so the grid works pointed
@@ -199,13 +204,28 @@ export function LlmDashboard({
       <header className="llm-strip">
         {live.enabled ? (
           <>
+            {/* Badge precedence: disconnected (red) > paused (amber) > thinking
+                (purple — a live run mid-decision, #525) > live (green). Thinking
+                requires `connected`, so it can never mask "reconnecting". */}
             <span
               className={`agent-live-badge${
-                !live.connected ? " is-off" : live.paused ? " is-paused" : ""
+                !live.connected
+                  ? " is-off"
+                  : live.paused
+                    ? " is-paused"
+                    : thinking
+                      ? " is-thinking"
+                      : ""
               }`}
             >
-              {!live.connected ? "reconnecting" : live.paused ? "live · paused" : "live"} · step{" "}
-              {live.step}
+              {!live.connected
+                ? "reconnecting"
+                : live.paused
+                  ? "live · paused"
+                  : thinking
+                    ? "live · thinking…"
+                    : "live"}{" "}
+              · step {live.step}
             </span>
             <span className="llm-strip-controls">
               {live.paused ? (
@@ -288,6 +308,20 @@ export function LlmDashboard({
                         s.last ? `last call ${s.last.time} (${heat})` : "no calls seen this session"
                       }
                     />
+                  )}
+                  {/* Per-agent "thinking" bubble (#525): lit while this agent's
+                      `deciding` begin is unmatched on the feed (#551). Within-tick
+                      decides fold begin+end in one batch and never light it — the
+                      #605 boundary — so this mostly marks tick-spanning decides. */}
+                  {live.enabled && cell.actor !== null && cell.actor in live.deciding && (
+                    <span
+                      className="llm-thinking-bubble"
+                      role="img"
+                      aria-label="deciding"
+                      title={`${cell.label} is deciding…`}
+                    >
+                      💭
+                    </span>
                   )}
                 </h3>
                 {live.enabled && (

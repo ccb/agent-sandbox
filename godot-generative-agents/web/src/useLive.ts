@@ -68,6 +68,14 @@ export interface LiveState {
   frame: Frame | null; // the latest frame record's agents (same shape as replay.frames[i])
   calls: ReceivedLlmCall[]; // oldest → newest, capped per agent
   events: ReceivedFeedEvent[]; // game_event + wish rows, oldest → newest, capped
+  // Agents mid-decision right now (#525): name → the wall-clock ms their
+  // `deciding: begin` record arrived, deleted again on the matching `end`
+  // (#551's lifecycle). Cleared on reset/restart, mirroring the Godot
+  // viewer's DecidingState.clear(), so a dropped `end` can't wedge a bubble.
+  deciding: Record<string, number>;
+  // When the newest frame reached the page (the handshake seeds it) — the
+  // stall clock behind the #372-style global "thinking" inference.
+  lastFrameAt: number | null;
 }
 
 const IDLE: LiveState = {
@@ -83,6 +91,8 @@ const IDLE: LiveState = {
   frame: null,
   calls: [],
   events: [],
+  deciding: {},
+  lastFrameAt: null,
 };
 
 /**
@@ -95,6 +105,10 @@ const IDLE: LiveState = {
  * - `engine` records whose payload is `kind: "game_event"` plus top-level
  *   `wish` records (#644) — the run-event rows the Godot HUD log shows, so the
  *   two instruments agree about what happened;
+ * - `deciding` begin/end records (#551 → #525): the per-agent "thinking"
+ *   lifecycle. Folded in batch order, so a decide that begins AND ends inside
+ *   one tick (today's within-tick pairs, #605) nets out to no bubble — no
+ *   flicker at mock speeds — while a tick-spanning decide leaves its agent lit;
  * - the latest `frame` record (step + per-agent state, the live counterpart of
  *   `replay.frames[step]`);
  * - the latest `status` record (running / paused, from the run controls).
@@ -105,16 +119,18 @@ export function applyFeedRecords(
   receivedAt: number,
 ): LiveState {
   // Walk the batch in feed order: a status record with reason "reset"
-  // (the documented new-run signal) drops every call/event before it — the
-  // retained log and this batch's earlier rows describe the dead run.
+  // (the documented new-run signal) drops every call/event/bubble before it —
+  // the retained log and this batch's earlier rows describe the dead run.
   let wasReset = false;
   const fresh: ReceivedLlmCall[] = [];
   const freshEvents: ReceivedFeedEvent[] = [];
+  let deciding: Record<string, number> | null = null; // null = untouched this batch
   for (const r of records) {
     if (r.kind === "status" && r.reason === "reset") {
       wasReset = true;
       fresh.length = 0;
       freshEvents.length = 0;
+      deciding = {};
     } else if (r.kind === "engine" && r.event?.kind === "llm_call") {
       fresh.push({ ...(r.event as unknown as LlmCallRecord), receivedAt });
     } else if (r.kind === "engine" && r.event?.kind === "game_event") {
@@ -133,6 +149,10 @@ export function applyFeedRecords(
         cursor: r.cursor,
         receivedAt,
       });
+    } else if (r.kind === "deciding" && typeof r.agent === "string") {
+      deciding = deciding ?? { ...s.deciding };
+      if (r.state === "begin") deciding[r.agent] = receivedAt;
+      else delete deciding[r.agent]; // "end" — an orphan end is a no-op
     }
   }
   // Only the newest frame/status matter — the panel shows "now", not history.
@@ -142,7 +162,14 @@ export function applyFeedRecords(
   const lastStatus = statuses[statuses.length - 1];
   // Skip the state update when nothing changed, so an idle (or paused)
   // backend doesn't re-render the panel once a second.
-  if (s.connected && fresh.length === 0 && freshEvents.length === 0 && !lastFrame && !lastStatus)
+  if (
+    s.connected &&
+    fresh.length === 0 &&
+    freshEvents.length === 0 &&
+    deciding === null &&
+    !lastFrame &&
+    !lastStatus
+  )
     return s;
   const heldEvents = wasReset ? [] : s.events;
   return {
@@ -152,6 +179,8 @@ export function applyFeedRecords(
     events: freshEvents.length
       ? [...heldEvents, ...freshEvents].slice(-MAX_EVENT_ROWS)
       : heldEvents,
+    deciding: deciding ?? s.deciding,
+    lastFrameAt: lastFrame ? receivedAt : s.lastFrameAt,
     // frame is deliberately NOT dropped on reset: calls/events are append-only
     // logs (stale rows would linger beside new ones), but frame is wholesale-
     // replaced by the new run's first frame within one tick — keeping the
@@ -161,6 +190,51 @@ export function applyFeedRecords(
     running: lastStatus?.running ?? s.running,
     paused: lastStatus?.paused ?? s.paused,
   };
+}
+
+// How long the feed head may sit still on a RUNNING backend before the global
+// indicator infers "thinking" (#372's heuristic, web edition). The Godot
+// viewer uses 1500 ms against its pushed frame stream; the web's poll
+// fallback quantizes arrivals at POLL_MS, so the threshold covers a full
+// missed poll on top of a tick (2 × POLL_MS + margin) — otherwise a healthy
+// 0.6 s-tick mock run would strobe the badge once per poll beat.
+export const THINKING_STALL_MS = 2500;
+
+/**
+ * The global "thinking" cue (#525), mirroring the Godot viewer's #598
+ * semantics: the explicit per-agent `deciding` signal OR the #372 stall
+ * heuristic. The OR keeps the heuristic live for decides that begin AND end
+ * within one tick (their begin/end fold to nothing in `applyFeedRecords` —
+ * the #605 boundary), while `deciding` adds the cases that DO span ticks
+ * (a parked #366 straggler) even though frames keep flowing.
+ *
+ * Gated on connected: a dead poll renders the existing "reconnecting" badge —
+ * thinking must stay visually distinct from disconnected. Mock runs without
+ * `deciding` records fall back to pure stall inference, exactly like the
+ * Godot badge.
+ */
+export function isThinking(s: LiveState, now: number, stallMs = THINKING_STALL_MS): boolean {
+  if (!s.connected || !s.live) return false;
+  if (Object.keys(s.deciding).length > 0) return true;
+  return s.running && !s.paused && s.lastFrameAt !== null && now - s.lastFrameAt > stallMs;
+}
+
+/**
+ * React seam over isThinking(): re-evaluated when the live state changes AND
+ * on a 1 s clock (the stall half needs wall time to pass with no state change
+ * to trigger it). Edge-triggered — setState with an unchanged boolean is a
+ * React no-op — so the page re-renders only when the cue actually flips,
+ * never once a second.
+ */
+export function useThinking(live: LiveState): boolean {
+  const [thinking, setThinking] = useState(false);
+  useEffect(() => {
+    const update = () => setThinking(isThinking(live, Date.now()));
+    update();
+    const t = setInterval(update, 1000);
+    return () => clearInterval(t);
+  }, [live]);
+  return thinking;
 }
 
 /**
@@ -254,6 +328,14 @@ export function followLive(
       // synthetic one would have to carry the whole meta/usage/step snapshot too.
       calls: restarted ? [] : s.calls,
       events: restarted ? [] : s.events,
+      // A restarted backend's in-flight decisions died with it — clear the
+      // bubbles like the Godot viewer's DecidingState.clear() on #549 restart,
+      // so a dropped `end` can't wedge one across runs.
+      deciding: restarted ? {} : s.deciding,
+      // Seed (or re-seed) the stall clock: "quiet since attach" is the stall
+      // that matters when we join a run already mid-decision. A background
+      // eviction-gap refresh keeps the genuine last-frame time.
+      lastFrameAt: restarted || s.lastFrameAt === null ? Date.now() : s.lastFrameAt,
     }));
   };
 
