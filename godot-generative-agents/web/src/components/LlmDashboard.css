@@ -368,3 +368,32 @@
   font-weight: 600;
   color: #5b6478;
 }
+
+/* ---------- Thinking state (#525) -------------------------------------------- */
+/* The per-agent "deciding" bubble, next to the recency pulse — lit while that
+   agent's `deciding: begin` is unmatched on the feed (#551). A gentle bob keeps
+   it readable as "in flight right now" vs the pulse's "called recently". */
+.llm-thinking-bubble {
+  flex: none;
+  font-size: 0.8em;
+  line-height: 1;
+  animation: llm-thinking-bob 1.2s ease-in-out infinite;
+}
+
+@keyframes llm-thinking-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.65;
+  }
+  50% {
+    transform: translateY(-0.15em);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .llm-thinking-bubble {
+    animation: none;
+  }
+}

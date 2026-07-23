@@ -564,3 +564,11 @@
     animation: mem-flash-soft 2.5s ease-out 1;
   }
 }
+
+/* A live run mid-decision (#525): the global thinking cue. Purple, its own hue —
+   never confusable with is-off's red "reconnecting" (disconnected) state. */
+.agent-live-badge.is-thinking {
+  color: #5b3f8f;
+  background: #f1ebfa;
+  border-color: #ddd0f0;
+}

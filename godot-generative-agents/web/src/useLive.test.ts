@@ -4,8 +4,10 @@ import {
   applyFeedRecords,
   capPerAgent,
   followLive,
+  isThinking,
   type LiveState,
   type ReceivedLlmCall,
+  THINKING_STALL_MS,
 } from "./useLive";
 
 // capPerAgent only inspects `.actor`; `call_no` tags each row so we can assert
@@ -58,6 +60,8 @@ const idle = (): LiveState => ({
   frame: null,
   calls: [],
   events: [],
+  deciding: {},
+  lastFrameAt: null,
 });
 
 const call = (call_no: number, cursor: number): FeedRecord => ({
@@ -162,6 +166,106 @@ describe("applyFeedRecords", () => {
     for (let i = 1; i <= 205; i++) s = applyFeedRecords(s, [gameEvent(i, `e${i}`)], 0);
     expect(s.events).toHaveLength(200);
     expect(s.events[0]).toMatchObject({ summary: "e6" }); // oldest 5 evicted
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The thinking state (#525): the per-agent `deciding` fold and the isThinking
+// selector — fake feed fixtures with #551's begin/end lifecycle records.
+// ---------------------------------------------------------------------------
+
+const deciding = (cursor: number, agent: string, state: "begin" | "end"): FeedRecord => ({
+  cursor,
+  kind: "deciding",
+  agent,
+  state,
+  step: 1,
+  ...(state === "end" ? { elapsed_ms: 12 } : {}),
+});
+
+describe("deciding state", () => {
+  it("a begin lights the agent and the matching end clears it", () => {
+    let s = applyFeedRecords(idle(), [deciding(1, "Maya", "begin")], 70);
+    expect(s.deciding).toEqual({ Maya: 70 });
+    s = applyFeedRecords(s, [deciding(2, "Maya", "end")], 71);
+    expect(s.deciding).toEqual({});
+  });
+
+  it("tracks several agents' decides independently (#366 concurrency)", () => {
+    let s = applyFeedRecords(
+      idle(),
+      [deciding(1, "Maya", "begin"), deciding(2, "Diego", "begin")],
+      70,
+    );
+    s = applyFeedRecords(s, [deciding(3, "Maya", "end")], 71);
+    expect(s.deciding).toEqual({ Diego: 70 });
+  });
+
+  it("a within-tick begin+end folds to no bubble — no flicker at mock speeds (#605)", () => {
+    // Today the backend drains a within-tick decide's begin AND end at the same
+    // tick boundary, so they arrive in one batch: the fold must net out to
+    // nothing rather than strobing a bubble through a render.
+    const s = applyFeedRecords(
+      idle(),
+      [deciding(1, "Maya", "begin"), deciding(2, "Maya", "end")],
+      70,
+    );
+    expect(s.deciding).toEqual({});
+  });
+
+  it("an orphan end (pre-reset straggler) is a no-op", () => {
+    const s = applyFeedRecords(idle(), [deciding(1, "Maya", "end")], 70);
+    expect(s.deciding).toEqual({});
+  });
+
+  it("a reset clears in-flight bubbles with the rest of the dead run", () => {
+    const lit = applyFeedRecords(idle(), [deciding(1, "Maya", "begin")], 70);
+    const s = applyFeedRecords(lit, [{ cursor: 2, kind: "status", reason: "reset", step: 0 }], 71);
+    expect(s.deciding).toEqual({});
+  });
+
+  it("a frame stamps the stall clock", () => {
+    const s = applyFeedRecords(idle(), [{ cursor: 1, kind: "frame", step: 2, agents: {} }], 88);
+    expect(s.lastFrameAt).toBe(88);
+  });
+});
+
+describe("isThinking", () => {
+  // A healthy, connected, running live follower — each case below perturbs it.
+  const following = (over: Partial<LiveState>): LiveState => ({
+    ...idle(),
+    connected: true,
+    live: true,
+    running: true,
+    lastFrameAt: 10_000,
+    ...over,
+  });
+
+  it("lights on the explicit per-agent signal even while frames keep flowing", () => {
+    // #598's OR semantics: a parked #366 straggler decides across ticks while
+    // the head keeps growing — stall inference alone would stay dark.
+    const s = following({ deciding: { Maya: 9_900 } });
+    expect(isThinking(s, 10_100)).toBe(true);
+  });
+
+  it("falls back to stall inference when no deciding records exist (mock runs)", () => {
+    const s = following({});
+    expect(isThinking(s, 10_000 + THINKING_STALL_MS + 1)).toBe(true);
+    expect(isThinking(s, 10_000 + THINKING_STALL_MS - 1)).toBe(false); // fresh frame → dark
+  });
+
+  it("stays dark while paused or before any frame has landed", () => {
+    expect(isThinking(following({ paused: true }), 99_999)).toBe(false);
+    expect(isThinking(following({ running: false }), 99_999)).toBe(false);
+    expect(isThinking(following({ lastFrameAt: null }), 99_999)).toBe(false);
+  });
+
+  it("is distinct from disconnected: a dead poll never reads as thinking", () => {
+    // The strip's red "reconnecting" badge owns that state — even a mid-decide
+    // agent or an ancient frame must not flip the cue while disconnected.
+    const stalled = following({ connected: false, deciding: { Maya: 9_900 } });
+    expect(isThinking(stalled, 99_999)).toBe(false);
+    expect(isThinking(following({ live: false }), 99_999)).toBe(false);
   });
 });
 
