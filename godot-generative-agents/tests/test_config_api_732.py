@@ -19,7 +19,6 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SIM_DIR = _REPO_ROOT / "godot-generative-agents" / "backend" / "penn"
 sys.path.insert(0, str(_SIM_DIR))
 
-import serve_penn  # noqa: E402
 from penn_world import WORLD_DATA, build_penn_world  # noqa: E402
 from serve_penn import SCENARIOS, SCRIPTED, PennStepper, _GameProxy  # noqa: E402
 
@@ -180,3 +179,84 @@ def test_apply_brain_llm_without_extra_fails_before_teardown(monkeypatch, tmp_pa
         stepper.apply_config(brain="llm")
     assert stepper.run_id == run_id
     assert stepper.tick() is not None
+
+
+pytest.importorskip("fastapi")
+pytest.importorskip("httpx")
+
+from fastapi.testclient import TestClient  # noqa: E402
+
+from backend.api import create_app  # noqa: E402
+
+
+def _client(tmp_path=None, **stepper_kw):
+    if tmp_path is not None:
+        stepper_kw.setdefault("run_store", RunStore(tmp_path / "runs"))
+    stepper = _mock_stepper(**stepper_kw)
+    app = create_app(
+        _GameProxy(stepper), stepper=stepper, start_paused=True, tick_seconds=0.05
+    )
+    return TestClient(app), stepper
+
+
+def test_get_config_configurable_at_tick_zero():
+    client, _ = _client()
+    body = client.get("/config").json()
+    assert body["status"] == "configurable"
+    assert body["run"]["tick_seconds"] == 0.05
+    assert {"personas", "cast", "knobs", "brains", "run"} <= set(body)
+
+
+def test_config_locks_once_started():
+    client, _ = _client()
+    client.post("/resume")  # the Start button: paused -> False, gate closes
+    assert client.get("/config").json()["status"] == "locked"
+    resp = client.post("/config", json={"cast": ["diego"]})
+    assert resp.status_code == 409
+
+
+def test_post_config_applies_cast_and_publishes_adoption(tmp_path):
+    client, stepper = _client(tmp_path)
+    resp = client.post("/config", json={"cast": ["diego"], "tick_seconds": 0.5})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["applied"]["cast"] == ["diego"]
+    assert body["run_id"] == stepper.run_id
+    # the live handshake now shows the sub-cast and the new cadence
+    live = client.get("/live").json()
+    assert [p["name"] for p in live["meta"]["personas"]] == ["Diego Torres"]
+    assert live["tick_seconds"] == 0.5
+    # followers got the standard rebuild signal
+    events = client.get("/events?since=0").json()["events"]
+    assert any(
+        e["kind"] == "status" and e.get("reason") == "reset" and e.get("run_id")
+        for e in events
+    )
+    # still configurable (paused, tick 0): the UI may keep adjusting
+    assert client.get("/config").json()["status"] == "configurable"
+    assert client.get("/config").json()["cast"] == ["diego"]
+    # and the persisted manifest records the setup
+    manifest = client.get(f"/runs/{body['run_id']}").json()["manifest"]
+    assert manifest["config"]["cast"] == ["diego"]
+
+
+def test_post_config_bad_inputs_are_400():
+    client, _ = _client()
+    assert client.post("/config", json={"cast": []}).status_code == 400
+    assert client.post("/config", json={"cast": ["nobody"]}).status_code == 400
+    assert client.post("/config", json={"brain": "gpt"}).status_code == 400
+    assert client.post("/config", json={"sim_config": {"nope": {}}}).status_code == 400
+
+
+def test_post_config_llm_without_key_is_400(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    client, _ = _client()
+    assert client.post("/config", json={"brain": "llm"}).status_code == 400
+
+
+def test_config_404_without_a_live_loop():
+    from backend.api import _demo_game
+
+    client = TestClient(create_app(_demo_game()))
+    assert client.get("/config").status_code == 404
+    assert client.post("/config", json={}).status_code == 404

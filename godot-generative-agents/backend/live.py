@@ -94,6 +94,14 @@ class SimStepper(Protocol):
     * ``resume_run(run_id)`` -- adopt a persisted run as the live one
       (#543); without it ``POST /runs/{run_id}/resume`` answers 501 even
       when a ``run_store`` is present.
+    * ``describe_config() -> dict`` -- the pre-run config surface
+      (#732): persona library, SimulationConfig knobs, advertised brains,
+      run controls. When present, ``GET /config`` serves it (composed with
+      the loop's own status/tick_seconds); absent -> 404.
+    * ``apply_config(**kwargs) -> dict`` -- apply a pre-run configuration
+      by rebuilding through the stepper's reset path (#732); accepted by
+      ``POST /config`` only while the loop is paused at tick 0. Raises
+      ``ValueError`` on bad input (the route's 400).
     """
 
     @property
@@ -248,6 +256,11 @@ class LiveRunController:
         self.paused = start_paused
         self.running = False  # set/cleared by run_loop, read by the routes
         self.generation = 0
+        # The loop's target cadence (#732): seconds per tick. create_app
+        # stamps the boot value; POST /config may change it pre-start.
+        # run_loop re-reads it every iteration, so a change applies from
+        # the next tick.
+        self.tick_seconds: float | None = None
 
     def tick_once(self) -> dict:
         """One tick under the app lock. Runs in a worker thread (or directly in
@@ -337,7 +350,16 @@ async def run_loop(
     elapsed = 0.0
     try:
         while True:
-            await asyncio.sleep(_pace(tick_seconds, elapsed))
+            await asyncio.sleep(
+                _pace(
+                    (
+                        controller.tick_seconds
+                        if controller.tick_seconds is not None
+                        else tick_seconds
+                    ),
+                    elapsed,
+                )
+            )
             if controller.paused:
                 elapsed = 0.0  # a paused loop keeps its full-tick cadence
                 continue
