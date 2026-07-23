@@ -267,7 +267,10 @@ def test_arena_layer_resolved_flags_orphan_objects(tmp_path):
     assert "arena_layer_unresolved" in codes
 
 
-def test_collision_check_is_warn_only(tmp_path):
+def test_collision_check_is_warn_only_for_unsealed(tmp_path):
+    # "Test Hall" is not a sealed (room-subdivided) building, so even a total
+    # collision blow-out stays on the loose warn-only tolerance (#643 tightens
+    # only the sealed buildings -- see test_sealed_* below).
     def edit(tmj, mf):
         # knock a big hole: mark the whole footprint walkable though it's wall-drawn
         for i in range(len(mf["maze/collision_maze.csv"])):
@@ -298,7 +301,9 @@ def test_collision_reads_walls_layers_on_real_data():
     coll = [f for f in c.findings if f.code == "collision_walls_ok"]
     assert coll, "no collision_walls_ok finding on the real map"
     assert any("*_walls layers" in f.message for f in coll)
-    # still warn-only — a wall gap is a warning, never a baseline-failing error.
+    # the committed map is clean: sealed buildings have 0 walkable wall cells
+    # (no collision_wall_gap_sealed error) and Cohen's 3 doorway-art cells sit
+    # under the loose tolerance (no collision_wall_gap warn).
     assert all(
         f.severity != "error" for f in c.findings if f.code.startswith("collision_")
     )
@@ -363,6 +368,168 @@ def test_wall_tiles_solid_on_real_data():
     c = v.Checker(real_world()).run()
     assert not [f for f in c.errors() if f.code == "wall_on_walkable"]
     assert [f for f in c.findings if f.code == "wall_tiles_solid_ok"]
+
+
+def _catalog_wall_edit(walkable):
+    """Give the synthetic map a franuka tileset and paint wall_brick (catalog
+    coords (24,0) -> firstgid 100 + 24 = gid 124) on a lone floor layer with NO
+    `*_walls` layer anywhere. Layer-bound wall identity (#643) recognized a gid
+    as wall art only if some `*_walls` layer used it, so this building slipped
+    the check entirely; catalog-derived identity must still catch it."""
+
+    def edit(tmj, mf):
+        W, H, N = 5, 4, 20
+        tmj["tilesets"].append(
+            {
+                "firstgid": 100,
+                "name": "interior_franuka",
+                "tilecount": 1024,
+                "columns": 32,
+            }
+        )
+        floor = [0] * N
+        floor[0 if walkable else (1 * W + 1)] = 124  # (0,0) walkable | (1,1) solid
+        tmj["layers"].append(
+            {
+                "type": "tilelayer",
+                "name": "lonely_floor",
+                "width": W,
+                "height": H,
+                "data": floor,
+            }
+        )
+
+    return edit
+
+
+def test_catalog_wall_gid_on_walkable_errors_without_walls_layer(tmp_path):
+    w = make_world(tmp_path, _catalog_wall_edit(walkable=True))
+    findings = v.Checker(w).run().findings
+    leak = [f for f in findings if f.code == "wall_on_walkable"]
+    assert leak and leak[0].severity == "error", findings
+    assert "lonely_floor" in leak[0].message and "(0,0)" in leak[0].message
+    # the check must not have skipped itself for lack of *_walls layers
+    assert not [f for f in findings if f.code == "wall_tiles_no_walls"]
+
+
+def test_catalog_wall_gid_on_solid_cell_is_ok(tmp_path):
+    w = make_world(tmp_path, _catalog_wall_edit(walkable=False))
+    findings = v.Checker(w).run().findings
+    assert not [f for f in findings if f.code == "wall_on_walkable"], findings
+    assert [f for f in findings if f.code == "wall_tiles_solid_ok"]
+
+
+def test_catalog_wall_gids_resolve_against_this_tmj():
+    # Resolution must use the map's own tilesets, not furnish_building's pinned
+    # firstgids (the committed map predates the pinning): wall_set_silver lives
+    # on interior_music, firstgid 5211 in the tmj (pinned constant says 6072).
+    w = real_world()
+    gids = v.catalog_wall_gids(w)
+    assert 543 in gids  # wall_brick, franuka (24,0) @ firstgid 519
+    assert 5211 in gids  # wall_set_silver top-left, music (0,0) @ firstgid 5211
+    assert 6072 not in gids  # the pinned-firstgid value would be wrong here
+
+
+def _seal_rename_edit(walkable_wall_cells):
+    """Rename the synthetic building to Williams Hall (a sealed building) and
+    make the given footprint cells walkable though they are wall-drawn."""
+
+    def edit(tmj, mf):
+        W = 5
+        mf["special_blocks/arena_blocks.csv"][0][2] = "Williams Hall"
+        mf["special_blocks/sector_blocks.csv"][0][2] = "Williams Hall"
+        for x, y in walkable_wall_cells:
+            mf["maze/collision_maze.csv"][y * W + x] = "0"
+
+    return edit
+
+
+def test_sealed_building_wall_gap_is_error(tmp_path):
+    # 1 of 4 wall-drawn cells walkable = 25%, under the loose 60% tolerance --
+    # exactly the drift class that shipped past the gate before #643. On a
+    # sealed building it must now error.
+    w = make_world(tmp_path, _seal_rename_edit({(1, 1)}))
+    c = v.Checker(w)
+    c.check_collision_vs_walls()
+    gap = [f for f in c.findings if f.code == "collision_wall_gap_sealed"]
+    assert gap and gap[0].severity == "error", c.findings
+    assert gap[0].building == "Williams Hall"
+    # the loose warn did not fire (25% < 60%): without the sealed error this
+    # regression would have produced no failing finding at all
+    assert not [f for f in c.findings if f.code == "collision_wall_gap"]
+
+
+def test_sealed_building_intact_is_ok(tmp_path):
+    w = make_world(tmp_path, _seal_rename_edit(set()))
+    c = v.Checker(w)
+    c.check_collision_vs_walls()
+    assert not [f for f in c.findings if f.code == "collision_wall_gap_sealed"]
+    assert [f for f in c.findings if f.code == "collision_walls_ok"]
+
+
+def test_sealed_building_wall_gap_error_on_real_data():
+    # Punch one hole in Williams' collision under a williams_walls tile: the
+    # sealed per-building tolerance must error where the old 60% warn stayed
+    # silent.
+    w = real_world()
+    i = next(i for i, g in enumerate(w.tile_layers["williams_walls"]["data"]) if g)
+    assert w.collision[i] == "1"
+    w.collision[i] = "0"
+    c = v.Checker(w)
+    c.check_collision_vs_walls()
+    gap = [f for f in c.findings if f.code == "collision_wall_gap_sealed"]
+    assert gap and gap[0].severity == "error" and gap[0].building == "Williams Hall"
+
+
+def test_van_pelt_rooms_verified_on_real_data():
+    c = v.Checker(real_world()).run()
+    match = [f for f in c.findings if f.code == "van_pelt_rooms_match"]
+    assert match and match[0].severity == "ok"
+    assert not [f for f in c.findings if f.code == "van_pelt_rooms_drift"]
+
+
+def test_van_pelt_room_drop_is_error():
+    # Drop one Van Pelt room row from arena_blocks: the old gate downgraded all
+    # Van Pelt drawn-vs-matrix findings to info (#643); the JSON cross-check
+    # must error.
+    w = real_world()
+    row = next(r for r in w.arena_blocks if r[2] == v.VAN_PELT and r[3] == "Entrance")
+    w.arena_blocks.remove(row)
+    c = v.Checker(w)
+    c.check_van_pelt_interior()
+    drift = [f for f in c.findings if f.code == "van_pelt_rooms_drift"]
+    assert drift and drift[0].severity == "error"
+    assert "missing" in drift[0].message and "Entrance" in drift[0].message
+
+
+def test_van_pelt_room_rename_is_error():
+    w = real_world()
+    row = next(r for r in w.arena_blocks if r[2] == v.VAN_PELT and r[3] == "Entrance")
+    row[3] = "Grand Foyer"
+    c = v.Checker(w)
+    c.check_van_pelt_interior()
+    drift = [f for f in c.findings if f.code == "van_pelt_rooms_drift"]
+    assert drift and drift[0].severity == "error"
+    assert "renamed" in drift[0].message
+
+
+def test_van_pelt_total_room_loss_is_error():
+    # Losing ALL Van Pelt rooms leaves the building absent from both sides of
+    # check_drawn_vs_present (no finding at all) -- the JSON cross-check is the
+    # only gate that sees it.
+    w = real_world()
+    w.arena_blocks = [
+        r
+        for r in w.arena_blocks
+        if not (r[2] == v.VAN_PELT and r[3] not in ("grounds", "lobby"))
+    ]
+    c = v.Checker(w)
+    c.check_drawn_vs_present()
+    assert not [f for f in c.findings if f.building == v.VAN_PELT]
+    c.check_van_pelt_interior()
+    drift = [f for f in c.findings if f.code == "van_pelt_rooms_drift"]
+    assert drift and drift[0].severity == "error"
+    assert "25 missing" in drift[0].message
 
 
 def test_format_report_groups_and_counts():
