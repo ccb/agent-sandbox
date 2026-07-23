@@ -37,14 +37,19 @@ var live_token := ""
 var last_live_url := ""
 
 
+# The two REPLAY sources are mutually exclusive: the viewer (_ready) prefers
+# replay_text over replay_path, so each setter clears the other -- a value left
+# over from a prior choice must never linger and hijack the next play.
 func set_replay(path: String) -> void:
 	mode = Mode.REPLAY
 	replay_path = path
+	replay_text = ""
 
 
 func set_replay_text(text: String) -> void:
 	mode = Mode.REPLAY
 	replay_text = text
+	replay_path = ""
 
 
 func set_live(url: String, token: String) -> void:

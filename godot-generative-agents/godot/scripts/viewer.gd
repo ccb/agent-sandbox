@@ -2013,8 +2013,14 @@ func _on_save_run_requested() -> void:
 
 
 func _on_save_http_completed(
-	_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray
+	result: int, code: int, _headers: PackedStringArray, body: PackedByteArray
 ) -> void:
+	# A transport failure (unreachable backend, timeout) arrives with code == 0, so
+	# check the RESULT before the HTTP code -- otherwise it reads as "HTTP 0".
+	if result != HTTPRequest.RESULT_SUCCESS:
+		_save_stage = ""
+		_panel.set_save_status("Save failed — couldn't reach the backend (down or timed out).", "")
+		return
 	if code != 200:
 		_save_stage = ""
 		_panel.set_save_status("Save failed (HTTP %d)." % code, "")

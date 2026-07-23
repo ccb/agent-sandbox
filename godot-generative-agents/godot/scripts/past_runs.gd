@@ -168,8 +168,8 @@ func _build_row(entry: Dictionary) -> Control:
 	actions.add_theme_constant_override("separation", 6)
 	box.add_child(actions)
 	var id := String(entry.get("id", ""))
-	# Row-action buttons are wired in Task 7; here they exist (so the scene builds
-	# and the smoke test sees buttons) but only report "not wired yet".
+	# Each button routes through _on_row_action(op, id), which drives the shared
+	# _http (one request at a time; see _set_busy).
 	for spec in [["Open", "open"], ["Resume", "resume"], ["Export", "export"], ["Delete", "delete"]]:
 		var b := Button.new()
 		b.text = spec[0]
@@ -210,12 +210,18 @@ func _on_row_action(op: String, id: String) -> void:
 
 
 func _on_http_completed(
-	_result: int, code: int, _headers_in: PackedStringArray, body: PackedByteArray
+	result: int, code: int, _headers_in: PackedStringArray, body: PackedByteArray
 ) -> void:
 	var stage := _pending
 	var id := _pending_id
 	_pending = ""
 	_pending_id = ""
+	# A transport failure (unreachable backend, timeout) arrives with code == 0.
+	# No stage has switched scenes yet, so uniformly unfreeze + report and stop.
+	if result != HTTPRequest.RESULT_SUCCESS:
+		_set_busy(false)
+		_set_status("Couldn't reach the backend (down or timed out).", true)
+		return
 	match stage:
 		"list":
 			_set_busy(false)
