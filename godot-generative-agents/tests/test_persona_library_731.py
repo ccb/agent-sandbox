@@ -169,3 +169,50 @@ def test_load_world_data_resolves_cast_and_normalizes(library_world):
     # _normalize_personas ran: every persona has a uniform schedule list.
     assert all(p["schedule"] for p in personas)
     assert locations[0]["name"] == "Hub"
+
+
+# --------------------------------------------------------------------------- #
+# Acceptance against the REAL Penn library (#731): default cast unchanged,
+# all 7 loadable, sub-casts filter their edges/meetings.
+
+from backend.penn.penn_world import WORLD_DATA, build_penn_world
+
+FULL_CAST = ["diego", "tanaka", "sofia", "maya", "ellis", "priya", "marcus"]
+
+
+def test_default_cast_is_the_three_person_mvp():
+    data = load_world_yaml(WORLD_DATA)
+    assert [p["name"] for p in data["personas"]] == [
+        "Diego Torres",
+        "Professor Tanaka",
+        "Sofia Ramirez",
+    ]
+    assert [m["label"] for m in data["meetings"]] == [
+        "Diego shows Sofia around the gallery (Kamin Gallery)",
+        "Before the guest lecture at Irvine (Irvine Auditorium)",
+    ]
+    assert [(r["a"], r["b"]) for r in data["relationships"]] == [
+        ("Diego Torres", "Professor Tanaka")
+    ]
+
+
+def test_full_seven_cast_loads_all_seven():
+    data = load_world_yaml(WORLD_DATA, cast=FULL_CAST)
+    assert len(data["personas"]) == 7
+    assert len(data["meetings"]) == 4
+    assert len(data["relationships"]) == 3
+
+
+def test_full_seven_cast_builds():
+    world = build_penn_world(cast=FULL_CAST)
+    assert len(world.personas) == 7
+    # relationships_meta validated all 3 edges against the 7-person cast.
+    assert len(world.relationships) == 3
+
+
+def test_sub_cast_drops_orphaned_edges_and_meetings():
+    # Maya without Priya: her study-buddies edge and cram meeting both go.
+    world = build_penn_world(cast=["maya"])
+    assert [p["name"] for p in world.personas] == ["Maya Chen"]
+    assert world.relationships == []
+    assert world.meetings == []
