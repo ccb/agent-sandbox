@@ -345,9 +345,9 @@ async def run_loop(
                 #   thinking bubble stays stuck on the finished screen (#598).
                 for event in result["events"]:
                     log.append("engine", step=result["step"], event=event)
-                for wish in result.get("wishes", ()):
+                for wish in result["wishes"]:
                     log.append("wish", **wish)
-                for rec in result.get("deciding", ()):
+                for rec in result["deciding"]:
                     log.append("deciding", **rec)
                 log.append("status", reason="finished", **controller.status())
                 continue
@@ -363,9 +363,9 @@ async def run_loop(
             )
             for event in result["events"]:
                 log.append("engine", step=result["step"], event=event)
-            for wish in result.get("wishes", ()):
+            for wish in result["wishes"]:
                 log.append("wish", **wish)
-            for rec in result.get("deciding", ()):
+            for rec in result["deciding"]:
                 log.append("deciding", **rec)
     finally:
         controller.running = False

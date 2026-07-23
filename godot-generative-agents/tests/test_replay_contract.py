@@ -15,6 +15,7 @@ Run from the repo root::
     uv run pytest godot-generative-agents/tests/test_replay_contract.py -v
 """
 
+import functools
 import json
 import os
 import re
@@ -322,7 +323,10 @@ def test_wish_state_contract_accepts_a_null_actor():
     WishState.model_validate(sample.to_primitive())
 
 
+@functools.lru_cache(maxsize=None)
 def _ts_interface_fields(path: Path = _REPLAY_TS) -> dict[str, set[str]]:
+    # Cached: the mirror tests below re-check several interfaces apiece, so
+    # each TS file is read and comment-stripped once per session, not per pair.
     src = path.read_text()
     src = re.sub(r"/\*.*?\*/", "", src, flags=re.S)  # block comments
     src = re.sub(r"//[^\n]*", "", src)  # line comments
@@ -368,19 +372,34 @@ def _assert_ts_matches(ts_name: str, wire_fields: set[str]) -> None:
 
 
 def test_live_ts_usage_summary_mirrors_the_usage_route():
-    # GET /usage's payload is assembled from three real emitters (api.py):
-    # UsageLedger.summary(), the route's own extras (available/over_budget +
-    # the budget pair when a ceiling is armed), and the stepper's run_usage()
-    # merge (#526/#569). The union is every field the wire can carry; live.ts
+    # GET /usage assembles its payload inline in the route (api.py): the
+    # ledger summary, extras added in the route body (available/over_budget +
+    # the budget pair when a ceiling is armed), the stepper's run_usage()
+    # merge (#526/#569), and a hand-rolled no-ledger fallback shape. A literal
+    # re-statement of those extras here couldn't catch the next field added
+    # inline in the route body, so drive the REAL route through both branches
+    # -- a budget-armed ledger on a run_usage-bearing stepper puts every
+    # conditional field on the wire at once -- and mirror the union. live.ts
     # marks the conditionally-present ones optional, but must NAME them all --
     # omitting run_calls/run_cost_usd is exactly how the dashboard fell back
     # to lifetime counters (#644).
+    api = pytest.importorskip("backend.api")
+    from fastapi.testclient import TestClient
+
     from text_adventure_games.usage import UsageLedger
 
-    wire = set(UsageLedger().summary())
-    wire |= {"available", "over_budget", "max_cost_usd", "remaining_budget_usd"}
-    wire |= set(PennStepper(num_steps=2, world=build_penn_world()).run_usage())
-    _assert_ts_matches("UsageSummary", wire)
+    stepper = PennStepper(num_steps=2, world=build_penn_world())
+    stepper.ledger = UsageLedger(max_cost_usd=1.0)  # arm the budget pair
+    armed_app = api.create_app(stepper.game, stepper=stepper, start_paused=True)
+    with TestClient(armed_app) as client:
+        armed = client.get("/usage").json()
+    with TestClient(api.create_app(stepper.game)) as client:  # no stepper: no ledger
+        fallback = client.get("/usage").json()
+    # Self-check both branches really fired -- a silently un-armed ledger
+    # would narrow the mirror without failing it.
+    assert armed["available"] is True and fallback["available"] is False
+    assert {"max_cost_usd", "remaining_budget_usd", "run_calls"} <= set(armed)
+    _assert_ts_matches("UsageSummary", set(armed) | set(fallback))
 
 
 def test_live_ts_llm_call_record_mirrors_the_monitor_row():

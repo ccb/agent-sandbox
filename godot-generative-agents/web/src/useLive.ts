@@ -152,6 +152,10 @@ export function applyFeedRecords(
     events: freshEvents.length
       ? [...heldEvents, ...freshEvents].slice(-MAX_EVENT_ROWS)
       : heldEvents,
+    // frame is deliberately NOT dropped on reset: calls/events are append-only
+    // logs (stale rows would linger beside new ones), but frame is wholesale-
+    // replaced by the new run's first frame within one tick — keeping the
+    // last-known agents until then beats flashing an empty campus.
     frame: lastFrame?.agents ?? s.frame,
     step: lastFrame?.step ?? lastStatus?.step ?? s.step,
     running: lastStatus?.running ?? s.running,
