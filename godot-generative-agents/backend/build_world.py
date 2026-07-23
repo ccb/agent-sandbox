@@ -62,7 +62,8 @@ def load_world_yaml(path, cast: list[str] | None = None) -> dict:
     its participants.
 
     ``cast`` overrides the file's list, so the pre-run config seam (#730) can
-    pick a sub-cast without editing YAML. Inline-personas worlds ignore it.
+    pick a sub-cast without editing YAML. A ``cast`` passed against a world
+    with no persona library fails loudly (ValueError) rather than being ignored.
     """
     with open(path, encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
