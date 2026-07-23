@@ -447,6 +447,41 @@ def test_wish_rows_ride_their_own_top_level_kind():
     assert {k: v for k, v in rows[0].items() if k not in ("cursor", "kind")} == wish
 
 
+# --- out-of-band deciding publish (#605) ------------------------------------
+
+
+def test_create_app_injects_the_deciding_publisher_and_polls_see_it_at_once():
+    # #605: a stepper offering set_deciding_publisher gets a direct line onto
+    # the live EventLog at boot, and a record published through it from a
+    # worker thread -- in serial mode the tick thread itself, mid-decide, still
+    # holding the app lock -- is immediately visible to a GET /events poll:
+    # the poll reads only the log's internal lock, never the app lock. Paused
+    # loop, so the feed is quiet: what lands below came from the publisher.
+    stepper = _walker()
+    captured = {}
+    stepper.set_deciding_publisher = lambda publish: captured.update(pub=publish)
+    with _live_client(stepper, start_paused=True) as c:
+        assert "pub" in captured  # create_app wired the publisher at boot
+        worker = threading.Thread(
+            target=lambda: captured["pub"]({"agent": "a", "state": "begin", "step": 0})
+        )
+        worker.start()
+        worker.join(timeout=5)
+        deciding = [
+            e
+            for e in c.get("/events?since=0").json()["events"]
+            if e["kind"] == "deciding"
+        ]
+        assert len(deciding) == 1  # published once, immediately -- no boundary echo
+        assert {k: deciding[0][k] for k in ("kind", "agent", "state", "step")} == {
+            "kind": "deciding",
+            "agent": "a",
+            "state": "begin",
+            "step": 0,
+        }
+        assert deciding[0]["cursor"] >= 1  # cursor-stamped like any feed record
+
+
 # --- run registry (#306) -----------------------------------------------------
 
 

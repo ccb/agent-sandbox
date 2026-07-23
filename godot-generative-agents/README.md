@@ -383,7 +383,10 @@ stalls without spending anything: `--mock-latency 5 --decide-workers 3` under
 the mock brain. `deciding` — a per-agent decision lifecycle record
 (`{agent, state: "begin"|"end", step, elapsed_ms?}`, #551), emitted under a
 real/scripted brain; the viewer shows a per-agent "thinking" bubble from it
-(and the global badge prefers it over stall-inference).
+(and the global badge prefers it over stall-inference). The `begin` is
+published the moment the decide starts — mid-tick, out-of-band (#605) — so
+the bubble lights for the decide's whole duration even when it begins and
+ends within one tick; the `end` follows at the tick boundary.
 
 ### The run monitor (top-right)
 

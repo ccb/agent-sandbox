@@ -581,6 +581,13 @@ class PennStepper:
         self._deciding_buf: list = []
         self._deciding_started: dict = {}
         self._deciding_lock = threading.Lock()
+        # Out-of-band `begin` publish (#605): api.create_app injects a callable
+        # that appends straight onto the live EventLog, so a viewer's thinking
+        # bubble lights the moment a decide starts -- mid-tick -- rather than
+        # at the boundary drain (which, for a within-tick decide, delivered
+        # begin+end together and never lit it). Lives here (not _build) so the
+        # wiring survives resets, like the lock.
+        self._deciding_publish = None
         # DEBUG (#372): hold every STALL_EVERY_STEPS-th step this long to fake a
         # real brain's decision latency so the viewer's "thinking…" cue can be
         # exercised under the free mock brain. 0.0 = off (byte-identical timing).
@@ -1492,10 +1499,25 @@ class PennStepper:
         )
         record.save(str(self.run_store.root / self._run_id / "run.yaml"))
 
+    def set_deciding_publisher(self, publish) -> None:
+        """Adopt the live feed's out-of-band `deciding` channel (#605).
+
+        api.create_app calls this once at boot when serving live. From then on
+        `_deciding_sink` sends each `begin` through *publish* the moment the
+        decide starts -- from the decide's own thread; the live EventLog's
+        append is thread-safe -- instead of buffering it for the tick-boundary
+        drain. `end`s keep the boundary path, which lands them after the
+        tick's frame record, so a within-tick decide reads begin (mid-tick),
+        frame, end. A record published here is never also returned by
+        drain_deciding(), so nothing double-publishes."""
+        self._deciding_publish = publish
+
     def _deciding_sink(self, name: str, state: str, step: int) -> None:
         """Called by run_simulation._decide_for at a decision's start/finish
-        (issue #551). Buffers a feed record; backend.live drains it per tick and
-        appends it as a `kind: "deciding"` change-feed record.
+        (issue #551). With a live publisher wired (#605) a `begin` is published
+        out-of-band immediately; everything else is buffered for backend.live's
+        per-tick drain, which appends each row as a `kind: "deciding"`
+        change-feed record.
 
         Held under `_deciding_lock` because this may run on a #366 decide worker
         thread while `drain_deciding` swaps the buffer on the tick thread: a
@@ -1504,12 +1526,15 @@ class PennStepper:
         run -- a straggler finishing after a reset cleared `_deciding_started` --
         is dropped, so a stray elapsed-less `end` can't leak into the fresh run's
         feed and clear a real bubble there."""
+        publish_now = None
         with self._deciding_lock:
             if state == "begin":
                 self._deciding_started[name] = time.monotonic()
-                self._deciding_buf.append(
-                    {"agent": name, "state": "begin", "step": step}
-                )
+                record = {"agent": name, "state": "begin", "step": step}
+                if self._deciding_publish is not None:
+                    publish_now = record  # out-of-band below, NEVER also buffered
+                else:
+                    self._deciding_buf.append(record)
             else:  # "end"
                 started = self._deciding_started.pop(name, None)
                 if started is None:
@@ -1522,13 +1547,22 @@ class PennStepper:
                         "elapsed_ms": round((time.monotonic() - started) * 1000),
                     }
                 )
+        if publish_now is not None:
+            # Outside _deciding_lock: the publisher takes the EventLog's own
+            # lock, and keeping the two un-nested keeps the sink/drain critical
+            # section tiny. Program order still puts this append before the
+            # matching end is even buffered, so begin < end in cursor order.
+            self._deciding_publish(publish_now)
 
     def drain_deciding(self) -> list:
         """New `deciding` records formed since the last drain (#551). backend.live
         probes this optional method after each tick and appends each as a
         `kind: "deciding"` feed record (beside the `engine` rows). Empty under the
-        pure mock brain. Swaps under `_deciding_lock` so a concurrent
-        `_deciding_sink` append can't be lost to the buffer swap (#598 review)."""
+        pure mock brain; with a live publisher wired (#605) `begin`s bypass this
+        buffer entirely (published out-of-band as the decide starts), so the
+        drain then carries only `end`s. Swaps under `_deciding_lock` so a
+        concurrent `_deciding_sink` append can't be lost to the buffer swap
+        (#598 review)."""
         with self._deciding_lock:
             rows = self._deciding_buf
             self._deciding_buf = []
