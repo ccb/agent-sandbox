@@ -67,9 +67,12 @@ from penn_world import (
     PENN_ACTION_VERBS,
     SEC_PER_STEP,
     SIM_START,
+    WORLD_DATA_BOIL,
+    WORLD_DATA_BOIL_HARD,
     PennWorld,
     build_penn_world,
     persona_meta_entry,
+    relocate_stove_to_kitchen,
     replay_frame_entry,
 )
 from text_adventure_games.llm_client import LlmConfig, create_llm_client
@@ -128,6 +131,42 @@ SCRIPTED = "scripted"
 # (fresh WorldMap + patch state) on every call, which is what a per-run build
 # needs. Penn is the first (and today only) entry; a second world is one line.
 WORLD_BUILDERS = {"penn": build_penn_world}
+
+
+def _build_boil_hard_world() -> PennWorld:
+    """A fresh #728 boil_hard world: the boil world plus its `Kitchen` location,
+    with the stove relocated there at build time (`penn_world.
+    relocate_stove_to_kitchen`) -- the murky pot stays visible from step 0, the
+    boil Recipe's tool is a real 297-tick Travel away. Wraps build_world_fn
+    rather than patching one game post-hoc so every rebuild -- including a POST
+    /reset's -- carries the relocation."""
+    pw = build_penn_world(world_data=WORLD_DATA_BOIL_HARD)
+    inner = pw.build_world_fn
+
+    def _relocated(world_map):
+        game, chars = inner(world_map)
+        relocate_stove_to_kitchen(game)
+        return game, chars
+
+    return replace(pw, build_world_fn=_relocated)
+
+
+# Named scenarios (#592/#728): which world this server steps, using the same
+# names as the bake's `generate_penn_replay.py --scenario`. Each entry is a
+# zero-arg builder returning a FRESH PennWorld (the stepper rebuilds through it,
+# so the scenario survives POST /reset) plus the perception radius the scenario
+# pins (None = the config/default radius). boil_hard pins vision_r=0: its stove
+# lives in a separate Kitchen and must not leak into observations via
+# cross-location perception (#82) -- the only lead the agent gets is "Kitchen"
+# in Travel's destination enum (#635).
+SCENARIOS = {
+    "penn": {"world": build_penn_world, "vision_r": None},
+    "boil": {
+        "world": lambda: build_penn_world(world_data=WORLD_DATA_BOIL),
+        "vision_r": None,
+    },
+    "boil_hard": {"world": _build_boil_hard_world, "vision_r": 0},
+}
 
 
 def _is_paid(llm) -> bool:
@@ -480,7 +519,19 @@ class PennStepper:
         seed=0,
         replay_cassette=None,
         sim_config=None,
+        world_builder=None,
+        vision_r=None,
     ):
+        # What a rebuild without an explicit world (reset()) constructs from:
+        # the launch scenario's builder (#728), defaulting to the full campus --
+        # without this a boil_hard server's POST /reset would silently swap the
+        # scenario back to the default world.
+        self._world_builder = (
+            world_builder if world_builder is not None else build_penn_world
+        )
+        # The scenario's pinned perception radius (#728), or None for the
+        # config/default value; applied in _build after the config-derived cog.
+        self.vision_r = vision_r
         self.num_steps = num_steps
         # The launch-configured budget, kept so a per-request create_run(steps=)
         # override stays one-shot: reset()/resume_run() restore this instead of
@@ -731,7 +782,7 @@ class PennStepper:
         # same reconstruction tests/test_penn_live.py::
         # test_stepper_matches_simulate_prefix pins). If simulate's setup ever
         # drifts from this, the equivalence test fails -- on purpose.
-        self.world = world if world is not None else build_penn_world()
+        self.world = world if world is not None else self._world_builder()
         # Resume semantics (#564 review finding 1): a resumed run's OWN
         # recorded sim_config wins over whatever this server booted with
         # (its own --config, or None) -- otherwise the world silently
@@ -785,6 +836,13 @@ class PennStepper:
             cognition_tools=self.cognition_tools,
             react_enabled=self.react,
         )
+        # The scenario's pinned perception radius (#728): boil_hard serves with
+        # vision_r=0 so its relocated stove can't leak into observations via
+        # cross-location perception (#82). Applied over the config-derived base
+        # so neither a --config file nor a resumed run's adopted sim_config can
+        # quietly re-widen it.
+        if self.vision_r is not None:
+            self.cog = replace(self.cog, vision_r=self.vision_r)
         # The live analogue of the bake's meta start/sec_per_step (#580): one
         # SimClock so the decide-context block and the hourly BEHIND_SCHEDULE
         # revision seam see the same in-game time the viewer's navbar shows.
@@ -1869,6 +1927,16 @@ def _build_parser() -> argparse.ArgumentParser:
         description="Serve the live Penn sim for the Godot viewer (#263)."
     )
     ap.add_argument(
+        "--scenario",
+        choices=sorted(SCENARIOS),
+        default="penn",
+        help="which world to serve, mirroring the bake's --scenario names: "
+        "'penn' (default: the full campus cast), 'boil' (the one-persona "
+        "boil-water demo, #592), or 'boil_hard' (#728: the demo with the stove "
+        "relocated to a separate Kitchen and vision_r pinned to 0 -- the "
+        "connect-the-dots experiment world)",
+    )
+    ap.add_argument(
         "--steps",
         type=int,
         default=DEFAULT_STEPS,
@@ -2086,9 +2154,12 @@ def main() -> int:
         except (OSError, ValueError, ImportError) as e:
             raise SystemExit(f"cannot load --config {args.config}: {e}")
 
-    # Build the world once: resolve_llm reads its llm: block, the stepper
-    # steps it (a second build would waste the map load and fork patch state).
-    world = build_penn_world()
+    # Build the scenario's world once: resolve_llm reads its llm: block, the
+    # stepper steps it (a second build would waste the map load and fork patch
+    # state). The builder itself rides along so reset() rebuilds the SAME
+    # scenario (#728).
+    scenario = SCENARIOS[args.scenario]
+    world = scenario["world"]()
     llm = resolve_llm(
         world.llm,
         args.brain,
@@ -2166,6 +2237,8 @@ def main() -> int:
             resume_run_id=resume_id,
             seed=args.seed,
             sim_config=sim_config,
+            world_builder=scenario["world"],
+            vision_r=scenario["vision_r"],
         )
     except ImportError as e:
         raise SystemExit(f"{e}\n(--brain llm needs the LLM extra: uv sync --extra llm)")
@@ -2179,7 +2252,7 @@ def main() -> int:
         raise SystemExit(f"cannot resume: {e}")
     wm = stepper.world.world_map
     print(
-        f"Loaded the_upenn ({wm.width}x{wm.height}); "
+        f"Loaded the_upenn ({wm.width}x{wm.height}), scenario '{args.scenario}'; "
         f"{len(stepper.order)} personas, {len(stepper.world.meetings)} authored "
         f"meetings. Stepping every {args.tick_seconds}s "
         f"({'endless' if args.endless else f'{args.steps}-step day'})."
