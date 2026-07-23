@@ -19,7 +19,9 @@ import re
 from collections import Counter, defaultdict, deque
 from dataclasses import dataclass
 
+import furnish_building
 from add_entrances import (
+    COHEN,
     FLOOR,
     FORCED_CLOSED,
     INTERIOR_ARENA_BASE,
@@ -149,6 +151,36 @@ def matrix_rooms_by_building(world: World) -> dict:
             continue
         out[sector].append({"id": aid, "name": arena})
     return dict(out)
+
+
+def catalog_wall_gids(world: World) -> set[int]:
+    """Every gid this map uses for a catalog tile of category "wall".
+
+    furniture_catalog.json is the repo's "what tile is what" table (the tmj's
+    tilesets are plain sheet images with no per-tile class metadata), so it is
+    the tileset-level wall identity #643 asks for: a wall tile is wall art no
+    matter which layer it is painted on. Entries resolve against the map's OWN
+    tilesets (name -> firstgid/columns) rather than furnish_building's pinned
+    firstgids, so the set is right even where the two disagree (the committed
+    map predates the expansion-sheet pinning); sheets the map does not embed
+    are skipped, so catalog-free fixture maps get an empty set."""
+    by_name = {
+        ts["name"]: ts for ts in world.tilesets if "firstgid" in ts and "columns" in ts
+    }
+    gids: set[int] = set()
+    for obj in furnish_building.CATALOG.values():
+        if obj.get("category") != "wall":
+            continue
+        sheet = furnish_building._SHEET_ALIAS.get(obj["sheet"], obj["sheet"])
+        ts = by_name.get(sheet)
+        if ts is None:
+            continue
+        for r in range(obj["h"]):
+            for c in range(obj["w"]):
+                gids.add(
+                    ts["firstgid"] + (obj["row"] + r) * ts["columns"] + (obj["col"] + c)
+                )
+    return gids
 
 
 class Checker:
@@ -467,13 +499,16 @@ class Checker:
                 )
             elif rooms and not drawn:
                 if b == VAN_PELT:
+                    # info, not an exemption: check_van_pelt_interior gates the
+                    # rooms against the committed JSON they are derived from.
                     self.add(
                         "info",
                         "MATRIX_TMJ",
                         b,
                         "arena_matrix_no_tmj_layer",
                         f"{len(rooms)} matrix rooms, no tmj arena layer "
-                        f"(sourced from van_pelt_interior.json)",
+                        f"(sourced from van_pelt_interior.json, cross-checked "
+                        f"against it)",
                     )
                 else:
                     self.add(
@@ -508,6 +543,86 @@ class Checker:
                         f"{len(rooms)} matrix rooms all backed by a tmj arena object",
                     )
 
+    def check_van_pelt_interior(self):
+        """Van Pelt's rooms have no tmj arena layer -- add_entrances derives
+        them from the committed van_pelt_interior.json (the frozen hand-designed
+        interior, see extract_van_pelt_interior.py). That used to leave them
+        exempt from the drawn-vs-matrix error (#643): a Van Pelt arena
+        regression -- rooms dropped, renamed or re-numbered in the matrix --
+        was at most an info. Gate on the derived artifact instead: every room
+        in the JSON must appear in arena_blocks under the add_entrances id
+        scheme (ROOM_ARENA_BASE + sid*100 + list index) with the same name,
+        and nothing extra. A drift in either direction is an error, including
+        the matrix losing ALL Van Pelt rooms (which check_drawn_vs_present
+        cannot see -- a building absent from both sides emits no finding)."""
+        sid = sector_id_by_name(self.w).get(VAN_PELT)
+        if sid is None:
+            return  # no Van Pelt sector in this world (synthetic fixtures)
+        path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "van_pelt_interior.json"
+        )
+        if not os.path.exists(path):
+            self.add(
+                "error",
+                "MATRIX_TMJ",
+                VAN_PELT,
+                "van_pelt_json_missing",
+                "van_pelt_interior.json is missing -- Van Pelt matrix rooms "
+                "cannot be verified against their source",
+            )
+            return
+        with open(path) as fh:
+            rooms = json.load(fh).get("rooms", [])
+        expected = {
+            str(ROOM_ARENA_BASE + int(sid) * 100 + i): r["name"]
+            for i, r in enumerate(rooms)
+        }
+        actual = {
+            r["id"]: r["name"]
+            for r in matrix_rooms_by_building(self.w).get(VAN_PELT, [])
+        }
+        if expected == actual:
+            self.add(
+                "ok",
+                "MATRIX_TMJ",
+                VAN_PELT,
+                "van_pelt_rooms_match",
+                f"all {len(expected)} van_pelt_interior.json rooms are in "
+                f"arena_blocks (ids and names)",
+            )
+            return
+        missing = sorted(set(expected) - set(actual), key=int)
+        extra = sorted(set(actual) - set(expected), key=int)
+        renamed = sorted(
+            (k for k in set(expected) & set(actual) if expected[k] != actual[k]),
+            key=int,
+        )
+        problems = []
+        if missing:
+            problems.append(
+                f"{len(missing)} missing from arena_blocks "
+                f"(e.g. '{expected[missing[0]]}' id {missing[0]})"
+            )
+        if extra:
+            problems.append(
+                f"{len(extra)} extra in arena_blocks "
+                f"(e.g. '{actual[extra[0]]}' id {extra[0]})"
+            )
+        if renamed:
+            problems.append(
+                f"{len(renamed)} renamed (id {renamed[0]}: json "
+                f"'{expected[renamed[0]]}' != matrix '{actual[renamed[0]]}')"
+            )
+        self.add(
+            "error",
+            "MATRIX_TMJ",
+            VAN_PELT,
+            "van_pelt_rooms_drift",
+            "matrix rooms disagree with van_pelt_interior.json: "
+            + "; ".join(problems)
+            + " -- re-run add_entrances or restore the JSON",
+        )
+
     def check_arena_layer_resolved(self):
         tmj = tmj_arenas_by_building(self.w)
         orphans = tmj.get("", [])
@@ -522,6 +637,15 @@ class Checker:
             )
 
     COLLISION_TOLERANCE = 0.60  # share of wall-drawn cells left walkable before we warn
+    # Room-subdivided buildings are sealed on the committed map (0 walkable
+    # wall-drawn cells), so ANY walkable wall-drawn cell there is a regression
+    # and errors -- the loose warn-only tolerance above would let up to 60% of a
+    # sector's walls go walkable without failing the gate (#643). Buildings
+    # here keep the loose tolerance: cohen_walls carries 3 doorway-art cells
+    # (gid 896 around (35,208)) that are legitimately walkable. A deliberate
+    # new walls-layer doorway on a sealed building belongs in this set (or in
+    # the baseline) -- an unexplained one is exactly what the error is for.
+    UNSEALED_SECTORS = frozenset({COHEN})
 
     def _wall_cells(self) -> tuple[set[int], str]:
         """Indices of cells drawn as walls, and where they came from.
@@ -567,11 +691,26 @@ class Checker:
             return
         warned = False
         for sid, (d, wk) in sorted(per_sector.items()):
-            if d and wk / d > self.COLLISION_TOLERANCE:
+            building = names.get(sid, f"sector {sid}")
+            sealed = (
+                building in ROOM_SUBDIVIDE and building not in self.UNSEALED_SECTORS
+            )
+            if sealed and wk:
+                self.add(
+                    "error",
+                    "MATRIX_TMJ",
+                    building,
+                    "collision_wall_gap_sealed",
+                    f"{wk}/{d} wall-drawn cells are walkable in collision_maze "
+                    f"but {building} is sealed (0 expected) — re-run the matrix "
+                    f"chain or repaint the cell",
+                )
+                warned = True
+            elif d and wk / d > self.COLLISION_TOLERANCE:
                 self.add(
                     "warn",
                     "MATRIX_TMJ",
-                    names.get(sid, f"sector {sid}"),
+                    building,
                     "collision_wall_gap",
                     f"{wk}/{d} wall-drawn cells are walkable in collision_maze "
                     f"({wk/d:.0%}) — verify walls/doors",
@@ -600,11 +739,13 @@ class Checker:
 
         `*_walls` layers are excluded on purpose: they legitimately carry a few
         walkable doorway cells, and `check_collision_vs_walls` already covers
-        them with a tolerance. Wall identity is derived from the walls layers
-        rather than the catalog so the check is self-contained and needs no
-        firstgid remap; a gid that appears on no `*_walls` layer at all is not
-        recognized as wall art (acceptable -- every real wall gid does)."""
-        wall_gids: set[int] = set()
+        them with a tolerance. Wall identity is the union of two sources: the
+        catalog's category-"wall" tiles resolved against this map's tilesets
+        (catalog_wall_gids -- so a building whose walls live only on its floor
+        layer, with a gid no `*_walls` layer uses, no longer slips the check,
+        #643) and every gid actually painted on a `*_walls` layer (wall art the
+        catalog does not name, e.g. the decorative pieces on cohen_walls)."""
+        wall_gids = catalog_wall_gids(self.w)
         for name, layer in self.w.tile_layers.items():
             if name.endswith("_walls"):
                 wall_gids.update(g & GID_MASK for g in layer.get("data", []) if g)
@@ -614,7 +755,8 @@ class Checker:
                 "MATRIX_TMJ",
                 "",
                 "wall_tiles_no_walls",
-                "no `*_walls` layers -- wall-solidity check skipped",
+                "no `*_walls` layers and no catalog wall tileset in this map -- "
+                "wall-solidity check skipped",
             )
             return
         offenders = []
@@ -870,6 +1012,7 @@ class Checker:
         self.check_arena_rects_and_names()
         self.check_referential_integrity()
         self.check_drawn_vs_present()
+        self.check_van_pelt_interior()
         self.check_arena_layer_resolved()
         self.check_collision_vs_walls()
         self.check_wall_tiles_solid()
