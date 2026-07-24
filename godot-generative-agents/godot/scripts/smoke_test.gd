@@ -42,10 +42,14 @@ func _ready() -> void:
 	# campus tiles, so — like the landing menu — it gets its own check (root script
 	# attached + it builds without a backend) rather than a spot in SCENES.
 	failures += await _check_past_runs()
+	# The Simulation Setup scene (issue #733) is another code-built menu-like
+	# scene with no campus tiles, so -- like the menu and Past-runs -- it gets
+	# its own check (root script attached + it builds without a backend).
+	failures += await _check_simulation_setup()
 	# The snapshot gallery (issue #253) is a code-built pop-up, not a scene in SCENES;
 	# check that it builds and accepts snapshots (the capture path it feeds is GPU-only).
 	failures += _check_gallery()
-	var checks := SCENES.size() + 3
+	var checks := SCENES.size() + 4
 	if failures == 0:
 		print("smoke_test: PASS — %d scene(s) OK" % checks)
 	else:
@@ -143,6 +147,38 @@ func _check_menu() -> int:
 # script attached (parse gate, #639) and that it built its buttons (Back + rows).
 func _check_past_runs() -> int:
 	var path := "res://scenes/past_runs.tscn"
+	var packed: PackedScene = load(path)
+	if packed == null:
+		printerr("  %s: could not load scene (missing file or broken script ref)" % path)
+		return 1
+	var inst: Node = packed.instantiate()
+	if inst == null:
+		printerr("  %s: could not instantiate scene" % path)
+		return 1
+	add_child(inst)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if inst.get_script() == null:
+		printerr("  %s: root script failed to load (parse/compile error?)" % path)
+		inst.queue_free()
+		await get_tree().process_frame
+		return 1
+	var buttons := _count_buttons(inst)
+	inst.queue_free()
+	await get_tree().process_frame
+	if buttons <= 0:
+		printerr("  %s: built 0 buttons (broken _ready?)" % path)
+		return 1
+	print("  %s: OK (%d button(s))" % [path, buttons])
+	return 0
+
+
+# Returns 0 if the Simulation Setup browser (issue #733) is healthy, 1 if not.
+# With no backend URL set it renders the "no backend" state -- we only assert
+# the root script attached (parse gate, #639) and that it built its buttons
+# (Start + Back).
+func _check_simulation_setup() -> int:
+	var path := "res://scenes/simulation_setup.tscn"
 	var packed: PackedScene = load(path)
 	if packed == null:
 		printerr("  %s: could not load scene (missing file or broken script ref)" % path)
