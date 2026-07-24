@@ -10,7 +10,7 @@
    and disconnected nodes drop off the clock automatically. */
 (() => {
   "use strict";
-  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-c-m": ["svg", 640, 720], "autarch-e": ["svg", 640, 420], "autarch-e-m": ["svg", 640, 720], "autarch-m": ["svg", 640, 720], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "bats-c-m": ["svg", 640, 720], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "canopic-c-m": ["svg", 640, 720], "centipede": ["svg", 640, 360], "centipede-m": ["svg", 640, 720], "chimney-f": ["svg", 640, 360], "chimney-f-m": ["svg", 640, 720], "chimney-g": ["svg", 640, 360], "chimney-g-m": ["svg", 640, 720], "chimney-h": ["svg", 640, 360], "chimney-h-m": ["svg", 640, 720], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-a-m": ["svg", 640, 720], "cyl-c": ["svg", 640, 400], "cyl-c-m": ["svg", 640, 720], "cyl-o": ["svg", 640, 400], "cyl-o-m": ["svg", 640, 720], "cyl-v": ["svg", 640, 400], "cyl-v-m": ["svg", 640, 720], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "cylinders-b-m": ["svg", 640, 720], "cylinders-m": ["svg", 640, 720], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flood": ["svg", 640, 360], "flood-m": ["svg", 640, 720], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-a-m": ["svg", 640, 720], "guts-b": ["svg", 640, 360], "guts-b-m": ["svg", 640, 720], "guts-c": ["svg", 640, 360], "guts-c-m": ["svg", 640, 720], "guts-lash": ["svg", 640, 360], "guts-lash-m": ["svg", 640, 720], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-baboon-m": ["svg", 640, 720], "jar-falcon": ["svg", 640, 300], "jar-falcon-m": ["svg", 640, 720], "jar-human": ["svg", 640, 300], "jar-human-m": ["svg", 640, 720], "jar-jackal": ["svg", 640, 300], "jar-jackal-m": ["svg", 640, 720], "jar-mantis": ["svg", 640, 300], "jar-mantis-m": ["svg", 640, 720], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-b-m": ["svg", 640, 720], "mystic-c": ["svg", 640, 400], "mystic-c-m": ["svg", 640, 720], "mystic-f": ["svg", 640, 400], "mystic-f-m": ["svg", 640, 720], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-a-m": ["svg", 640, 720], "spawn-b": ["svg", 640, 360], "spawn-b-m": ["svg", 640, 720], "spawn-c": ["svg", 640, 360], "spawn-c-m": ["svg", 640, 720], "sphere-b": ["svg", 640, 420], "sphere-b-m": ["svg", 640, 720], "sphere-d": ["svg", 640, 420], "sphere-d-m": ["svg", 640, 720], "sphere-e": ["svg", 640, 420], "sphere-e-m": ["svg", 640, 720], "sphere-f": ["svg", 640, 420], "sphere-f-m": ["svg", 640, 720], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tank-f-m": ["svg", 640, 720], "tank-m": ["svg", 640, 720], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-m": ["svg", 640, 720], "ulfire-u": ["svg", 640, 360], "ulfire-u-m": ["svg", 640, 720], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
+  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-c-m": ["svg", 640, 720], "autarch-e": ["svg", 640, 420], "autarch-e-m": ["svg", 640, 720], "autarch-m": ["svg", 640, 720], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "bats-c-m": ["svg", 640, 720], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "canopic-c-m": ["svg", 640, 720], "centipede": ["svg", 640, 360], "centipede-m": ["svg", 640, 720], "chimney-f": ["svg", 640, 360], "chimney-f-m": ["svg", 640, 720], "chimney-g": ["svg", 640, 360], "chimney-g-m": ["svg", 640, 720], "chimney-h": ["svg", 640, 360], "chimney-h-m": ["svg", 640, 720], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "critch-m": ["svg", 640, 720], "cyl-a": ["svg", 640, 400], "cyl-a-m": ["svg", 640, 720], "cyl-c": ["svg", 640, 400], "cyl-c-m": ["svg", 640, 720], "cyl-o": ["svg", 640, 400], "cyl-o-m": ["svg", 640, 720], "cyl-v": ["svg", 640, 400], "cyl-v-m": ["svg", 640, 720], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "cylinders-b-m": ["svg", 640, 720], "cylinders-m": ["svg", 640, 720], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flood": ["svg", 640, 360], "flood-m": ["svg", 640, 720], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-a-m": ["svg", 640, 720], "guts-b": ["svg", 640, 360], "guts-b-m": ["svg", 640, 720], "guts-c": ["svg", 640, 360], "guts-c-m": ["svg", 640, 720], "guts-lash": ["svg", 640, 360], "guts-lash-m": ["svg", 640, 720], "hound": ["svg", 640, 360], "hound-m": ["svg", 640, 720], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-baboon-m": ["svg", 640, 720], "jar-falcon": ["svg", 640, 300], "jar-falcon-m": ["svg", 640, 720], "jar-human": ["svg", 640, 300], "jar-human-m": ["svg", 640, 720], "jar-jackal": ["svg", 640, 300], "jar-jackal-m": ["svg", 640, 720], "jar-mantis": ["svg", 640, 300], "jar-mantis-m": ["svg", 640, 720], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-b-m": ["svg", 640, 720], "mystic-c": ["svg", 640, 400], "mystic-c-m": ["svg", 640, 720], "mystic-f": ["svg", 640, 400], "mystic-f-m": ["svg", 640, 720], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-a-m": ["svg", 640, 720], "spawn-b": ["svg", 640, 360], "spawn-b-m": ["svg", 640, 720], "spawn-c": ["svg", 640, 360], "spawn-c-m": ["svg", 640, 720], "sphere-b": ["svg", 640, 420], "sphere-b-m": ["svg", 640, 720], "sphere-d": ["svg", 640, 420], "sphere-d-m": ["svg", 640, 720], "sphere-e": ["svg", 640, 420], "sphere-e-m": ["svg", 640, 720], "sphere-f": ["svg", 640, 420], "sphere-f-m": ["svg", 640, 720], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tank-f-m": ["svg", 640, 720], "tank-m": ["svg", 640, 720], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-m": ["svg", 640, 720], "ulfire-u": ["svg", 640, 360], "ulfire-u-m": ["svg", 640, 720], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
   const FIG = {
     _defs: {}, _uid: 0, _ticks: [], _timer: null, _target: null,
     MAX_LIVE: 3,
@@ -7786,6 +7786,108 @@
   /* ---------------- ulfire-u-m (phone twin) ---------------- */
   FIG._define("ulfire-u-m", "svg", function (svg) {
     ulfireCardM(svg, { key: "ulfire-u-m", header: "THE ULFIRE LANTERN (UNLIT)", lit: false, callouts: [], footer: "UNLIT, THE STONE KEEPS ITS SECRETS." });
+  });
+
+  /* ---------------- critch-m (phone twin) ---------------- */
+  FIG._define("critch-m", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const CD = stipple(svg, "dots-critchm", "#ffd06a", 1.2);
+    const CX = 320, CY = 320;
+    // the great round ears
+    [[-150, -70], [150, -70]].forEach(([dx, dy]) => {
+      el(svg, "circle", { cx: CX + dx, cy: CY + dy, r: 70, fill: CD, stroke: PH, "stroke-width": 2.2 });
+      el(svg, "circle", { cx: CX + dx, cy: CY + dy, r: 38, fill: "none", stroke: PH_DIM, "stroke-width": 1.6 });
+    });
+    // the golden crest, over the skull
+    for (let i = -3; i <= 3; i++)
+      el(svg, "line", { x1: CX + i * 10, y1: CY - 150, x2: CX + i * 14, y2: CY - 200,
+        stroke: "#ffd06a", "stroke-width": 2 });
+    // the face mass + ruff
+    el(svg, "path", { fill: CD, stroke: PH, "stroke-width": 2.4, d:
+      "M 226 250 Q 226 168 320 160 Q 414 168 414 250 Q 414 344 360 400 " +
+      "Q 320 428 280 400 Q 226 344 226 250 Z" });
+    for (let i = 0; i < 9; i++) {                          // the ruff
+      const a = Math.PI * (.15 + i * .09);
+      el(svg, "line", { x1: CX - 94 + i * 24, y1: 396, x2: CX - 108 + i * 27, y2: 440,
+        stroke: "#ffd06a", "stroke-width": 1.6, opacity: .8 });
+    }
+    // the close-set lit eyes
+    const eyeL = el(svg, "circle", { cx: 292, cy: 296, r: 15, fill: BG, stroke: PH, "stroke-width": 2 });
+    const eyeR = el(svg, "circle", { cx: 348, cy: 296, r: 15, fill: BG, stroke: PH, "stroke-width": 2 });
+    const pL = el(svg, "circle", { cx: 292, cy: 296, r: 6, fill: PH_BRIGHT });
+    const pR = el(svg, "circle", { cx: 348, cy: 296, r: 6, fill: PH_BRIGHT });
+    el(svg, "polygon", { points: "312,320 320,346 328,320", fill: BG, stroke: PH, "stroke-width": 1.6 }); // muzzle
+    // the mouth: shut line -> toothy grin
+    const mouth = el(svg, "path", { fill: "none", stroke: PH, "stroke-width": 2 });
+    const teeth = Array.from({ length: 7 }, (_, i) =>
+      el(svg, "polygon", { fill: PH_BRIGHT, points: `${288 + i * 12},356 ${294 + i * 12},372 ${300 + i * 12},356`, opacity: 0 }));
+    // the two-line quip
+    const q1 = label(svg, 320, 560, 22, FUNGUS); q1.setAttribute("text-anchor", "middle");
+    const q2 = label(svg, 320, 594, 22, FUNGUS); q2.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 220;
+      doWipe(T);
+      typeOn(hdr, "CRITCH (THE ADVICE)", T, 4, 1.2);
+      const grin = (T % 110) > 55;                          // shifts to the famous grin
+      const look = Math.sin(t * .05) * 4;
+      pL.setAttribute("cx", 292 + look); pR.setAttribute("cx", 348 + look);
+      eyeL.setAttribute("ry", grin ? 7 : 15); eyeR.setAttribute("ry", grin ? 7 : 15); // squints on the grin
+      mouth.setAttribute("d", grin ? "M 284 352 Q 320 356 356 352" : "M 296 356 Q 320 362 344 356");
+      teeth.forEach(tt => tt.setAttribute("opacity", grin ? 1 : 0));
+      typeOn(q1, '"TOMB PAYS BETTER THAN THE ROAD --', T, 120, 1.9);
+      typeOn(q2, '-- IF THE TOMB LETS YOU KEEP IT."', T, 150, 1.9);
+    });
+  });
+
+  /* ---------------- hound-m (phone twin) ---------------- */
+  FIG._define("hound-m", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 22, PH_BRIGHT);
+    const GEL = stipple(svg, "dots-houndm", "#ffcf6a", 1.2);
+    // the plexiglas gel tank
+    el(svg, "rect", { x: 120, y: 120, width: 400, height: 360, rx: 8, fill: GEL, stroke: PH, "stroke-width": 2.4 });
+    el(svg, "line", { x1: 120, y1: 138, x2: 520, y2: 138, stroke: "#ffcf6a", opacity: .7 });   // meniscus
+    // the synth-hound, drifting and slowly rotating
+    const g = el(svg, "g", {});
+    const H = (n, a) => el(g, n, a);
+    H("ellipse", { cx: 0, cy: 0, rx: 120, ry: 40, fill: "none", stroke: PH, "stroke-width": 2.4 });  // body shell
+    for (let i = 0; i < 7; i++) H("line", { x1: -84 + i * 26, y1: -34, x2: -84 + i * 26, y2: 34, stroke: PH_DIM }); // vertebra ticks
+    H("polyline", { fill: "none", stroke: PH, "stroke-width": 2, points: "96,-8 140,-24 128,4" });   // muzzle
+    const eye = H("circle", { cx: 108, cy: -6, r: 6, fill: BG, stroke: PH, "stroke-width": 1.8 });    // dark goggle eye
+    H("polyline", { fill: "none", stroke: PH_DIM, "stroke-width": 2, points: "70,26 84,60 108,64" }); // fore leg (piston)
+    H("polyline", { fill: "none", stroke: PH_DIM, "stroke-width": 2, points: "-40,30 -30,64 -6,68" });// hind leg
+    H("polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points: "-118,-6 -160,-18 -176,-6" }); // tail cable
+    H("rect", { x: -70, y: -22, width: 44, height: 30, fill: "none", stroke: PH_DIM });               // heraldry panel
+    // bubbles rising through the gel
+    const bubs = Array.from({ length: 6 }, (_, i) => el(svg, "circle", { r: 2.6, fill: "none",
+      stroke: "#ffcf6a", cx: 180 + i * 56, cy: 470, opacity: .6 }));
+    // the callouts
+    const CALL = ["EYE: DARK, AND BEST LEFT SO", "PANELS: SOMEONE ELSE'S HERALDRY",
+      "HIP: PISTON-HOCKED, AUTARCHY PATTERN", "TAIL: A CABLE. THE LEASH RING IS GONE"];
+    const calls = CALL.map((c, i) => label(svg, 40, 528 + i * 30, 16, PH_DIM));
+    // the PRESERVATION gauge (full) + the footers
+    label(svg, 40, 646, 19, PH_DIM).textContent = "PRESERVATION";
+    const cells = Array.from({ length: 10 }, (_, i) =>
+      el(svg, "rect", { x: 220 + i * 30, y: 630, width: 22, height: 18, fill: PH, "fill-opacity": .8 }));
+    const foot1 = label(svg, 320, 678, 20, FUNGUS); foot1.setAttribute("text-anchor", "middle");
+    const foot2 = label(svg, 320, 704, 20, FUNGUS); foot2.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 220;
+      doWipe(T);
+      typeOn(hdr, "SYNTH-HOUND (PRESERVED SPECIMEN)", T, 4, 1.1);
+      const x = 320 + Math.sin(t * .03) * 20, y = 300 + Math.cos(t * .04) * 16, rot = Math.sin(t * .025) * 10;
+      g.setAttribute("transform", `translate(${x} ${y}) rotate(${rot})`);
+      eye.setAttribute("opacity", 1);
+      bubs.forEach((b, i) => { const k = (t * 2 + i * 30) % 340; b.setAttribute("cy", 470 - k); b.setAttribute("opacity", k > 300 ? 0 : .6); });
+      CALL.forEach((c, i) => typeOn(calls[i], c, T, 30 + i * 14, 1.6));
+      typeOn(foot1, "FOUR THOUSAND YEARS, HOLDING.", T, 150, 1.7);
+      typeOn(foot2, "DO NOT LIGHT THE GEL.", T, 176, 1.7);
+    });
   });
 
 })();
