@@ -10,7 +10,7 @@
    and disconnected nodes drop off the clock automatically. */
 (() => {
   "use strict";
-  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "blade-m": ["canvas", 640, 720], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "chimney-f": ["svg", 640, 360], "chimney-g": ["svg", 640, 360], "chimney-h": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-c": ["svg", 640, 400], "cyl-o": ["svg", 640, 400], "cyl-v": ["svg", 640, 400], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
+  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "bats-c-m": ["svg", 640, 720], "bats-m": ["canvas", 640, 720], "blade": ["canvas", 640, 360], "blade-m": ["canvas", 640, 720], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "chimney-f": ["svg", 640, 360], "chimney-g": ["svg", 640, 360], "chimney-h": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-c": ["svg", 640, 400], "cyl-o": ["svg", 640, 400], "cyl-v": ["svg", 640, 400], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
   const FIG = {
     _defs: {}, _uid: 0, _ticks: [], _timer: null, _target: null,
     MAX_LIVE: 3,
@@ -705,6 +705,52 @@
       ctx.fillStyle = PH_DIM; ctx.font = "11px ui-monospace, monospace";
       ctx.fillText(wheeling ? "TURN " + (Math.floor(T / 15) + 1) + " OF 10" :
         "TOWARD THE HORIZON'S MOLTEN LINE", 18, 288);
+    });
+  });
+
+  /* ---------------- 05-m: the wheel of bats (phone twin) ---------------- */
+  /* Phone twin of 05. The same forty bats on the same clock -- wheel, tomb,
+     and molten horizon all at twice the size in the portrait frame, the
+     caption re-set at 22px. Titleless, like the desktop card. terminal.js
+     picks it by rendered width. */
+  FIG._define("bats-m", "canvas", function (cv) {
+    const ctx = cv.getContext("2d");
+    const N = 40, bats = Array.from({ length: N }, (_, i) => ({
+      ph: (i / N) * Math.PI * 2, r: 46 + (i * 37 % 34), wob: (i * 13 % 7) - 3 }));
+    clock(t => {
+      const T = t % 200, wheeling = T < 150, scatter = (T - 150) / 50;
+      ctx.fillStyle = BG; ctx.fillRect(0, 0, cv.width, cv.height);
+      // the tomb, far below, minimal
+      ctx.strokeStyle = PH_DIM; ctx.shadowColor = PH; ctx.shadowBlur = 5;
+      ctx.strokeRect(260, 460, 120, 140);
+      ctx.beginPath(); ctx.moveTo(290, 600); ctx.lineTo(290, 556); ctx.lineTo(316, 556);
+      ctx.lineTo(316, 600); ctx.stroke();
+      // the horizon's molten line
+      ctx.strokeStyle = FUNGUS; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(0, 602); ctx.lineTo(640, 602); ctx.stroke();
+      // the wheel
+      ctx.strokeStyle = PH; ctx.shadowBlur = 8; ctx.lineWidth = 2.2;
+      const a0 = T * .35;
+      for (const b of bats) {
+        const R = b.r * 2;
+        let x, y;
+        if (wheeling) {
+          x = 320 + Math.cos(a0 + b.ph) * (R + b.wob * 2 * Math.sin(T * .7 + b.ph));
+          y = 260 + Math.sin(a0 + b.ph) * (R * .42);
+        } else {
+          x = 320 + Math.cos(b.ph) * (R + scatter * 420);
+          y = 260 + Math.sin(b.ph) * (R * .42) + scatter * (b.ph > Math.PI ? -60 : 120) * .4;
+        }
+        const flap = ((t + b.wob) % 4 < 2) ? 7 : 2.4;
+        ctx.globalAlpha = wheeling ? 1 : Math.max(0, 1 - scatter);
+        ctx.beginPath();
+        ctx.moveTo(x - 8, y - flap); ctx.lineTo(x, y); ctx.lineTo(x + 8, y - flap);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1; ctx.shadowBlur = 0; ctx.lineWidth = 1;
+      ctx.fillStyle = PH_DIM; ctx.font = "22px ui-monospace, monospace";
+      ctx.fillText(wheeling ? "TURN " + (Math.floor(T / 15) + 1) + " OF 10" :
+        "TOWARD THE HORIZON'S MOLTEN LINE", 24, 682);
     });
   });
 
@@ -5215,6 +5261,94 @@
         fill: "#ffd76a", "fill-opacity": .08 }));
     const foot = label(svg, 430, 334, 10, FUNGUS);
     const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 160;
+      doWipe(T);
+      typeOn(hdr, "RESIDENTS, HALL OF YOUTH (THOUSANDS)", T, 4, 1.4);
+      const br = [0, 1, 2, 2, 1, 0][Math.floor(t / 4) % 6];   // the breath
+      body.setAttribute("transform", `translate(0 ${br * .8})`);
+      const tw = T > 118 ? 4 : 0;                             // the ears hear it
+      earA.setAttribute("points", `302,246 ${294 - tw},272 306,254`);
+      earB.setAttribute("points", `318,248 ${326 + tw},274 322,254`);
+      const on = Math.min(10, Math.floor(T / 12));
+      cells.forEach((r, i) => r.setAttribute("fill-opacity", i < on ? .8 : .08));
+      // the last four beats of the gauge: eyes open, pair by pair
+      eyes.forEach((g, i) => g.setAttribute("opacity", on >= 7 + i ? 1 : 0));
+      foot.textContent = T > 118 ? "OPINION OF LIGHT: FORMING." : "";
+    });
+  });
+
+  /* ---------------- 05-C-m: bats, the residents (phone twin) ---------------- */
+  /* Phone twin of 05-C. The colony is carried over whole -- every coordinate
+     inside SC is 05-C's scene space, scaled 2x into the portrait frame --
+     and the type is re-set outside it: 22px title, the LIGHT gauge and the
+     verdict in big type below. terminal.js picks it by rendered width. */
+  FIG._define("bats-c-m", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 22, PH_BRIGHT);
+    const SC = el(svg, "g", { transform: "translate(-350 -16) scale(2)" });
+    el(SC, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.8,
+      points: "220,64 300,58 340,60 420,66" });               // the rock lip
+    el(SC, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.4,
+      points: "308,60 306,74 312,70 316,74 314,60" });        // the gripping feet
+    // the neighbors: more of the eleven hundred, folded and dimmer
+    [[244, .62, .55], [398, .7, .6], [438, .5, .4]].forEach(([cx, sc, op]) => {
+      const g = el(SC, "g", { opacity: op });
+      const put = (name, attrs) => el(g, name, attrs);
+      put("polyline", { fill: "none", stroke: PH_DIM, "stroke-width": 1.2,
+        points: `${cx - 2},62 ${cx - 4},70 ${cx + 4},70 ${cx + 2},62` });
+      put("path", { d: `M ${cx - 2},70 Q ${cx - 18 * sc},${70 + 42 * sc} ` +
+        `${cx - 10 * sc},${70 + 96 * sc} Q ${cx - 4 * sc},${70 + 112 * sc} ${cx},${70 + 116 * sc} L ${cx - 2},70`,
+        fill: "none", stroke: PH, "stroke-width": 1.3 });
+      put("path", { d: `M ${cx + 2},70 Q ${cx + 18 * sc},${70 + 42 * sc} ` +
+        `${cx + 10 * sc},${70 + 96 * sc} Q ${cx + 4 * sc},${70 + 112 * sc} ${cx},${70 + 116 * sc} L ${cx + 2},70`,
+        fill: "none", stroke: PH, "stroke-width": 1.3 });
+      put("circle", { cx, cy: 70 + 124 * sc, r: 9 * sc, fill: "none",
+        stroke: PH, "stroke-width": 1.2 });
+      put("polygon", { points: `${cx - 6 * sc},${70 + 128 * sc} ${cx - 10 * sc},${70 + 146 * sc} ` +
+        `${cx - 2 * sc},${70 + 132 * sc}`, fill: "none", stroke: PH_DIM });
+      put("polygon", { points: `${cx + 6 * sc},${70 + 128 * sc} ${cx + 10 * sc},${70 + 146 * sc} ` +
+        `${cx + 2 * sc},${70 + 132 * sc}`, fill: "none", stroke: PH_DIM });
+    });
+    const body = el(SC, "g", {});
+    const inB = (name, attrs) => el(body, name, attrs);
+    // the folded wings: teardrops with the finger bones showing
+    inB("path", { d: "M 310 74 Q 282 120 292 196 Q 300 224 310 226 L 310 74",
+      fill: "none", stroke: PH, "stroke-width": 1.6 });
+    inB("path", { d: "M 314 74 Q 342 120 332 196 Q 324 224 314 226 L 314 74",
+      fill: "none", stroke: PH, "stroke-width": 1.6 });
+    [[296, 100, 294, 180], [301, 92, 299, 196], [323, 92, 325, 196], [328, 100, 330, 180]]
+      .forEach(([x1, y1, x2, y2]) =>
+        inB("line", { x1, y1, x2, y2, stroke: PH_DIM }));      // the fingers
+    // the head, upside down at the bottom: ears pointing DOWN
+    inB("circle", { cx: 312, cy: 238, r: 14, fill: "none", stroke: PH, "stroke-width": 1.6 });
+    const earA = inB("polygon", { fill: "none", stroke: PH, "stroke-width": 1.4 });
+    const earB = inB("polygon", { fill: "none", stroke: PH, "stroke-width": 1.4 });
+    inB("polyline", { fill: "none", stroke: PH_DIM, points: "306,244 312,248 318,244" });
+    // every resident gets two glowing red eyes; they open on the last beats
+    const RED = "#ff5252";
+    const pair = (x1, y1, x2, y2, r) => {
+      const g = el(SC, "g", { opacity: 0 });
+      [[x1, y1], [x2, y2]].forEach(([x, y]) => {
+        el(g, "circle", { cx: x, cy: y, r: r * 2.2, fill: RED, "fill-opacity": .3 });
+        el(g, "circle", { cx: x, cy: y, r, fill: RED });
+      });
+      return g;
+    };
+    const eyes = [                                            // left to right, star last
+      pair(244 - 3.2, 70 + 121 * .62, 244 + 3.2, 70 + 121 * .62, 1.6),
+      pair(398 - 3.6, 70 + 121 * .7, 398 + 3.6, 70 + 121 * .7, 1.8),
+      pair(438 - 2.6, 70 + 121 * .5, 438 + 2.6, 70 + 121 * .5, 1.3),
+      pair(306, 234, 318, 234, 2.4),
+    ];
+    label(svg, 40, 604, 20, PH_DIM).textContent = "LIGHT";
+    const cells = Array.from({ length: 10 }, (_, i) =>
+      el(svg, "rect", { x: 128 + i * 32, y: 588, width: 24, height: 20,
+        fill: "#ffd76a", "fill-opacity": .08 }));
+    const foot = label(svg, 320, 672, 22, FUNGUS);
+    foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
     clock(t => {
       const T = t % 160;
       doWipe(T);
