@@ -8,6 +8,7 @@ from .enums import EventKind, Property
 from .events import GameEvent
 from .triggers import Trigger, at_turn
 
+import importlib
 import json
 import inspect
 from collections import namedtuple
@@ -1506,31 +1507,57 @@ class Game:
                     err_msg = f"ERROR: invalid custom block ({cb})"
                     raise Exception(err_msg)
 
-        # Instantiate all blocks for all locations
-        # CCB - temporarially removing this.
-        # for l in context.locations.values():
-        #     for direction, block_data in l.blocks.items():
-        #         # it is possible for two locations to have the same block, so
-        #         # skip any that have already been instantiated
-        #         if isinstance(block_data, blocks.Block):
-        #             continue
-        #         cls_type = block_map[block_data["_type"]]
-        #         del block_data["_type"]
-        #         # we will copy the properties of relevant items before we
-        #         # install the block, so we can restore them after
-        #         prop_map = {}
-        #         # replace thing names in primitive with thing instances
-        #         for param_name, param in block_data.items():
-        #             if param in context.items:
-        #                 param_instance = context.items[param]
-        #             elif param in context.locations:
-        #                 param_instance = context.locations[param]
-        #             block_data[param_name] = param_instance
-        #             prop_map[param_name] = param_instance.properties.copy()
-        #         instance = cls_type.from_primitive(block_data)
-        #         # restore properties found in primitive data
-        #         for param_name, param in block_data.items():
-        #             param.properties = prop_map[param_name]
+        # Instantiate all blocks for all locations (issue #744). The location
+        # skeletons still hold each block's primitive dict; now that every
+        # location, item, and character exists we can swap the saved thing
+        # names back to instances and rebuild the Block objects.
+        for l in context.locations.values():
+            for direction, block_data in list(l.blocks.items()):
+                # It is possible for two locations to share the same block
+                # (a Locked_Door installs itself on both sides of the door),
+                # so skip any that have already been instantiated.
+                if isinstance(block_data, blocks.Block):
+                    continue
+                # Work on a copy so we never mutate the caller's primitive data.
+                block_data = dict(block_data)
+                cls_name = block_data.pop("_type")
+                module_name = block_data.pop("_module", None)
+                cls_type = block_map.get(cls_name)
+                if cls_type is None and module_name:
+                    # A game-specific block that wasn't registered via
+                    # custom_blocks: re-import it from the module recorded
+                    # at save time (see Block.to_primitive).
+                    module = importlib.import_module(module_name)
+                    cls_type = getattr(module, cls_name, None)
+                if cls_type is None:
+                    err_msg = "".join(
+                        [
+                            f"ERROR: unmapped block ({cls_name}) found in ",
+                            "primitive data; pass its class via custom_blocks",
+                        ]
+                    )
+                    raise Exception(err_msg)
+                # Replace saved thing names with the live instances. Block
+                # constructors may mutate the things they attach to (e.g.
+                # Locked_Door re-locks its door, Darkness re-flags its room
+                # dark), so we copy each referenced thing's properties before
+                # we install the block and restore them after -- the loaded
+                # state must match the save, not the constructor's defaults.
+                prop_map = {}
+                pools = (context.items, context.characters, context.locations)
+                for param_name, param in block_data.items():
+                    if not isinstance(param, str):
+                        continue
+                    for pool in pools:
+                        if param in pool:
+                            block_data[param_name] = pool[param]
+                            prop_map[param_name] = pool[param].properties.copy()
+                            break
+                instance = cls_type.from_primitive(block_data)
+                # restore properties found in primitive data
+                for param_name, snapshot in prop_map.items():
+                    block_data[param_name].properties = snapshot
+                l.blocks[direction] = instance
 
         start_at = context.locations[data["start_at"]]
         player = context.characters[data["player"]]

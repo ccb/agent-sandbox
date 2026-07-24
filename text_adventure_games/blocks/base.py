@@ -26,8 +26,25 @@ class Block:
         cls_type = self.__class__.__name__
         data = {
             "_type": cls_type,
+            # The defining module, so Game.from_primitive can re-import a
+            # game-specific block class even when the loader wasn't handed
+            # it via custom_blocks (issue #744).
+            "_module": self.__class__.__module__,
             # subclasses hardcode these
             # 'name': self.name,
             # 'description': self.description,
         }
         return data
+
+    @classmethod
+    def from_primitive(cls, data):
+        """
+        Recreate a block from its primitive data. By the time this is called,
+        Game.from_primitive has already swapped saved thing names back to the
+        live instances, so `data` maps constructor arguments to real objects.
+
+        This default assumes the keys a subclass saved in its to_primitive
+        match its constructor's arguments (as they do for the blocks in this
+        package). A block that saves extra state should override this.
+        """
+        return cls(**data)
