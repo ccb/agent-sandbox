@@ -108,6 +108,23 @@ TIER_ROLES = frozenset(
     {"decide", "plan", "reflect", "converse", "outcome", "score", "react"}
 )
 
+# Mid-run brain-outage threshold (#745): after this many CONSECUTIVE failed
+# real-brain calls (error rows in the ledger with no genuine answer between
+# them), the next tick() raises BrainOutage instead of burning more paid,
+# failing round-trips. backend.live's #637 tick-error handler turns the raise
+# into a visible pause + status(reason="error") record; POST /resume retries
+# with a fresh window. Low enough that a dead key (every agent fails its first
+# decide) trips within a tick or two; high enough that a single transient
+# failure -- already retried by the client's own #260 budget -- rides through.
+BRAIN_OUTAGE_PAUSE_STREAK = 3
+
+
+class BrainOutage(RuntimeError):
+    """The live brain is erroring on every call (#745): raised by
+    ``PennStepper.tick()`` once ``BRAIN_OUTAGE_PAUSE_STREAK`` consecutive
+    real-brain calls have failed, so the #637 error path pauses the run
+    visibly instead of the cast freezing silently at $0."""
+
 
 def _parse_model_for(pairs):
     """``["plan=claude-sonnet-4-6", ...]`` -> ``{"plan": "claude-sonnet-4-6"}``.
@@ -679,6 +696,17 @@ class PennStepper:
         # Like the ledger it lives here, not in _build(), so its call counter
         # survives resets.
         self.monitor = monitor
+        # Mid-run brain health (#745). _llm_failures_seen is a cursor into
+        # ledger.records (the _events_seen idiom) -- it lives here because the
+        # ledger it indexes survives resets. The streak counts consecutive
+        # failed real-brain calls (a genuine answer resets it; _build resets
+        # it too -- a new day gets a fresh window); tick() raises BrainOutage
+        # at BRAIN_OUTAGE_PAUSE_STREAK. _llm_error_buf holds the per-failure
+        # feed rows drain_events publishes (kind "llm_error").
+        self._llm_failures_seen = 0
+        self._brain_error_streak = 0
+        self._last_brain_error = None
+        self._llm_error_buf: list = []
         # What POST /config applied, or None for an unconfigured server; when
         # set, _store_manifest records it as the manifest's `config` block (#732).
         self._applied_config = None
@@ -1016,6 +1044,15 @@ class PennStepper:
         self._decide_pending = {}
         self._deciding_buf = []
         self._deciding_started = {}
+        # A rebuild gets a fresh brain-outage window (#745): a reset/config
+        # apply must never inherit a tripped streak (a brain swapped to the
+        # free mock would otherwise raise on its first tick). The ledger
+        # cursor is deliberately NOT reset -- it indexes the surviving ledger,
+        # and any error rows stragglers land across the boundary are scanned
+        # (and counted against the new window) on the next tick.
+        self._brain_error_streak = 0
+        self._last_brain_error = None
+        self._llm_error_buf = []
         if self.mock_latency > 0:
             for char in self.chars.values():
                 char.agent.schedule.latency_s = self.mock_latency
@@ -1263,18 +1300,28 @@ class PennStepper:
         headline ``run_cost_usd`` beside per-agent spend that reconciles with it
         (``sum(run_by_actor.values()) == run_cost_usd`` for a fresh, non-resumed
         run), instead of mixing a run-scoped total with lifetime per-agent rows.
+
+        ``run_failed_calls`` (#745) counts this run's FAILED real calls (error
+        rows) -- 0 on a healthy day; climbing while ``run_cost_usd`` stands
+        still is the mid-run-outage fingerprint, now visible in ``GET /usage``.
         """
         run_records = self.ledger.records[self._run_ledger_calls_base :]
         run_calls = 0
+        run_failed_calls = 0
         run_by_actor: dict[str, float] = {}
         for rec in run_records:
             if rec.usage.provider == "mock":
                 continue
             run_calls += 1
+            if rec.error:
+                # Failed real calls (#745): counted beside run_calls so the
+                # dashboard can tell "brain erroring" from "not being asked".
+                run_failed_calls += 1
             key = rec.actor or "(unattributed)"
             run_by_actor[key] = run_by_actor.get(key, 0.0) + rec.cost_usd
         return {
             "run_calls": run_calls,
+            "run_failed_calls": run_failed_calls,
             "run_cost_usd": self._run_cost_usd(),
             "run_by_actor": {a: round(c, 6) for a, c in run_by_actor.items()},
         }
@@ -1547,6 +1594,22 @@ class PennStepper:
         if not self.endless and self._step_idx >= self.num_steps:
             self._finish_run()
             return None
+        # Mid-run brain outage (#745): the brain is failing every call (auth
+        # revoked, quota, network down). Raising here -- BEFORE spending more
+        # failing round-trips -- hands the run to backend.live's #637 tick-error
+        # handler, which pauses visibly and publishes status(reason="error")
+        # with this message, instead of the silent frozen-cast freeze. The
+        # streak resets so a POST /resume retries with a fresh window.
+        if (
+            self.llm_client is not None
+            and self._brain_error_streak >= BRAIN_OUTAGE_PAUSE_STREAK
+        ):
+            streak, last = self._brain_error_streak, self._last_brain_error
+            self._brain_error_streak = 0
+            raise BrainOutage(
+                f"{streak} consecutive LLM call failures (last: {last}) -- "
+                "pausing the run; fix the key/network, then resume to retry"
+            )
         # DEBUG (#372): fake a decision stall so the head stops growing long
         # enough for the viewer's "thinking…" indicator to fire. Holding the app
         # lock here is the point -- pollers wait, exactly like a real brain mid-
@@ -1597,6 +1660,13 @@ class PennStepper:
                 f"  - DECIDE TIMEOUT {name} @ step {self._step_idx} -- "
                 "idling this tick; its answer will apply when the call resolves"
             )
+        # Brain health (#745): pick up any error rows the tick's calls (or a
+        # parked #366 straggler) landed in the ledger -- each becomes a feed
+        # row and counts against the consecutive-failure streak checked above.
+        # Real/scripted brains only: the mock never errors and must never pay
+        # the scan.
+        if self.llm_client is not None:
+            self._scan_llm_failures()
         frame = {name: replay_frame_entry(raw[name]) for name in self.order}
         # Paint authored dialogue post-step, exactly where the bake's injector
         # runs (on the converted frames, never the engine state) -- so a future
@@ -1776,12 +1846,54 @@ class PennStepper:
             self._deciding_buf = []
         return rows
 
+    def _scan_llm_failures(self) -> None:
+        """Scan ledger rows appended since the last scan for failed calls (#745).
+
+        Each failure -- an API error the adapter degraded to ``None``, recorded
+        as a zero-cost error row -- is buffered as an ``llm_error`` feed row
+        (published by :meth:`drain_events`) and counts against the
+        consecutive-failure streak ``tick()`` checks. A genuinely answered call
+        (non-mock, with real token usage) clears the streak; the zero-usage
+        retry-attempt rows (#260) and the mock pacing records are neutral, so
+        interleaved retries can never mask a dead key. Runs on the tick thread;
+        a parked #366 straggler may append concurrently, which is safe (list
+        append/slice are GIL-atomic) -- a row this scan misses is simply picked
+        up next tick.
+        """
+        fresh = self.ledger.records[self._llm_failures_seen :]
+        self._llm_failures_seen += len(fresh)
+        for rec in fresh:
+            usage = rec.usage
+            if usage.provider == "mock":
+                continue
+            if rec.error:
+                self._brain_error_streak += 1
+                self._last_brain_error = rec.error
+                self._llm_error_buf.append(
+                    {
+                        "kind": "llm_error",
+                        "agent": rec.actor,
+                        "role": rec.role,
+                        "error": rec.error,
+                        "streak": self._brain_error_streak,
+                    }
+                )
+                # Mirror the DECIDE TIMEOUT print: a failed model call must be
+                # visible in the run log even with --no-monitor.
+                print(
+                    f"  - LLM ERROR {rec.actor or '(unattributed)'} @ step "
+                    f"{self._step_idx}: {rec.error} "
+                    f"({self._brain_error_streak} consecutive)"
+                )
+            elif usage.total_input_tokens or usage.output_tokens:
+                self._brain_error_streak = 0
+
     def drain_events(self) -> list:
         """New change-feed rows formed during the last ``tick()`` (#398, #467).
 
         ``backend.live`` probes this optional method after every tick and
         publishes each returned dict as a ``kind: "engine"`` change-feed
-        record. Two row types ride it, told apart by their inner ``kind``:
+        record. Three row types ride it, told apart by their inner ``kind``:
 
         * ``"llm_call"`` -- the request monitor's kept records (a flattened
           :class:`~text_adventure_games.usage.CallRecord` plus ``role``/
@@ -1791,6 +1903,11 @@ class PennStepper:
           drain (#467), ``to_primitive()`` dicts (the #305 EventState shape,
           identical to what the replay bake persists), e.g. the boil-water
           ``sickness`` events (#465).
+        * ``"llm_error"`` -- one row per FAILED model call (#745):
+          ``{agent, role, error, streak}``, buffered by
+          :meth:`_scan_llm_failures` regardless of whether a monitor is wired,
+          so a mid-run API outage names the erroring agent in the feed instead
+          of freezing the cast silently.
 
         A finishing tick (``tick()`` -> ``None``) can still drain rows -- a
         ``POST /world/event`` landing between the last real tick and the
@@ -1801,6 +1918,10 @@ class PennStepper:
         rows = []
         if self.monitor is not None:
             rows.extend(dict(rec, kind="llm_call") for rec in self.monitor.drain())
+        # Failed-call rows (#745), right after the llm_call log lines they
+        # annotate; buffered by _scan_llm_failures, monitor or not.
+        rows.extend(self._llm_error_buf)
+        self._llm_error_buf = []
         new_events = self.game.events[self._events_seen :]
         self._events_seen = len(self.game.events)
         rows.extend(
