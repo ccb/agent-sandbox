@@ -10,7 +10,7 @@
    and disconnected nodes drop off the clock automatically. */
 (() => {
   "use strict";
-  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "canopic-c-m": ["svg", 640, 720], "centipede": ["svg", 640, 360], "chimney-f": ["svg", 640, 360], "chimney-g": ["svg", 640, 360], "chimney-h": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-c": ["svg", 640, 400], "cyl-o": ["svg", 640, 400], "cyl-v": ["svg", 640, 400], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
+  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "bats-c-m": ["svg", 640, 720], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "canopic-c-m": ["svg", 640, 720], "centipede": ["svg", 640, 360], "chimney-f": ["svg", 640, 360], "chimney-g": ["svg", 640, 360], "chimney-h": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-a-m": ["svg", 640, 720], "cyl-c": ["svg", 640, 400], "cyl-c-m": ["svg", 640, 720], "cyl-o": ["svg", 640, 400], "cyl-o-m": ["svg", 640, 720], "cyl-v": ["svg", 640, 400], "cyl-v-m": ["svg", 640, 720], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "cylinders-b-m": ["svg", 640, 720], "cylinders-m": ["svg", 640, 720], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
   const FIG = {
     _defs: {}, _uid: 0, _ticks: [], _timer: null, _target: null,
     MAX_LIVE: 3,
@@ -295,6 +295,81 @@
     };
   }
 
+  // the four burial cylinders, phone layout -- shared by the cyl-*-m twins.
+  // cfg = { key, header, kicker, burst:[NAMES], footer }
+  function cylsCardM(svg, cfg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 22, PH_BRIGHT);
+    if (cfg.kicker) {                              // class label as a left subtitle,
+      const k = label(svg, 20, 64, 13, PH_DIM);   // not right-anchored (long headers
+      k.textContent = cfg.kicker;                 // would collide with it)
+    }
+    const gel = stipple(svg, "dots-" + cfg.key, PH_DIM, 1.4);
+    const HUE = { CERULEAN: PH, AMBER: "#ffd06a", VIRIDIAN: "#4ee0a8", ORANGE: FUNGUS };
+    const CX = { CERULEAN: 110, AMBER: 253, VIRIDIAN: 393, ORANGE: 536 };
+    const burst = cfg.burst || [], bubbles = [], spores = [];
+    ["CERULEAN", "AMBER", "VIRIDIAN", "ORANGE"].forEach((name, i) => {
+      const cx = CX[name], hue = HUE[name], down = burst.includes(name);
+      const put = (nn, a) => el(svg, nn, a);
+      if (!down) {
+        put("rect", { x: cx - 34, y: 150, width: 68, height: 250, fill: gel });
+        put("line", { x1: cx - 36, y1: 142, x2: cx - 36, y2: 400, stroke: PH, "stroke-width": 2 });
+        put("line", { x1: cx + 36, y1: 142, x2: cx + 36, y2: 400, stroke: PH, "stroke-width": 2 });
+        put("ellipse", { cx, cy: 142, rx: 36, ry: 10, fill: "none", stroke: PH_BRIGHT, "stroke-width": 2 });
+        put("ellipse", { cx, cy: 400, rx: 36, ry: 10, fill: "none", stroke: PH });
+        put("circle", { cx, cy: 196, r: 9, fill: "none", stroke: PH_DIM, "stroke-width": 1.6 });
+        put("polyline", { fill: "none", stroke: PH_DIM, "stroke-width": 1.6, points:
+          `${cx - 12},212 ${cx + 12},212 ${cx + 8},300 ${cx + 6},368 ${cx - 6},368 ${cx - 8},300 ${cx - 12},212` });
+        if (name === "CERULEAN")
+          put("line", { x1: cx + 16, y1: 224, x2: cx + 16, y2: 300, stroke: hue, "stroke-width": 2.4 });
+        if (name === "AMBER")
+          put("circle", { cx, cy: 236, r: 8, fill: "none", stroke: hue, "stroke-width": 2 });
+        if (name === "VIRIDIAN") {
+          put("rect", { x: cx - 13, y: 372, width: 11, height: 9, fill: "none", stroke: hue, "stroke-width": 2 });
+          put("rect", { x: cx + 2, y: 372, width: 11, height: 9, fill: "none", stroke: hue, "stroke-width": 2 });
+        }
+        if (name === "ORANGE") {
+          put("line", { x1: cx, y1: 300, x2: cx, y2: 250, stroke: hue, "stroke-width": 2.4 });
+          for (let s = 0; s < 6; s++)
+            spores.push({ q: put("circle", { r: 2.2, fill: FUNGUS }), x: cx + (s - 2.5) * 10, ph: s * 23 });
+        }
+        for (let b = 0; b < 3; b++)
+          bubbles.push({ q: put("circle", { cx: cx + (b - 1) * 12, cy: 398, r: 2.4,
+            fill: "none", stroke: hue, opacity: .8 }), ph: i * 31 + b * 57 });
+      } else {
+        put("polyline", { fill: "none", stroke: PH, "stroke-width": 2, points:
+          `${cx - 36},400 ${cx - 36},300 ${cx - 22},322 ${cx - 8},292 ${cx + 6},318 ` +
+          `${cx + 20},290 ${cx + 34},320 ${cx + 36},300 ${cx + 36},400` });
+        put("ellipse", { cx, cy: 400, rx: 36, ry: 10, fill: "none", stroke: PH });
+        put("ellipse", { cx, cy: 422, rx: 58, ry: 10, fill: hue, opacity: .3 });
+        put("polyline", { fill: "none", stroke: PH_DIM, "stroke-width": 2,
+          points: `${cx - 22},386 ${cx - 6},374 ${cx + 12},386 ${cx + 22},378` });
+      }
+      const cap = label(svg, cx, 446, 15, down ? hue : PH_DIM);
+      cap.setAttribute("text-anchor", "middle"); cap.textContent = name;
+    });
+    const fw = cfg.footer, cut = fw.length > 34 ? fw.lastIndexOf(" ", 34) : -1;
+    const fL1 = cut > 0 ? fw.slice(0, cut) : fw, fL2 = cut > 0 ? fw.slice(cut + 1) : "";
+    const foot1 = label(svg, 320, 636, 22, FUNGUS); foot1.setAttribute("text-anchor", "middle");
+    const foot2 = label(svg, 320, 668, 22, FUNGUS); foot2.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 200;
+      doWipe(T);
+      typeOn(hdr, cfg.header, T, 4, 1.2);
+      bubbles.forEach(b => b.q.setAttribute("cy", 398 - ((t * 3 + b.ph) % 246)));
+      spores.forEach(s => {
+        const k = (t * 2 + s.ph) % 130;
+        s.q.setAttribute("cx", s.x + Math.sin((t + s.ph) * .25) * 8);
+        s.q.setAttribute("cy", 250 - k * 1.2);
+        s.q.setAttribute("opacity", k > 108 ? 0 : .5);
+      });
+      typeOn(foot1, fL1, T, 120, 1.6);
+      typeOn(foot2, fL2, T, 120 + fL1.length, 1.6);
+    });
+  }
+
     // each jar's stopper is the animal's head, in angular litho line
     function headGlyph(svg, kind, cx) {
       const P = (pts, extra) => el(svg, "polyline",
@@ -495,24 +570,26 @@
     J("polygon", { fill: JDOTS, stroke: PH, "stroke-width": 1.8, points:
       "520,280 566,320 604,372 566,382 512,340 486,300" });
     // the walking legs
-    const LEGS = [[210, 310], [268, 300], [420, 320], [470, 316]].map(([ax, ay], i) => ({
+    // the legs -- long and thin, a proper canine gait (haunch/shoulder down to
+    // the ground band), near pair brighter than far
+    const LEGS = [[206, 286], [258, 282], [416, 290], [460, 286]].map(([ax, ay], i) => ({
       ax, ay, ph: i * .5, near: i % 2,
-      leg: J("polyline", { fill: "none", stroke: PH, "stroke-width": i % 2 ? 3.4 : 2.4,
-        "stroke-linecap": "round", opacity: i % 2 ? 1 : .55 }),
+      leg: J("polyline", { fill: "none", stroke: PH, "stroke-width": i % 2 ? 2.8 : 2,
+        "stroke-linecap": "round", opacity: i % 2 ? 1 : .5 }),
     }));
     // the ground ticks, sliding under the walk
     const gGround = el(svg, "g", {});
     for (let x = 30; x < 610; x += 20)
-      el(gGround, "line", { x1: x, y1: 408, x2: x + 9, y2: 408, stroke: PH_DIM });
+      el(gGround, "line", { x1: x, y1: 454, x2: x + 9, y2: 454, stroke: PH_DIM });
     // the guide callouts, big
     const CALL = ["EYES: DOING SUMS", "NOSE: FINDS MEAT AT TWO ROOMS", "COAT: PTHALO No.9"];
-    const calls = CALL.map((c, i) => label(svg, 40, 470 + i * 40, 21, PH));
+    const calls = CALL.map((c, i) => label(svg, 40, 502 + i * 38, 21, PH));
     // the PATIENCE gauge + verdict
-    label(svg, 40, 604, 20, PH_DIM).textContent = "PATIENCE";
+    label(svg, 40, 638, 20, PH_DIM).textContent = "PATIENCE";
     const cells = Array.from({ length: 10 }, (_, i) =>
-      el(svg, "rect", { x: 200 + i * 34, y: 588, width: 26, height: 20,
+      el(svg, "rect", { x: 200 + i * 34, y: 622, width: 26, height: 20,
         fill: PH, "fill-opacity": .8 }));
-    const verdict = label(svg, 320, 668, 22, FUNGUS); verdict.setAttribute("text-anchor", "middle");
+    const verdict = label(svg, 320, 692, 22, FUNGUS); verdict.setAttribute("text-anchor", "middle");
     const doWipe = wipe(svg, 640, 720, 2, 10);
     clock(t => {
       const T = t % 220;
@@ -523,9 +600,12 @@
       eye.setAttribute("opacity", t % 40 < 2 ? 0 : 1);         // a rare blink
       LEGS.forEach(L => {
         const th = ((t % 16) / 16 + L.ph) * Math.PI * 2;
-        const fx = L.ax - 6 + 14 * Math.cos(th);
-        const fy = 404 - Math.max(0, Math.sin(th)) * 14;
-        L.leg.setAttribute("points", `${L.ax},${L.ay + bob} ${(L.ax + fx) / 2},${(L.ay + fy) / 2 + 10} ${fx},${fy}`);
+        const fx = L.ax - 4 + 16 * Math.cos(th);
+        const fy = 454 - Math.max(0, Math.sin(th)) * 20;
+        // knee ~55% down the leg, kicked forward, so the shank reads long
+        const kx = L.ax + (fx - L.ax) * .5 + (L.knee || 0);
+        const ky = L.ay + bob + (fy - L.ay - bob) * .52;
+        L.leg.setAttribute("points", `${L.ax},${L.ay + bob} ${kx},${ky} ${fx},${fy}`);
       });
       gGround.setAttribute("transform", `translate(${(t * 5) % 20} 0)`);
       calls.forEach((n, i) => typeOn(n, CALL[i], T, 30 + i * 16, 1.7));
@@ -6801,6 +6881,132 @@
       });
       typeOn(foot, "THREE FACES, TWO DOORS, ONE CHIMNEY.", Math.min(t, 259), 120, 1.6);
     });
+  });
+
+  /* ---------------- bats-c-m (phone twin) ---------------- */
+  FIG._define("bats-c-m", "svg", function (svg) {
+    const ctx = window.TombFigures ? window.TombFigures.context : null;
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 30, PH_BRIGHT);
+    const kick = label(svg, 620, 34, 15, PH_DIM);
+    kick.setAttribute("text-anchor", "end");
+
+    // the SUBJECT: one bat hanging, folded among the eleven hundred.
+    // Re-composed from the original at ~1.7x so it fills the phone column.
+    const subj = el(svg, "g", { transform: "translate(-215 22) scale(1.72)" });
+    const RED = "#ff5252";
+
+    // the rock lip and the gripping feet
+    el(subj, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
+      points: "220,64 300,58 340,60 420,66" });
+    el(subj, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.2,
+      points: "308,60 306,74 312,70 316,74 314,60" });
+
+    // the neighbors: more of the thousand, folded and dimmer
+    [[244, .62, .55], [398, .7, .6], [438, .5, .4]].forEach(([cx, sc, op]) => {
+      const g = el(subj, "g", { opacity: op });
+      el(g, "polyline", { fill: "none", stroke: PH_DIM, "stroke-width": 1.1,
+        points: `${cx - 2},62 ${cx - 4},70 ${cx + 4},70 ${cx + 2},62` });
+      el(g, "path", { fill: "none", stroke: PH, "stroke-width": 1.2,
+        d: `M ${cx - 2},70 Q ${cx - 18 * sc},${70 + 42 * sc} ` +
+          `${cx - 10 * sc},${70 + 96 * sc} Q ${cx - 4 * sc},${70 + 112 * sc} ${cx},${70 + 116 * sc} L ${cx - 2},70` });
+      el(g, "path", { fill: "none", stroke: PH, "stroke-width": 1.2,
+        d: `M ${cx + 2},70 Q ${cx + 18 * sc},${70 + 42 * sc} ` +
+          `${cx + 10 * sc},${70 + 96 * sc} Q ${cx + 4 * sc},${70 + 112 * sc} ${cx},${70 + 116 * sc} L ${cx + 2},70` });
+      el(g, "circle", { cx, cy: 70 + 124 * sc, r: 9 * sc, fill: "none",
+        stroke: PH, "stroke-width": 1.1 });
+    });
+
+    // the resident, in full: folded wings, finger bones, head hung down
+    const body = el(subj, "g", {});
+    el(body, "path", { fill: "none", stroke: PH, "stroke-width": 1.6,
+      d: "M 310 74 Q 282 120 292 196 Q 300 224 310 226 L 310 74" });
+    el(body, "path", { fill: "none", stroke: PH, "stroke-width": 1.6,
+      d: "M 314 74 Q 342 120 332 196 Q 324 224 314 226 L 314 74" });
+    [[296, 100, 294, 180], [301, 92, 299, 196], [323, 92, 325, 196], [328, 100, 330, 180]]
+      .forEach(([x1, y1, x2, y2]) =>
+        el(body, "line", { x1, y1, x2, y2, stroke: PH_DIM }));
+    el(body, "circle", { cx: 312, cy: 238, r: 14, fill: "none", stroke: PH, "stroke-width": 1.6 });
+    const earA = el(body, "polygon", { fill: "none", stroke: PH, "stroke-width": 1.4 });
+    const earB = el(body, "polygon", { fill: "none", stroke: PH, "stroke-width": 1.4 });
+    el(body, "polyline", { fill: "none", stroke: PH_DIM, points: "306,244 312,248 318,244" });
+
+    // every resident gets two red eyes; they open on the last beats
+    const pair = (ax, ay, bx, by, r) => {
+      const g = el(subj, "g", { opacity: 0 });
+      [[ax, ay], [bx, by]].forEach(([x, y]) => {
+        el(g, "circle", { cx: x, cy: y, r: r * 2.2, fill: RED, "fill-opacity": .3 });
+        el(g, "circle", { cx: x, cy: y, r, fill: RED });
+      });
+      return g;
+    };
+    const eyes = [
+      pair(244 - 3.2, 70 + 121 * .62, 244 + 3.2, 70 + 121 * .62, 1.6),
+      pair(398 - 3.6, 70 + 121 * .7, 398 + 3.6, 70 + 121 * .7, 1.8),
+      pair(438 - 2.6, 70 + 121 * .5, 438 + 2.6, 70 + 121 * .5, 1.3),
+      pair(306, 234, 318, 234, 2.4),
+    ];
+
+    // the LIGHT gauge, filling toward the waking
+    label(svg, 40, 486, 20, PH_DIM).textContent = "LIGHT";
+    const cells = Array.from({ length: 10 }, (_, i) =>
+      el(svg, "rect", { x: 128 + i * 32, y: 470, width: 24, height: 20,
+        fill: "#ffd76a", "fill-opacity": .08 }));
+
+    // the footer caption, in orange, appears when the eyes open
+    const foot = label(svg, 40, 668, 24, FUNGUS);
+
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 160;
+      doWipe(T);
+      typeOn(hdr, "THE RESIDENTS", T, 4, 1.3);
+      typeOn(kick, "HALL OF YOUTH", T, 6, 1.2);
+
+      const br = [0, 1, 2, 2, 1, 0][Math.floor(t / 4) % 6];
+      body.setAttribute("transform", `translate(0 ${br * .8})`);
+
+      const tw = T > 118 ? 4 : 0;
+      earA.setAttribute("points", `302,246 ${294 - tw},272 306,254`);
+      earB.setAttribute("points", `318,248 ${326 + tw},274 322,254`);
+
+      const on = Math.min(10, Math.floor(T / 12));
+      cells.forEach((r, i) => r.setAttribute("fill-opacity", i < on ? .8 : .08));
+      eyes.forEach((g, i) => g.setAttribute("opacity", on >= 7 + i ? 1 : 0));
+
+      foot.textContent = T > 118 ? "OPINION OF LIGHT: FORMING." : "";
+    });
+  });
+
+  /* ---------------- cylinders-b-m (phone twin) ---------------- */
+  FIG._define("cylinders-b-m", "svg", function (svg) {
+    cylsCardM(svg, { key: "cylinders-b-m", header: "THE BURIAL CYLINDERS (INTACT)", kicker: "GUARD ISSUE / INTACT", burst: [], footer: "AS THE TOMBWRIGHTS LEFT THEM. NOTHING HAS COME SCAVENGING. YET." });
+  });
+
+  /* ---------------- cylinders-m (phone twin) ---------------- */
+  FIG._define("cylinders-m", "svg", function (svg) {
+    cylsCardM(svg, { key: "cylinders-m", header: "THE BURIAL CYLINDERS", kicker: "GUARD ISSUE / TWO BURST", burst: ["CERULEAN", "AMBER"], footer: "KIT OUTLASTS ITS OWNERS." });
+  });
+
+  /* ---------------- cyl-c-m (phone twin) ---------------- */
+  FIG._define("cyl-c-m", "svg", function (svg) {
+    cylsCardM(svg, { key: "cyl-c-m", header: "THE BURIAL CYLINDERS, CERULEAN DOWN", kicker: "GUARD ISSUE / ONE BURST", burst: ["CERULEAN"], footer: "THE BLADE FIRST. AMBER NEXT, IF YOU LIKE BREATHING." });
+  });
+
+  /* ---------------- cyl-a-m (phone twin) ---------------- */
+  FIG._define("cyl-a-m", "svg", function (svg) {
+    cylsCardM(svg, { key: "cyl-a-m", header: "THE BURIAL CYLINDERS, AMBER DOWN", kicker: "GUARD ISSUE / ONE BURST", burst: ["AMBER"], footer: "AMBER FIRST. EXACTLY AS THE MANUAL WOULD HAVE IT." });
+  });
+
+  /* ---------------- cyl-v-m (phone twin) ---------------- */
+  FIG._define("cyl-v-m", "svg", function (svg) {
+    cylsCardM(svg, { key: "cyl-v-m", header: "THE BURIAL CYLINDERS, VIRIDIAN DOWN", kicker: "GUARD ISSUE / ONE BURST", burst: ["VIRIDIAN"], footer: "BOOTS FIRST: A SCAVENGER WHO PLANS AHEAD." });
+  });
+
+  /* ---------------- cyl-o-m (phone twin) ---------------- */
+  FIG._define("cyl-o-m", "svg", function (svg) {
+    cylsCardM(svg, { key: "cyl-o-m", header: "THE BURIAL CYLINDERS, ORANGE DOWN", kicker: "GUARD ISSUE / ONE BURST", burst: ["ORANGE"], footer: "ORANGE FIRST. THE BLOOM THANKS YOU FOR YOUR LUNGS." });
   });
 
 })();
