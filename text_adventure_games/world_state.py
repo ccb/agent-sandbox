@@ -38,6 +38,7 @@ _AFFORDANCE_KEYS = (
     "edible",
     "flammable",
     "gettable",
+    "is_device",
     "wearable",
     "wieldable",
 )
