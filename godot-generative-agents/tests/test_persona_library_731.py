@@ -190,6 +190,49 @@ def test_meeting_naming_unknown_persona_raises(library_world):
         load_world_yaml(library_world)
 
 
+def _write_minimal_library(tmp_path, cast):
+    world = tmp_path / "world.yaml"
+    _write_yaml(
+        world,
+        {
+            "cast": cast,
+            "locations": [{"name": "Hub", "description": "d", "address": None}],
+        },
+    )
+    lib = tmp_path / "personas"
+    lib.mkdir()
+    _write_yaml(
+        lib / "ok.yaml",
+        {
+            "name": "Ok",
+            "home": "Hub",
+            "persona": "I am Ok.",
+            "emoji": "🙂",
+            "start_tile": [0, 0],
+            "destination": "Hub",
+            "activity": "idling",
+        },
+    )
+    (lib / "broken.yaml").write_text("name: [unclosed\n", encoding="utf-8")
+    return world
+
+
+def test_syntax_broken_parked_persona_is_skipped(tmp_path):
+    # "broken" is parked (not in the cast) and never referenced by name; a
+    # syntax error in its file must not break composing the cast (#757).
+    world = _write_minimal_library(tmp_path, cast=["ok"])
+    data = load_world_yaml(world)
+    assert [p["name"] for p in data["personas"]] == ["Ok"]
+
+
+def test_syntax_broken_persona_referenced_by_cast_still_raises(tmp_path):
+    # If the broken file IS in the cast, it's absent from the catalog and the
+    # existing "no persona file for" check fires -- fail-loud is preserved.
+    world = _write_minimal_library(tmp_path, cast=["ok", "broken"])
+    with pytest.raises(ValueError, match="broken"):
+        load_world_yaml(world, cast=["ok", "broken"])
+
+
 def test_load_world_data_resolves_cast_and_normalizes(library_world):
     personas, locations = load_world_data(library_world)
     assert [p["name"] for p in personas] == ["Ana", "Bo"]
