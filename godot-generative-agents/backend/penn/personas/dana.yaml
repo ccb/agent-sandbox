@@ -1,0 +1,41 @@
+# Dana Ellsworth -- varsity rower, early riser. Un-parked catalog entry (#762):
+# in the library, NOT in the default cast. Schedule shape: an early-riser
+# criss-cross touching most of the campus buildings. Owns a single cross-link
+# edge to the existing sprinter Imani Carter (fires only when Imani is cast).
+name: Dana Ellsworth
+home: Penn campus
+persona: I am Dana Ellsworth, 20, a sophomore at Penn and a varsity rower. I am
+  up before dawn for practice, perpetually in motion, and I cross the whole
+  campus twice before most people are awake.
+emoji: 🚣
+start_tile:
+- 45
+- 270
+schedule:
+- place: Meyerson Hall
+  activity: cooling down after a dawn row
+  emoji: 🚣
+  steps: 30
+- place: College Hall
+  activity: cutting across the green
+  emoji: 🏃
+  steps: 30
+- place: Houston Hall
+  activity: refueling with a quick snack
+  emoji: 🏃
+  steps: 30
+- place: Van Pelt — Study Booths
+  activity: squeezing in some coursework
+  emoji: 📖
+  steps: 30
+- place: Irvine Auditorium
+  activity: catching the tail of a lecture
+  emoji: 🏃
+
+relationships:
+- a: Dana Ellsworth
+  b: Imani Carter
+  kind: fellow athletes
+  closeness: 2
+  description: Dana and Imani know each other from the early-morning athletics
+    crowd -- a rower and a sprinter who nod hello at the training center.

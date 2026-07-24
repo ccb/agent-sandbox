@@ -1,0 +1,38 @@
+# Lily Zhao -- half of a campus couple. Un-parked catalog entry (#762): in the
+# library, NOT in the default cast. Owns the partners edge to Sam and their
+# lunch meeting (Lily is participants[0]).
+name: Lily Zhao
+home: Penn campus
+persona: I am Lily Zhao, 21, a junior studying nursing at Penn. I am warm,
+  organized, and I guard my lunch hour with Sam like it's the best part of the
+  day -- because it is.
+emoji: 💚
+start_tile:
+- 168
+- 52
+schedule:
+- place: Houston Hall
+  activity: saving a table for two
+  emoji: 💚
+  steps: 120
+- place: Van Pelt — Moelis Reading Room
+  activity: cramming before an afternoon quiz
+  emoji: 💚
+
+relationships:
+- a: Lily Zhao
+  b: Sam O'Connor
+  kind: partners
+  closeness: 5
+  description: Lily and Sam have been together two years and meet for lunch at
+    Houston Hall almost every day between their classes.
+
+meetings:
+- label: Lily and Sam meet for lunch (Houston Hall)
+  at: Houston Hall
+  participants: [Lily Zhao, Sam O'Connor]
+  dialogue:
+  - [Lily Zhao, "I grabbed us the corner table by the window."]
+  - [Sam O'Connor, "Perfect. I have exactly forty minutes before lab."]
+  - [Lily Zhao, "Then we make them count. How was the exam?"]
+  - [Sam O'Connor, "Survived it. Barely. Tell me something good."]

@@ -1,0 +1,46 @@
+# Nina Alvarez -- a cappella lead. Un-parked catalog entry (#762): in the
+# library, NOT in the default cast. Owns the trio's friendship edges (to Jamal
+# and Grace) and their rehearsal meeting (Nina is participants[0]).
+name: Nina Alvarez
+home: Penn campus
+persona: I am Nina Alvarez, 20, a junior at Penn and lead singer of a student a
+  cappella group. I am outgoing, a bit of a perfectionist about harmonies, and
+  I basically live for rehearsal.
+emoji: 🎤
+start_tile:
+- 190
+- 50
+schedule:
+# The trio all spawn together and open the day rehearsing in the Reception Hall;
+# Nina holds it long enough for their whole exchange (see `meetings`).
+- place: Houston Hall — Reception Hall
+  activity: leading warm-ups with the group
+  emoji: 🎤
+  steps: 150
+- place: Irvine Auditorium
+  activity: scouting the stage for the spring show
+  emoji: 🎤
+
+relationships:
+- a: Nina Alvarez
+  b: Jamal Reed
+  kind: friends
+  closeness: 4
+  description: Nina and Jamal have sung together since freshman year and anchor
+    the group's sound -- her melody over his beat.
+- a: Nina Alvarez
+  b: Grace Kim
+  kind: friends
+  closeness: 4
+  description: Nina leans on Grace, the group's arranger, to shape every new
+    number before they perform it.
+
+meetings:
+- label: The trio rehearses a number (Houston Reception Hall)
+  at: Houston Hall — Reception Hall
+  participants: [Nina Alvarez, Jamal Reed, Grace Kim]
+  dialogue:
+  - [Nina Alvarez, "Okay, from the top -- Grace, you take the intro."]
+  - [Grace Kim, "On it. Jamal, give me a steady four-count?"]
+  - [Jamal Reed, "Four, three, two... go."]
+  - [Nina Alvarez, "Perfect. That's the version we keep."]

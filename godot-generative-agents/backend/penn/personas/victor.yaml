@@ -1,0 +1,37 @@
+# Victor Nowak -- chess club regular. Un-parked catalog entry (#762): in the
+# library, NOT in the default cast. Owns the friendship edge to Desmond and
+# their billiard-room meeting (Victor is participants[0]).
+name: Victor Nowak
+home: Penn campus
+persona: I am Victor Nowak, 22, a senior at Penn and a fixture of the chess club.
+  I am competitive, talkative, and I will absolutely make you play one more game.
+emoji: ♟️
+start_tile:
+- 107
+- 223
+schedule:
+- place: Houston Hall — Billiard Room
+  activity: setting up the chessboard
+  emoji: ♟️
+  steps: 120
+- place: Houston Hall — Reading Room
+  activity: poring over an endgame puzzle
+  emoji: ♟️
+
+relationships:
+- a: Victor Nowak
+  b: Desmond Clarke
+  kind: friends
+  closeness: 3
+  description: Victor and Desmond are chess rivals turned friends who meet most
+    afternoons in the union to trade games and trash talk.
+
+meetings:
+- label: Victor and Desmond square off (Houston Billiard Room)
+  at: Houston Hall — Billiard Room
+  participants: [Victor Nowak, Desmond Clarke]
+  dialogue:
+  - [Victor Nowak, "Rematch? You got lucky last time."]
+  - [Desmond Clarke, "Luck nothing. That was a beautiful fork and you know it."]
+  - [Victor Nowak, "We'll see. Loser buys the coffee."]
+  - [Desmond Clarke, "You're on."]
