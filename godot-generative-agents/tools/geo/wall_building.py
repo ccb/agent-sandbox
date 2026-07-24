@@ -40,7 +40,7 @@ import collections
 import json
 import os
 
-from furnish_building import CATALOG, SHEETS, _FIRST, load_matrix_sector, tile_named
+from furnish_building import CATALOG, ensure_sheets, load_matrix_sector, tile_named
 from tmj_io import write_tmj
 
 
@@ -213,27 +213,12 @@ def outer_two_rings(roof):
 def ensure_interior_tileset(tmj, sheet_name):
     """Make sure an interior sheet (e.g. interior_franuka) is a registered tileset
     so a GID into it resolves. furnish_building.py normally adds these, but this
-    script may run on a freshly-baked map that only has the Kenney sheet. We append
-    just the one missing sheet (never strip — that would drop furnished layers)."""
-    if any(t.get("name") == sheet_name for t in tmj["tilesets"]):
-        return
-    name, img, cols, rows = next(s for s in SHEETS if s[0] == sheet_name)
-    tmj["tilesets"].append(
-        {
-            "firstgid": _FIRST[name],
-            "name": name,
-            "image": img,
-            "imagewidth": cols * 16,
-            "imageheight": rows * 16,
-            "tilewidth": 16,
-            "tileheight": 16,
-            "columns": cols,
-            "tilecount": cols * rows,
-            "margin": 0,
-            "spacing": 0,
-        }
-    )
-    tmj["tilesets"].sort(key=lambda t: t["firstgid"])
+    script may run on a freshly-baked map that only has the Kenney sheet. Delegates
+    to furnish_building.ensure_sheets, which appends just the missing sheet at the
+    map's next free gid (never strip — that would drop furnished layers) and binds
+    every sheet's firstgid from the map's own tilesets (#746) — so tile_named()
+    below paints the gids THIS map actually uses, expansion sheets included."""
+    ensure_sheets(tmj, [sheet_name])
 
 
 def main():
