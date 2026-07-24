@@ -27,11 +27,12 @@ def _m_cards(html):
     """[(key, title)] for every ``-m`` card, in reel order.
 
     Each card sits under a ``<div class="slate"><h2>TITLE</h2>`` and renders
-    into a ``<svg id="KEY">``; we walk both markers in document order and pair
-    each svg with the nearest preceding slate title, then keep the ``-m`` ids.
+    into a ``<svg id="KEY">`` or ``<canvas id="KEY">``; we walk both markers in
+    document order and pair each screen with the nearest preceding slate title,
+    then keep the ``-m`` ids.
     """
     cards, last_title = [], None
-    for m in re.finditer(r'<h2>(.*?)</h2>|<svg id="([^"]+)"', html, re.S):
+    for m in re.finditer(r'<h2>(.*?)</h2>|<(?:svg|canvas) id="([^"]+)"', html, re.S):
         if m.group(1) is not None:
             last_title = re.sub(r"\s+", " ", m.group(1).replace("&mdash;", "—")).strip()
         elif m.group(2).endswith("-m"):

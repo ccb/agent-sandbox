@@ -10,7 +10,7 @@
    and disconnected nodes drop off the clock automatically. */
 (() => {
   "use strict";
-  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "chimney-f": ["svg", 640, 360], "chimney-g": ["svg", 640, 360], "chimney-h": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-c": ["svg", 640, 400], "cyl-o": ["svg", 640, 400], "cyl-v": ["svg", 640, 400], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
+  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "blade-m": ["canvas", 640, 720], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "chimney-f": ["svg", 640, 360], "chimney-g": ["svg", 640, 360], "chimney-h": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-c": ["svg", 640, 400], "cyl-o": ["svg", 640, 400], "cyl-v": ["svg", 640, 400], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
   const FIG = {
     _defs: {}, _uid: 0, _ticks: [], _timer: null, _target: null,
     MAX_LIVE: 3,
@@ -249,6 +249,80 @@
     });
   });
 
+  /* ---------------- 02-m: the prismatic blade (phone twin) ---------------- */
+  /* Phone twin of 02. The same wireframe -- identical vertices, edges, and
+     the angle -- projected about twice the size (focal 360 vs 168) into the
+     portrait frame; the two corner labels re-set at 22px. Titleless, like
+     the desktop card. terminal.js picks it by rendered width. */
+  FIG._define("blade-m", "canvas", function (cv) {
+    const ctx = cv.getContext("2d");
+    const V = [], E = [];
+    const box = (x0,x1,y0,y1,z0,z1) => {
+      const n = V.length;
+      for (const x of [x0,x1]) for (const y of [y0,y1]) for (const z of [z0,z1]) V.push([x,y,z]);
+      [[0,1],[2,3],[4,5],[6,7],[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[3,7]]
+        .forEach(([a,b]) => E.push([n+a, n+b]));
+    };
+    // the blade: a tip, a mid facet-ring, and a square ricasso section
+    const tip = V.length; V.push([0, -1.95, 0]);
+    const ring = (y, w, d) => { const n = V.length;
+      V.push([-w, y, 0], [0, y, d], [w, y, 0], [0, y, -d]);
+      for (let k = 0; k < 4; k++) E.push([n + k, n + (k + 1) % 4]); return n; };
+    const m = ring(-0.7, 0.22, 0.06);
+    const r = ring(0.85, 0.3, 0.09);
+    for (let k = 0; k < 4; k++) { E.push([tip, m + k]); E.push([m + k, r + k]); }
+    box(-0.55, 0.55, 0.85, 1.0, -0.12, 0.12);   // guard
+    box(-0.1, 0.1, 1.0, 1.62, -0.1, 0.1);       // grip
+    box(-0.2, 0.2, 1.62, 1.8, -0.16, 0.16);     // pommel
+    const GLEAM = [[tip, m + 1], [m + 1, r + 1]]; // the facet that bends light
+    clock(t => {
+      const a = (t % 180) * Math.PI / 90, tilt = 0.5;
+      ctx.fillStyle = BG; ctx.fillRect(0, 0, cv.width, cv.height);
+      const pts = V.map(([x, y, z]) => {
+        [x, z] = rot(x, z, a);
+        [y, z] = rot(y, z, tilt * .4);
+        const s = 360 / (4.2 - z);
+        return [320 + x * s, 340 + y * s];
+      });
+      drawEdges(ctx, pts, E, PH, 10);
+      // THE ANGLE: once per turn the flat catches the light, and the blade
+      // does what prisms do on album covers.
+      const phase = ((a / Math.PI) % 2 + 2) % 2;          // 0..2, one turn
+      const k = Math.max(0, 1 - Math.abs(phase - 1.5) / 0.22); // the window
+      const kq = Math.round(k * 6) / 6;                    // quantized, of course
+      const hit = pts[m + 1];                              // the mid facet
+      if (kq > 0) {
+        // the incoming beam, white, from the dark
+        ctx.strokeStyle = PH_BRIGHT; ctx.lineWidth = 3;
+        ctx.shadowColor = PH_BRIGHT; ctx.shadowBlur = 14; ctx.globalAlpha = kq;
+        ctx.beginPath(); ctx.moveTo(0, hit[1] - 130); ctx.lineTo(hit[0], hit[1]); ctx.stroke();
+        // the fan: six bands, diverging to the right edge
+        const HUES = [0, 30, 55, 120, 210, 275];
+        HUES.forEach((h, i) => {
+          const y1 = hit[1] - 88 + i * 30, y2 = y1 + 30;
+          ctx.fillStyle = `hsl(${h} 95% 60%)`;
+          ctx.globalAlpha = kq * .5; ctx.shadowBlur = 0;
+          ctx.beginPath();
+          ctx.moveTo(hit[0], hit[1]);
+          ctx.lineTo(640, y1); ctx.lineTo(640, y2);
+          ctx.closePath(); ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+        drawEdges(ctx, pts, GLEAM, PH_BRIGHT, 18);
+      } else {
+        const hue = (t * 30) % 360; // between angles: the gleam idles
+        drawEdges(ctx, pts, GLEAM, `hsl(${hue} 90% 70%)`, 16);
+      }
+      ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+      ctx.fillStyle = PH_DIM; ctx.font = "22px ui-monospace, monospace";
+      ctx.textAlign = "left";
+      ctx.fillText("EDGE: BENDS LIGHT", 24, 688);
+      ctx.textAlign = "right";
+      ctx.fillText(kq > 0 ? "REFRACTION: THE ANGLE" : "HILT: SNAPS ONCE", 616, 688);
+      ctx.textAlign = "left";
+    });
+  });
+
   /* ---------------- SVG helpers (litho cards) ---------------- */
   const NS = "http://www.w3.org/2000/svg";
   // Leo Hunt's halftone: a dot-screen pattern per svg, used as the gel fill
@@ -457,6 +531,132 @@
       const c = CALLS[Math.floor(T / 22) % CALLS.length];
       if (T > 16) {
         callLead.setAttribute("points", `${c.at[0]},${c.at[1]} 440,86 448,86`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      const left = Math.max(0, 10 - Math.floor(Math.max(0, T - 20) / 9));
+      cells.forEach((r, i) => r.setAttribute("fill-opacity", i < left ? .8 : .08));
+      verdict.textContent = left === 0
+        ? "TRIBUTE ACCEPTED: PEACE, PURCHASED DEEP"
+        : left <= 3 ? "ADVICE: PRODUCE THE DATES" : "";
+    });
+  });
+
+  /* ---------------- 04-m: PTHALO-JACKAL (phone twin) ---------------- */
+  /* Phone twin of 04. The prowl is landscape by nature, so the animal is
+     carried over whole -- every coordinate inside SC is 04's scene space --
+     riding the full width at 1.42x across the middle of the portrait frame.
+     The apparatus moves out of the scene into big type: 26px title, the
+     class line under the rule, the cycling callout on its own line above
+     the scene (leader lines bridge via SX/SY), PATIENCE and the verdict
+     below. terminal.js picks it by rendered width. */
+  FIG._define("jackal-m", "svg", function (svg) {
+    el(svg, "rect", { x:0, y:0, width:640, height:720, fill: BG });
+    el(svg, "line", { x1:20, y1:44, x2:620, y2:44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const cls = label(svg, 20, 70, 16, PH_DIM);
+    cls.textContent = "FAUNA / DESERT / CAUTIOUS, CLEVER, HUNGRY";
+    const SX = x => x * 1.42 - 141, SY = y => y * 1.42 + 48;
+    const SC = el(svg, "g", { transform: "translate(-141 48) scale(1.42)" });
+    // the jackal, from the 2e reference: prowling LEFT, head low, ears
+    // swept back, grin bared, brush tail trailing -- and SWAYING as it goes
+    const JDOTS = stipple(svg, "dots-jackalm", PH, 1);
+    const BODY = [];
+    const B = (name, attrs) => { const n = el(SC, name, attrs); BODY.push(n); return n; };
+    // top contour: nose -> stop -> skull -> ears -> shoulder -> hip -> tail base
+    B("polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+      "108,154 120,146 138,140 150,134 158,130 " +
+      "162,128 152,84 172,110 " +          // ear one, swept back
+      "178,112 198,80 212,108 " +          // ear two
+      "232,116 268,112 306,120 352,124 392,130 412,142 416,150" });
+    // underside: jaw -> throat -> chest -> belly -> flank
+    B("polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+      "108,154 112,166 128,172 152,170 182,158 216,150 242,162 258,184 " +
+      "308,190 350,188 372,176 396,160" });
+    // the grin, zigzag, bared
+    B("polyline", { fill: "none", stroke: PH, "stroke-width": 1.2,
+      points: "114,160 119,167 124,159 129,167 134,159 139,166 144,161 149,167" });
+    // the eye: yellow, slanted, and frankly doing sums
+    B("polygon", { points: "138,138 147,133 156,138 147,142",
+      fill: "#ffd76a", stroke: "#ffd76a", "stroke-width": 1 });
+    B("circle", { cx: 149, cy: 138, r: 1.7, fill: BG });
+    // the coat: FUR now, not spikes -- fine paired strokes leaning back
+    // along the spine, longest over the neck and shoulder
+    const SPINE = [
+      [216, 121], [226, 118], [236, 115], [246, 113], [256, 112], [266, 112],
+      [278, 113], [290, 116], [302, 119], [314, 120], [326, 121], [338, 122],
+      [350, 124], [362, 125], [374, 127], [386, 129],
+    ];
+    SPINE.forEach(([x, y], i) => {
+      const len = i < 6 ? 10 - i : 5;
+      B("line", { x1: x, y1: y, x2: x - 4, y2: y - len, stroke: PH,
+        "stroke-width": 1 });
+      B("line", { x1: x + 5, y1: y + 1, x2: x + 1, y2: y - len + 2,
+        stroke: PH_DIM, "stroke-width": 1 });
+    });
+    // the brush tail, low and trailing, halftoned
+    B("polygon", { fill: JDOTS, stroke: PH, "stroke-width": 1.4, points:
+      "416,150 448,180 490,214 526,232 542,242 524,246 480,228 440,198 408,164" });
+    // the legs, WALKING and no longer sticks: a rounded THIGH stroke into a
+    // finer SHIN, far pair dimmed for depth, all on the gait clock
+    const LEGS = [
+      { ax: 250, ay: 178, ph: 0.0, near: 1, knee: -9 },   // near fore
+      { ax: 262, ay: 182, ph: 0.5, near: 0, knee: -9 },   // far fore
+      { ax: 370, ay: 178, ph: 0.55, near: 1, knee: 12 },  // near hind (hocked)
+      { ax: 396, ay: 160, ph: 0.05, near: 0, knee: 12 },  // far hind
+    ].map(cfg => Object.assign(cfg, {
+      thigh: el(SC, "polyline", { fill: "none", stroke: PH,
+        "stroke-width": cfg.near ? 5.5 : 3.6, "stroke-linecap": "round",
+        opacity: cfg.near ? 1 : .5 }),
+      shin: el(SC, "polyline", { fill: "none", stroke: PH,
+        "stroke-width": cfg.near ? 2.6 : 1.8, "stroke-linecap": "round",
+        opacity: cfg.near ? 1 : .5 }),
+    }));
+    // the ground: a band of ticks sliding rightward under the walk
+    const gGround = el(SC, "g", {});
+    for (let x = 44; x < 600; x += 16)
+      el(gGround, "line", { x1: x, y1: 276, x2: x + 7, y2: 276, stroke: PH_DIM });
+    // the cycling callout: big type on its own line, leader into the scene
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 620, 116, 18, PH);
+    call.setAttribute("text-anchor", "end");
+    const CALLS = [
+      { at: [148, 139], text: "EYES: DOING SUMS" },
+      { at: [310, 122], text: "COAT: PTHALO No.9" },
+      { at: [108, 154], text: "NOSE: FINDS MEAT AT TWO ROOMS" },
+      { at: [526, 232], text: "EXIT: ALWAYS PREPARED" },
+    ];
+    // the PATIENCE gauge
+    label(svg, 40, 546, 20, PH_DIM).textContent = "PATIENCE";
+    const cells = Array.from({ length: 10 }, (_, i) =>
+      el(svg, "rect", { x: 190 + i * 30, y: 530, width: 22, height: 18, fill: PH, "fill-opacity": .8 }));
+    const verdict = label(svg, 320, 616, 22, FUNGUS);
+    verdict.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 150;
+      doWipe(T);
+      typeOn(hdr, "PTHALO-JACKAL (PACK, VIGOROUS)", T, 4, 1.4);
+      // the prowl: the body BOBS and the shoulders ROLL over planted feet
+      const bob = [0, 1, 2, 1, 0, -1, -2, -1][t % 8] * .8;
+      const roll = ((t % 16) < 8 ? 1 : -1) * 0.7;
+      const TR = `translate(0 ${bob}) rotate(${roll} 270 170)`;
+      BODY.forEach(n => n.setAttribute("transform", TR));
+      // the walk: sixteen poses per stride, feet planted or swinging
+      LEGS.forEach(L => {
+        const th = ((t % 16) / 16 + L.ph) * Math.PI * 2;
+        const ay = L.ay + bob;
+        const fx = L.ax - 34 + 20 * Math.cos(th);
+        const fy = 274 - Math.max(0, Math.sin(th)) * 12;
+        const kx = (L.ax + fx) / 2 + L.knee, ky = (ay + fy) / 2 + 8;
+        L.thigh.setAttribute("points", `${L.ax},${ay} ${kx},${ky}`);
+        L.shin.setAttribute("points",
+          `${kx},${ky} ${fx},${fy} ${fx - 9},${fy + 2}`);
+      });
+      gGround.setAttribute("transform", `translate(${(t * 4) % 16}, 0)`);
+      const c = CALLS[Math.floor(T / 22) % CALLS.length];
+      if (T > 16) {
+        callLead.setAttribute("points",
+          `${SX(c.at[0])},${SY(c.at[1])} 548,94 556,94`);
         call.textContent = c.text;
       } else { call.textContent = ""; callLead.setAttribute("points", ""); }
       const left = Math.max(0, 10 - Math.floor(Math.max(0, T - 20) / 9));
