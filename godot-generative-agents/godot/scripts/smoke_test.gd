@@ -174,9 +174,9 @@ func _check_past_runs() -> int:
 
 
 # Returns 0 if the Simulation Setup browser (issue #733) is healthy, 1 if not.
-# With no backend URL set it renders the "no backend" state -- we only assert
-# the root script attached (parse gate, #639) and that it built its buttons
-# (Start + Back).
+# With no backend URL set it renders the "no backend" state -- we assert the root
+# script attached (parse gate, #639), that it built its buttons (Start + Back),
+# and (issue #734) that a "Re-run with this setup" seed pre-fills the form.
 func _check_simulation_setup() -> int:
 	var path := "res://scenes/simulation_setup.tscn"
 	var packed: PackedScene = load(path)
@@ -187,6 +187,9 @@ func _check_simulation_setup() -> int:
 	if inst == null:
 		printerr("  %s: could not instantiate scene" % path)
 		return 1
+	# Seed the scene the way "Re-run with this setup" does (#734): set it BEFORE
+	# add_child so _ready captures it. Runs as a scene, so LaunchConfig exists.
+	LaunchConfig.setup_seed = _rerun_seed()
 	add_child(inst)
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -196,13 +199,91 @@ func _check_simulation_setup() -> int:
 		await get_tree().process_frame
 		return 1
 	var buttons := _count_buttons(inst)
+	var seed_fails := _check_seed_prefill(inst)
 	inst.queue_free()
 	await get_tree().process_frame
 	if buttons <= 0:
 		printerr("  %s: built 0 buttons (broken _ready?)" % path)
 		return 1
-	print("  %s: OK (%d button(s))" % [path, buttons])
+	if seed_fails > 0:
+		return seed_fails
+	print("  %s: OK (%d button(s), seed pre-fill OK)" % [path, buttons])
 	return 0
+
+
+# A saved run's applied config block (#734): a sub-cast, a different brain, two
+# moved knobs, a different step budget.
+func _rerun_seed() -> Dictionary:
+	return {
+		"cast": ["diego"],
+		"brain": "scripted",
+		"sim_config": {
+			"game": {"agent": {"temperature": 1.1}},
+			"cognition": {"vision_r": 3},
+		},
+		"run": {"steps": 200, "tick_seconds": 0.1, "max_cost": null},
+	}
+
+
+# A GET /config-shaped reply whose server defaults differ from _rerun_seed(), so
+# the pre-fill is visible and rides the POST body as knob edits.
+func _fake_config() -> Dictionary:
+	return {
+		"status": "configurable",
+		"personas": [
+			{"id": "diego", "name": "Diego", "blurb": ""},
+			{"id": "tanaka", "name": "Tanaka", "blurb": ""},
+			{"id": "sofia", "name": "Sofia", "blurb": ""},
+		],
+		"cast": ["diego", "tanaka", "sofia"],
+		"knobs": {
+			"defaults": {},
+			"current": {
+				"game": {"agent": {"temperature": 0.7}},
+				"retrieval": {"alpha_recency": 1.0, "alpha_importance": 1.0, "alpha_relevance": 1.0},
+				"cognition": {"vision_r": 8, "conversation_cooldown_steps": 90, "conversation_max_exchanges": 6},
+			},
+		},
+		"brains": ["mock", "scripted", "llm"],
+		"run": {"brain": "mock", "steps": 1080, "tick_seconds": 0.1, "max_cost": null},
+	}
+
+
+# Drive the setup scene's config render + seed overlay (#734) and confirm the
+# saved run's cast/brain/knobs pre-filled. Returns the failure count. _ready
+# already captured + cleared the seed; _render_config applies it at its end.
+func _check_seed_prefill(inst: Node) -> int:
+	var fails := 0
+	if not LaunchConfig.setup_seed.is_empty():
+		printerr("  simulation_setup seed: _ready did not consume the seed")
+		fails += 1
+	inst._render_config(_fake_config())
+	if inst._checked_ids() != ["diego"]:
+		printerr("  simulation_setup seed: cast not pre-filled (%s)" % str(inst._checked_ids()))
+		fails += 1
+	if inst._brains[inst._brain_opt.selected] != "scripted":
+		printerr("  simulation_setup seed: brain not selected from seed")
+		fails += 1
+	var edits: Dictionary = inst._knob_edits()
+	if not is_equal_approx(edits.get("game", {}).get("agent", {}).get("temperature", -1.0), 1.1):
+		printerr("  simulation_setup seed: temperature edit missing")
+		fails += 1
+	if edits.get("cognition", {}).get("vision_r", -1) != 3:
+		printerr("  simulation_setup seed: vision_r edit missing")
+		fails += 1
+	if edits.get("retrieval", {}).has("alpha_recency"):
+		printerr("  simulation_setup seed: untouched knob leaked as an edit")
+		fails += 1
+	# Run controls pre-fill too, and the seeded tick (0.1) must survive the
+	# SpinBox step grid unchanged -- a coarse step would snap 0.1 to 0.15 and the
+	# re-run would tick ~50% slower than the saved run (#734 tick-snap regression).
+	if inst._steps_spin.value != 200:
+		printerr("  simulation_setup seed: steps not pre-filled (%s)" % str(inst._steps_spin.value))
+		fails += 1
+	if not is_equal_approx(inst._tick_spin.value, 0.1):
+		printerr("  simulation_setup seed: tick_seconds snapped to %s (want 0.1)" % str(inst._tick_spin.value))
+		fails += 1
+	return fails
 
 
 # Count the Button descendants of a node — the menu builds its choices in code, so

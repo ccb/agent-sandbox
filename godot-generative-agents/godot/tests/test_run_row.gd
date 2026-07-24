@@ -38,6 +38,36 @@ func _initialize() -> void:
 	_check(w.contains(" · soon · "), "unparseable created passes through")
 	_check(w.contains("$12.50"), "cost >= $10 uses two decimals")
 
+	# --- config summary + detail (#734) ---
+	var configured := {
+		"id": "run-x", "status": "finished", "model": "claude-haiku-4-5",
+		"created": "2026-07-24T10:00:00+00:00", "cost": 0.5, "steps": 10,
+		"config": {
+			"cast": ["diego", "tanaka", "sofia"], "brain": "llm",
+			"sim_config": {"game": {"agent": {"temperature": 0.7}}},
+			"run": {"steps": 10, "tick_seconds": 0.1, "max_cost": 5.0},
+		},
+	}
+	_check(RunRow.config_summary(configured) == "3 persona(s) · llm · temp 0.7",
+		"config summary reads cast size, brain, temperature")
+	var detail := RunRow.config_detail(configured)
+	_check(detail.contains("\"cast\"") and detail.contains("diego"),
+		"config detail is the pretty-printed block")
+	_check(typeof(JSON.parse_string(detail)) == TYPE_DICTIONARY,
+		"config detail is valid JSON")
+
+	# A run with no config block at all.
+	var bare := {"id": "run-y", "status": "finished"}
+	_check(RunRow.config_summary(bare) == "no config recorded",
+		"missing config summarised")
+	_check(RunRow.config_detail(bare).begins_with("No configuration"),
+		"missing config detail")
+
+	# cast == null -> "default cast"; sim_config == null -> temperature omitted.
+	var defcast := {"config": {"cast": null, "brain": "mock", "sim_config": null}}
+	_check(RunRow.config_summary(defcast) == "default cast · mock",
+		"null cast + null sim_config: default cast, no temp")
+
 	if _failures == 0:
 		print("test_run_row: all checks passed")
 	quit(1 if _failures > 0 else 0)

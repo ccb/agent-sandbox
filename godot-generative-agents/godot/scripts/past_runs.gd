@@ -16,6 +16,7 @@ extends Control
 
 const VIEWER_SCENE := "res://scenes/viewer.tscn"
 const MENU_SCENE := "res://scenes/main_menu.tscn"
+const SETUP_SCENE := "res://scenes/simulation_setup.tscn"
 const RunRow := preload("res://scripts/run_row.gd")
 const ReplaySave := preload("res://scripts/replay_save.gd")
 
@@ -25,8 +26,9 @@ const ERROR_COLOR := Color(0.82, 0.20, 0.15)
 var _url := ""
 var _token := ""
 var _http: HTTPRequest = null
-var _pending := ""       # "" idle | "list" | "open" | "export" | "resume" | "delete"
+var _pending := ""       # "" idle | "list" | "open" | "export" | "resume" | "delete" | "rerun"
 var _pending_id := ""
+var _pending_config := {}  # the saved config block for a pending "rerun" (#734)
 var _rows_box: VBoxContainer = null
 var _status: Label = null
 var _row_buttons: Array[Button] = []  # every row-action button, for _set_busy
@@ -155,7 +157,8 @@ func _render(runs: Array) -> void:
 
 
 func _build_row(entry: Dictionary) -> Control:
-	# One row: the formatted label on its own line, the four actions below it.
+	# One row: the summary label, the applied-config summary, the actions, and a
+	# collapsible full-config detail (#734), then a separator.
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 2)
 
@@ -163,6 +166,14 @@ func _build_row(entry: Dictionary) -> Control:
 	label.text = RunRow.label(entry)
 	label.add_theme_font_size_override("font_size", 14)
 	box.add_child(label)
+
+	# The run's applied config (#734): a compact summary always on the row, the
+	# full block behind a toggle. `config` rides each GET /runs row (backend E5).
+	var summary := Label.new()
+	summary.text = RunRow.config_summary(entry)
+	summary.add_theme_color_override("font_color", HINT_COLOR)
+	summary.add_theme_font_size_override("font_size", 12)
+	box.add_child(summary)
 
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 6)
@@ -178,6 +189,34 @@ func _build_row(entry: Dictionary) -> Control:
 		b.pressed.connect(func() -> void: _on_row_action(op, id))
 		actions.add_child(b)
 		_row_buttons.append(b)
+
+	# Config-bearing runs get "Re-run with this setup" + a detail toggle; a run
+	# no one configured shows only the "no config recorded" summary above.
+	if typeof(entry.get("config")) == TYPE_DICTIONARY:
+		var config: Dictionary = entry["config"]
+		var rerun := Button.new()
+		rerun.text = "Re-run"
+		rerun.focus_mode = Control.FOCUS_NONE
+		rerun.pressed.connect(func() -> void: _on_rerun_pressed(id, config))
+		actions.add_child(rerun)
+		_row_buttons.append(rerun)
+
+		var detail := Label.new()
+		detail.text = RunRow.config_detail(entry)
+		detail.add_theme_color_override("font_color", HINT_COLOR)
+		detail.add_theme_font_size_override("font_size", 12)
+		detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		detail.visible = false
+		var toggle := Button.new()
+		toggle.text = "Config ▾"
+		toggle.focus_mode = Control.FOCUS_NONE
+		# A local reveal, not a network action, so it stays clickable while a
+		# request is in flight (kept out of _row_buttons / _set_busy).
+		toggle.pressed.connect(func() -> void:
+			detail.visible = not detail.visible
+			toggle.text = "Config ▴" if detail.visible else "Config ▾")
+		actions.add_child(toggle)
+		box.add_child(detail)
 
 	var sep := HSeparator.new()
 	box.add_child(sep)
@@ -207,6 +246,25 @@ func _on_row_action(op: String, id: String) -> void:
 		_pending = ""
 		_set_busy(false)
 		_set_status("Couldn't start the %s request (error %d)." % [op, err], true)
+
+
+func _on_rerun_pressed(id: String, config: Dictionary) -> void:
+	# "Re-run with this setup" (#734): confirm the connected backend is a fresh,
+	# configurable one (paused at tick 0), then hand the saved config to the
+	# Simulation Setup scene as a seed. Same inline-error UX as the row actions:
+	# a non-configurable backend reports and stays put.
+	if _pending != "" or _switching or id == "":
+		return
+	_pending = "rerun"
+	_pending_id = id
+	_pending_config = config
+	_set_busy(true)
+	_set_status("Checking %s can start a fresh run…" % _url, false)
+	var err := _http.request("%s/config" % _url, _headers())
+	if err != OK:
+		_pending = ""
+		_set_busy(false)
+		_set_status("Couldn't start the re-run request (error %d)." % err, true)
 
 
 func _on_http_completed(
@@ -279,6 +337,23 @@ func _on_http_completed(
 				_set_status("Can't delete %s — it's the live run; stop it first." % id, true)
 			else:
 				_set_status("Delete failed (HTTP %d)." % code, true)
+		"rerun":
+			if code != 200:
+				_set_busy(false)
+				var why := "no config surface" if code == 404 else "HTTP %d" % code
+				_set_status("Can't re-run here — this backend has %s. Connect to a fresh paused backend." % why, true)
+				return
+			var data: Variant = JSON.parse_string(body.get_string_from_utf8())
+			if typeof(data) != TYPE_DICTIONARY \
+					or str((data as Dictionary).get("status", "")) != "configurable":
+				_set_busy(false)
+				_set_status("Can't re-run here — this backend already started its run. Connect to a fresh paused backend.", true)
+				return
+			# Configurable: seed the setup scene and hand off. The scene swap
+			# tears us down, so no need to clear _busy.
+			LaunchConfig.setup_seed = _pending_config
+			_switching = true
+			get_tree().change_scene_to_file.call_deferred(SETUP_SCENE)
 		_:
 			_set_busy(false)
 
