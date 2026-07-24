@@ -895,6 +895,14 @@
   </section>
 
   <section>
+    <div class="slate"><h2>20 — THE GLASS CENTIPEDE (phone)</h2><span class="kind">LITHO / PHONE TWIN</span></div>
+    <div class="screen">
+      <svg id="centipede-m" viewBox="0 0 640 720" aria-label="20 — THE GLASS CENTIPEDE (phone)"></svg>
+    </div>
+    <p class="spec">Phone twin of centipede: the fungal chimney-shaft, big.</p>
+  </section>
+
+  <section>
     <div class="slate"><h2>20-F &mdash; THE CHIMNEY, VACATED</h2><span class="kind">LITHO / STATE VARIANT</span></div>
     <div class="screen">
       <svg id="chimney-f" viewBox="0 0 640 360" aria-label="The fungal chimney, tenant out"></svg>
@@ -903,6 +911,14 @@
        middle of it. Plays when the centipede has been lured out (or dealt with) while
        the growth still stands. <span class="attach">Attaches: the Fungal Chimney,
        tenant elsewhere.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>20-F — THE CHIMNEY, VACATED (phone)</h2><span class="kind">LITHO / PHONE TWIN</span></div>
+    <div class="screen">
+      <svg id="chimney-f-m" viewBox="0 0 640 720" aria-label="20-F — THE CHIMNEY, VACATED (phone)"></svg>
+    </div>
+    <p class="spec">Phone twin of chimney-f: the fungal chimney-shaft, big.</p>
   </section>
 
   <section>
@@ -918,6 +934,14 @@
   </section>
 
   <section>
+    <div class="slate"><h2>20-G — THE CHIMNEY, BURNT AND TENANTED (phone)</h2><span class="kind">LITHO / PHONE TWIN</span></div>
+    <div class="screen">
+      <svg id="chimney-g-m" viewBox="0 0 640 720" aria-label="20-G — THE CHIMNEY, BURNT AND TENANTED (phone)"></svg>
+    </div>
+    <p class="spec">Phone twin of chimney-g: the fungal chimney-shaft, big.</p>
+  </section>
+
+  <section>
     <div class="slate"><h2>20-H &mdash; THE CHIMNEY, BURNT AND BARE</h2><span class="kind">LITHO / STATE VARIANT</span></div>
     <div class="screen">
       <svg id="chimney-h" viewBox="0 0 640 360" aria-label="The fungal chimney, burnt and empty"></svg>
@@ -926,6 +950,14 @@
        the draught, the prayers' glow still patient at the bottom. Black, bare, and
        breathable. <span class="attach">Attaches: the Fungal Chimney, growth dead,
        tenant gone.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>20-H — THE CHIMNEY, BURNT AND BARE (phone)</h2><span class="kind">LITHO / PHONE TWIN</span></div>
+    <div class="screen">
+      <svg id="chimney-h-m" viewBox="0 0 640 720" aria-label="20-H — THE CHIMNEY, BURNT AND BARE (phone)"></svg>
+    </div>
+    <p class="spec">Phone twin of chimney-h: the fungal chimney-shaft, big.</p>
   </section>
 
   <section>
@@ -1517,6 +1549,76 @@
       (cfg.callouts || []).forEach((c, i) => typeOn(calls[i], c, T, 30 + i * 18, 1.5));
       typeOn(foot1, fL1, T, 150, 1.6);
       typeOn(foot2, fL2, T, 150 + fL1.length, 1.6);
+    });
+  }
+
+  // the fungal chimney-shaft on its side, phone layout -- shared by the
+  // centipede / chimney-*-m twins. cfg = { key, header, charred, centipede, gauge, footer }
+  function chimCardM(svg, cfg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const RDOTS = stipple(svg, "dots-" + cfg.key, PH_DIM, 1.1);
+    const TCOL = cfg.charred ? "#7a4a24" : FUNGUS;
+    // the rock above and below, the shaft between
+    el(svg, "rect", { x: 0, y: 150, width: 640, height: 72, fill: RDOTS, opacity: .5 });
+    el(svg, "rect", { x: 0, y: 428, width: 640, height: 72, fill: RDOTS, opacity: .5 });
+    el(svg, "line", { x1: 0, y1: 222, x2: 640, y2: 222, stroke: PH, "stroke-width": 2 });
+    el(svg, "line", { x1: 0, y1: 428, x2: 640, y2: 428, stroke: PH, "stroke-width": 2 });
+    // the prayer-glow at the far end
+    el(svg, "circle", { cx: 596, cy: 325, r: 46, fill: "none", stroke: PH_BRIGHT, opacity: .4 });
+    el(svg, "circle", { cx: 596, cy: 325, r: 26, fill: "none", stroke: PH_BRIGHT, opacity: .65 });
+    const tends = [], motes = [];
+    for (let i = 0; i < 7; i++) {
+      const x = 60 + i * 78;
+      tends.push({ q: el(svg, "polyline", { fill: "none", stroke: TCOL, "stroke-width": 2.4 }), x });
+      if (!cfg.charred) motes.push({ q: el(svg, "circle", { r: 2.4, fill: FUNGUS }), x, ph: i * 30 });
+    }
+    let cent = null;
+    if (cfg.centipede) {
+      cent = el(svg, "g", {});
+      for (let s = 0; s < 12; s++)
+        el(cent, "polygon", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.6, opacity: .85,
+          points: `${s * 22 - 8},325 ${s * 22},312 ${s * 22 + 8},325 ${s * 22},338` });
+    }
+    let cells = null;
+    if (cfg.gauge) {
+      label(svg, 40, 556, 20, PH_DIM).textContent = cfg.gauge;
+      cells = Array.from({ length: 10 }, (_, i) => el(svg, "rect", { x: 250 + i * 34, y: 540,
+        width: 26, height: 20, fill: PH, "fill-opacity": .8 }));
+    }
+    const fw = cfg.footer, cut = fw.length > 32 ? fw.lastIndexOf(" ", 32) : -1;
+    const fL1 = cut > 0 ? fw.slice(0, cut) : fw, fL2 = cut > 0 ? fw.slice(cut + 1) : "";
+    const foot1 = label(svg, 320, 636, 22, FUNGUS); foot1.setAttribute("text-anchor", "middle");
+    const foot2 = label(svg, 320, 668, 22, FUNGUS); foot2.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 200;
+      doWipe(T);
+      typeOn(hdr, cfg.header, T, 4, 1.2);
+      tends.forEach((td, i) => {
+        const pts = [];
+        for (let q = 0; q <= 5; q++) {
+          const sway = cfg.charred ? Math.sin(t * .05 + i) * 2 : Math.sin(t * .12 + q + i) * 8;
+          pts.push([td.x + sway, 222 + q * 41.2]);
+        }
+        td.q.setAttribute("points", pts.map(p => p.join(",")).join(" "));
+      });
+      motes.forEach(m => {
+        const k = (t * 2 + m.ph) % 90;
+        m.q.setAttribute("cx", m.x + Math.sin((t + m.ph) * .2) * 6);
+        m.q.setAttribute("cy", 428 - k * 2.3); m.q.setAttribute("opacity", k > 76 ? 0 : .5);
+      });
+      if (cent) {
+        cent.setAttribute("transform", `translate(${((t * 26) % 900) - 260} 0)`);
+        cent.setAttribute("opacity", t % 40 < 6 ? .2 : 1);
+      }
+      if (cells) {
+        const on = 3 + Math.floor(3 * (1 + Math.sin(t * .1)));
+        cells.forEach((r, i) => r.setAttribute("fill-opacity", i < on ? .8 : .1));
+      }
+      typeOn(foot1, fL1, T, 130, 1.6);
+      typeOn(foot2, fL2, T, 130 + fL1.length, 1.6);
     });
   }
 
@@ -8255,6 +8357,30 @@
   {
     const svg = document.getElementById("jar-human-m");
     jarCardM(svg, { key: "jar-human-m", head: "HUMAN", header: "THE HUMAN JAR (HIS OWN FACE, YOUNG)", callouts: ["THE FACE: HIS OWN, YOUNG. NOT SMILING", "CONTENTS: THE LIVER. GRUDGES INTACT", "THE LIDS: CARVED SHUT. CHECK ANYWAY"], footer: "THE ONLY JAR WITH ITS OWNER'S FACE. IT ISN'T FLATTERED." });
+  }
+
+  /* ---------------- centipede-m (phone twin) ---------------- */
+  {
+    const svg = document.getElementById("centipede-m");
+    chimCardM(svg, { key: "centipede-m", header: "THE GLASS CENTIPEDE", charred: false, centipede: true, gauge: "VISIBILITY", footer: "FOUR FEET OF GLASS. FASTER THAN THE EYE WANTS TO ALLOW." });
+  }
+
+  /* ---------------- chimney-f-m (phone twin) ---------------- */
+  {
+    const svg = document.getElementById("chimney-f-m");
+    chimCardM(svg, { key: "chimney-f-m", header: "THE FUNGAL CHIMNEY", charred: false, centipede: false, gauge: null, footer: "SOMETHING LIVED HERE. IT FOLLOWED YOU OUT." });
+  }
+
+  /* ---------------- chimney-g-m (phone twin) ---------------- */
+  {
+    const svg = document.getElementById("chimney-g-m");
+    chimCardM(svg, { key: "chimney-g-m", header: "THE FUNGAL CHIMNEY, BURNT", charred: true, centipede: true, gauge: "VISIBILITY", footer: "THE GROWTH BURNED. THE GLASS DID NOT." });
+  }
+
+  /* ---------------- chimney-h-m (phone twin) ---------------- */
+  {
+    const svg = document.getElementById("chimney-h-m");
+    chimCardM(svg, { key: "chimney-h-m", header: "THE FUNGAL CHIMNEY, BURNT", charred: true, centipede: false, gauge: null, footer: "BLACK, BARE, AND BREATHABLE." });
   }
 
 })();

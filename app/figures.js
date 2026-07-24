@@ -10,7 +10,7 @@
    and disconnected nodes drop off the clock automatically. */
 (() => {
   "use strict";
-  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "bats-c-m": ["svg", 640, 720], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "canopic-c-m": ["svg", 640, 720], "centipede": ["svg", 640, 360], "chimney-f": ["svg", 640, 360], "chimney-g": ["svg", 640, 360], "chimney-h": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-a-m": ["svg", 640, 720], "cyl-c": ["svg", 640, 400], "cyl-c-m": ["svg", 640, 720], "cyl-o": ["svg", 640, 400], "cyl-o-m": ["svg", 640, 720], "cyl-v": ["svg", 640, 400], "cyl-v-m": ["svg", 640, 720], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "cylinders-b-m": ["svg", 640, 720], "cylinders-m": ["svg", 640, 720], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-baboon-m": ["svg", 640, 720], "jar-falcon": ["svg", 640, 300], "jar-falcon-m": ["svg", 640, 720], "jar-human": ["svg", 640, 300], "jar-human-m": ["svg", 640, 720], "jar-jackal": ["svg", 640, 300], "jar-jackal-m": ["svg", 640, 720], "jar-mantis": ["svg", 640, 300], "jar-mantis-m": ["svg", 640, 720], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
+  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "bats-c-m": ["svg", 640, 720], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "canopic-c-m": ["svg", 640, 720], "centipede": ["svg", 640, 360], "centipede-m": ["svg", 640, 720], "chimney-f": ["svg", 640, 360], "chimney-f-m": ["svg", 640, 720], "chimney-g": ["svg", 640, 360], "chimney-g-m": ["svg", 640, 720], "chimney-h": ["svg", 640, 360], "chimney-h-m": ["svg", 640, 720], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-a-m": ["svg", 640, 720], "cyl-c": ["svg", 640, 400], "cyl-c-m": ["svg", 640, 720], "cyl-o": ["svg", 640, 400], "cyl-o-m": ["svg", 640, 720], "cyl-v": ["svg", 640, 400], "cyl-v-m": ["svg", 640, 720], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "cylinders-b-m": ["svg", 640, 720], "cylinders-m": ["svg", 640, 720], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-baboon-m": ["svg", 640, 720], "jar-falcon": ["svg", 640, 300], "jar-falcon-m": ["svg", 640, 720], "jar-human": ["svg", 640, 300], "jar-human-m": ["svg", 640, 720], "jar-jackal": ["svg", 640, 300], "jar-jackal-m": ["svg", 640, 720], "jar-mantis": ["svg", 640, 300], "jar-mantis-m": ["svg", 640, 720], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
   const FIG = {
     _defs: {}, _uid: 0, _ticks: [], _timer: null, _target: null,
     MAX_LIVE: 3,
@@ -405,6 +405,76 @@
       (cfg.callouts || []).forEach((c, i) => typeOn(calls[i], c, T, 30 + i * 18, 1.5));
       typeOn(foot1, fL1, T, 150, 1.6);
       typeOn(foot2, fL2, T, 150 + fL1.length, 1.6);
+    });
+  }
+
+  // the fungal chimney-shaft on its side, phone layout -- shared by the
+  // centipede / chimney-*-m twins. cfg = { key, header, charred, centipede, gauge, footer }
+  function chimCardM(svg, cfg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const RDOTS = stipple(svg, "dots-" + cfg.key, PH_DIM, 1.1);
+    const TCOL = cfg.charred ? "#7a4a24" : FUNGUS;
+    // the rock above and below, the shaft between
+    el(svg, "rect", { x: 0, y: 150, width: 640, height: 72, fill: RDOTS, opacity: .5 });
+    el(svg, "rect", { x: 0, y: 428, width: 640, height: 72, fill: RDOTS, opacity: .5 });
+    el(svg, "line", { x1: 0, y1: 222, x2: 640, y2: 222, stroke: PH, "stroke-width": 2 });
+    el(svg, "line", { x1: 0, y1: 428, x2: 640, y2: 428, stroke: PH, "stroke-width": 2 });
+    // the prayer-glow at the far end
+    el(svg, "circle", { cx: 596, cy: 325, r: 46, fill: "none", stroke: PH_BRIGHT, opacity: .4 });
+    el(svg, "circle", { cx: 596, cy: 325, r: 26, fill: "none", stroke: PH_BRIGHT, opacity: .65 });
+    const tends = [], motes = [];
+    for (let i = 0; i < 7; i++) {
+      const x = 60 + i * 78;
+      tends.push({ q: el(svg, "polyline", { fill: "none", stroke: TCOL, "stroke-width": 2.4 }), x });
+      if (!cfg.charred) motes.push({ q: el(svg, "circle", { r: 2.4, fill: FUNGUS }), x, ph: i * 30 });
+    }
+    let cent = null;
+    if (cfg.centipede) {
+      cent = el(svg, "g", {});
+      for (let s = 0; s < 12; s++)
+        el(cent, "polygon", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.6, opacity: .85,
+          points: `${s * 22 - 8},325 ${s * 22},312 ${s * 22 + 8},325 ${s * 22},338` });
+    }
+    let cells = null;
+    if (cfg.gauge) {
+      label(svg, 40, 556, 20, PH_DIM).textContent = cfg.gauge;
+      cells = Array.from({ length: 10 }, (_, i) => el(svg, "rect", { x: 250 + i * 34, y: 540,
+        width: 26, height: 20, fill: PH, "fill-opacity": .8 }));
+    }
+    const fw = cfg.footer, cut = fw.length > 32 ? fw.lastIndexOf(" ", 32) : -1;
+    const fL1 = cut > 0 ? fw.slice(0, cut) : fw, fL2 = cut > 0 ? fw.slice(cut + 1) : "";
+    const foot1 = label(svg, 320, 636, 22, FUNGUS); foot1.setAttribute("text-anchor", "middle");
+    const foot2 = label(svg, 320, 668, 22, FUNGUS); foot2.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 200;
+      doWipe(T);
+      typeOn(hdr, cfg.header, T, 4, 1.2);
+      tends.forEach((td, i) => {
+        const pts = [];
+        for (let q = 0; q <= 5; q++) {
+          const sway = cfg.charred ? Math.sin(t * .05 + i) * 2 : Math.sin(t * .12 + q + i) * 8;
+          pts.push([td.x + sway, 222 + q * 41.2]);
+        }
+        td.q.setAttribute("points", pts.map(p => p.join(",")).join(" "));
+      });
+      motes.forEach(m => {
+        const k = (t * 2 + m.ph) % 90;
+        m.q.setAttribute("cx", m.x + Math.sin((t + m.ph) * .2) * 6);
+        m.q.setAttribute("cy", 428 - k * 2.3); m.q.setAttribute("opacity", k > 76 ? 0 : .5);
+      });
+      if (cent) {
+        cent.setAttribute("transform", `translate(${((t * 26) % 900) - 260} 0)`);
+        cent.setAttribute("opacity", t % 40 < 6 ? .2 : 1);
+      }
+      if (cells) {
+        const on = 3 + Math.floor(3 * (1 + Math.sin(t * .1)));
+        cells.forEach((r, i) => r.setAttribute("fill-opacity", i < on ? .8 : .1));
+      }
+      typeOn(foot1, fL1, T, 130, 1.6);
+      typeOn(foot2, fL2, T, 130 + fL1.length, 1.6);
     });
   }
 
@@ -7070,6 +7140,26 @@
   /* ---------------- jar-human-m (phone twin) ---------------- */
   FIG._define("jar-human-m", "svg", function (svg) {
     jarCardM(svg, { key: "jar-human-m", head: "HUMAN", header: "THE HUMAN JAR (HIS OWN FACE, YOUNG)", callouts: ["THE FACE: HIS OWN, YOUNG. NOT SMILING", "CONTENTS: THE LIVER. GRUDGES INTACT", "THE LIDS: CARVED SHUT. CHECK ANYWAY"], footer: "THE ONLY JAR WITH ITS OWNER'S FACE. IT ISN'T FLATTERED." });
+  });
+
+  /* ---------------- centipede-m (phone twin) ---------------- */
+  FIG._define("centipede-m", "svg", function (svg) {
+    chimCardM(svg, { key: "centipede-m", header: "THE GLASS CENTIPEDE", charred: false, centipede: true, gauge: "VISIBILITY", footer: "FOUR FEET OF GLASS. FASTER THAN THE EYE WANTS TO ALLOW." });
+  });
+
+  /* ---------------- chimney-f-m (phone twin) ---------------- */
+  FIG._define("chimney-f-m", "svg", function (svg) {
+    chimCardM(svg, { key: "chimney-f-m", header: "THE FUNGAL CHIMNEY", charred: false, centipede: false, gauge: null, footer: "SOMETHING LIVED HERE. IT FOLLOWED YOU OUT." });
+  });
+
+  /* ---------------- chimney-g-m (phone twin) ---------------- */
+  FIG._define("chimney-g-m", "svg", function (svg) {
+    chimCardM(svg, { key: "chimney-g-m", header: "THE FUNGAL CHIMNEY, BURNT", charred: true, centipede: true, gauge: "VISIBILITY", footer: "THE GROWTH BURNED. THE GLASS DID NOT." });
+  });
+
+  /* ---------------- chimney-h-m (phone twin) ---------------- */
+  FIG._define("chimney-h-m", "svg", function (svg) {
+    chimCardM(svg, { key: "chimney-h-m", header: "THE FUNGAL CHIMNEY, BURNT", charred: true, centipede: false, gauge: null, footer: "BLACK, BARE, AND BREATHABLE." });
   });
 
 })();
