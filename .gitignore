@@ -170,13 +170,14 @@ cython_debug/
 !godot-generative-agents/tests/fixtures/wishes_sample.jsonl
 # ...and #699's committed golden-test fixture for most-common-actions aggregator.
 !godot-generative-agents/tests/fixtures/events_sample.jsonl
+# ...and the RunStore's committed runs: frames/events are the replay payload, so a
+# tracked run is useless without them (the Past-runs browser reads frames.jsonl).
+!godot-generative-agents/runs/**/*.jsonl
 
 # Generated per-checkout / per-run — regenerable, never commit.
 godot-generative-agents/godot/maps/penn_replay.json
 # The boil-water demo replay (#592), baked on demand with --scenario boil.
 godot-generative-agents/godot/maps/penn_replay_boil.json
-# RunStore artifacts (#304): per-run frames + sim.db.
-godot-generative-agents/runs/
 godot-generative-agents/tools/geo/out/upenn_core_ville_addresses.json
 godot-generative-agents/tools/geo/out/upenn_furniture_debug.tmj
 

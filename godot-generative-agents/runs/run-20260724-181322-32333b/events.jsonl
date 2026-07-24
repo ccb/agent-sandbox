@@ -1,0 +1,5 @@
+{"turn":0,"actor":"Diego Torres","action":"go","summary":"travel to Meyerson Hall","payload":{"location":"Penn campus","dest":"Meyerson Hall","dir":"to meyerson hall","heard_radius":0}}
+{"turn":0,"actor":"Professor Tanaka","action":"go","summary":"travel to Irvine Auditorium","payload":{"location":"Penn campus","dest":"Irvine Auditorium","dir":"to irvine auditorium","heard_radius":0}}
+{"turn":0,"actor":"Sofia Ramirez","action":"go","summary":"travel to Van Pelt — Kamin Gallery","payload":{"location":"Penn campus","dest":"Van Pelt — Kamin Gallery","dir":"to van pelt — kamin gallery","heard_radius":0}}
+{"turn":27,"actor":"Diego Torres","action":"perform","summary":"perform working on a studio model","payload":{"location":"Meyerson Hall","dest":"Meyerson Hall","dir":null,"heard_radius":0}}
+{"turn":71,"actor":"Professor Tanaka","action":"perform","summary":"perform setting up for an afternoon guest lecture","payload":{"location":"Irvine Auditorium","dest":"Irvine Auditorium","dir":null,"heard_radius":0}}

@@ -1290,7 +1290,7 @@ back out of the store.
 
 `backend/run_store.py` — SQLite + JSONL, zero extra dependencies:
 
-    godot-generative-agents/runs/        # git-ignored
+    godot-generative-agents/runs/        # tracked — your local runs land here too
       sim.db                             # runs + memories tables
       <run_id>/manifest.json             # the run's meta() blob
       <run_id>/frames.jsonl              # line N = the step-N frame (#305 shape)
