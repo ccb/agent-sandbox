@@ -10,7 +10,7 @@
    and disconnected nodes drop off the clock automatically. */
 (() => {
   "use strict";
-  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "bats-c-m": ["svg", 640, 720], "bats-m": ["canvas", 640, 720], "blade": ["canvas", 640, 360], "blade-m": ["canvas", 640, 720], "boots": ["svg", 640, 360], "boots-m": ["svg", 640, 720], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "chimney-f": ["svg", 640, 360], "chimney-g": ["svg", 640, 360], "chimney-h": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-a-m": ["svg", 640, 720], "cyl-c": ["svg", 640, 400], "cyl-c-m": ["svg", 640, 720], "cyl-o": ["svg", 640, 400], "cyl-o-m": ["svg", 640, 720], "cyl-v": ["svg", 640, 400], "cyl-v-m": ["svg", 640, 720], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "cylinders-b-m": ["svg", 640, 720], "cylinders-m": ["svg", 640, 720], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flask-m": ["svg", 640, 720], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "resp-m": ["svg", 640, 720], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
+  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "bats-c-m": ["svg", 640, 720], "bats-m": ["canvas", 640, 720], "blade": ["canvas", 640, 360], "blade-m": ["canvas", 640, 720], "boots": ["svg", 640, 360], "boots-m": ["svg", 640, 720], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "chimney-f": ["svg", 640, 360], "chimney-g": ["svg", 640, 360], "chimney-h": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-a-m": ["svg", 640, 720], "cyl-c": ["svg", 640, 400], "cyl-c-m": ["svg", 640, 720], "cyl-o": ["svg", 640, 400], "cyl-o-m": ["svg", 640, 720], "cyl-v": ["svg", 640, 400], "cyl-v-m": ["svg", 640, 720], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "cylinders-b-m": ["svg", 640, 720], "cylinders-m": ["svg", 640, 720], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flask-m": ["svg", 640, 720], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-b-m": ["canvas", 640, 720], "glowstone-c": ["canvas", 640, 300], "glowstone-c-m": ["canvas", 640, 720], "glowstone-m": ["canvas", 640, 720], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "resp-m": ["svg", 640, 720], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "silas-m": ["svg", 640, 720], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
   const FIG = {
     _defs: {}, _uid: 0, _ticks: [], _timer: null, _target: null,
     MAX_LIVE: 3,
@@ -1718,6 +1718,70 @@
     clock(t => { if ((t + 40) % 48 === 0) lit = !lit; draw(t); });
   });
 
+  /* ---------------- 08-m: the glowstone (phone twin, interactive) ---------------- */
+  /* Phone twin of 08. The shard, halo, and switch draw verbatim inside a
+     save/translate/scale(2) transform mid-frame; the commentary, DOUSED/LIT,
+     ATTENTION ledger, and prompt re-set at phone size outside it. Still
+     interactive: click to throw the switch. terminal.js picks it by width. */
+  FIG._define("glowstone-m", "canvas", function (cv) {
+    const ctx = cv.getContext("2d");
+    const YELLOW = "#ffd76a";
+    // the shard: an irregular faceted lump, hand-plotted
+    const OUTLINE = [[250,128],[286,84],[338,72],[386,96],[402,142],[376,184],[318,198],[268,176]];
+    const FACETS = [[1,6],[2,5],[0,4],[3,7]];
+    let lit = false, k = 0, lastT = 0;
+    function draw(t) {
+      lastT = t;
+      // the glow steps toward its target, one increment per tick
+      k = Math.max(0, Math.min(6, k + (lit ? 1 : -1)));
+      ctx.fillStyle = BG; ctx.fillRect(0, 0, cv.width, cv.height);
+      const kk = k / 6;
+      ctx.save(); ctx.translate(-328, -6); ctx.scale(2, 2);
+      if (kk > 0) { // the LIGHT: a radial wash of warm yellow, then the rings
+        const halo = ctx.createRadialGradient(324, 138, 8, 324, 138, 84 + k * 26);
+        halo.addColorStop(0, `rgba(255,215,106,${.30 * kk})`);
+        halo.addColorStop(.45, `rgba(255,215,106,${.13 * kk})`);
+        halo.addColorStop(1, "rgba(255,215,106,0)");
+        ctx.fillStyle = halo;
+        ctx.beginPath(); ctx.arc(324, 138, 84 + k * 26, 0, Math.PI * 2); ctx.fill();
+        for (let r = 1; r <= k; r++) { // concentric rings, quantized, fading out
+          ctx.strokeStyle = YELLOW; ctx.globalAlpha = .2 * kk * (1 - r / 8);
+          ctx.beginPath(); ctx.arc(324, 138, 60 + r * 22, 0, Math.PI * 2); ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      }
+      const mix = kk > .5 ? YELLOW : kk > 0 ? PH : PH_DIM;
+      ctx.strokeStyle = mix; ctx.lineWidth = 1.6;
+      ctx.shadowColor = mix; ctx.shadowBlur = (4 + k * 4) * 2;
+      ctx.beginPath();
+      OUTLINE.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+      ctx.closePath(); ctx.stroke();
+      FACETS.forEach(([a, b]) => { ctx.beginPath();
+        ctx.moveTo(OUTLINE[a][0], OUTLINE[a][1]); ctx.lineTo(OUTLINE[b][0], OUTLINE[b][1]); ctx.stroke(); });
+      // the switch
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = PH; ctx.strokeRect(270, 238, 100, 22);
+      ctx.fillStyle = lit ? YELLOW : PH_DIM;
+      ctx.fillRect(lit ? 322 : 274, 242, 44, 14);
+      ctx.restore();
+      // the type, re-set at phone size
+      ctx.fillStyle = PH_DIM; ctx.font = "18px ui-monospace, monospace";
+      ctx.textAlign = "right"; ctx.fillText("DOUSED", 196, 500);
+      ctx.textAlign = "left"; ctx.fillText("LIT", 420, 500);
+      ctx.font = "20px ui-monospace, monospace";
+      // the ledger: attention, accruing
+      const att = Math.round(kk * 10);
+      ctx.fillText("ATTENTION: " + "|".repeat(att) + ".".repeat(10 - att), 24, 620);
+      ctx.textAlign = "right";
+      ctx.fillText(lit ? "> LIGHT GLOWSTONE" : "> DOUSE GLOWSTONE", 616, 620);
+      ctx.textAlign = "left";
+      ctx.fillStyle = kk === 1 ? YELLOW : PH_DIM;
+      ctx.fillText(kk === 1 ? "LIGHT IS DEAR; ATTENTION DEARER" : "", 24, 40);
+    }
+    cv.addEventListener("pointerdown", () => { lit = !lit; if (reduced) draw(lastT + 1); });
+    clock(t => { if ((t + 40) % 48 === 0) lit = !lit; draw(t); });
+  });
+
   /* ---------------- 08-B: the glowstone, off ---------------- */
   FIG._define("glowstone-b", "canvas", function (cv) {
     const ctx = cv.getContext("2d");
@@ -1772,6 +1836,65 @@
     });
   });
 
+  /* ---------------- 08-B-m: the glowstone, off (phone twin) ---------------- */
+  /* Phone twin of 08-B: the sleeping shard, glints, and tapping chevron at
+     2x mid-frame; commentary and the tutorial prompt re-set at phone size. */
+  FIG._define("glowstone-b-m", "canvas", function (cv) {
+    const ctx = cv.getContext("2d");
+    const OUTLINE = [[250,128],[286,84],[338,72],[386,96],[402,142],[376,184],[318,198],[268,176]];
+    const FACETS = [[1,6],[2,5],[0,4],[3,7]];
+    const QUIPS = [
+      "COLD LAZULITE, FACTORY SET TO OFF.",
+      "ONE MOVING PART. NOBODY HAS MOVED IT.",
+      "A STONE THAT TAKES INSTRUCTION. RARE.",
+    ];
+    clock(t => {
+      ctx.fillStyle = BG; ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.save(); ctx.translate(-328, -6); ctx.scale(2, 2);
+      // the shard, asleep
+      ctx.strokeStyle = PH_DIM; ctx.lineWidth = 1.6;
+      ctx.shadowColor = PH_DIM; ctx.shadowBlur = 6;
+      ctx.beginPath();
+      OUTLINE.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+      ctx.closePath(); ctx.stroke();
+      FACETS.forEach(([a, b]) => { ctx.beginPath();
+        ctx.moveTo(OUTLINE[a][0], OUTLINE[a][1]); ctx.lineTo(OUTLINE[b][0], OUTLINE[b][1]); ctx.stroke(); });
+      // once in a while one facet glints -- proof of life, not light
+      if (Math.floor(t / 3) % 20 === 0) {
+        const [a, b] = FACETS[Math.floor(t / 60) % FACETS.length];
+        ctx.strokeStyle = PH; ctx.shadowColor = PH; ctx.shadowBlur = 12;
+        ctx.beginPath(); ctx.moveTo(OUTLINE[a][0], OUTLINE[a][1]);
+        ctx.lineTo(OUTLINE[b][0], OUTLINE[b][1]); ctx.stroke();
+      }
+      ctx.shadowBlur = 0;
+      // the amenity
+      ctx.strokeStyle = PH; ctx.strokeRect(270, 238, 100, 22);
+      ctx.fillStyle = PH_DIM; ctx.fillRect(274, 242, 44, 14);
+      // the chevron, tapping on the glass above the switch
+      const bob = Math.floor(t / 4) % 2 ? 2 : 0;
+      ctx.fillStyle = PH;
+      ctx.beginPath();
+      ctx.moveTo(313, 220 + bob); ctx.lineTo(327, 220 + bob); ctx.lineTo(320, 230 + bob);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+      // the type, re-set at phone size
+      ctx.font = "18px ui-monospace, monospace";
+      ctx.fillStyle = PH_BRIGHT;
+      ctx.textAlign = "right"; ctx.fillText("DOUSED", 196, 500);
+      ctx.fillStyle = PH_DIM;
+      ctx.textAlign = "left"; ctx.fillText("LIT", 420, 500);
+      ctx.font = "20px ui-monospace, monospace";
+      // the dry commentary
+      ctx.fillText(QUIPS[Math.floor(t / 40) % QUIPS.length], 24, 40);
+      ctx.fillText("ATTENTION: ..........", 24, 620);
+      // the prompt: the whole point of the card
+      const cur = Math.floor(t / 5) % 2 ? "_" : " ";
+      ctx.textAlign = "right"; ctx.fillStyle = PH_BRIGHT;
+      ctx.fillText("> LIGHT GLOWSTONE" + cur, 616, 620);
+      ctx.textAlign = "left";
+    });
+  });
+
   /* ---------------- 08-C: the glowstone, lit ---------------- */
   FIG._define("glowstone-c", "canvas", function (cv) {
     const ctx = cv.getContext("2d");
@@ -1819,6 +1942,62 @@
       ctx.textAlign = "left";
       ctx.fillStyle = YELLOW;
       ctx.fillText("LIGHT IS DEAR; ATTENTION DEARER", 18, 24);
+    });
+  });
+
+  /* ---------------- 08-C-m: the glowstone, lit (phone twin) ---------------- */
+  /* Phone twin of 08-C: the burn breathing at 2x mid-frame; the running
+     ledger and the standing advice re-set at phone size. */
+  FIG._define("glowstone-c-m", "canvas", function (cv) {
+    const ctx = cv.getContext("2d");
+    const YELLOW = "#ffd76a";
+    const OUTLINE = [[250,128],[286,84],[338,72],[386,96],[402,142],[376,184],[318,198],[268,176]];
+    const FACETS = [[1,6],[2,5],[0,4],[3,7]];
+    clock(t => {
+      ctx.fillStyle = BG; ctx.fillRect(0, 0, cv.width, cv.height);
+      const k = 5 + (Math.floor(t / 8) % 2);              // the burn breathes
+      const kk = k / 6;
+      ctx.save(); ctx.translate(-328, -6); ctx.scale(2, 2);
+      const halo = ctx.createRadialGradient(324, 138, 8, 324, 138, 84 + k * 26);
+      halo.addColorStop(0, `rgba(255,215,106,${.30 * kk})`);
+      halo.addColorStop(.45, `rgba(255,215,106,${.13 * kk})`);
+      halo.addColorStop(1, "rgba(255,215,106,0)");
+      ctx.fillStyle = halo;
+      ctx.beginPath(); ctx.arc(324, 138, 84 + k * 26, 0, Math.PI * 2); ctx.fill();
+      for (let r = 1; r <= k; r++) {
+        ctx.strokeStyle = YELLOW; ctx.globalAlpha = .2 * kk * (1 - r / 8);
+        ctx.beginPath(); ctx.arc(324, 138, 60 + r * 22, 0, Math.PI * 2); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = YELLOW; ctx.lineWidth = 1.6;
+      ctx.shadowColor = YELLOW; ctx.shadowBlur = (4 + k * 4) * 2;
+      ctx.beginPath();
+      OUTLINE.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+      ctx.closePath(); ctx.stroke();
+      FACETS.forEach(([a, b]) => { ctx.beginPath();
+        ctx.moveTo(OUTLINE[a][0], OUTLINE[a][1]); ctx.lineTo(OUTLINE[b][0], OUTLINE[b][1]); ctx.stroke(); });
+      ctx.shadowBlur = 0;
+      // the switch, thrown
+      ctx.strokeStyle = PH; ctx.strokeRect(270, 238, 100, 22);
+      ctx.fillStyle = YELLOW; ctx.fillRect(322, 242, 44, 14);
+      ctx.restore();
+      // the type, re-set at phone size
+      ctx.font = "18px ui-monospace, monospace";
+      ctx.fillStyle = PH_DIM;
+      ctx.textAlign = "right"; ctx.fillText("DOUSED", 196, 500);
+      ctx.fillStyle = YELLOW;
+      ctx.textAlign = "left"; ctx.fillText("LIT", 420, 500);
+      ctx.font = "20px ui-monospace, monospace";
+      // the ledger, running
+      const att = 9 + Math.floor(t / 12) % 2;
+      ctx.fillStyle = PH_DIM;
+      ctx.fillText("ATTENTION: " + "|".repeat(att) + ".".repeat(10 - att), 24, 620);
+      const cur = Math.floor(t / 5) % 2 ? "_" : " ";
+      ctx.textAlign = "right"; ctx.fillStyle = PH_BRIGHT;
+      ctx.fillText("> DOUSE GLOWSTONE" + cur, 616, 620);
+      ctx.textAlign = "left";
+      ctx.fillStyle = YELLOW;
+      ctx.fillText("LIGHT IS DEAR; ATTENTION DEARER", 24, 40);
     });
   });
 
@@ -1978,6 +2157,174 @@
       ledger.textContent = "#".repeat(days) + ".".repeat(10 - days) +
         (days === 10 ? "  (NEVER QUITE DONE)" : "");
       typeOn(foot, "A MAN IS NOT DONE DYING UNTIL HE IS DONE BEING REMEMBERED.", T, 130, 1.8);
+    });
+  });
+
+  /* ---------------- 09-m: Silas (phone twin) ---------------- */
+  /* Phone twin of 09. The archivist and his lattice are carried over whole
+     -- every coordinate inside SC is 09's scene space at 1.3x, which fills
+     the portrait width exactly -- and the type is re-set outside: 22px
+     title, class line under the rule, the cycling callout on its own line
+     (left-anchored, as on desktop), the remembered-days ledger and the
+     proverb wrapped big below. terminal.js picks it by rendered width. */
+  FIG._define("silas-m", "svg", function (svg) {
+    const YELLOW = "#ffd76a";
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 22, PH_BRIGHT);
+    const cls = label(svg, 20, 70, 16, PH_DIM);
+    cls.textContent = "EYELESS WISDOM / MENDICANT";
+    const SX = x => x * 1.3 - 165, SY = y => y * 1.3 + 70;
+    const SC = el(svg, "g", { transform: "translate(-165 70) scale(1.3)" });
+    const RDOTS = stipple(svg, "dots-silasm", YELLOW, 1);
+    // THE ROBE, properly draped: peaked hood, shoulder caps, corded waist,
+    // an A-line fall of folds to a dusted hem -- yellow so the dust shows
+    el(SC, "polygon", { points:
+      "198,80 226,92 240,114 246,152 252,172 " +      // hood front, to shoulder
+      "262,186 268,214 258,222 " +                    // the sleeve's upper reach
+      "252,240 250,330 134,330 " +                    // robe front, hem
+      "128,244 140,186 156,150 166,108",              // the back fall
+      fill: RDOTS, stroke: YELLOW, "stroke-width": 1.6 });
+    // fold lines, falling from the shoulders
+    [[172, 190, 162, 328], [196, 196, 192, 330], [220, 198, 224, 330]].forEach(f =>
+      el(SC, "polyline", { fill: "none", stroke: YELLOW, "stroke-width": .8,
+        opacity: .6, points: `${f[0]},${f[1]} ${f[2]},${f[3]}` }));
+    // the cord at the waist, knotted, ends hanging
+    el(SC, "polyline", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.2,
+      points: "138,240 250,236" });
+    el(SC, "polyline", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 1,
+      points: "206,238 202,262 208,280" });
+    el(SC, "rect", { x: 134, y: 322, width: 116, height: 8, fill: "none",
+      stroke: PH_DIM, "stroke-dasharray": "2 3" });   // the dust hem
+    // THE HOOD'S INTERIOR, and the plated skull in profile (after the ref:
+    // panel plates, a deep socketed eye, the ear ring, a grilled mouth)
+    el(SC, "polygon", { points: "202,88 232,100 242,130 238,160 212,170 192,150 190,112",
+      fill: BG, stroke: "none" });
+    el(SC, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+      "198,148 194,122 204,106 222,102 236,112 242,126 " +   // the cranium dome
+      "240,134 246,140 242,146 " +                           // brow step, nose flat
+      "236,150 238,162 224,168 208,166 200,158 198,148" });  // lip, jaw, home
+    el(SC, "polyline", { fill: "none", stroke: PH_DIM,
+      points: "202,112 222,106 236,118" });                  // plate seam one
+    el(SC, "polyline", { fill: "none", stroke: PH_DIM,
+      points: "196,132 212,128 220,132" });                  // plate seam two
+    el(SC, "circle", { cx: 208, cy: 110, r: 1.3, fill: PH_DIM });
+    el(SC, "circle", { cx: 228, cy: 110, r: 1.3, fill: PH_DIM });
+    el(SC, "circle", { cx: 230, cy: 132, r: 6.5, fill: BG,
+      stroke: PH_DIM, "stroke-width": 1.4 });                // the deep socket
+    const eye = el(SC, "circle", { cx: 231, cy: 132, r: 2.6, fill: PH_BRIGHT });
+    el(SC, "circle", { cx: 201, cy: 144, r: 6, fill: "none",
+      stroke: PH_DIM, "stroke-width": 1.3 });                // the ear ring
+    el(SC, "circle", { cx: 201, cy: 144, r: 1.2, fill: PH_DIM });
+    [[233, 152], [237, 154], [231, 158]].forEach(([x, y]) => // the mouth grille
+      el(SC, "line", { x1: x, y1: y, x2: x + 5, y2: y + 1, stroke: PH_DIM }));
+    const port = el(SC, "circle", { cx: 210, cy: 172, r: 2.8, fill: "none",
+      stroke: FUNGUS, "stroke-width": 1.3 });                // beneath the jaw
+    // THE SLEEVE, wide and draped, and the bare synth forearm out of it
+    el(SC, "polygon", { points: "258,184 322,206 316,232 254,220",
+      fill: RDOTS, stroke: YELLOW, "stroke-width": 1.4 });
+    el(SC, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.4,
+      points: "322,208 398,200" });                          // forearm strut, upper
+    el(SC, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.4,
+      points: "318,226 398,214" });                          // forearm strut, lower
+    el(SC, "line", { x1: 348, y1: 205, x2: 348, y2: 221, stroke: PH_DIM }); // a coupling
+    el(SC, "circle", { cx: 402, cy: 207, r: 4.5, fill: "none",
+      stroke: PH, "stroke-width": 1.4 });                    // the wrist joint
+    // THE HAND, fully outlined: a plated palm and four jointed fingers
+    el(SC, "polygon", { points: "406,200 422,196 428,206 424,216 408,216",
+      fill: "none", stroke: PH, "stroke-width": 1.4 });      // the palm plate
+    [[422,197,444,188,447,192,424,203],
+     [426,203,452,199,453,204,427,208],
+     [426,209,450,211,449,216,425,213],
+     [423,214,442,222,440,226,421,218]].forEach(q =>
+      el(SC, "polygon", { points: `${q[0]},${q[1]} ${q[2]},${q[3]} ${q[4]},${q[5]} ${q[6]},${q[7]}`,
+        fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.1 }));
+    [[422,200],[426,205],[426,211],[422,216]].forEach(([x, y]) =>
+      el(SC, "circle", { cx: x, cy: y, r: 1.3, fill: PH }));  // the knuckles
+    // the lattice: a crystal net on the right wall
+    const NODES = [];
+    for (let c = 0; c < 4; c++) for (let r = 0; r < 5; r++)
+      NODES.push([452 + c * 50 + (r % 2) * 14, 78 + r * 62]);
+    const EDGES = [];
+    NODES.forEach(([x, y], i) => NODES.forEach(([X, Y], j) => {
+      if (j > i && Math.hypot(X - x, Y - y) < 78) EDGES.push([i, j]);
+    }));
+    EDGES.forEach(([a, b]) => el(SC, "line", { x1: NODES[a][0], y1: NODES[a][1],
+      x2: NODES[b][0], y2: NODES[b][1], stroke: PH_DIM }));
+    NODES.forEach(([x, y]) => el(SC, "circle", { cx: x, cy: y, r: 1.8, fill: PH }));
+    // the bright threads: lattice -> fingertips -> up the forearm -> UNDER
+    // the sleeve (unseen) -> re-emerging at the neck to walk the skull's
+    // panel circuits, ending behind the eye. The robe segments are the gap.
+    const HAND = [450, 202];
+    const EXT = [
+      HAND, [404, 210], [356, 213], [322, 216],   // hand, wrist, forearm, sleeve
+      [268, 194], [228, 172],                     // under the robe: UNSEEN
+      [206, 162], [201, 144], [214, 128], [224, 106], [231, 132],  // the circuits
+    ];
+    const EXT_HIDDEN = new Set([3, 4]);           // the segments beneath the cloth
+    const PATHS = [
+      [NODES[19], NODES[14], NODES[9], NODES[2]],
+      [NODES[5], NODES[6], NODES[7], NODES[2]],
+      [NODES[16], NODES[12], NODES[8], NODES[2]],
+    ].map(base => {
+      const path = base.concat(EXT);
+      const baseSegs = base.length; // lattice + approach segments, all visible
+      const hidden = new Set([...EXT_HIDDEN].map(k => k + baseSegs));
+      return { path, hidden };
+    });
+    let eyeArrival = false;
+    const pulses = PATHS.map((pp, i) => ({
+      ...pp, off: i * 37,
+      dot: el(SC, "circle", { cx: 0, cy: 0, r: 2.4, fill: PH_BRIGHT }),
+      tail: el(SC, "line", { x1: 0, y1: 0, x2: 0, y2: 0, stroke: PH_BRIGHT,
+        "stroke-width": 1.4 }),
+    }));
+    // callouts + the ledger of remembered days, re-set at phone size
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 20, 116, 18, PH);
+    const CALLS = [
+      { at: [190, 270], text: "ROBES: YELLOW, SO THE DUST SHOWS" },
+      { at: [448, 202], text: "FINGERTIPS: THE RIGHT KIND" },
+      { at: [210, 172], text: "PORT: BENEATH THE JAW. FUNGUS-READY" },
+      { at: [231, 132], text: "EYES: OPTIONAL, PER THE ORDER" },
+    ];
+    label(svg, 40, 556, 18, PH_DIM).textContent = "THE AUTARCH, IN ORDER:";
+    const ledger = label(svg, 40, 588, 18, YELLOW);
+    const F1 = label(svg, 320, 648, 22, FUNGUS); F1.setAttribute("text-anchor", "middle");
+    const F2 = label(svg, 320, 680, 22, FUNGUS); F2.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 200;
+      doWipe(T);
+      typeOn(hdr, "SILAS (SYNTHETIC ARCHIVIST, VIGOR 2)", T, 4, 1.4);
+      eye.setAttribute("opacity", (t % 34) < 31 ? 1 : .15);   // the long blink
+      eye.setAttribute("r", eyeArrival ? 3.8 : 2.6);          // a day, arriving
+      eye.setAttribute("fill", eyeArrival ? "#ffd76a" : PH_BRIGHT);
+      port.setAttribute("opacity", (t % 34) < 31 ? .6 : 1);
+      eyeArrival = false;
+      pulses.forEach(p => {
+        const segs = p.path.length - 1, total = segs * 7;
+        const k = (t + p.off) % total, si = Math.floor(k / 7), f = (k % 7) / 7;
+        const [ax, ay] = p.path[si], [bx, by] = p.path[si + 1];
+        const x = ax + (bx - ax) * f, y = ay + (by - ay) * f;
+        const seen = p.hidden.has(si) ? 0 : 1;  // beneath the robe: unseen
+        p.dot.setAttribute("opacity", seen); p.tail.setAttribute("opacity", seen);
+        p.dot.setAttribute("cx", x); p.dot.setAttribute("cy", y);
+        p.tail.setAttribute("x1", ax + (bx - ax) * Math.max(0, f - .4));
+        p.tail.setAttribute("y1", ay + (by - ay) * Math.max(0, f - .4));
+        p.tail.setAttribute("x2", x); p.tail.setAttribute("y2", y);
+        if (si === segs - 1) eyeArrival = true;  // a day, arriving
+      });
+      const c = CALLS[Math.floor(T / 30) % CALLS.length];
+      if (T > 14) {
+        callLead.setAttribute("points", `${SX(c.at[0])},${SY(c.at[1])} 92,94 84,94`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      const days = Math.min(10, Math.floor(T / 18));
+      ledger.textContent = "#".repeat(days) + ".".repeat(10 - days) +
+        (days === 10 ? "  (NEVER QUITE DONE)" : "");
+      typeOn(F1, "A MAN IS NOT DONE DYING", T, 130, 1.8);
+      typeOn(F2, "UNTIL HE IS DONE BEING REMEMBERED.", T, 145, 1.8);
     });
   });
 
