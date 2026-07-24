@@ -22,6 +22,7 @@ func _check(cond: bool, name: String) -> void:
 # A GET /config `knobs.current`-shaped blob (only the sections/keys the scene reads).
 func _knobs() -> Dictionary:
 	return {
+		"game": {"agent": {"temperature": 0.7, "max_tokens": 128}},
 		"retrieval": {"alpha_recency": 1.0, "alpha_importance": 1.0, "alpha_relevance": 1.0},
 		"cognition": {"vision_r": 8, "conversation_cooldown_steps": 90, "conversation_max_exchanges": 6},
 	}
@@ -96,6 +97,22 @@ func _initialize() -> void:
 	var merged := ConfigBody.merge_knobs(cur, {"cognition": {"vision_r": 12}})
 	_check(merged["cognition"]["vision_r"] == 12, "merge overlays the edit")
 	_check(cur["cognition"]["vision_r"] == 8, "merge leaves the input dictionary unchanged")
+
+	# --- a NESTED knob edit (game.agent.temperature) merges deep, preserving siblings ---
+	s = _base_state()
+	s["knob_edits"] = {"game": {"agent": {"temperature": 0.9}}}
+	body = ConfigBody.build_post_body(s)
+	sc = body["sim_config"]
+	_check(is_equal_approx(sc["game"]["agent"]["temperature"], 0.9), "nested edited leaf (game.agent.temperature) applied")
+	_check(sc["game"]["agent"]["max_tokens"] == 128, "sibling leaf (game.agent.max_tokens) preserved under a nested edit")
+	_check(sc["cognition"]["vision_r"] == 8, "unrelated section preserved under a nested edit")
+
+	# --- merge_knobs deep-merges a nested path without mutating input ---
+	cur = _knobs()
+	merged = ConfigBody.merge_knobs(cur, {"game": {"agent": {"temperature": 1.2}}})
+	_check(is_equal_approx(merged["game"]["agent"]["temperature"], 1.2), "nested merge overlays the deep leaf")
+	_check(merged["game"]["agent"]["max_tokens"] == 128, "nested merge preserves the deep sibling")
+	_check(is_equal_approx(cur["game"]["agent"]["temperature"], 0.7), "nested merge leaves the input unchanged")
 
 	if _failures == 0:
 		print("test_simulation_setup: all checks passed")

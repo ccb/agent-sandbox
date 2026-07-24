@@ -21,7 +21,7 @@ extends RefCounted
 #   initial_tick   float          run.tick_seconds
 #   max_cost       float          cost spinbox value (0.0 = unset)
 #   knobs_current  Dictionary     GET /config's knobs.current
-#   knob_edits     Dictionary     {section: {key: value}} for CHANGED knobs only
+#   knob_edits     Dictionary     nested dict keyed by path segments, for CHANGED knobs only
 static func build_post_body(state: Dictionary) -> Dictionary:
 	var body := {"cast": state.get("cast", [])}
 	if state.get("brain", "") != state.get("initial_brain", ""):
@@ -39,13 +39,22 @@ static func build_post_body(state: Dictionary) -> Dictionary:
 
 
 # Overlay CHANGED knob values onto a deep copy of the server's current knobs, so
-# untouched keys round-trip unchanged -- a partial sim_config section would
-# otherwise reset the keys it omits to their dataclass defaults on the server.
+# untouched keys round-trip unchanged. Recursive so an edit can reach a nested
+# path (e.g. game/agent/temperature) without clobbering its siblings; the input
+# dictionaries are never mutated (current is deep-copied; edits is read-only).
 static func merge_knobs(current: Dictionary, edits: Dictionary) -> Dictionary:
 	var out: Dictionary = current.duplicate(true)
-	for section in edits:
-		if not out.has(section) or typeof(out[section]) != TYPE_DICTIONARY:
-			out[section] = {}
-		for key in edits[section]:
-			out[section][key] = edits[section][key]
+	_deep_merge(out, edits)
 	return out
+
+
+# Recursively overlay `edits` onto `into` (mutating `into`, which is already a
+# fresh deep copy): a dict value merges into the matching sub-dict; any other
+# value overwrites the leaf.
+static func _deep_merge(into: Dictionary, edits: Dictionary) -> void:
+	for k in edits:
+		var v: Variant = edits[k]
+		if typeof(v) == TYPE_DICTIONARY and typeof(into.get(k)) == TYPE_DICTIONARY:
+			_deep_merge(into[k], v)
+		else:
+			into[k] = v.duplicate(true) if typeof(v) == TYPE_DICTIONARY else v

@@ -22,18 +22,18 @@ const ConfigBody := preload("res://scripts/config_body.gd")
 const HINT_COLOR := Color(0.42, 0.32, 0.24)
 const ERROR_COLOR := Color(0.82, 0.20, 0.15)
 
-# The curated sim knobs this scene exposes, mapped to their (section, key) path
-# in GET /config's `knobs` block: retrieval weights, vision, conversation
-# pacing -- the subset the issue calls out. (Temperature lives under game.llm,
-# which the config surface strips as key-bearing, so it isn't offered here;
-# exposing it would be a #732 backend follow-up.)
+# The curated sim knobs this scene exposes, each mapped to its nested path into
+# GET /config's `knobs` block. Temperature (game.agent.temperature) is the live
+# sampling temperature honored by the brain (#564); the rest are retrieval
+# weights + vision + conversation pacing. `path` lets a knob reach any depth.
 const KNOBS := [
-	{"label": "Recency weight", "section": "retrieval", "key": "alpha_recency", "kind": "float"},
-	{"label": "Importance weight", "section": "retrieval", "key": "alpha_importance", "kind": "float"},
-	{"label": "Relevance weight", "section": "retrieval", "key": "alpha_relevance", "kind": "float"},
-	{"label": "Vision radius (tiles)", "section": "cognition", "key": "vision_r", "kind": "int"},
-	{"label": "Conversation cooldown (steps)", "section": "cognition", "key": "conversation_cooldown_steps", "kind": "int"},
-	{"label": "Max exchanges / conversation", "section": "cognition", "key": "conversation_max_exchanges", "kind": "int"},
+	{"label": "Temperature (llm brain)", "path": ["game", "agent", "temperature"], "kind": "float"},
+	{"label": "Recency weight", "path": ["retrieval", "alpha_recency"], "kind": "float"},
+	{"label": "Importance weight", "path": ["retrieval", "alpha_importance"], "kind": "float"},
+	{"label": "Relevance weight", "path": ["retrieval", "alpha_relevance"], "kind": "float"},
+	{"label": "Vision radius (tiles)", "path": ["cognition", "vision_r"], "kind": "int"},
+	{"label": "Conversation cooldown (steps)", "path": ["cognition", "conversation_cooldown_steps"], "kind": "int"},
+	{"label": "Max exchanges / conversation", "path": ["cognition", "conversation_max_exchanges"], "kind": "int"},
 ]
 
 var _url := ""
@@ -306,14 +306,14 @@ func _render_config(data: Dictionary) -> void:
 			spin.max_value = 100.0
 		else:
 			spin.step = 1
+			spin.rounded = true
 			spin.max_value = 10000
 		spin.min_value = 0
-		spin.value = float(_knob_value(spec.section, spec.key))
+		spin.value = float(_knob_value(spec.path))
 		row.add_child(spin)
 		_form_box.add_child(row)
 		_knob_rows.append({
-			"section": spec.section, "key": spec.key, "kind": spec.kind,
-			"spin": spin, "initial": spin.value,
+			"path": spec.path, "kind": spec.kind, "spin": spin, "initial": spin.value,
 		})
 
 	# --- Run controls ---
@@ -365,14 +365,21 @@ func _spin_row(label: String, lo: float, hi: float, step: float, value: float) -
 	return spin
 
 
-func _knob_value(section: String, key: String) -> Variant:
-	var cur: Variant = _knobs_current.get(section, {})
-	if typeof(cur) == TYPE_DICTIONARY and (cur as Dictionary).has(key):
-		return (cur as Dictionary)[key]
-	var dz: Variant = _knobs_defaults.get(section, {})
-	if typeof(dz) == TYPE_DICTIONARY and (dz as Dictionary).has(key):
-		return (dz as Dictionary)[key]
-	return 0
+func _knob_value(path: Array) -> Variant:
+	var v: Variant = _walk(_knobs_current, path)
+	if v != null:
+		return v
+	v = _walk(_knobs_defaults, path)
+	return v if v != null else 0
+
+
+func _walk(d: Variant, path: Array) -> Variant:
+	var cur: Variant = d
+	for k in path:
+		if typeof(cur) != TYPE_DICTIONARY or not (cur as Dictionary).has(k):
+			return null
+		cur = (cur as Dictionary)[k]
+	return cur
 
 
 func _checked_ids() -> Array:
@@ -384,7 +391,8 @@ func _checked_ids() -> Array:
 
 
 func _knob_edits() -> Dictionary:
-	# Only knobs the user actually moved off their server value are edits.
+	# Only knobs the user actually moved off their server value are edits, keyed
+	# by their nested path so merge_knobs overlays just that leaf.
 	var edits := {}
 	for row in _knob_rows:
 		var v: Variant = int(row.spin.value) if row.kind == "int" else float(row.spin.value)
@@ -394,10 +402,18 @@ func _knob_edits() -> Dictionary:
 		else:
 			changed = not is_equal_approx(float(v), float(row.initial))
 		if changed:
-			if not edits.has(row.section):
-				edits[row.section] = {}
-			edits[row.section][row.key] = v
+			_set_path(edits, row.path, v)
 	return edits
+
+
+func _set_path(d: Dictionary, path: Array, value: Variant) -> void:
+	var cur := d
+	for i in range(path.size() - 1):
+		var k: Variant = path[i]
+		if not cur.has(k) or typeof(cur[k]) != TYPE_DICTIONARY:
+			cur[k] = {}
+		cur = cur[k]
+	cur[path[path.size() - 1]] = value
 
 
 func _on_start_pressed() -> void:
