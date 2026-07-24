@@ -1315,11 +1315,30 @@ def apply_conversation_outcome(
     if result.get("plans_changed") is not True:
         return False
     commitment = result.get("commitment")
-    detail = (
-        commitment.strip()
-        if isinstance(commitment, str) and commitment.strip()
-        else transcript
-    )
+    has_commitment = isinstance(commitment, str) and bool(commitment.strip())
+    detail = commitment.strip() if has_commitment else transcript
+    # #778: the commitment becomes a durable INTENTION in this agent's own
+    # stream, not merely a revision trigger. Before this, maybe_revise_plan was
+    # its ONLY consumer -- and the default plan_mode "schedule" wires
+    # MockPlanner, whose revise() returns the plan unchanged, so an agreement
+    # the model stated outright ("leaving right now to grab food") was silently
+    # dropped and re-negotiated on every cooldown expiry. Written here, BEFORE
+    # the revision, so it lands whether or not the planner does anything.
+    #
+    # RELATIONSHIP_NOTE_IMPORTANCE, not add_plan's 5.0 default, is load-bearing:
+    # the same conversation mints an 8.0 relationship note and 7-8 #583-scored
+    # talk observations, so a 5.0 intention is crowded out of the retrieved
+    # block by its own partner-chatter. Locked for the same reason the note
+    # above is -- a deliberate high signal the scorer must not re-guess.
+    # The transcript fallback is deliberately NOT written: a whole transcript
+    # stored as a "plan" is noise, so only a real commitment persists.
+    if has_commitment:
+        intent = agent.memory.add_plan(
+            f"I agreed with {partner_name}: {detail}",
+            turn=step,
+            importance=RELATIONSHIP_NOTE_IMPORTANCE,
+        )
+        intent.metadata[_IMPORTANCE_LOCKED] = True
     return maybe_revise_plan(char, RevisionTrigger(CONVERSATION, step, detail), clock)
 
 
