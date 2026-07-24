@@ -10,7 +10,7 @@
    and disconnected nodes drop off the clock automatically. */
 (() => {
   "use strict";
-  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "bats-c-m": ["svg", 640, 720], "bats-m": ["canvas", 640, 720], "blade": ["canvas", 640, 360], "blade-m": ["canvas", 640, 720], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "chimney-f": ["svg", 640, 360], "chimney-g": ["svg", 640, 360], "chimney-h": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-a-m": ["svg", 640, 720], "cyl-c": ["svg", 640, 400], "cyl-c-m": ["svg", 640, 720], "cyl-o": ["svg", 640, 400], "cyl-o-m": ["svg", 640, 720], "cyl-v": ["svg", 640, 400], "cyl-v-m": ["svg", 640, 720], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "cylinders-b-m": ["svg", 640, 720], "cylinders-m": ["svg", 640, 720], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
+  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "bats-c-m": ["svg", 640, 720], "bats-m": ["canvas", 640, 720], "blade": ["canvas", 640, 360], "blade-m": ["canvas", 640, 720], "boots": ["svg", 640, 360], "boots-m": ["svg", 640, 720], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "chimney-f": ["svg", 640, 360], "chimney-g": ["svg", 640, 360], "chimney-h": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-a-m": ["svg", 640, 720], "cyl-c": ["svg", 640, 400], "cyl-c-m": ["svg", 640, 720], "cyl-o": ["svg", 640, 400], "cyl-o-m": ["svg", 640, 720], "cyl-v": ["svg", 640, 400], "cyl-v-m": ["svg", 640, 720], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "cylinders-b-m": ["svg", 640, 720], "cylinders-m": ["svg", 640, 720], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flask-m": ["svg", 640, 720], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "resp-m": ["svg", 640, 720], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
   const FIG = {
     _defs: {}, _uid: 0, _ticks: [], _timer: null, _target: null,
     MAX_LIVE: 3,
@@ -1223,6 +1223,108 @@
     });
   });
 
+  /* ---------------- 38-m: the magnetic boots (phone twin) ---------------- */
+  /* Phone twin of 38. The walk is carried over whole -- every coordinate
+     inside SC is 38's scene space at 1.6x, the deck running full bleed --
+     and the type is re-set outside: 26px title, class line under the rule,
+     the cycling callout above the deck (the RELEASE call still tracks the
+     boot via SX/SY), CLICK. and the footer big. terminal.js picks it by
+     rendered width. */
+  FIG._define("boots-m", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const cls = label(svg, 20, 70, 16, PH_DIM);
+    cls.textContent = "GUARD ISSUE / FEET / ANCHOR";
+    const SX = x => x * 1.6 - 192, SY = y => y * 1.6 + 20;
+    const SC = el(svg, "g", { transform: "translate(-192 20) scale(1.6)" });
+    const VIR = "#4ee0a8";                                    // viridian issue
+    const BDOTS2 = stipple(svg, "dots-boots38m", VIR, .85);
+    // the ferrous deck
+    el(SC, "line", { x1: 60, y1: 300, x2: 580, y2: 300, stroke: PH, "stroke-width": 1.6 });
+    for (let x = 72; x < 580; x += 26)
+      el(SC, "line", { x1: x, y1: 300, x2: x - 9, y2: 311, stroke: PH_DIM });
+    // the boot, per reference: tall buckled cuff, long boxy toe, slab sole
+    const BOOT = "0,-8 4,-40 2,-72 40,-72 42,-40 78,-16 86,-12 86,0 0,0";
+    const mkBoot = () => {
+      const g = el(SC, "g", {});
+      const put = (nn, a) => el(g, nn, a);
+      put("polygon", { points: BOOT, fill: BDOTS2, stroke: VIR, "stroke-width": 1.6 });
+      put("rect", { x: 0, y: 0, width: 86, height: 7, fill: "#2e7a5e",
+        "fill-opacity": .9, stroke: VIR, "stroke-width": 1.2 });  // the magnet sole
+      put("line", { x1: 5, y1: -58, x2: 39, y2: -58, stroke: VIR });  // cuff bands
+      put("rect", { x: 14, y: -62, width: 13, height: 7, fill: BG, stroke: VIR });
+      put("line", { x1: 5, y1: -42, x2: 40, y2: -42, stroke: VIR });
+      put("rect", { x: 14, y: -46, width: 13, height: 7, fill: BG, stroke: VIR });
+      put("line", { x1: 50, y1: -28, x2: 66, y2: -19, stroke: VIR });  // instep strap
+      put("rect", { x: 53, y: -30, width: 10, height: 6, fill: BG, stroke: VIR });
+      return g;
+    };
+    const left = mkBoot(); left.setAttribute("transform", "translate(150 293)");
+    const right = mkBoot();
+    // the field, bright white against the deck
+    const arcs = [];
+    [0, 1].forEach(b => [10, 17, 24].forEach((r, i) =>
+      arcs.push({ b, r, i, q: el(SC, "path", { fill: "none", stroke: PH_BRIGHT,
+        "stroke-width": 1.7, "stroke-dasharray": "3 3" }) })));
+    const grudge = [0, 1, 2].map(() => el(SC, "line",
+      { stroke: PH_BRIGHT, "stroke-dasharray": "2 3", opacity: 0 }));
+    const click = label(svg, 0, 546, 18, PH_BRIGHT); click.setAttribute("text-anchor", "middle");
+    const clickBar = el(SC, "line", { y1: 302, y2: 302, stroke: PH_BRIGHT,
+      "stroke-width": 2.5, opacity: 0 });
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 620, 116, 18, PH); call.setAttribute("text-anchor", "end");
+    const CALLS = [
+      { at: [193, 296], text: "SOLE: MAGNET-METAL, DULL" },
+      { at: [193, 308], text: "GRIP: FERROUS, TOTAL" },
+      { at: [504, 254], text: "RELEASE: GRUDGING", track: true },
+    ];
+    const foot = label(svg, 320, 640, 24, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 150;
+      doWipe(T);
+      typeOn(hdr, "THE MAGNETIC BOOTS", T, 4, 1.4);
+      let bx = 320, by = 0, strain = 0;
+      if (T < 34) { bx = 320; by = 0; }
+      else if (T < 64) { by = -Math.round(((T - 34) / 30) * 14 / 2) * 2; strain = 1; }
+      else if (T < 92) {
+        const k = (T - 64) / 28;
+        bx = 320 + Math.round(90 * k / 4) * 4;
+        by = -14 - Math.round(Math.sin(k * Math.PI) * 30 / 2) * 2;
+      } else { bx = 410; by = 0; }
+      right.setAttribute("transform", `translate(${bx} ${293 + by})`);
+      const beat = Math.floor(t / 6);
+      arcs.forEach(a => {
+        const cx = a.b ? bx + 43 : 193;
+        const on = a.b ? (T < 34 || T >= 92) : true;
+        a.q.setAttribute("d", `M ${cx - a.r} 300 Q ${cx} ${300 + a.r * .8} ${cx + a.r} 300`);
+        a.q.setAttribute("opacity", on ? .65 + ((beat + a.i) % 3 === 0 ? .35 : 0) : 0);
+      });
+      grudge.forEach((n, i) => {                              // the field, refusing
+        if (!strain) { n.setAttribute("opacity", 0); return; }
+        const gx = 328 + i * 32;
+        n.setAttribute("x1", gx); n.setAttribute("x2", gx);
+        n.setAttribute("y1", 300); n.setAttribute("y2", 300 + by);
+        n.setAttribute("opacity", (t + i) % 2 ? .9 : .4);
+      });
+      const clicked = T >= 92 && T < 104;
+      click.setAttribute("x", SX(bx + 43));
+      click.textContent = clicked ? "CLICK." : "";
+      clickBar.setAttribute("x1", bx + 2); clickBar.setAttribute("x2", bx + 84);
+      clickBar.setAttribute("opacity", clicked && t % 2 ? .9 : 0);
+      const c = CALLS[Math.floor(T / 30) % CALLS.length];
+      if (T > 16) {
+        // a tracking call follows the boot; the text end stays anchored
+        const ax = c.track ? SX(bx + 43) : SX(c.at[0]);
+        const ay = c.track ? SY(293 + by - 78) : SY(c.at[1]);
+        callLead.setAttribute("points", `${ax},${ay} 548,94 556,94`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      typeOn(foot, "THE CLICK MEANS IT.", T, 116, 1.5);
+    });
+  });
+
   /* ---------------- 39: the respirator ---------------- */
   FIG._define("resp", "svg", function (svg) {
     const YEL = "#ffd76a";
@@ -1320,6 +1422,109 @@
     });
   });
 
+  /* ---------------- 39-m: the respirator (phone twin) ---------------- */
+  /* Phone twin of 39. The mannequin portrait is carried over whole -- every
+     coordinate inside SC is 39's scene space at 2x, spores parting at the
+     seal as before -- and the type is re-set outside: 26px title, class
+     line under the rule, the cycling callout above, the footer dropped
+     below the spore field. terminal.js picks it by rendered width. */
+  FIG._define("resp-m", "svg", function (svg) {
+    const YEL = "#ffd76a";
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const cls = label(svg, 20, 70, 16, PH_DIM);
+    cls.textContent = "GUARD ISSUE / FACE / SEALED";
+    const SC = el(svg, "g", { transform: "translate(-320 -34) scale(2)" });
+    const RDOTS = stipple(svg, "dots-respm", YEL, .85);       // amber-issue yellow
+    // the mannequin head that wears it
+    el(SC, "ellipse", { cx: 320, cy: 168, rx: 60, ry: 76, fill: "none",
+      stroke: PH_DIM, "stroke-width": 1.4 });
+    el(SC, "line", { x1: 298, y1: 240, x2: 294, y2: 300, stroke: PH_DIM, "stroke-width": 1.4 });
+    el(SC, "line", { x1: 342, y1: 240, x2: 346, y2: 300, stroke: PH_DIM, "stroke-width": 1.4 });
+    [297, 343].forEach(ex => {                                // brows and eyes, above it
+      el(SC, "path", { d: `M ${ex - 9} 140 Q ${ex} 134 ${ex + 9} 140`,
+        fill: "none", stroke: PH_DIM });
+      el(SC, "ellipse", { cx: ex, cy: 152, rx: 8, ry: 4, fill: "none", stroke: PH_DIM });
+      el(SC, "circle", { cx: ex, cy: 152, r: 1.6, fill: PH_DIM });
+    });
+    // straps, buckled at the temples -- amber issue, like the cup
+    el(SC, "line", { x1: 296, y1: 184, x2: 266, y2: 152, stroke: YEL, "stroke-width": 2 });
+    el(SC, "line", { x1: 344, y1: 184, x2: 374, y2: 152, stroke: YEL, "stroke-width": 2 });
+    el(SC, "line", { x1: 292, y1: 230, x2: 263, y2: 206, stroke: YEL, "stroke-width": 2 });
+    el(SC, "line", { x1: 348, y1: 230, x2: 377, y2: 206, stroke: YEL, "stroke-width": 2 });
+    el(SC, "rect", { x: 259, y: 144, width: 11, height: 9, fill: BG, stroke: YEL });
+    el(SC, "rect", { x: 370, y: 144, width: 11, height: 9, fill: BG, stroke: YEL });
+    // the half-mask: cup, nose wedge, central grille, chin exhaust
+    el(SC, "path", { d: "M 320 160 L 298 184 Q 280 202 286 226 Q 294 250 320 258 " +
+      "Q 346 250 354 226 Q 360 202 342 184 Z", fill: RDOTS, stroke: YEL, "stroke-width": 1.8 });
+    el(SC, "polygon", { points: "313,178 320,166 327,178", fill: BG,
+      stroke: YEL, "stroke-width": 1.3 });
+    const spinners = [];
+    const grille = (cx, cy, r) => {                           // the fan grille
+      el(SC, "circle", { cx, cy, r, fill: BG, stroke: YEL, "stroke-width": 1.8 });
+      el(SC, "circle", { cx, cy, r: r * .76, fill: "none", stroke: PH_DIM });
+      const bl = el(SC, "g", {});                             // the blades, spinning --
+      for (let a = 0; a < 10; a++) {                          // fungus-orange, like
+        const th = a * Math.PI / 5 + .31;                     // what they catch
+        el(bl, "line", { x1: cx + Math.cos(th) * r * .2, y1: cy + Math.sin(th) * r * .2,
+          x2: cx + Math.cos(th) * r * .66, y2: cy + Math.sin(th) * r * .66, stroke: FUNGUS });
+      }
+      el(SC, "circle", { cx, cy, r: r * .13, fill: FUNGUS });
+      spinners.push({ bl, cx, cy, k: spinners.length });
+    };
+    grille(320, 224, 19);
+    [311, 317, 323, 329].forEach(x =>                         // the chin exhaust
+      el(SC, "line", { x1: x, y1: 259, x2: x, y2: 267, stroke: PH_DIM }));
+    [[250, 216], [390, 216]].forEach(([cx, cy]) => {          // the twin cartridges
+      el(SC, "rect", { x: cx > 320 ? cx - 32 : cx + 18, y: 208, width: 16, height: 14,
+        fill: BG, stroke: PH, "stroke-width": 1.2 });         // the port stub
+      grille(cx, cy, 30);
+      el(SC, "circle", { cx, cy, r: 26, fill: "none", stroke: YEL,
+        "stroke-dasharray": "6 4", opacity: .8 });            // the banded rim
+    });
+    el(SC, "ellipse", { cx: 320, cy: 190, rx: 126, ry: 108, fill: "none",
+      stroke: PH_DIM, "stroke-dasharray": "4 4", opacity: .6 });  // the seal
+    const spores = Array.from({ length: 14 }, (_, j) =>
+      ({ j, q: el(SC, "circle", { r: j % 3 ? 1.6 : 2.2, fill: FUNGUS }) }));
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 620, 116, 18, PH); call.setAttribute("text-anchor", "end");
+    const CALLS = [                                           // canvas coords
+      { at: [460, 398], text: "FILTERS: TWIN, FAN-GRILLED" },
+      { at: [320, 286], text: "SEAL: FOUR THOUSAND YEARS, HOLDING" },
+      { at: [572, 346], text: "AIR INSIDE: CLEAN, IN A PLACE THAT ISN'T" },
+    ];
+    const foot = label(svg, 320, 690, 22, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 160;
+      doWipe(T);
+      typeOn(hdr, "THE RESPIRATOR", T, 4, 1.4);
+      spinners.forEach(sp => sp.bl.setAttribute("transform",
+        `rotate(${(Math.floor(t / 2) * (sp.k % 2 ? -8 : 8) + sp.k * 12) % 360} ${sp.cx} ${sp.cy})`));
+      spores.forEach(s => {
+        const j = s.j;
+        const x = ((t * (1.4 + (j % 3) * .7) + j * 61) % 700) - 30;
+        const y0 = 52 + ((j * 37) % 280);
+        let y = y0 + Math.round(Math.sin((t + j * 7) * .18) * 6 / 2) * 2;
+        const dx = (x - 320) / 126;
+        if (Math.abs(dx) < 1) {                               // the spores PART
+          const by = 108 * Math.sqrt(1 - dx * dx);
+          const side = y0 >= 190 ? 1 : -1;
+          if (Math.abs(y - 190) < by + 8) y = 190 + side * (by + 8);
+        }
+        s.q.setAttribute("cx", x); s.q.setAttribute("cy", y);
+        s.q.setAttribute("opacity", .4 + ((t + j) % 3) * .2);
+      });
+      const c = CALLS[Math.floor(T / 30) % CALLS.length];
+      if (T > 16) {
+        callLead.setAttribute("points", `${c.at[0]},${c.at[1]} 548,94 556,94`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      typeOn(foot, "IT KEPT ITS SEAL. THE GUARD DID NOT.", T, 112, 1.5);
+    });
+  });
+
   /* ---------------- 40: the flask of embalming gel ---------------- */
   FIG._define("flask", "svg", function (svg) {
     const VIR = "#4ee0a8", YEL = "#ffd76a";
@@ -1378,6 +1583,76 @@
       const c = CALLS[Math.floor(T / 30) % CALLS.length];
       if (T > 16) {
         callLead.setAttribute("points", `${c.at[0]},${c.at[1]} 440,58 448,58`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      typeOn(foot, "CAUTION: NON-POTABLE, FLAMMABLE.", T, 112, 1.5);
+    });
+  });
+
+  /* ---------------- 40-m: the flask of embalming gel (phone twin) ---------------- */
+  /* Phone twin of 40. The specimen is carried over whole -- every coordinate
+     inside SC is 40's scene space at 2x, halo rings and slosh and bubbles on
+     the same clock -- and the type is re-set outside: 26px title, class line
+     under the rule, the cycling callout above, DOSES and the label's warning
+     in big type below. terminal.js picks it by rendered width. */
+  FIG._define("flask-m", "svg", function (svg) {
+    const VIR = "#4ee0a8", YEL = "#ffd76a";
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const cls = label(svg, 20, 70, 16, PH_DIM);
+    cls.textContent = "THE HOUND TANK / THREE DOSES";
+    const SC = el(svg, "g", { transform: "translate(-320 -6) scale(2)" });
+    const GDOTS = stipple(svg, "dots-flaskm", VIR, 1.1);
+    // the glow, breathing behind everything
+    const rings = [95, 125, 155].map(r => el(SC, "circle",
+      { cx: 320, cy: 218, r, fill: "none", stroke: YEL, opacity: 0 }));
+    // the gel, then the glass over it
+    el(SC, "path", { d: "M 268 196 Q 254 224 258 246 Q 266 286 320 286 " +
+      "Q 374 286 382 246 Q 386 224 372 196 Z", fill: GDOTS, stroke: "none" });
+    const surface = el(SC, "line", { x1: 268, y1: 196, x2: 372, y2: 196,
+      stroke: YEL, "stroke-width": 1.5 });
+    el(SC, "path", { d: "M 306 140 Q 252 168 252 226 Q 252 290 320 290 " +
+      "Q 388 290 388 226 Q 388 168 334 140", fill: "none", stroke: PH,
+      "stroke-width": 1.8 });                                 // the bulb
+    el(SC, "line", { x1: 306, y1: 94, x2: 306, y2: 140, stroke: PH, "stroke-width": 1.8 });
+    el(SC, "line", { x1: 334, y1: 94, x2: 334, y2: 140, stroke: PH, "stroke-width": 1.8 });
+    el(SC, "rect", { x: 300, y: 78, width: 40, height: 16, fill: BG,
+      stroke: PH, "stroke-width": 1.5 });                     // the stopper
+    el(SC, "rect", { x: 310, y: 68, width: 20, height: 10, fill: BG,
+      stroke: PH_DIM, "stroke-width": 1.3 });
+    [82, 88].forEach(y => el(SC, "line", { x1: 303, y1: y, x2: 337, y2: y, stroke: PH_DIM }));
+    const bubbles = Array.from({ length: 4 }, (_, j) =>
+      ({ j, q: el(SC, "circle", { r: 2, fill: "none", stroke: VIR, opacity: .8 }) }));
+    label(svg, 40, 632, 20, PH_DIM).textContent = "DOSES";
+    Array.from({ length: 3 }, (_, i) =>
+      el(svg, "rect", { x: 160 + i * 34, y: 616, width: 26, height: 18,
+        fill: VIR, "fill-opacity": .8 }));
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 620, 116, 18, PH); call.setAttribute("text-anchor", "end");
+    const CALLS = [                                           // canvas coords
+      { at: [320, 150], text: "STOPPER: HOLDING, MOSTLY" },
+      { at: [390, 474], text: "CONTENTS: LAMP-OIL, HONEY, AGE" },
+      { at: [510, 314], text: "GLOW: ITS OWN" },
+    ];
+    const foot = label(svg, 320, 688, 22, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 160;
+      doWipe(T);
+      typeOn(hdr, "THE FLASK OF EMBALMING GEL", T, 4, 1.4);
+      const pulse = .6 + ((Math.floor(t / 5) % 3) / 2) * .4;
+      rings.forEach((n, i) => n.setAttribute("opacity", [.16, .10, .06][i] * pulse * 2.2));
+      const tl = [0, 2, 3, 2, 0, -2, -3, -2][Math.floor(t / 9) % 8];  // the slosh
+      surface.setAttribute("y1", 196 + tl); surface.setAttribute("y2", 196 - tl);
+      bubbles.forEach(b => {
+        const y = 280 - ((t * 2 + b.j * 34) % 78);
+        b.q.setAttribute("cx", 296 + (b.j * 17) % 50); b.q.setAttribute("cy", y);
+        b.q.setAttribute("opacity", y < 204 ? 0 : .8);
+      });
+      const c = CALLS[Math.floor(T / 30) % CALLS.length];
+      if (T > 16) {
+        callLead.setAttribute("points", `${c.at[0]},${c.at[1]} 548,94 556,94`);
         call.textContent = c.text;
       } else { call.textContent = ""; callLead.setAttribute("points", ""); }
       typeOn(foot, "CAUTION: NON-POTABLE, FLAMMABLE.", T, 112, 1.5);
