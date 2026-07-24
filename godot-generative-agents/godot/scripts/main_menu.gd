@@ -30,6 +30,7 @@ const BUNDLED_REPLAY := "res://maps/penn_replay.json"
 # `generate_penn_replay.py --scenario boil`. Like the bundled replay it's a
 # git-ignored artifact, so its button self-hides until it's been baked.
 const BOIL_REPLAY := "res://maps/penn_replay_boil.json"
+const SETUP_SCENE := "res://scenes/simulation_setup.tscn"
 const BACKDROP_MAP := "res://maps/upenn_core_urban.tmj"
 const DEFAULT_LIVE_URL := "http://127.0.0.1:8080"  # serve_penn.py's default
 
@@ -54,6 +55,10 @@ var _replay_hint: Label = null
 # One-shot latch: once we've committed to a scene switch, ignore every other
 # button so a fast double-click can't fire change_scene_to_file twice.
 var _switching := false
+
+# The connect flow probes GET /live, then (only if the backend is paused) GET
+# /config to decide setup-vs-viewer. This tracks which reply we're expecting.
+var _probe_stage := "live"  # "live" | "config"
 
 
 func _ready() -> void:
@@ -380,6 +385,7 @@ func _normalize_url(raw: String) -> String:
 func _on_connect_pressed() -> void:
 	if _switching:
 		return
+	_probe_stage = "live"
 	var url := _normalize_url(_url_edit.text)
 	if url == "":
 		_show_live_status("Enter the backend's URL first.", true)
@@ -403,34 +409,82 @@ func _on_probe_completed(
 ) -> void:
 	if _switching:
 		return
-	_connect_btn.disabled = false
 	var url := _normalize_url(_url_edit.text)
+	# Stage 2: the GET /config reply -- decide setup scene vs. viewer.
+	if _probe_stage == "config":
+		_connect_btn.disabled = false
+		if _config_is_configurable(result, code, body):
+			# Stash the connection the same way Past runs does, then hand off to
+			# the setup scene (it fetches GET /config itself and owns the run
+			# from Start onward).
+			LaunchConfig.last_live_url = url
+			LaunchConfig.live_token = _token_edit.text.strip_edges()
+			_switching = true
+			get_tree().change_scene_to_file.call_deferred(SETUP_SCENE)
+			return
+		# Not configurable (no config surface, or already locked): fall back to
+		# today's paused-backend behavior -- into the viewer, Start there.
+		LaunchConfig.set_live(url, _token_edit.text.strip_edges())
+		_show_live_status("Connected — press ▶ Start in the viewer to begin.", false)
+		_go_to_viewer()
+		return
+
+	# Stage 1: the GET /live reply (today's probe).
 	if result != HTTPRequest.RESULT_SUCCESS:
+		_connect_btn.disabled = false
 		_show_live_status(
 			"Can't reach %s — is the backend running? (backend/penn/serve_penn.py)" % url, true)
 		return
 	if code == 401 or code == 403:
+		_connect_btn.disabled = false
 		_show_live_status("HTTP %d — check the token." % code, true)
 		return
 	if code != 200:
+		_connect_btn.disabled = false
 		_show_live_status("Backend returned HTTP %d." % code, true)
 		return
 	var data: Variant = JSON.parse_string(body.get_string_from_utf8())
 	if typeof(data) != TYPE_DICTIONARY or not bool((data as Dictionary).get("enabled", false)):
+		_connect_btn.disabled = false
 		_show_live_status(
 			"Backend has no live loop — start it with a stepper (backend/penn/serve_penn.py).", true)
 		return
 
-	# Reachable and live. Hand the connection to the viewer; it owns the handshake,
-	# backfill and socket from here. A --start-paused backend (the --brain llm
-	# default) waits behind the sidebar's ▶ Start, so say so rather than look stuck.
-	var token := _token_edit.text.strip_edges()
-	LaunchConfig.set_live(url, token)
-	if bool((data as Dictionary).get("paused", false)):
-		_show_live_status("Connected — press ▶ Start in the viewer to begin.", false)
-	else:
+	# Reachable and live. A running backend goes straight to the viewer (today's
+	# flow, untouched). A PAUSED backend might be configurable -- probe GET
+	# /config before deciding, keeping the Connect button disabled meanwhile.
+	if not bool((data as Dictionary).get("paused", false)):
+		_connect_btn.disabled = false
+		LaunchConfig.set_live(url, _token_edit.text.strip_edges())
 		_show_live_status("Connected — following the running sim…", false)
-	_go_to_viewer()
+		_go_to_viewer()
+		return
+
+	_probe_stage = "config"
+	_show_live_status("Connected — checking for a setup screen…", false)
+	var headers := PackedStringArray()
+	var token := _token_edit.text.strip_edges()
+	if token != "":
+		headers.append("Authorization: Bearer %s" % token)
+	var err := _probe.request("%s/config" % url, headers)
+	if err != OK:
+		# Couldn't even ask -- treat as not-configurable and go to the viewer.
+		_connect_btn.disabled = false
+		LaunchConfig.set_live(url, token)
+		_show_live_status("Connected — press ▶ Start in the viewer to begin.", false)
+		_go_to_viewer()
+		return
+
+
+func _config_is_configurable(result: int, code: int, body: PackedByteArray) -> bool:
+	# The GET /config verdict: only a reachable, 200, status=="configurable"
+	# backend routes to the setup scene. A 404 (no config surface), a "locked"
+	# status (run already started), or any transport error -> false -> viewer.
+	if result != HTTPRequest.RESULT_SUCCESS or code != 200:
+		return false
+	var data: Variant = JSON.parse_string(body.get_string_from_utf8())
+	return typeof(data) == TYPE_DICTIONARY \
+		and str((data as Dictionary).get("status", "")) == "configurable"
 
 
 func _on_past_runs_pressed() -> void:
