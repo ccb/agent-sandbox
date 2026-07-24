@@ -2,9 +2,11 @@
 
 Lifted from the Penn boil-water port (#300): an ``is_contaminated`` liquid
 sets ``is_sick`` on the drinker (and logs a ``sickness`` GameEvent); drinking
-safe water -- boiled, or never needing boiling -- while sick clears it (and
-logs a ``recovery``). The Penn backend keeps its narrower experiment gates by
-subclassing the same seam (see backend/actions.py's DrinkPenn).
+*boiled* water while sick clears it (and logs a ``recovery``) -- a bare safe
+drink does not (aking526's #464 review: boiled-only is the one cure rule, so
+the library never ships "any beverage cures dysentery"). The Penn backend
+keeps its narrower *sicken* gate by subclassing the same seam (see
+backend/actions.py's DrinkPenn).
 """
 
 from text_adventure_games import games, things
@@ -53,19 +55,7 @@ def test_clean_drink_neither_sickens_nor_logs():
     assert not _events(game, "recovery")
 
 
-def test_safe_water_cures_a_sick_drinker_and_logs_a_recovery_event():
-    game = drinker_game()
-    game.player.set_property(Property.IS_SICK, True)
-    game.player.add_to_inventory(_cup())  # plain water: never needed boiling
-    assert game.parser.parse_command("drink cup of water")
-    assert game.player.get_property(Property.IS_SICK) is False
-    rec = _events(game, "recovery")
-    assert len(rec) == 1
-    assert rec[0].payload["item"] == "cup of water"
-    assert rec[0].payload["location"] == "Spring"
-
-
-def test_boiled_water_cures_too():
+def test_boiled_water_cures_a_sick_drinker_and_logs_a_recovery_event():
     game = drinker_game()
     game.player.set_property(Property.IS_SICK, True)
     cup = _cup("cup of boiled water")
@@ -74,7 +64,23 @@ def test_boiled_water_cures_too():
     game.player.add_to_inventory(cup)
     assert game.parser.parse_command("drink cup of boiled water")
     assert game.player.get_property(Property.IS_SICK) is False
-    assert _events(game, "recovery")
+    rec = _events(game, "recovery")
+    assert len(rec) == 1
+    assert rec[0].payload["item"] == "cup of boiled water"
+    assert rec[0].payload["location"] == "Spring"
+
+
+def test_a_bare_safe_drink_does_not_cure():
+    # Engine mirror of Penn's pin (aking526's #464 review): only *boiled* water
+    # cures. A plain drink that never needed boiling (juice, a bare cup of
+    # water) does NOT clear sickness -- otherwise any beverage would cure
+    # dysentery, erasing the #301 "did it learn to boil?" signal.
+    game = drinker_game()
+    game.player.set_property(Property.IS_SICK, True)
+    game.player.add_to_inventory(_cup())  # plain water: never needed boiling
+    assert game.parser.parse_command("drink cup of water")
+    assert game.player.get_property(Property.IS_SICK) is True
+    assert not _events(game, "recovery")
 
 
 def test_raw_water_that_requires_boiling_does_not_cure():

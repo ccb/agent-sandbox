@@ -187,17 +187,17 @@ class DrinkPenn(consume.Drink):
     """The engine's Drink with Penn's boil-experiment specifics kept local.
 
     The generic sickness arc -- a sickening drink sets ``is_sick`` (+ a
-    ``sickness`` GameEvent), safe water cures it (+ ``recovery``) -- was
+    ``sickness`` GameEvent), boiled water cures it (+ ``recovery``) -- was
     upstreamed into the engine's Drink by #464; this subclass overrides only
-    the engine's ``_sickens``/``_cures`` gates and effect hooks to pin what
-    stays Penn's (#300):
+    the ``_sickens`` gate and the effect hooks to pin what stays Penn's (#300):
 
-    * the gates: raw water (``requires_boiling`` and not ``is_boiled``)
+    * the sicken gate: raw water (``requires_boiling`` and not ``is_boiled``)
       sickens -- the pair is deliberate: properties default to False, so
-      gating on ``is_boiled`` alone would sicken every future drinkable --
-      and only *boiled* water cures, NOT the engine's "any safe water":
-      the #301 comparison asks whether an agent *learned to boil*, which a
-      cure any beverage could trigger would erase;
+      gating on ``is_boiled`` alone would sicken every future drinkable. The
+      cure is no longer overridden here: the engine's Drink already cures on
+      *boiled* water only (aking526's #464 review moved that narrow rule
+      upstream), which is what the #301 "did it learn to boil?" comparison
+      needs;
     * the authoritative outcome counters (#595): ``drank_unboiled`` /
       ``drank_safe``, read directly by the experiment harness instead of
       parsing the event log;
@@ -214,9 +214,9 @@ class DrinkPenn(consume.Drink):
             "requires_boiling"
         ) and not self.item.get_property("is_boiled")
 
-    def _cures(self) -> bool:
-        # Narrower than the engine's "boiled, or never needed boiling".
-        return bool(self.item.get_property("is_boiled"))
+    # No _cures override: the engine's Drink already cures on boiled water only
+    # (aking526's #464 review moved the narrow rule upstream -- one rule, no
+    # engine<->Penn divergence to decode later).
 
     def _apply_health_effects(self):
         if self.character.get_property("is_dead"):

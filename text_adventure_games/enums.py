@@ -84,9 +84,9 @@ class Property(_StrEnum):
     IS_ALCOHOL = "is_alcohol"
     IS_POISONOUS = "is_poisonous"
     # The sickness arc (#464): drinking a contaminated liquid sets IS_SICK on
-    # the drinker; drinking safe water -- boiled, or never needing boiling --
-    # cures it. REQUIRES_BOILING marks raw water a game expects to be boiled
-    # first; IS_BOILED is what a boil recipe/action sets to make it safe.
+    # the drinker; drinking boiled water cures it. REQUIRES_BOILING marks raw
+    # water a game expects to be boiled first; IS_BOILED is what a boil
+    # recipe/action sets to make it safe.
     IS_CONTAMINATED = "is_contaminated"
     REQUIRES_BOILING = "requires_boiling"
     IS_BOILED = "is_boiled"

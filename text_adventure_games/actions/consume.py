@@ -164,25 +164,28 @@ class Drink(base.Action):
 
         self._apply_health_effects()
 
-    # -- the sickness arc (#464): bad drinks sicken, safe water cures -------
+    # -- the sickness arc (#464): bad drinks sicken, boiled water cures -----
     #
     # Lifted from the Penn boil-water port (#300), where the arc drink ->
     # sicken -> boil -> recover is the measurable motivation signal for its
     # agents. The two gate methods are the subclass seam: a game overrides
-    # them to change WHICH drinks sicken or cure (the Penn port keys sickening
-    # on raw water and narrows the cure to boiled water) without touching the
-    # effects, narration, or events.
+    # them to change WHICH drinks sicken or cure without touching the effects,
+    # narration, or events (the Penn port keys sickening on raw water).
 
     def _sickens(self) -> bool:
         """Does this drink sicken the drinker? Contaminated liquids do."""
         return bool(self.item.get_property(Property.IS_CONTAMINATED))
 
     def _cures(self) -> bool:
-        """Does this drink cure a sick drinker? Safe water does -- boiled,
-        or never needing boiling in the first place."""
-        return bool(
-            self.item.get_property(Property.IS_BOILED)
-        ) or not self.item.get_property(Property.REQUIRES_BOILING)
+        """Does this drink cure a sick drinker? Only *boiled* water does.
+
+        Deliberately narrow (aking526's #464 review): a loose "any safe
+        beverage cures" default would mean, in any engine game, that juice or
+        beer clears dysentery -- surprising for the library students build on,
+        and it would erase the #301 signal of whether an agent *learned to
+        boil*. A game that wants a different cure (e.g. spring water) overrides
+        this one-line seam."""
+        return bool(self.item.get_property(Property.IS_BOILED))
 
     def _apply_health_effects(self):
         """Apply the sicken/cure pair after the drink itself resolves.
