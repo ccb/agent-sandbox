@@ -86,6 +86,8 @@ func _initialize() -> void:
 	_check(PayloadGuards.is_known_kind("wish"), "wish is a known kind (#625)")
 	_check(PayloadGuards.is_known_kind("intervention"),
 		"intervention is a known kind (#687)")
+	_check(PayloadGuards.is_known_kind("deciding"),
+		"deciding is a known kind (#756)")
 	_check(not PayloadGuards.is_known_kind("bogus"), "an unrecognized kind is unknown")
 	_check(not PayloadGuards.is_known_kind(""), "empty kind is unknown")
 

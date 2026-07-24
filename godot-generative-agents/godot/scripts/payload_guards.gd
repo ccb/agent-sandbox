@@ -78,7 +78,7 @@ static func schema_ok(meta: Dictionary, supported: String) -> bool:
 
 # --- feed record kind ---
 
-const KNOWN_KINDS := ["frame", "status", "engine", "wish", "intervention"]
+const KNOWN_KINDS := ["frame", "status", "engine", "wish", "intervention", "deciding"]
 
 
 static func is_known_kind(kind: String) -> bool:
@@ -87,7 +87,8 @@ static func is_known_kind(kind: String) -> bool:
 	## not dropped without a breadcrumb. `wish` (#622) is known as of #625 (the
 	## viewer surfaces it: scene marker + HUD row + timeline). `intervention`
 	## (a human touching the run, #369) is known as of #687 (viewer surfaces it
-	## as a HUD event-log row).
+	## as a HUD event-log row). `deciding` (the per-agent thinking lifecycle,
+	## #551) is known as of #756 (viewer drives the deciding indicator with it).
 	return KNOWN_KINDS.has(kind)
 
 
