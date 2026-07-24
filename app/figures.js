@@ -10,7 +10,7 @@
    and disconnected nodes drop off the clock automatically. */
 (() => {
   "use strict";
-  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "chimney-f": ["svg", 640, 360], "chimney-g": ["svg", 640, 360], "chimney-h": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-c": ["svg", 640, 400], "cyl-o": ["svg", 640, 400], "cyl-v": ["svg", 640, 400], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
+  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "canopic-c-m": ["svg", 640, 720], "centipede": ["svg", 640, 360], "chimney-f": ["svg", 640, 360], "chimney-g": ["svg", 640, 360], "chimney-h": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-c": ["svg", 640, 400], "cyl-o": ["svg", 640, 400], "cyl-v": ["svg", 640, 400], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
   const FIG = {
     _defs: {}, _uid: 0, _ticks: [], _timer: null, _target: null,
     MAX_LIVE: 3,
@@ -450,6 +450,86 @@
         call.textContent = c.text;
       } else { call.textContent = ""; callLead.setAttribute("points", ""); }
       const left = Math.max(0, 10 - Math.floor(Math.max(0, T - 20) / 9));
+      cells.forEach((r, i) => r.setAttribute("fill-opacity", i < left ? .8 : .08));
+      verdict.textContent = left === 0
+        ? "TRIBUTE ACCEPTED: PEACE, PURCHASED DEEP"
+        : left <= 3 ? "ADVICE: PRODUCE THE DATES" : "";
+    });
+  });
+
+  /* ---------------- 04-m: PTHALO-JACKAL (phone twin) ----------------
+     The creature entry, relaid for phone: the jackal drawn big up top, then the
+     guide callouts and the verdict set large below. */
+  FIG._define("jackal-m", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 28, PH_BRIGHT);
+    const kick = label(svg, 620, 34, 15, PH_DIM); kick.setAttribute("text-anchor", "end");
+    kick.textContent = "FAUNA / DESERT";
+    const JDOTS = stipple(svg, "dots-jackalm", PH, 1.1);
+    // the jackal, prowling left, drawn big -- a group that bobs on the gait
+    const gJ = el(svg, "g", {});
+    const J = (name, attrs) => el(gJ, name, attrs);
+    // top contour: nose -> skull -> swept ears -> back -> hip -> tail base
+    J("polyline", { fill: "none", stroke: PH, "stroke-width": 2.4, points:
+      "70,300 96,282 128,268 150,256 158,250 148,168 190,224 " +
+      "202,228 246,164 274,220 320,232 402,224 470,236 512,262 520,280" });
+    // underside: jaw -> throat -> chest -> belly -> flank
+    J("polyline", { fill: "none", stroke: PH, "stroke-width": 2.4, points:
+      "70,300 78,326 110,338 156,334 214,310 280,296 330,320 360,360 " +
+      "440,372 500,368 520,340" });
+    // the bared grin
+    J("polyline", { fill: "none", stroke: PH, "stroke-width": 1.8, points:
+      "82,312 92,326 102,310 112,326 122,312 132,325 142,314 152,326" });
+    // the eye: yellow, slanted, doing sums
+    J("polygon", { points: "150,272 168,262 186,272 168,280", fill: "#ffd76a",
+      stroke: "#ffd76a", "stroke-width": 1 });
+    const eye = J("circle", { cx: 170, cy: 272, r: 3, fill: BG });
+    // fur along the spine
+    for (let i = 0; i < 14; i++) {
+      const x = 250 + i * 20, len = i < 5 ? 18 - i * 2 : 8;
+      J("line", { x1: x, y1: 224 + i * 1.2, x2: x - 7, y2: 224 + i * 1.2 - len,
+        stroke: PH, "stroke-width": 1.4 });
+    }
+    // the brush tail, halftoned, trailing
+    J("polygon", { fill: JDOTS, stroke: PH, "stroke-width": 1.8, points:
+      "520,280 566,320 604,372 566,382 512,340 486,300" });
+    // the walking legs
+    const LEGS = [[210, 310], [268, 300], [420, 320], [470, 316]].map(([ax, ay], i) => ({
+      ax, ay, ph: i * .5, near: i % 2,
+      leg: J("polyline", { fill: "none", stroke: PH, "stroke-width": i % 2 ? 3.4 : 2.4,
+        "stroke-linecap": "round", opacity: i % 2 ? 1 : .55 }),
+    }));
+    // the ground ticks, sliding under the walk
+    const gGround = el(svg, "g", {});
+    for (let x = 30; x < 610; x += 20)
+      el(gGround, "line", { x1: x, y1: 408, x2: x + 9, y2: 408, stroke: PH_DIM });
+    // the guide callouts, big
+    const CALL = ["EYES: DOING SUMS", "NOSE: FINDS MEAT AT TWO ROOMS", "COAT: PTHALO No.9"];
+    const calls = CALL.map((c, i) => label(svg, 40, 470 + i * 40, 21, PH));
+    // the PATIENCE gauge + verdict
+    label(svg, 40, 604, 20, PH_DIM).textContent = "PATIENCE";
+    const cells = Array.from({ length: 10 }, (_, i) =>
+      el(svg, "rect", { x: 200 + i * 34, y: 588, width: 26, height: 20,
+        fill: PH, "fill-opacity": .8 }));
+    const verdict = label(svg, 320, 668, 22, FUNGUS); verdict.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 10);
+    clock(t => {
+      const T = t % 220;
+      doWipe(T);
+      typeOn(hdr, "PTHALO-JACKAL", T, 4, 1.3);
+      const bob = [0, 1, 2, 1, 0, -1, -2, -1][t % 8] * 1.1;
+      gJ.setAttribute("transform", `translate(0 ${bob})`);
+      eye.setAttribute("opacity", t % 40 < 2 ? 0 : 1);         // a rare blink
+      LEGS.forEach(L => {
+        const th = ((t % 16) / 16 + L.ph) * Math.PI * 2;
+        const fx = L.ax - 6 + 14 * Math.cos(th);
+        const fy = 404 - Math.max(0, Math.sin(th)) * 14;
+        L.leg.setAttribute("points", `${L.ax},${L.ay + bob} ${(L.ax + fx) / 2},${(L.ay + fy) / 2 + 10} ${fx},${fy}`);
+      });
+      gGround.setAttribute("transform", `translate(${(t * 5) % 20} 0)`);
+      calls.forEach((n, i) => typeOn(n, CALL[i], T, 30 + i * 16, 1.7));
+      const left = Math.max(0, 10 - Math.floor(Math.max(0, T - 40) / 12));
       cells.forEach((r, i) => r.setAttribute("fill-opacity", i < left ? .8 : .08));
       verdict.textContent = left === 0
         ? "TRIBUTE ACCEPTED: PEACE, PURCHASED DEEP"
@@ -4493,6 +4573,44 @@
       });
       if (step > 4 || T < 20) { lead.setAttribute("points", ""); payload.setAttribute("opacity", 0); }
       typeOn(foot, "PLEASE REMOVE ORGANS BEFORE INTERMENT.", T, 160, 1.8);
+    });
+  });
+
+  /* ---------------- 03-C-m: the canopic system, supine (phone twin) ----------------
+     The five-jar procedure relaid as a vertical inventory, so each organ->jar
+     pairing reads big on a phone. Reuses the headGlyph stopper heads. */
+  FIG._define("canopic-c-m", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 27, PH_BRIGHT);
+    const kick = label(svg, 620, 34, 15, PH_DIM); kick.setAttribute("text-anchor", "end");
+    kick.textContent = "RITES / SUPINE";
+    const JARS = [
+      ["LUNGS", "BABOON"], ["LIVER", "HUMAN"], ["EYES", "MANTIS"],
+      ["INTESTINES", "FALCON"], ["BRAIN", "JACKAL"],
+    ];
+    const rows = JARS.map(([organ, head], i) => {
+      const y = 130 + i * 100;                                 // 130..530
+      // the jar body, and the animal-head stopper (glyph drawn ~y273, moved up)
+      el(svg, "polygon", { points: `60,${y + 58} 120,${y + 58} 110,${y + 14} 70,${y + 14}`,
+        fill: PH, "fill-opacity": .10, stroke: PH, "stroke-width": 1.8 });
+      const g = el(svg, "g", { transform: `translate(0 ${y - 273})` });
+      headGlyph(g, head, 90);
+      const organL = label(svg, 158, y - 2, 26, PH_BRIGHT);
+      const headL = label(svg, 158, y + 26, 17, PH_DIM);
+      headL.textContent = "— " + head + " STOPPER";
+      return { organ, organL, i };
+    });
+    const foot1 = label(svg, 320, 648, 22, FUNGUS); foot1.setAttribute("text-anchor", "middle");
+    const foot2 = label(svg, 320, 680, 22, FUNGUS); foot2.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 10);
+    clock(t => {
+      const T = t % 220;
+      doWipe(T);
+      typeOn(hdr, "THE CANOPIC SYSTEM", T, 4, 1.3);
+      rows.forEach(r => typeOn(r.organL, r.organ, T, 20 + r.i * 16, 1.6));
+      typeOn(foot1, "PLEASE REMOVE ORGANS", T, 130, 1.6);
+      typeOn(foot2, "BEFORE INTERMENT.", T, 150, 1.6);
     });
   });
 
