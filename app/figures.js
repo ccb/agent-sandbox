@@ -5116,17 +5116,13 @@
 
   /* ---------------- 17-C-m: the approach, thin curls (phone twin) ---------------- */
   /* Phone twin of 17-C. The desktop scene is carried over whole -- every
-     coordinate inside SC is 17-C's scene space, scaled 1.5x into the portrait
-     frame -- and only the type is re-set: a 26px title up top, the 24px footer
-     below the ground. terminal.js picks it by rendered width. */
+     coordinate inside SC is 17-C's scene space, scaled 1.6x into the portrait
+     frame. Titleless, like the desktop card; only the footer is re-set, at
+     24px below the ground. terminal.js picks it by rendered width. */
   FIG._define("ext1c-m", "svg", function (svg) {
     el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
-    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
-    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
-    const kick = label(svg, 620, 34, 15, PH_DIM); kick.setAttribute("text-anchor", "end");
-    kick.textContent = "ALTERNATE FOR 17";
     const XDOTS = stipple(svg, "dots-ext1cm", PH, .8);
-    const SC = el(svg, "g", { transform: "translate(-160 8) scale(1.5)" });
+    const SC = el(svg, "g", { transform: "translate(-192 -16) scale(1.6)" });
     el(SC, "line", { x1: 0, y1: 300, x2: 640, y2: 300, stroke: FUNGUS,
       "stroke-width": 1.4, opacity: .8 });
     el(SC, "polyline", { fill: "none", stroke: PH_DIM,
@@ -5170,7 +5166,6 @@
     clock(t => {
       const T = t % 220;
       doWipe(T);
-      typeOn(hdr, "THE APPROACH, THIN CURLS", T, 4, 1.2);
       tendrils.forEach((n, i) => {
         const bx = 344 + i * 4, sway = Math.sin(t * .12 + i * 2) * 6;
         const pts = Array.from({ length: 7 }, (_, k) => {
