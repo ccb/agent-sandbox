@@ -176,3 +176,36 @@ nothing until twinned.
   or should they stay close to the current height with fewer elements?
 - **Scope:** twin all 77 eventually, or deliberately stop at the text-carrying
   subset and let spectacle cards ride the downscale?
+
+## Overnight batch progress (autonomous run)
+
+**44 phone twins live** at https://ccb.github.io/tomb-of-nassak-an-rah/animations-iphone/
+(each `KEY-m` authored in the reel; `test_figures.py` green; deploy via
+`./app/deploy_iphone_reel.sh`, which touches only that dir, not the game).
+
+**Method that works** (use for the rest):
+1. Canon text for every card is in the spec sheet an agent extracted (headers,
+   footers, callouts verbatim) — CCB cares about exact copy, so pull it from the
+   reel block, never invent. (Agent-drafted art is fine; agent-drafted *text*
+   fabricates — always reconcile against canon.)
+2. Families share a phone helper in the reel's helper scope, instantiated from a
+   data table: `cylsCardM` (6), `jarCardM` (5, reuses `headGlyph`), `chimCardM`
+   (4), `autarchCardM` (3), `sphereCardM` (4), `mysticCardM` (3), `spawnCardM`
+   (3), `gutsCardM` (4), `tankCardM` (3), `ulfireCardM` (2).
+3. Convention: 640x720 portrait, rule at y44, big typed header (~22-30px),
+   subject up top, big-type furniture below, footer wrapped to <=2 lines.
+   Author text ~2.5x desktop px. Unique stipple id `dots-<key>`.
+4. Tooling in scratchpad: `integrate.py KEY...` splices `cards/KEY.js` + `.slate`
+   into the reel; `vg.py KEY-m...` renders at 356px and reports pageerrors/empties
+   + a contact sheet to eyeball.
+
+**Done (44):** road, ext1c, ext1e, epitaph, canopic-c, jackal, bats-c,
+cylinders(+b,-a,-c,-v,-o), jar-mantis/jackal/falcon/baboon/human,
+centipede, chimney-f/g/h, autarch/-c/-e, sphere-b/d/e/f, mystic-b/c/f,
+spawn-a/b/c, guts-a/b/c/lash, tank/flood/tank-f, ulfire/-u.
+
+**Remaining SVG (25):** silas, boots, resp, flask, dagger, core, shard, critch,
+hound, wagon, manifest, fungus, seal, seal-b, zoxen, zoxen-b,
+mem-mother/bath/kestrel/raising/embalm (memFrame family), youth-a/b/c/d.
+**Deferred — canvas cards (7):** blade, bats, glowstone/-b/-c, tesseract/-u
+(they draw via ctx/3-D, not SVG; need a canvas-specific pass).
