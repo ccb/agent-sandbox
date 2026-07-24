@@ -10,7 +10,7 @@
    and disconnected nodes drop off the clock automatically. */
 (() => {
   "use strict";
-  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-c-m": ["svg", 640, 720], "autarch-e": ["svg", 640, 420], "autarch-e-m": ["svg", 640, 720], "autarch-m": ["svg", 640, 720], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "bats-c-m": ["svg", 640, 720], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "canopic-c-m": ["svg", 640, 720], "centipede": ["svg", 640, 360], "centipede-m": ["svg", 640, 720], "chimney-f": ["svg", 640, 360], "chimney-f-m": ["svg", 640, 720], "chimney-g": ["svg", 640, 360], "chimney-g-m": ["svg", 640, 720], "chimney-h": ["svg", 640, 360], "chimney-h-m": ["svg", 640, 720], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-a-m": ["svg", 640, 720], "cyl-c": ["svg", 640, 400], "cyl-c-m": ["svg", 640, 720], "cyl-o": ["svg", 640, 400], "cyl-o-m": ["svg", 640, 720], "cyl-v": ["svg", 640, 400], "cyl-v-m": ["svg", 640, 720], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "cylinders-b-m": ["svg", 640, 720], "cylinders-m": ["svg", 640, 720], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-baboon-m": ["svg", 640, 720], "jar-falcon": ["svg", 640, 300], "jar-falcon-m": ["svg", 640, 720], "jar-human": ["svg", 640, 300], "jar-human-m": ["svg", 640, 720], "jar-jackal": ["svg", 640, 300], "jar-jackal-m": ["svg", 640, 720], "jar-mantis": ["svg", 640, 300], "jar-mantis-m": ["svg", 640, 720], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
+  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-c-m": ["svg", 640, 720], "autarch-e": ["svg", 640, 420], "autarch-e-m": ["svg", 640, 720], "autarch-m": ["svg", 640, 720], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "bats-c-m": ["svg", 640, 720], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "canopic-c-m": ["svg", 640, 720], "centipede": ["svg", 640, 360], "centipede-m": ["svg", 640, 720], "chimney-f": ["svg", 640, 360], "chimney-f-m": ["svg", 640, 720], "chimney-g": ["svg", 640, 360], "chimney-g-m": ["svg", 640, 720], "chimney-h": ["svg", 640, 360], "chimney-h-m": ["svg", 640, 720], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-a-m": ["svg", 640, 720], "cyl-c": ["svg", 640, 400], "cyl-c-m": ["svg", 640, 720], "cyl-o": ["svg", 640, 400], "cyl-o-m": ["svg", 640, 720], "cyl-v": ["svg", 640, 400], "cyl-v-m": ["svg", 640, 720], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "cylinders-b-m": ["svg", 640, 720], "cylinders-m": ["svg", 640, 720], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-baboon-m": ["svg", 640, 720], "jar-falcon": ["svg", 640, 300], "jar-falcon-m": ["svg", 640, 720], "jar-human": ["svg", 640, 300], "jar-human-m": ["svg", 640, 720], "jar-jackal": ["svg", 640, 300], "jar-jackal-m": ["svg", 640, 720], "jar-mantis": ["svg", 640, 300], "jar-mantis-m": ["svg", 640, 720], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-b-m": ["svg", 640, 720], "sphere-d": ["svg", 640, 420], "sphere-d-m": ["svg", 640, 720], "sphere-e": ["svg", 640, 420], "sphere-e-m": ["svg", 640, 720], "sphere-f": ["svg", 640, 420], "sphere-f-m": ["svg", 640, 720], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
   const FIG = {
     _defs: {}, _uid: 0, _ticks: [], _timer: null, _target: null,
     MAX_LIVE: 3,
@@ -570,6 +570,84 @@
       if (cells) { const on = Math.max(0, 10 - Math.floor(T / 20));
         cells.forEach((r, i) => r.setAttribute("fill-opacity", i < on ? .8 : .1)); }
       foots.forEach((ft, i) => typeOn(ft.n, ft.f, T, 120 + i * 20, 1.6));
+    });
+  }
+
+  // the zero-g burial sphere, phone layout -- shared by sphere-b/d/e/f-m.
+  // cfg = { key, header, state:'upright'|'reforged'|'shatter-vacant'|'shatter-tenant', gauge, callouts, footer }
+  function sphereCardM(svg, cfg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 22, PH_BRIGHT);
+    const FD = stipple(svg, "dots-" + cfg.key, PH_DIM, 1.1);
+    const CX = 320, CY = 292;
+    const shattered = cfg.state.indexOf("shatter") === 0;
+    const tenant = cfg.state === "upright" || cfg.state === "shatter-tenant";
+    el(svg, "circle", { cx: CX, cy: CY, r: 210, fill: "none", stroke: PH_DIM });  // the chamber
+    // a few orbiting motes on the chamber
+    const motes = Array.from({ length: 10 }, (_, i) => ({ q: el(svg, "circle",
+      { r: 2, fill: PH_BRIGHT, opacity: .7 }), a: i * Math.PI / 5, r: 150 + (i % 3) * 26 }));
+    const rings = [], shards = [];
+    if (!shattered) {
+      el(svg, "ellipse", { cx: CX, cy: CY, rx: 118, ry: 156, fill: FD, stroke: PH, "stroke-width": 2.4 });
+      if (cfg.state === "upright")
+        el(svg, "line", { x1: CX, y1: CY - 154, x2: CX, y2: CY + 154, stroke: PH_DIM });  // the seam
+      if (cfg.state === "reforged")
+        for (let k = 0; k < 3; k++) rings.push(el(svg, "ellipse", { cx: CX, cy: CY,
+          fill: "none", stroke: PH_BRIGHT, opacity: .5 }));
+    } else {
+      el(svg, "ellipse", { cx: CX, cy: CY, rx: 118, ry: 156, fill: "none",
+        stroke: PH_DIM, "stroke-dasharray": "5 5" });                    // the ghost home
+      for (let s = 0; s < 6; s++) {
+        const a = s * Math.PI / 3;
+        shards.push({ q: el(svg, "polygon", { fill: FD, stroke: PH, "stroke-width": 1.8, points:
+          `${CX},${CY} ${CX + Math.cos(a) * 118},${CY + Math.sin(a) * 156} ` +
+          `${CX + Math.cos(a + 1.05) * 118},${CY + Math.sin(a + 1.05) * 156}` }), a });
+      }
+    }
+    // the fungus tenant -- a knot with coiling tendrils -- when present
+    const tends = [];
+    if (tenant) {
+      el(svg, "circle", { cx: CX, cy: CY, r: 20, fill: FUNGUS, "fill-opacity": .5, stroke: FUNGUS });
+      for (let i = 0; i < 6; i++)
+        tends.push({ q: el(svg, "polyline", { fill: "none", stroke: FUNGUS, "stroke-width": 2 }), a: i * Math.PI / 3 });
+    }
+    let cells = null;
+    if (cfg.gauge) {
+      label(svg, 40, 556, 19, PH_DIM).textContent = cfg.gauge;
+      cells = Array.from({ length: 10 }, (_, i) => el(svg, "rect", { x: 210 + i * 36, y: 540,
+        width: 26, height: 20, fill: PH, "fill-opacity": .8 }));
+    }
+    const calls = (cfg.callouts || []).slice(0, 3).map((c, i) => label(svg, 40, 584 + i * 28, 16, PH_DIM));
+    const fw = cfg.footer, cut = fw.length > 34 ? fw.lastIndexOf(" ", 34) : -1;
+    const fL1 = cut > 0 ? fw.slice(0, cut) : fw, fL2 = cut > 0 ? fw.slice(cut + 1) : "";
+    const foot1 = label(svg, 320, 668, 21, FUNGUS); foot1.setAttribute("text-anchor", "middle");
+    const foot2 = label(svg, 320, 698, 21, FUNGUS); foot2.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 220;
+      doWipe(T);
+      typeOn(hdr, cfg.header, T, 4, 1.2);
+      motes.forEach((m, i) => { const a = m.a + t * .01 * (1 + i % 2);
+        m.q.setAttribute("cx", CX + Math.cos(a) * m.r); m.q.setAttribute("cy", CY + Math.sin(a) * m.r); });
+      rings.forEach((r, k) => { const g = ((t * 2 + k * 30) % 90) / 90;
+        r.setAttribute("rx", 118 * g); r.setAttribute("ry", 156 * g); r.setAttribute("opacity", .6 * (1 - g)); });
+      shards.forEach((s, i) => {                              // drift out (tenant) or breathe (vacant)
+        const out = cfg.state === "shatter-tenant" ? 40 + (t % 120) * .4 : Math.abs(Math.sin(t * .05 + i)) * 22;
+        s.q.setAttribute("transform", `translate(${Math.cos(s.a) * out} ${Math.sin(s.a) * out})`);
+      });
+      tends.forEach((td, i) => {
+        const pts = [[CX, CY]];
+        for (let q = 1; q <= 4; q++) {
+          const sway = Math.sin(t * .1 + q + i) * 5;
+          pts.push([CX + Math.cos(td.a) * q * 22 + sway, CY + Math.sin(td.a) * q * 22]);
+        }
+        td.q.setAttribute("points", pts.map(p => p.join(",")).join(" "));
+      });
+      if (cells) { const on = 4 + Math.floor(3 * (1 + Math.sin(t * .08))); cells.forEach((r, i) => r.setAttribute("fill-opacity", i < on ? .8 : .1)); }
+      (cfg.callouts || []).slice(0, 3).forEach((c, i) => typeOn(calls[i], c, T, 40 + i * 16, 1.6));
+      typeOn(foot1, fL1, T, 150, 1.7);
+      typeOn(foot2, fL2, T, 150 + fL1.length, 1.7);
     });
   }
 
@@ -7270,6 +7348,26 @@
   /* ---------------- autarch-e-m (phone twin) ---------------- */
   FIG._define("autarch-e-m", "svg", function (svg) {
     autarchCardM(svg, { key: "autarch-e-m", header: "THE HORROR, ABLAZE", state: "fire", footers: ["VIGOR", "ABLAZE, IT CANNOT MEND. KEEP CUTTING.", "IT DOES NOT CLOSE AGAIN."], gauge: "VIGOR" });
+  });
+
+  /* ---------------- sphere-b-m (phone twin) ---------------- */
+  FIG._define("sphere-b-m", "svg", function (svg) {
+    sphereCardM(svg, { key: "sphere-b-m", header: "BURIAL SPHERE OF NASSAK AN-RAH", state: "upright", gauge: "THE CHURN", callouts: ["THROAT: THE FUNGUS COMES DOWN IT", "SEAM: VERTICAL, FINE AS A HAIR", "TENANT: COILED TALL, BREATHING SLOW"], footer: "PRY IT, AND IT WILL MIND." });
+  });
+
+  /* ---------------- sphere-d-m (phone twin) ---------------- */
+  FIG._define("sphere-d-m", "svg", function (svg) {
+    sphereCardM(svg, { key: "sphere-d-m", header: "BURIAL SPHERE OF NASSAK AN-RAH", state: "reforged", gauge: "THE KEEPING", callouts: ["FIELD: ANTI-ENTROPY, HOLDING", "SEAM: CLOSED. THE GLASS FORGAVE IT", "TENANT: ASLEEP, DREAMING SOMETHING KIND"], footer: "FOUR THOUSAND YEARS INTO A GOOD NIGHT'S SLEEP." });
+  });
+
+  /* ---------------- sphere-e-m (phone twin) ---------------- */
+  FIG._define("sphere-e-m", "svg", function (svg) {
+    sphereCardM(svg, { key: "sphere-e-m", header: "BURIAL SPHERE OF NASSAK AN-RAH", state: "shatter-vacant", gauge: "THE DRIFT", callouts: ["SHARDS: SIX, FULL-CUT, KEEPING THEIR CURVE", "CRACKS: SIX, ALL TELLING THE SAME STORY", "PRAYERS: ONE OF THEM IS A MENDING"], footer: "THE SHARDS REMEMBER THEIR PLACES." });
+  });
+
+  /* ---------------- sphere-f-m (phone twin) ---------------- */
+  FIG._define("sphere-f-m", "svg", function (svg) {
+    sphereCardM(svg, { key: "sphere-f-m", header: "BURIAL SPHERE OF NASSAK AN-RAH", state: "shatter-tenant", gauge: "THE CHURN", callouts: ["TENANT: OUT", "SHARDS: SIX, SPINNING OUTWARD", "THROAT: THE FUNGUS STILL COMES DOWN IT"], footer: "IT MINDED." });
   });
 
 })();
