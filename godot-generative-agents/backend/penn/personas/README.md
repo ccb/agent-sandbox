@@ -74,8 +74,14 @@ west"). Plus two optional blocks that compose into the world's top level:
 
 - `relationships:` — seed social-graph edges (`{a, b, kind, closeness,
   description}`; `closeness` is 1 (acquaintance) to 5 (inseparable) and drives
-  edge thickness in the viewer's social-graph pop-up, #252). `description`
-  stays natural language so a future pass (#409) can seed it into agent memory.
+  edge thickness in the viewer's social-graph pop-up, #252). Since #779 an edge
+  is also **seeded into both ends' agent memory** at t=0 (importance 3.0, tagged
+  `seed`/`relationship`): one memory each, naming the other person, the `kind`,
+  and the `closeness` as a sentence ("We know each other a little.") — see
+  `prompt_templates/relationship_memory.prompty`. So `kind` and `description`
+  are read by the *model*, not just drawn: keep them natural language, write
+  `description` as something true of the pair (both ends see the same text), and
+  expect the wording to shape how the two behave when they meet.
 - `meetings:` — scripted encounters (`{label, at, participants, dialogue}`)
   the replay/live conversation injectors play when the participants are
   actually co-located (proximity-honest: if they never converge in a given

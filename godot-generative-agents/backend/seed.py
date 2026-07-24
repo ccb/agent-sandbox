@@ -34,6 +34,19 @@ from .prompt_templates import render
 # priors are notable background, not the agent's active intention. Tunable.
 RELATIONSHIP_IMPORTANCE = 3.0
 
+# How a world edge's `closeness` (1..5, validated by penn_world.relationships_meta)
+# reads inside the seeded memory (#779). Words, not the number: the memory is text
+# a model reasons over, and "we barely know each other" is a far stronger signal
+# than "closeness 1". Nothing in the engine branches on closeness -- it reaches the
+# agent only through this sentence.
+CLOSENESS_PHRASE = {
+    1: "We have only just met and barely know each other.",
+    2: "We know each other a little.",
+    3: "We know each other fairly well.",
+    4: "We are close.",
+    5: "We are extremely close.",
+}
+
 
 def load_relationships(csv_path: str) -> dict[str, list[str]]:
     """Parse the relationships CSV into ``{persona name: [statement, ...]}``.
@@ -55,6 +68,48 @@ def load_relationships(csv_path: str) -> dict[str, list[str]]:
             if name:
                 relationships[name] = statements
     return relationships
+
+
+def relationship_statements(name: str, edges: list[dict]) -> list[str]:
+    """One first-person statement per world edge *name* is an endpoint of (#779).
+
+    The other half of :func:`load_relationships`: same
+    ``[statement, ...]`` vocabulary, sourced from a world YAML's validated
+    ``relationships`` block (``{a, b, kind, closeness, description}`` --
+    ``penn_world.relationships_meta``) instead of the upstream Smallville CSV.
+    Both feed the one seeder, :func:`seed_relationships`.
+
+    An edge is authored *once*, under its first-named persona, but both ends
+    need to know -- so this is called per agent and reads the edge from that
+    agent's side: the statement names the *other* person (which is what makes
+    it retrievable, since the conversation path queries memory by the
+    listener's name -- ``conversation._dialogue_observation``). Edges that
+    don't touch *name* are skipped, so a caller may pass the world's whole
+    list.
+
+    ``kind`` and ``description`` are optional (``relationships_meta`` defaults
+    both to ``""``); ``closeness`` outside 1..5 simply contributes no sentence
+    rather than raising -- the authoring gate upstream already bounds it.
+    """
+    statements = []
+    for edge in edges:
+        a, b = edge.get("a"), edge.get("b")
+        if name == a:
+            other = b
+        elif name == b:
+            other = a
+        else:
+            continue  # an edge between two other people
+        statements.append(
+            render(
+                "relationship_memory",
+                other=other,
+                kind=edge.get("kind") or "",
+                closeness_note=CLOSENESS_PHRASE.get(edge.get("closeness") or 0, ""),
+                description=edge.get("description") or "",
+            )
+        )
+    return statements
 
 
 def load_spatial_memory(personas_dir: str, name: str) -> dict:
