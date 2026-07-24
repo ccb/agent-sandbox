@@ -19,7 +19,11 @@ Run from the repo root (so `uv run` finds the engine env)::
     uv run python godot-generative-agents/backend/penn/generate_penn_replay.py
     uv run python godot-generative-agents/backend/penn/generate_penn_replay.py --steps 600
 
-Writes: godot-generative-agents/godot/maps/penn_replay.json
+Writes the replay to `godot-generative-agents/godot/maps/penn_replay.json` and,
+since #752, also saves the run to the shared RunStore (`godot-generative-agents/
+runs/`) so it appears in the Past-runs browser and is re-runnable -- like every
+other entry point. Pass `--no-persist` for a throwaway bake (replay file only, no
+stored run), e.g. when iterating on the map.
 """
 
 import argparse
@@ -180,7 +184,8 @@ def _inject_scripted_conversations(replay, meetings, vision_r):
     print(f"Injected {fired}/{len(meetings)} meetings.")
 
 
-def main() -> int:
+def _build_parser() -> argparse.ArgumentParser:
+    """The bake's CLI, as a seam so the defaults can be pinned offline (#752)."""
     ap = argparse.ArgumentParser(description="Generate the Penn replay for Godot.")
     ap.add_argument(
         "--scenario",
@@ -206,8 +211,12 @@ def main() -> int:
     ap.add_argument(
         "--persist",
         action=argparse.BooleanOptionalAction,
-        default=False,
-        help="also record this bake into the #304 RunStore (runs/<run_id>/ + sim.db)",
+        default=True,
+        help="record this bake durably (#304), ON BY DEFAULT: a runs/<run_id>/ "
+        "entry (frames + events + wishes) plus a sim.db row, under "
+        "godot-generative-agents/runs/ -- so every entry point (viewer/script/web) "
+        "default-saves the run to the one shared store (#752). --no-persist makes "
+        "the bake ephemeral (replay file only, no store rows) for dev/throwaway bakes.",
     )
     ap.add_argument(
         "--runs-dir",
@@ -222,7 +231,11 @@ def main() -> int:
         "bake. scripted: the key-free full-feature brain (#563) -- bakes a replay "
         "that exercises the tool loop, cognition tools, conversation, reflection.",
     )
-    args = ap.parse_args()
+    return ap
+
+
+def main() -> int:
+    args = _build_parser().parse_args()
 
     # Resolve the scenario's world/steps/out, letting explicit flags win.
     scenario = SCENARIOS[args.scenario]

@@ -214,7 +214,9 @@ def test_bake_meta_carries_relationships(tmp_path, monkeypatch):
 
     out = tmp_path / "r.json"
     monkeypatch.setattr(
-        sys, "argv", ["generate_penn_replay.py", "--steps", "2", "--out", str(out)]
+        sys,
+        "argv",
+        ["generate_penn_replay.py", "--steps", "2", "--out", str(out), "--no-persist"],
     )
     assert generate_penn_replay.main() == 0
     baked_meta = json.loads(out.read_text())["meta"]
