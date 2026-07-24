@@ -224,7 +224,10 @@ class _ScriptedBrain:
     $0.0015) into its ledger -- so cost accounting, the monitor, and the
     kill-switch all see real numbers. ``fail=True`` simulates a provider
     outage: every route returns None, exactly like the Anthropic adapter after
-    an API exception."""
+    an API exception -- which since #745 also means landing a zero-cost error
+    row in the ledger first."""
+
+    FAIL_ERROR = "AuthenticationError: 401 key revoked mid-run"
 
     def __init__(self, ledger=None, fail=False):
         self.ledger = ledger or UsageLedger()
@@ -251,15 +254,31 @@ class _ScriptedBrain:
             latency_ms=42.0,
         )
 
+    def _record_failure(self, messages):
+        # The adapter's #745 except path: a zero-cost error row, then None.
+        record_call(
+            self.ledger,
+            self.context,
+            "anthropic",
+            "claude-haiku-4-5",
+            None,
+            messages,
+            None,
+            error=self.FAIL_ERROR,
+        )
+
     def chat(self, messages, max_tokens=256, temperature=0.0):
         self.chat_calls += 1
+        if self.fail:
+            self._record_failure(messages)
+            return None
         self._record(messages, None)
         return None
 
     def call_tool(self, messages, tool, max_tokens=256, temperature=0.0):
         self.tool_calls.append(tool["name"])
         if self.fail:
-            self._record(messages, None)
+            self._record_failure(messages)
             return None
         if tool["name"] == "day_outline":
             result = {"blocks": [{"label": "midday", "summary": "lunch then study"}]}
@@ -484,7 +503,7 @@ def test_real_conversation_fires_once_and_cools_down(monkeypatch):
     assert stepper.llm_client.tool_calls.count("conversation_outcome") == 2
 
 
-def test_brain_outage_degrades_to_idle_and_retry(monkeypatch):
+def test_brain_outage_degrades_to_idle_then_pauses_visibly(monkeypatch):
     stepper = _llm_stepper(monkeypatch, fail=True)
     frame = stepper.tick()  # every agent hits its decision point; every call fails
     assert set(frame) == set(stepper.order)
@@ -492,10 +511,107 @@ def test_brain_outage_degrades_to_idle_and_retry(monkeypatch):
         st = stepper.state[name]
         assert st["path"] == [] and not st["performing"]  # idled, not crashed
         assert frame[name]["act"].startswith("waking up")
-    # Still at a decision point next tick -> the stepper simply asks again.
+    # The failures were counted (#745), not swallowed: error rows in the
+    # ledger, and a consecutive-failure streak past the outage threshold.
+    assert stepper.ledger.summary()["failed_calls"] > 0
+    assert stepper._brain_error_streak >= serve_penn.BRAIN_OUTAGE_PAUSE_STREAK
+    # So the NEXT tick raises instead of burning more failing round-trips --
+    # backend.live's #637 handler turns this into a visible pause plus a
+    # status(reason="error") record carrying this message.
+    with pytest.raises(serve_penn.BrainOutage, match="consecutive LLM call"):
+        stepper.tick()
+    # The raise reset the window (a POST /resume retry): the stepper asks the
+    # brain again rather than staying wedged.
     asked = len(stepper.llm_client.tool_calls)
-    stepper.tick()
+    assert stepper.tick() is not None
     assert len(stepper.llm_client.tool_calls) > asked
+
+
+def test_midrun_llm_failures_surface_in_feed_and_usage(monkeypatch):
+    # The #745 acceptance: a mid-run API failure produces (a) an llm_error
+    # feed row naming the agent and the error class, (b) monitor llm_call
+    # rows carrying the error, and (c) countable failure totals in both
+    # usage scopes -- instead of the silent frozen-cast freeze.
+    monitor = LlmCallMonitor(stream=io.StringIO(), color=False)
+    stepper = _llm_stepper(monkeypatch, fail=True, monitor=monitor)
+    assert stepper.tick() is not None
+    events = stepper.drain_events()
+    errors = [ev for ev in events if ev["kind"] == "llm_error"]
+    assert errors, "each failed call must surface as its own llm_error feed row"
+    for ev in errors:
+        assert ev["agent"] in stepper.order
+        assert ev["error"] == _ScriptedBrain.FAIL_ERROR
+        assert ev["streak"] >= 1
+    # The monitor's request-log rows carry the error too (red ERR line).
+    llm_calls = [ev for ev in events if ev["kind"] == "llm_call"]
+    assert [ev for ev in llm_calls if ev.get("error")], "monitor rows name the error"
+    # Countable at both scopes: the lifetime summary and the run slice.
+    assert stepper.ledger.summary()["failed_calls"] == len(errors)
+    assert stepper.run_usage()["run_failed_calls"] == len(errors)
+    # Drained means drained, like every other feed buffer.
+    assert [ev for ev in stepper.drain_events() if ev["kind"] == "llm_error"] == []
+
+
+def test_llm_error_rows_ride_the_feed_without_a_monitor(monkeypatch):
+    # --no-monitor must not hide the outage: the llm_error rows come from the
+    # stepper's own ledger scan, not from the monitor's kept buffer.
+    stepper = _llm_stepper(monkeypatch, fail=True)
+    assert stepper.tick() is not None
+    events = stepper.drain_events()
+    assert [ev for ev in events if ev["kind"] == "llm_call"] == []
+    assert [ev for ev in events if ev["kind"] == "llm_error"]
+
+
+def test_recovered_brain_clears_the_failure_streak(monkeypatch):
+    stepper = _llm_stepper(monkeypatch, fail=True)
+    stepper.tick()  # failures accrue past the threshold
+    with pytest.raises(serve_penn.BrainOutage):
+        stepper.tick()  # the visible pause (and the fresh retry window)
+    stepper.llm_client.fail = False  # the provider recovered
+    assert stepper.tick() is not None  # the retry window's calls answer...
+    assert stepper._brain_error_streak == 0  # ...and clear the streak
+    assert stepper.tick() is not None  # no further outage raise
+
+
+def test_outage_reaches_the_feed_as_a_status_error(monkeypatch):
+    # End-to-end through backend.live: the BrainOutage raise rides the #637
+    # tick-error path -- the run PAUSES visibly and the feed carries a
+    # status(reason="error") record naming the outage, instead of the silent
+    # frozen-cast freeze this issue is about.
+    import asyncio
+    import contextlib
+    import threading
+
+    from backend.live import EventLog, LiveRunController, run_loop
+
+    stepper = _llm_stepper(monkeypatch, fail=True)
+
+    async def scenario():
+        controller = LiveRunController(stepper, threading.Lock())
+        log = EventLog()
+        task = asyncio.create_task(run_loop(controller, log, 0.001))
+        async with asyncio.timeout(30):
+            while not any(
+                r["kind"] == "status" and r.get("reason") == "error"
+                for r in log.since(0)
+            ):
+                await asyncio.sleep(0.001)
+        records = list(log.since(0))
+        paused = controller.paused
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+        return records, paused
+
+    records, paused = asyncio.run(scenario())
+    error = next(
+        r for r in records if r["kind"] == "status" and r.get("reason") == "error"
+    )
+    assert "BrainOutage" in error["error"] and "consecutive" in error["error"]
+    assert paused  # ticking stopped; reads keep working; POST /resume retries
+    # The per-failure llm_error rows reached the same feed.
+    engine = [r["event"] for r in records if r["kind"] == "engine"]
+    assert any(ev.get("kind") == "llm_error" for ev in engine)
 
 
 def test_cost_ceiling_ends_the_day(monkeypatch):

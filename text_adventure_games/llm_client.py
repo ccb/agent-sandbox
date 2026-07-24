@@ -973,6 +973,20 @@ class OpenAIClient:
             )
             return text
         except Exception as e:
+            # Degrading to None is the brain-outage contract, but the failure
+            # must stay countable (#745): land a zero-cost error row so a
+            # mid-run auth/quota/network outage reaches the ledger (and so the
+            # monitor and the live feed) instead of vanishing.
+            record_call(
+                getattr(self, "ledger", None),
+                getattr(self, "context", {}),
+                "openai",
+                getattr(self, "_model", "openai"),
+                None,
+                messages,
+                None,
+                error=f"{type(e).__name__}: {e}",
+            )
             if self._verbose:
                 print(f"OpenAI API error: {e}")
             return None
@@ -1037,6 +1051,17 @@ class OpenAIClient:
                 tool_choice=tool_choice,
             )
         except Exception as e:
+            # See chat() above: the failed call lands an error row (#745).
+            record_call(
+                getattr(self, "ledger", None),
+                getattr(self, "context", {}),
+                "openai",
+                getattr(self, "_model", "openai"),
+                None,
+                messages,
+                None,
+                error=f"{type(e).__name__}: {e}",
+            )
             if self._verbose:
                 print(f"OpenAI tool-call error: {e}")
             return None
@@ -1162,6 +1187,20 @@ class AnthropicClient:
             )
             return text
         except Exception as e:
+            # Degrading to None is the brain-outage contract, but the failure
+            # must stay countable (#745): land a zero-cost error row so a
+            # mid-run auth/quota/network outage reaches the ledger (and so the
+            # monitor and the live feed) instead of vanishing.
+            record_call(
+                getattr(self, "ledger", None),
+                getattr(self, "context", {}),
+                "anthropic",
+                getattr(self, "_model", "anthropic"),
+                None,
+                messages,
+                None,
+                error=f"{type(e).__name__}: {e}",
+            )
             if self._verbose:
                 print(f"Anthropic API error: {e}")
             return None
@@ -1230,6 +1269,17 @@ class AnthropicClient:
                 tool_choice=tool_choice,
             )
         except Exception as e:
+            # See chat() above: the failed call lands an error row (#745).
+            record_call(
+                getattr(self, "ledger", None),
+                getattr(self, "context", {}),
+                "anthropic",
+                getattr(self, "_model", "anthropic"),
+                None,
+                messages,
+                None,
+                error=f"{type(e).__name__}: {e}",
+            )
             if self._verbose:
                 print(f"Anthropic tool-call error: {e}")
             return None

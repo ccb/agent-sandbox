@@ -746,6 +746,24 @@ advancing **on its own** while frontends follow along:
   the per-agent filter key. This stream is the per-request *detail* — the
   aggregate [`GET /usage`](#get-usage) summary the HUD polls is unchanged.
 
+  A second `engine` sub-contract, **`event.kind: "llm_error"`** (#745): one
+  row per FAILED model call — an API error (auth revoked, quota, network) the
+  adapter degraded to an idle tick. Emitted by the stepper's own ledger scan,
+  so it rides the feed even under `--no-monitor`:
+
+  ```json
+  { "cursor": 16, "kind": "engine", "step": 12, "event": {
+      "kind": "llm_error", "agent": "Diego Torres", "role": "decide",
+      "error": "AuthenticationError: 401 key revoked", "streak": 2 } }
+  ```
+
+  `streak` is the run's consecutive-failure count at that row; once it reaches
+  the outage threshold (`serve_penn.BRAIN_OUTAGE_PAUSE_STREAK`), the next tick
+  raises and the loop's #637 handler pauses the run with a visible
+  `status(reason="error")` record — `POST /resume` retries with a fresh
+  window. Failed calls are also countable in [`GET /usage`](#get-usage)
+  (`failed_calls` lifetime, `run_failed_calls` per run).
+
 ### `GET /live`
 
 The handshake a live client reads once before following the feed:

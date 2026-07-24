@@ -178,6 +178,25 @@ def test_row_placeholders_for_missing_fields():
     assert " -" in line and "t    -" in line
 
 
+def test_failed_call_prints_and_keeps_the_error():
+    # #745: a failed call's error row (recorded by the adapters' except path)
+    # must be VISIBLE -- the printed line carries the error, and the kept
+    # record (the viewer's llm_call feed row) names it too.
+    stream = io.StringIO()
+    base, monitor, view = _view(stream=stream)
+    failure = CallRecord(
+        usage=Usage.zero("anthropic", "claude-haiku-4-5"),
+        cost_usd=0.0,
+        actor="Diego Torres",
+        error="AuthenticationError: 401 key revoked",
+    )
+    view.record(failure)
+    assert "ERR AuthenticationError: 401 key revoked" in stream.getvalue()
+    (kept,) = monitor.drain()
+    assert kept["error"] == "AuthenticationError: 401 key revoked"
+    assert base.summary()["failed_calls"] == 1  # write-through, still countable
+
+
 def test_columns_align_across_rows():
     # The whole point of the fixed widths: every field starts at the same
     # column no matter how the values vary row to row.

@@ -247,6 +247,55 @@ def test_first_try_success_records_one_call():
     assert ledger.records[0].attempt == 0
 
 
+# --- Observability: FINAL failures land an error row (#745) -------------
+#
+# Before #745, a call that exhausted its retries (or died on a non-retryable
+# error) was degraded to None with NOTHING in the ledger: a mid-run auth
+# revocation froze the whole cast at $0 with the calls counter flatlined.
+# Now the adapter's except path records a zero-cost error row first.
+
+
+def test_anthropic_final_failure_lands_an_error_row():
+    ledger = UsageLedger()
+    create = _ScheduledCreate([_Transient(429)] * 5)
+    client = _anthropic(create, max_retries=1, ledger=ledger)
+    assert client.chat(MSG) is None
+    # One retry row (attempt 0) + the final failure's error row.
+    assert ledger.summary()["calls"] == 2
+    assert ledger.summary()["failed_calls"] == 1
+    failure = ledger.records[-1]
+    assert failure.error == "_Transient: transient 429"
+    assert failure.cost_usd == 0  # a rejected call bills nothing
+
+
+def test_anthropic_non_retryable_failure_lands_an_error_row():
+    ledger = UsageLedger()
+    create = _ScheduledCreate([RuntimeError("auth revoked")] * 5)
+    client = _anthropic(create, ledger=ledger)
+    assert client.call_tool(MSG, TOOL) is None
+    assert ledger.summary()["failed_calls"] == 1
+    assert ledger.records[-1].error == "RuntimeError: auth revoked"
+
+
+def test_openai_final_failure_lands_an_error_row():
+    ledger = UsageLedger()
+    create = _ScheduledCreate([_Transient(429)] * 5)
+    client = _openai(create, max_retries=0, ledger=ledger)
+    assert client.chat(MSG) is None
+    assert ledger.summary()["failed_calls"] == 1
+    assert ledger.records[-1].error == "_Transient: transient 429"
+
+
+def test_success_records_carry_no_error():
+    ledger = UsageLedger()
+    create = _ScheduledCreate([_Transient(429)], _anthropic_chat_response("hi"))
+    client = _anthropic(create, ledger=ledger)
+    assert client.chat(MSG) == "hi"
+    # The retry row and the success row: neither is a failure.
+    assert ledger.summary()["failed_calls"] == 0
+    assert all(r.error is None for r in ledger.records)
+
+
 # --- __init__ plumbing: timeout + disabled SDK retries -----------------
 
 
