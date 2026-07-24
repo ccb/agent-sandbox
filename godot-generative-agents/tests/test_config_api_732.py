@@ -34,7 +34,25 @@ def test_library_personas_catalog():
     entries = library_personas(WORLD_DATA)
     ids = [e["id"] for e in entries]
     assert ids == sorted(ids)
-    assert set(ids) == {"diego", "tanaka", "sofia", "maya", "priya", "ellis", "marcus"}
+    assert set(ids) == {
+        # the #731 originals (default cast + first parked batch) ...
+        "diego",
+        "tanaka",
+        "sofia",
+        "maya",
+        "priya",
+        "ellis",
+        "marcus",
+        # ... plus the #762 library growth (all parked, never in the default cast)
+        "casey",
+        "debra",
+        "gus",
+        "imani",
+        "leon",
+        "nadia",
+        "rosa",
+        "theo",
+    }
     by_id = {e["id"]: e for e in entries}
     assert by_id["diego"]["name"] == "Diego Torres"
     assert by_id["diego"]["in_default_cast"] is True
