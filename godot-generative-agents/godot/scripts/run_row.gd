@@ -43,8 +43,10 @@ static func config_summary(entry: Dictionary) -> String:
 	else:
 		parts.append("default cast")
 	parts.append(str(cfg.get("brain", "?")))
+	# Temperature is honored only by the llm brain (#564); for a mock/scripted run
+	# it was inert, so don't imply it shaped that run (#734 review follow-up).
 	var temp: Variant = _config_temperature(cfg)
-	if temp != null:
+	if temp != null and str(cfg.get("brain", "")) == "llm":
 		parts.append("temp %s" % str(temp))
 	return " · ".join(parts)
 
