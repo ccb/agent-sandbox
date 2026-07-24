@@ -73,12 +73,16 @@ class Conversation:
 def can_converse(game, a, b) -> bool:
     """Whether *a* can hold a conversation with *b* right now.
 
-    Both need an attached agent (the decision-maker that supplies lines), and *b*
-    must be in *a*'s audience under the game's audibility seam -- co-located by
-    default, narrowed by any ``audience_for`` override. Symmetric in practice
-    (the default audience is mutual), but phrased from *a* as the initiator.
+    Both must be alive (a dead character may still have an agent attached, but
+    the dead don't talk -- issue #755), both need an attached agent (the
+    decision-maker that supplies lines), and *b* must be in *a*'s audience under
+    the game's audibility seam -- co-located by default, narrowed by any
+    ``audience_for`` override. Symmetric in practice (the default audience is
+    mutual), but phrased from *a* as the initiator.
     """
     if a is b:
+        return False
+    if a.get_property("is_dead") or b.get_property("is_dead"):
         return False
     if getattr(a, "agent", None) is None or getattr(b, "agent", None) is None:
         return False
