@@ -156,8 +156,14 @@ class LlmCallMonitor:
             self._kept.append(kept)
         try:
             line = self._fmt_row(n, wall, role, rec, cum)
+            # A failed call (#745): append the error so the terminal shows WHY
+            # the cast idles, and tint the whole line red like an over-budget
+            # row. The kept record above already carries rec.error (it rides
+            # to_primitive()), so the viewer's request log sees it too.
+            if rec.error:
+                line += f"  ERR {rec.error}"
             if self.color:
-                line = self._colorize(line, role, base.over_budget())
+                line = self._colorize(line, role, base.over_budget() or bool(rec.error))
             out = ""
             if first:
                 header = (
