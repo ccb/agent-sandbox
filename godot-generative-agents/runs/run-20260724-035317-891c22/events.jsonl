@@ -1,0 +1,10 @@
+{"turn":0,"actor":"Diego Torres","action":"go","summary":"travel to Meyerson Hall","payload":{"location":"Penn campus","dest":"Meyerson Hall","dir":"to meyerson hall","heard_radius":0}}
+{"turn":0,"actor":"Sofia Ramirez","action":"go","summary":"travel to Van Pelt — Kamin Gallery","payload":{"location":"Penn campus","dest":"Van Pelt — Kamin Gallery","dir":"to van pelt — kamin gallery","heard_radius":0}}
+{"turn":27,"actor":"Diego Torres","action":"perform","summary":"perform working on a studio model","payload":{"location":"Meyerson Hall","dest":"Meyerson Hall","dir":null,"heard_radius":0}}
+{"turn":92,"actor":"Diego Torres","action":"travel","summary":"travel to Van Pelt — Kamin Gallery","payload":{"location":"Meyerson Hall","dest":"Van Pelt — Kamin Gallery","dir":null,"heard_radius":0}}
+{"turn":162,"actor":"Sofia Ramirez","action":"perform","summary":"perform wandering the gallery exhibits","payload":{"location":"Van Pelt — Kamin Gallery","dest":"Van Pelt — Kamin Gallery","dir":null,"heard_radius":0}}
+{"turn":281,"actor":"Diego Torres","action":"perform","summary":"perform studying precedents in the gallery exhibits","payload":{"location":"Van Pelt — Kamin Gallery","dest":"Van Pelt — Kamin Gallery","dir":null,"heard_radius":0}}
+{"turn":351,"actor":"Diego Torres","action":"travel","summary":"travel to Van Pelt — Digital Scholarship Exchange","payload":{"location":"Van Pelt — Kamin Gallery","dest":"Van Pelt — Digital Scholarship Exchange","dir":null,"heard_radius":0}}
+{"turn":372,"actor":"Diego Torres","action":"perform","summary":"perform researching precedents for a project","payload":{"location":"Van Pelt — Digital Scholarship Exchange","dest":"Van Pelt — Digital Scholarship Exchange","dir":null,"heard_radius":0}}
+{"turn":382,"actor":"Sofia Ramirez","action":"travel","summary":"travel to Irvine Auditorium","payload":{"location":"Van Pelt — Kamin Gallery","dest":"Irvine Auditorium","dir":null,"heard_radius":0}}
+{"turn":397,"actor":"Diego Torres","action":"travel","summary":"travel to Irvine Auditorium","payload":{"location":"Van Pelt — Digital Scholarship Exchange","dest":"Irvine Auditorium","dir":null,"heard_radius":0}}
