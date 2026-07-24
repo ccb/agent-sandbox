@@ -22,6 +22,22 @@ lists every persona here with `in_default_cast`, and `POST /config {"cast":
 | `priya` | Priya Nair, CS junior | no |
 | `ellis` | Professor Ellis, historian | no |
 | `marcus` | Marcus Webb, campus tour guide | no |
+| `casey` | Casey Nguyen, visiting prospective student (criss-crossing tour day; stranger at t=0) | no (#762) |
+| `debra` | Debra Hollis, registrar's office coordinator (admin; College Hall + errand loop) | no (#762) |
+| `gus` | Gus Kowalski, facilities mechanic (criss-crosses all six buildings) | no (#762) |
+| `imani` | Imani Carter, varsity sprinter (early riser; starts on the walks) | no (#762) |
+| `leon` | Leon Brooks, circulation librarian (never leaves Van Pelt; stranger at t=0) | no (#762) |
+| `nadia` | Nadia Osei, physics postdoc (advisor--advisee pair with `tanaka`) | no (#762) |
+| `rosa` | Rosa Delgado, dining staff (early riser; never leaves Houston Hall) | no (#762) |
+| `theo` | Theo Lindqvist, philosophy junior (night owl; friend group with `imani` + `priya`) | no (#762) |
+
+The #762 entries grow the library across roles (staff, librarian, athlete,
+visitor, postdoc, admin) and schedule shapes (early-riser vs night-owl,
+one-building days vs campus criss-crossing) without touching the default
+cast, so the baked replay stays byte-identical (#640). The full-library
+sweep in `tests/test_persona_library_762.py` validates every file here:
+it must build, its places must resolve, and its activities must re-parse
+as `perform` (see the wording rules below).
 
 ## File format
 

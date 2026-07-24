@@ -1,0 +1,40 @@
+# Leon Brooks -- Van Pelt circulation librarian. Library entry (#762): NOT in
+# the default cast. Coverage: a LIBRARIAN role whose day never leaves one
+# building -- a room-to-room circuit inside Van Pelt. Deliberately no
+# `relationships:` block: he is new on staff and knows nobody at t=0, so the
+# social-graph pop-up shows his edges forming over the day (#582).
+name: Leon Brooks
+home: Penn campus
+persona: I am Leon Brooks, 36, a circulation librarian at Van Pelt. I am quiet,
+  exact, and quietly proud of the stacks -- a misshelved book bothers me more
+  than I let on. I started this semester and I'm still learning everyone's names.
+emoji: 🗂️
+# Starts on the walk outside Van Pelt's east door, a few tiles from where Maya
+# and Priya spawn, so his day opens with the walk in to the returns cart.
+start_tile:
+- 165
+- 58
+schedule:
+- place: Van Pelt — Circulation Desk
+  activity: sorting the overnight returns cart
+  emoji: 🗂️
+  steps: 120
+- place: Van Pelt — Book Stacks
+  activity: reshelving returns row by row
+  emoji: 📚
+  steps: 90
+- place: Van Pelt — Microtext Collection
+  activity: repairing a torn microfilm reel
+  emoji: 🎞️
+  steps: 60
+- place: Van Pelt — Circulation Desk
+  activity: helping students at the front desk
+  emoji: 🗂️
+  steps: 200
+- place: Van Pelt — Kamin Gallery
+  activity: straightening frames in the gallery
+  emoji: 🖼️
+  steps: 40
+- place: Van Pelt — Circulation Desk
+  activity: closing out the register for the night
+  emoji: 🌙
