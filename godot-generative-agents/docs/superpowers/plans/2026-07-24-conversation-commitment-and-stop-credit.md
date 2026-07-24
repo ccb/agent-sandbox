@@ -29,7 +29,7 @@ black. No new dependencies.
   `godot-generative-agents/tests/test_replay_contract.py:240` (runs each
   scenario under 3 different `PYTHONHASHSEED` values). This is the repo's
   hardest invariant — if it fails, the change is wrong, not the test.
-- **The worktree's venv starts bare.** Run `uv sync --extra dev server llm`
+- **The worktree's venv starts bare.** Run `uv sync --extra dev --extra server --extra llm`
   once before the first test command, or every import fails.
 - **All test commands run from the repo root** with the sim package on the path:
   `PYTHONPATH=.:godot-generative-agents uv run --no-sync pytest ...`
@@ -80,7 +80,7 @@ module would separate code that changes together.
 - [ ] **Step 1: Sync the worktree venv** (once, before any test command)
 
 ```bash
-uv sync --extra dev server llm
+uv sync --extra dev --extra server --extra llm
 ```
 
 Expected: exits 0 and creates `.venv/`. Skip if `.venv/bin/python` already exists.
