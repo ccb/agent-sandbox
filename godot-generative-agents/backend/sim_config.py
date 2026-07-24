@@ -36,6 +36,8 @@ from __future__ import annotations
 
 import json
 import os
+import types
+import typing
 from dataclasses import dataclass, field, fields, is_dataclass
 
 from text_adventure_games import memory as _memory
@@ -297,8 +299,45 @@ class SimulationConfig:
         return self.game.build_llm_client()
 
 
+def _type_ok(value, expected_type) -> bool:
+    """True if *value* matches *expected_type* (handles ``X | Y`` and ``Union``).
+
+    A local copy of the engine's ``config._type_ok`` helper -- see ``_build``.
+    A blank YAML scalar parses to ``None`` and is always accepted, even for a
+    field whose type doesn't itself include ``None`` -- YAML's ``key:`` (no
+    value) idiom means "no override, use the default", not "wrong type".
+    """
+    if value is None:
+        return True
+    origin = typing.get_origin(expected_type)
+    if origin in (typing.Union, types.UnionType):
+        return any(_type_ok(value, arg) for arg in typing.get_args(expected_type))
+    if origin is not None:
+        expected_type = origin  # e.g. dict[str, str] -> dict
+    if expected_type is bool:
+        return isinstance(value, bool)
+    if isinstance(value, bool):
+        return False  # bool is an int subclass; don't let it satisfy int/float/etc.
+    if expected_type is float:
+        return isinstance(value, (int, float))  # a YAML int is fine for a float field
+    return isinstance(value, expected_type)
+
+
+def _type_name(expected_type) -> str:
+    """Human-readable name of *expected_type* for an error message."""
+    origin = typing.get_origin(expected_type)
+    if origin in (typing.Union, types.UnionType):
+        return " or ".join(_type_name(a) for a in typing.get_args(expected_type))
+    if origin is not None:
+        expected_type = origin
+    if expected_type is type(None):
+        return "None"
+    return getattr(expected_type, "__name__", str(expected_type))
+
+
 def _build(dataclass_type, data, section_name):
-    """Construct *dataclass_type* from *data*, rejecting unknown keys clearly.
+    """Construct *dataclass_type* from *data*, rejecting unknown keys and
+    wrong-typed values clearly.
 
     A local copy of the engine's ``config._build`` helper: the port reuses the engine's
     *public* API only, so we duplicate this tiny validator rather than import a private.
@@ -312,6 +351,14 @@ def _build(dataclass_type, data, section_name):
             f"Unknown key(s) in '{section_name}' config: {sorted(unknown)}. "
             f"Valid keys: {sorted(valid)}."
         )
+    hints = typing.get_type_hints(dataclass_type)
+    for key, value in data.items():
+        expected = hints[key]
+        if not _type_ok(value, expected):
+            raise ValueError(
+                f"Config field '{section_name}.{key}' must be "
+                f"{_type_name(expected)}, got {type(value).__name__}."
+            )
     return dataclass_type(**data)
 
 
