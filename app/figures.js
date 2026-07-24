@@ -10,7 +10,7 @@
    and disconnected nodes drop off the clock automatically. */
 (() => {
   "use strict";
-  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "chimney-f": ["svg", 640, 360], "chimney-g": ["svg", 640, 360], "chimney-h": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-c": ["svg", 640, 400], "cyl-o": ["svg", 640, 400], "cyl-v": ["svg", 640, 400], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1e": ["svg", 640, 400], "flask": ["svg", 640, 360], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
+  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "chimney-f": ["svg", 640, 360], "chimney-g": ["svg", 640, 360], "chimney-h": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-c": ["svg", 640, 400], "cyl-o": ["svg", 640, 400], "cyl-v": ["svg", 640, 400], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
   const FIG = {
     _defs: {}, _uid: 0, _ticks: [], _timer: null, _target: null,
     MAX_LIVE: 3,
@@ -5102,6 +5102,71 @@
     });
   });
 
+  /* ---------------- 17-C-m: the approach, thin curls (phone twin) ----------------
+     A near-spectacle card (its only prose is the footer), so the twin draws the
+     crowned idol big on a taller portrait and sets header + footer large. */
+  FIG._define("ext1c-m", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 30, PH_BRIGHT);
+    const kick = label(svg, 620, 34, 15, PH_DIM); kick.setAttribute("text-anchor", "end");
+    kick.textContent = "AZURE STONE";
+    const XDOTS = stipple(svg, "dots-ext1cm", PH, .9);
+    // the fungus horizon, and the hatched underworld it stands over
+    el(svg, "line", { x1: 0, y1: 500, x2: 640, y2: 500, stroke: FUNGUS,
+      "stroke-width": 2, opacity: .8 });
+    el(svg, "rect", { x: 0, y: 502, width: 640, height: 130, fill: XDOTS, opacity: .3 });
+    // THE IDOL: a tall crowned monolith, a face on its body, mouth a door down
+    el(svg, "polygon", { fill: XDOTS, stroke: PH, "stroke-width": 2.4, points:
+      "250,168 262,120 286,142 300,110 320,132 340,110 354,142 378,120 390,168 " +
+      "404,320 396,430 402,500 238,500 244,430 236,320" });
+    el(svg, "circle", { cx: 320, cy: 138, r: 3, fill: PH_BRIGHT });     // the crown glint
+    el(svg, "circle", { cx: 292, cy: 320, r: 16, fill: "none", stroke: PH, "stroke-width": 1.8 });
+    el(svg, "circle", { cx: 348, cy: 320, r: 16, fill: "none", stroke: PH, "stroke-width": 1.8 });
+    el(svg, "circle", { cx: 292, cy: 320, r: 5, fill: PH_BRIGHT });
+    el(svg, "circle", { cx: 348, cy: 320, r: 5, fill: PH_BRIGHT });
+    el(svg, "path", { d: "M 288 500 L 288 424 Q 320 392 352 424 L 352 500 Z",
+      fill: BG, stroke: PH, "stroke-width": 2 });                       // the door-mouth
+    el(svg, "line", { x1: 288, y1: 500, x2: 352, y2: 500, stroke: PH_BRIGHT, "stroke-width": 2 });
+    // the thin curls, rising from the crown, orange -- weeping their drips
+    const TEND = [[300, 120, -1.4], [312, 112, -.5], [328, 112, .5], [340, 120, 1.4]];
+    const tendrils = TEND.map(() => el(svg, "polyline", { fill: "none",
+      stroke: FUNGUS, "stroke-width": 2.4 }));
+    const drips = TEND.map(() => el(svg, "circle", { r: 2.4, fill: FUNGUS }));
+    // a small walker, coming in along the horizon to stand before it
+    const walk = el(svg, "g", {});
+    el(walk, "circle", { cx: 0, cy: -22, r: 5, fill: PH_BRIGHT });
+    el(walk, "line", { x1: 0, y1: -17, x2: 0, y2: 2, stroke: PH_BRIGHT, "stroke-width": 2 });
+    const walkLegs = el(walk, "polyline", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.8 });
+    // the footer, big and wrapped
+    const F1 = label(svg, 320, 596, 24, FUNGUS); F1.setAttribute("text-anchor", "middle");
+    const F2 = label(svg, 320, 632, 24, FUNGUS); F2.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 10);
+    clock(t => {
+      const T = Math.min(t, 259);
+      doWipe(T);
+      typeOn(hdr, "THE APPROACH", T, 4, 1.3);
+      tendrils.forEach((n, i) => {
+        const [x0, y0, ph] = TEND[i];
+        const pts = [[x0, y0]];
+        for (let q = 1; q <= 5; q++) {
+          const sway = Math.sin(t * .16 + q * .9 + ph * 2) * 4 * q * .35;
+          pts.push([x0 + ph * q * 8 + sway, y0 - q * 11]);
+        }
+        n.setAttribute("points", pts.map(p => p.join(",")).join(" "));
+        const d = drips[i], dk = (t * 2 + i * 17) % 60;
+        d.setAttribute("cx", x0 + ph * 22); d.setAttribute("cy", y0 - 55 + dk);
+        d.setAttribute("opacity", dk > 46 ? 0 : .9);
+      });
+      const wx = Math.min(150, 24 + T * 1.1);
+      walk.setAttribute("transform", `translate(${wx} 500)`);
+      const st = (t % 4 < 2) ? 6 : -6;
+      walkLegs.setAttribute("points", wx < 150 ? `${-st},16 0,2 ${st},16` : "-4,16 0,2 4,16");
+      typeOn(F1, "HIS SENTENCE CONTINUES", T, 150, 1.6);
+      typeOn(F2, "UNDERGROUND.", T, 172, 1.6);
+    });
+  });
+
 
   /* ---------------- 00: the road to Gnomon ---------------- */
   FIG._define("road", "svg", function (svg) {
@@ -5876,7 +5941,8 @@
       const n = label(svg, 320, y, size, color);
       n.setAttribute("text-anchor", "middle"); return n;
     };
-    const L1 = line(332, 28, PH), L2 = line(392, 40, PH_BRIGHT);
+    const L1 = line(312, 28, PH);
+    const L2 = line(374, 30, PH_BRIGHT), L3 = line(428, 40, PH_BRIGHT);
     const press = line(614, 20, PH_DIM);
     const foot = label(svg, 320, 664, 24, FUNGUS); foot.setAttribute("text-anchor", "middle");
     const bat = el(svg, "path", { fill: "none", stroke: PH, "stroke-width": 1.8 });
@@ -5886,7 +5952,8 @@
       doWipe(T);
       typeOn(hdr, "THE EPITAPH", T, 4, 1.3);
       L1.textContent = T > 20 ? "HERE LIES" : "";
-      L2.textContent = T > 40 ? "A SCAVENGER" : "";
+      L2.textContent = T > 40 ? "A" : "";                 // stacked so the long
+      L3.textContent = T > 40 ? "SCAVENGER" : "";         // word fits the stone
       press.textContent = T > 130 && t % 8 < 4 ? "PRESS ENTER TO TRY AGAIN" : "";
       typeOn(foot, "THE TOMB KEEPS YOU.", T, 140, 1.5);
       const a = t * .05;                                      // something leathery
@@ -6503,6 +6570,118 @@
       eyeL.setAttribute("ry", blink ? 1 : 6.5); eyeL.setAttribute("rx", 6.5);
       eyeR.setAttribute("ry", blink ? 1 : 6.5); eyeR.setAttribute("rx", 6.5);
       typeOn(foot, "THREE FACES, TWO DOORS, ONE CHIMNEY.", Math.min(t, 239), 100, 1.7);
+    });
+  });
+
+  /* ---------------- 17-D-m: the approach, elevations (phone twin) ----------------
+     The survey cycles three faces of the slab; the twin draws each big, one at a
+     time, with a large two-line caption -- the elevation prose the desktop card
+     types small. */
+  FIG._define("ext1e-m", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 30, PH_BRIGHT);
+    const kick = label(svg, 620, 34, 15, PH_DIM); kick.setAttribute("text-anchor", "end");
+    kick.textContent = "SURVEY / BOTH DOORS";
+    const EDOTS = stipple(svg, "dots-ext1em", PH, .9);
+    el(svg, "line", { x1: 30, y1: 520, x2: 610, y2: 520, stroke: PH, "stroke-width": 1.6 });
+    // the slab, face-on (hidden for the plan view)
+    const slab = el(svg, "polygon", { fill: EDOTS, stroke: PH, "stroke-width": 2,
+      points: "196,172 444,172 456,520 184,520" });
+    // the crown, weeping tendrils -- on the elevations only
+    const crownG = el(svg, "g", {});
+    el(crownG, "polyline", { fill: "none", stroke: PH, "stroke-width": 2, points:
+      "268,172 282,140 300,130 312,134 320,118 332,116 340,130 352,134 366,140 372,172" });
+    el(crownG, "circle", { cx: 322, cy: 126, r: 2.4, fill: PH_BRIGHT });
+    const TEND = [[312, 124, -1.6], [320, 120, -.5], [330, 122, .6], [338, 126, 1.6]];
+    const tendrils = TEND.map(() => el(crownG, "polyline", { fill: "none",
+      stroke: FUNGUS, "stroke-width": 2.4 }));
+    // the door at the base, shared by both face elevations
+    const door = parent => {
+      el(parent, "path", { d: "M 288 520 L 288 452 Q 320 424 352 452 L 352 520 Z",
+        fill: BG, stroke: PH, "stroke-width": 2 });
+      el(parent, "line", { x1: 288, y1: 520, x2: 352, y2: 520,
+        stroke: PH_BRIGHT, "stroke-width": 2 });
+    };
+    // WEST: the Autarch, young -- a smooth swaddled oval, eyes closed
+    const west = el(svg, "g", {});
+    el(west, "ellipse", { cx: 320, cy: 312, rx: 78, ry: 94, fill: "none",
+      stroke: PH, "stroke-width": 2 });
+    el(west, "path", { d: "M 276 294 Q 292 282 308 294", fill: "none", stroke: PH, "stroke-width": 2 });
+    el(west, "path", { d: "M 332 294 Q 348 282 364 294", fill: "none", stroke: PH, "stroke-width": 2 });
+    el(west, "path", { d: "M 308 320 Q 320 330 332 320", fill: "none", stroke: PH_DIM });
+    [0, 1, 2].forEach(k => el(west, "path", { fill: "none", stroke: PH_DIM,
+      d: `M ${252 - k * 6} ${256 + k * 34} Q 320 ${238 + k * 34} ${388 + k * 6} ${256 + k * 34}` }));
+    door(west);
+    // EAST: the helmed warrior -- a great helm, eye slits, riveted band
+    const east = el(svg, "g", {});
+    el(east, "path", { fill: "none", stroke: PH, "stroke-width": 2.2, d:
+      "M 262 440 L 256 262 Q 256 184 320 178 Q 384 184 384 262 L 378 440 " +
+      "Q 352 452 320 454 Q 288 452 262 440 Z" });
+    el(east, "line", { x1: 320, y1: 178, x2: 320, y2: 308, stroke: PH, "stroke-width": 2.2 });
+    el(east, "rect", { x: 262, y: 284, width: 44, height: 14, fill: BG, stroke: PH, "stroke-width": 1.8 });
+    el(east, "rect", { x: 334, y: 284, width: 44, height: 14, fill: BG, stroke: PH, "stroke-width": 1.8 });
+    el(east, "line", { x1: 264, y1: 364, x2: 376, y2: 364, stroke: PH, "stroke-width": 1.6 });
+    [284, 312, 340, 368].forEach(x => el(east, "circle", { cx: x, cy: 374, r: 2.2, fill: PH_BRIGHT }));
+    door(east);
+    // SUMMIT: the plan view -- the upturned face, the mouth a chimney
+    const plan = el(svg, "g", {});
+    el(plan, "rect", { x: 196, y: 186, width: 248, height: 320, rx: 20, fill: "none",
+      stroke: PH, "stroke-width": 2 });
+    el(plan, "ellipse", { cx: 320, cy: 336, rx: 84, ry: 104, fill: "none", stroke: PH, "stroke-width": 2 });
+    el(plan, "circle", { cx: 288, cy: 308, r: 11, fill: "none", stroke: PH, "stroke-width": 2 });
+    el(plan, "circle", { cx: 352, cy: 308, r: 11, fill: "none", stroke: PH, "stroke-width": 2 });
+    el(plan, "circle", { cx: 288, cy: 308, r: 3.6, fill: PH_BRIGHT });
+    el(plan, "circle", { cx: 352, cy: 308, r: 3.6, fill: PH_BRIGHT });
+    el(plan, "circle", { cx: 320, cy: 388, r: 22, fill: BG, stroke: PH, "stroke-width": 2 });
+    el(plan, "circle", { cx: 320, cy: 388, r: 11, fill: "none", stroke: FUNGUS, "stroke-width": 2 });
+    const ptend = Array.from({ length: 8 }, () => el(plan, "polyline", { fill: "none",
+      stroke: FUNGUS, "stroke-width": 2 }));
+    // the big compass, the two-line caption, and the footer
+    const compass = label(svg, 44, 312, 44, PH_DIM);
+    const C1 = label(svg, 320, 578, 22, PH); C1.setAttribute("text-anchor", "middle");
+    const C2 = label(svg, 320, 608, 22, PH); C2.setAttribute("text-anchor", "middle");
+    const foot = label(svg, 320, 666, 23, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const CAPS = [
+      ["WEST -- THE AUTARCH, YOUNG.", "HIS MOUTH IS A DOOR."],
+      ["EAST -- THE HELMED WARRIOR.", "HIS MOUTH IS A DOOR."],
+      ["SUMMIT -- THE OLD MAN, SKYWARD.", "HIS MOUTH IS A CHIMNEY."],
+    ];
+    const doWipe = wipe(svg, 640, 720, 2, 10);
+    clock(t => {
+      const T = t % 300;
+      doWipe(Math.min(t, 259));
+      typeOn(hdr, "THE ELEVATIONS", Math.min(t, 259), 4, 1.3);
+      const phase = Math.floor(T / 100) % 3;
+      west.setAttribute("opacity", phase === 0 ? 1 : 0);
+      east.setAttribute("opacity", phase === 1 ? 1 : 0);
+      plan.setAttribute("opacity", phase === 2 ? 1 : 0);
+      crownG.setAttribute("opacity", phase === 2 ? 0 : 1);
+      slab.setAttribute("opacity", phase === 2 ? 0 : 1);
+      compass.textContent = ["W", "E", "UP"][phase];
+      const cap = CAPS[phase];
+      typeOn(C1, cap[0], T % 100, 8, 2.0);
+      typeOn(C2, cap[1], T % 100, 26, 2.0);
+      tendrils.forEach((n, i) => {
+        const [x0, y0, ph] = TEND[i];
+        const pts = [[x0, y0]];
+        for (let q = 1; q <= 5; q++) {
+          const sway = Math.sin(t * .2 + q * .9 + ph * 2) * 3 * q * .4;
+          pts.push([x0 + ph * q * 8 + sway, y0 - q * 11]);
+        }
+        n.setAttribute("points", pts.map(p => p.join(",")).join(" "));
+      });
+      ptend.forEach((n, i) => {
+        const a = i * Math.PI / 4 + .35;
+        const pts = [[320 + Math.cos(a) * 22, 388 + Math.sin(a) * 22]];
+        for (let q = 1; q <= 4; q++) {
+          const wob = Math.sin(t * .2 + q * 1.1 + i * 1.7) * 5;
+          const r = 22 + q * 20;
+          pts.push([320 + Math.cos(a) * r, 388 + Math.sin(a) * r + wob * .4]);
+        }
+        n.setAttribute("points", pts.map(p => p.join(",")).join(" "));
+      });
+      typeOn(foot, "THREE FACES, TWO DOORS, ONE CHIMNEY.", Math.min(t, 259), 120, 1.6);
     });
   });
 
