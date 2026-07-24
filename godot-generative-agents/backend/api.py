@@ -1291,7 +1291,8 @@ def create_app(
     def runs_index(_: None = Depends(require_auth)) -> dict:
         """The run history, newest first: row summaries WITHOUT the manifest
         blob (a hundred-run history shouldn't ship a hundred manifests --
-        fetch one run for its manifest), plus which id is live right now."""
+        fetch one run for its manifest), except each run's applied `config`
+        sub-block (#734, None when unconfigured), plus which id is live now."""
         store = _run_store()
         if store is None:
             return {"available": False, "current": None, "runs": []}
