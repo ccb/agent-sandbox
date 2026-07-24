@@ -1,0 +1,49 @@
+# Theo Lindqvist -- philosophy junior. Library entry (#762): NOT in the default
+# cast. Coverage: the NIGHT-OWL schedule shape -- his day starts near midday
+# and ends writing in the library long after everyone else's last stop. His
+# housemates edge with Imani lives in imani.yaml; the Theo -- Priya side of
+# that friend group lives here (first-named persona -- see README.md).
+name: Theo Lindqvist
+home: Penn campus
+persona: I am Theo Lindqvist, 21, a philosophy junior at Penn. I do my best
+  thinking after dark, my worst before noon, and I will argue about footnotes
+  with anyone who sits still long enough. My housemate Imani says I keep
+  philosopher's hours; she is correct.
+emoji: 🦉
+# Starts on the doorstep outside Houston Hall -- surfacing for brunch while the
+# early risers are already halfway through their day.
+start_tile:
+- 122
+- 222
+schedule:
+- place: Houston Hall
+  activity: surfacing for brunch long after sunrise
+  emoji: ☕
+  steps: 60
+- place: Van Pelt — Moelis Reading Room
+  activity: annotating a stack of philosophy papers
+  emoji: 📝
+  steps: 150
+- place: Houston Hall — Reading Room
+  activity: arguing footnotes with anyone who sits down
+  emoji: 💬
+  steps: 60
+- place: Van Pelt — Study Booths
+  activity: drafting a seminar paper in a corner booth
+  emoji: 📝
+  steps: 250
+- place: Van Pelt — Book Stacks
+  activity: hunting down one elusive citation
+  emoji: 🔍
+  steps: 60
+- place: Van Pelt — Study Booths
+  activity: writing deep into the quiet hours
+  emoji: 🦉
+
+relationships:
+- a: Theo Lindqvist
+  b: Priya Nair
+  kind: friends
+  closeness: 3
+  description: Theo and Priya bonded over a logic elective and have argued
+    about proofs, free will, and whose coffee order is worse ever since.

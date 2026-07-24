@@ -41,9 +41,10 @@
 # (backend.build_world.load_world_yaml) composes the run's personas -- plus
 # the relationship edges and scripted meetings that ride in those files --
 # from the cast at build time. See personas/README.md for the full catalog
-# (7 personas; the 4 beyond this default cast are parked while the live-LLM
-# MVP runs 3 agents) and the authoring contract. ORDER MATTERS: cast order is
-# the replay's persona order, so reordering changes the baked bytes (#640).
+# (15 personas; the 12 beyond this default cast are parked while the live-LLM
+# MVP runs 3 agents -- un-park them via the setup scene / POST /config, #730,
+# or a cast= override) and the authoring contract. ORDER MATTERS: cast order
+# is the replay's persona order, so reordering changes the baked bytes (#640).
 cast: [diego, tanaka, sofia]
 
 locations:

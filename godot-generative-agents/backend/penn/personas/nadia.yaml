@@ -1,0 +1,56 @@
+# Nadia Osei -- physics postdoc. Library entry (#762): NOT in the default
+# cast. Coverage: a POSTDOC role and an advisor--advisee pair -- her mentor
+# edge with Professor Tanaka and their end-of-day blackboard meeting both live
+# here (first-named persona -- see README.md). Cast her WITH tanaka to see the
+# pair; without her the edge and meeting are dropped at load time.
+name: Nadia Osei
+home: Penn campus
+persona: I am Dr. Nadia Osei, 31, a physics postdoc in Professor Tanaka's group.
+  I live in my data, distrust any result that looks too clean, and do my best
+  arguing at a blackboard with chalk on my hands.
+emoji: 🧪
+# Starts on the walk outside Van Pelt's east door: her morning belongs to the
+# Digital Scholarship Exchange and last night's detector run.
+start_tile:
+- 162
+- 56
+schedule:
+- place: Van Pelt — Digital Scholarship Exchange
+  activity: cleaning up detector data from an overnight run
+  emoji: 🧪
+  steps: 180
+- place: Van Pelt — Moelis Reading Room
+  activity: combing the literature for a stray factor of two
+  emoji: 📖
+  steps: 80
+- place: Houston Hall
+  activity: a working lunch over a stack of plots
+  emoji: 🥪
+  steps: 60
+- place: Williams Hall — Classroom A
+  activity: working through the day's results at the blackboard
+  emoji: 🧮
+  # No `steps`: she holds the blackboard for the rest of the day. Professor
+  # Tanaka's own last stop is this classroom (after her long Irvine window),
+  # so when both are cast, Nadia is already mid-derivation when Tanaka
+  # arrives -- see the `meetings` block below.
+  furniture: blackboard
+
+relationships:
+- a: Nadia Osei
+  b: Professor Tanaka
+  kind: advisor & postdoc
+  closeness: 4
+  description: Professor Tanaka supervises Nadia's postdoc; most evenings end
+    with the two of them arguing about the day's data at the Williams Hall
+    blackboard.
+
+meetings:
+- label: Advisor and postdoc at the blackboard (Williams Hall — Classroom A)
+  at: Williams Hall — Classroom A
+  participants: [Nadia Osei, Professor Tanaka]
+  dialogue:
+  - [Professor Tanaka, "Nadia! Tell me the overnight run behaved."]
+  - [Nadia Osei, "Mostly. There's a bump at the low end I don't trust yet."]
+  - [Professor Tanaka, "Good instinct. Plot it against Tuesday's calibration."]
+  - [Nadia Osei, "Already queued. Grab some chalk -- I saved you half the board."]
