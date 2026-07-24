@@ -41,6 +41,7 @@ var _token := ""
 var _http: HTTPRequest = null
 var _pending := ""  # "" idle | "load" | "config" | "resume"
 var _switching := false
+var _seed := {}  # a "Re-run with this setup" config block (#734), consumed once
 
 # UI, built once GET /config arrives.
 var _form_box: VBoxContainer = null
@@ -64,6 +65,10 @@ func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	_url = LaunchConfig.last_live_url.rstrip("/")
 	_token = LaunchConfig.live_token
+	# A "Re-run with this setup" hand-off (#734), consumed once: capture then
+	# clear, so a later fresh entry from the menu starts from server defaults.
+	_seed = LaunchConfig.setup_seed
+	LaunchConfig.setup_seed = {}
 	_build_shell()
 	_http = HTTPRequest.new()
 	# 30s, not 10: a POST /config that switches to the llm brain rebuilds the
@@ -349,6 +354,42 @@ func _render_config(data: Dictionary) -> void:
 
 	_start_btn.disabled = _persona_checks.is_empty()
 	_set_status("%d persona(s) available. Pick a cast, tweak knobs, then Start." % _persona_checks.size(), false)
+	if not _seed.is_empty():
+		_apply_seed(_seed)
+
+
+func _apply_seed(seed: Dictionary) -> void:
+	# Pre-fill the form from a saved run's applied `config` block (#734). Widget
+	# values move to the seed's; each knob row's `initial` (and the run-control
+	# initials in `_initial`) stay at the server value, so build_post_body sends
+	# the seed values as edits and the re-run reproduces the saved setup on this
+	# fresh backend. Knobs this scene does not expose aren't reproduced -- this is
+	# "same setup", not the byte-identical re-run #715 owns.
+	var cast: Variant = seed.get("cast")
+	if typeof(cast) == TYPE_ARRAY:
+		for p in _persona_checks:
+			p.cb.button_pressed = p.id in (cast as Array)
+	var sim_config: Variant = seed.get("sim_config")
+	if typeof(sim_config) == TYPE_DICTIONARY:
+		for row in _knob_rows:
+			var v: Variant = _walk(sim_config, row.path)
+			if v != null:
+				row.spin.value = float(v)
+	var brain := str(seed.get("brain", ""))
+	if brain != "" and _brain_opt != null:
+		var bi := (_brains as Array).find(brain)
+		if bi >= 0:
+			_brain_opt.select(bi)
+	var run: Variant = seed.get("run")
+	if typeof(run) == TYPE_DICTIONARY:
+		var r := run as Dictionary
+		if r.get("steps") != null and _steps_spin != null:
+			_steps_spin.value = float(r["steps"])
+		if r.get("tick_seconds") != null and _tick_spin != null:
+			_tick_spin.value = float(r["tick_seconds"])
+		if r.get("max_cost") != null and _cost_spin != null:
+			_cost_spin.value = float(r["max_cost"])
+	_set_status("Pre-filled from a saved run. Adjust anything, then Start.", false)
 
 
 func _spin_row(label: String, lo: float, hi: float, step: float, value: float) -> SpinBox:

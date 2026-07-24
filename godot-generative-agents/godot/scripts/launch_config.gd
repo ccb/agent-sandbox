@@ -36,6 +36,12 @@ var live_token := ""
 ## prefill it for a one-click reconnect. Unlike `live_url` it survives reset().
 var last_live_url := ""
 
+## RE-RUN (#734): a saved manifest's `config` block, stashed by the Past-runs
+## browser's "Re-run with this setup" so the Simulation Setup scene pre-fills its
+## cast + knobs from it. Read-once: the setup scene captures and clears it in
+## _ready(), so a later fresh entry from the menu never inherits a stale seed.
+var setup_seed := {}
+
 
 # The two REPLAY sources are mutually exclusive: the viewer (_ready) prefers
 # replay_text over replay_path, so each setter clears the other -- a value left
@@ -66,3 +72,4 @@ func reset() -> void:
 	replay_path = ""
 	replay_text = ""
 	live_url = ""
+	setup_seed = {}
