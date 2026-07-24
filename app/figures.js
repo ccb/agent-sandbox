@@ -10,7 +10,7 @@
    and disconnected nodes drop off the clock automatically. */
 (() => {
   "use strict";
-  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "chimney-f": ["svg", 640, 360], "chimney-g": ["svg", 640, 360], "chimney-h": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-c": ["svg", 640, 400], "cyl-o": ["svg", 640, 400], "cyl-v": ["svg", 640, 400], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "ext1c": ["svg", 640, 400], "ext1e": ["svg", 640, 400], "flask": ["svg", 640, 360], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
+  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "chimney-f": ["svg", 640, 360], "chimney-g": ["svg", 640, 360], "chimney-h": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-c": ["svg", 640, 400], "cyl-o": ["svg", 640, 400], "cyl-v": ["svg", 640, 400], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1e": ["svg", 640, 400], "flask": ["svg", 640, 360], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
   const FIG = {
     _defs: {}, _uid: 0, _ticks: [], _timer: null, _target: null,
     MAX_LIVE: 3,
@@ -5212,6 +5212,121 @@
     });
   });
 
+  /* ---------------- 00-m: the road to Gnomon (phone twin) ----------------
+     The desktop card (00) rings the wagon with tiny type; scaled to a phone
+     column that type is unreadable. This twin re-lays the same beat as a tall
+     portrait: a bigger wagon up top, then a large-type roster and a wrapped
+     proverb. Authored ~2.5x the desktop px so it lands legible after the phone
+     downscale. terminal.js picks it by rendered width. */
+  FIG._define("road-m", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 30, PH_BRIGHT);
+    const kick = label(svg, 620, 34, 15, PH_DIM); kick.setAttribute("text-anchor", "end");
+    kick.textContent = "AN OPENING";
+    // the dune line + the horizon
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM, points:
+      "0,300 120,292 260,306 400,290 540,304 640,296" });
+    el(svg, "line", { x1: 0, y1: 320, x2: 640, y2: 320, stroke: PH, "stroke-width": 1.8 });
+    el(svg, "line", { x1: 0, y1: 322, x2: 640, y2: 322, stroke: FUNGUS, opacity: .4 });
+    // THE WAGON, drawn big: bed, ribs, wheels, yoke, zoxen, driver
+    const gW = el(svg, "g", {});
+    const W = (name, attrs) => el(gW, name, attrs);
+    W("line", { x1: 120, y1: 288, x2: 300, y2: 288, stroke: PH, "stroke-width": 3 }); // bed
+    for (let i = 0; i < 4; i++)                                          // the ribs
+      W("path", { d: `M ${138 + i * 44} 288 Q ${160 + i * 44} 218 ${182 + i * 44} 288`,
+        fill: "none", stroke: PH, "stroke-width": 2 });
+    W("polyline", { fill: "none", stroke: PH_DIM,
+      points: "150,250 200,222 260,220 300,250" });                     // the canvas line
+    const wheels = [[160, 300], [252, 300]].map(([x, y]) => {
+      W("circle", { cx: x, cy: y, r: 24, fill: "none", stroke: PH, "stroke-width": 2 });
+      return { x, y, spokes: [0, 1, 2].map(() =>
+        W("line", { stroke: PH_DIM, "stroke-width": 1.6 })) };
+    });
+    W("line", { x1: 300, y1: 292, x2: 344, y2: 300, stroke: PH, "stroke-width": 1.8 }); // yoke
+    // the zoxen, plodding
+    const zox = [[350, 288], [402, 290]].map(([x, y]) => ({
+      x, y,
+      body: W("ellipse", { cx: x + 18, cy: y, rx: 22, ry: 13, fill: "none",
+        stroke: PH, "stroke-width": 2 }),
+      head: W("polyline", { fill: "none", stroke: PH, "stroke-width": 1.8,
+        points: `${x + 38},${y - 6} ${x + 52},${y} ${x + 49},${y + 9}` }),
+      legs: W("polyline", { fill: "none", stroke: PH, "stroke-width": 1.8 }),
+    }));
+    const driver = W("g", {});
+    const dv = (name, attrs) => el(driver, name, attrs);
+    dv("circle", { cx: 292, cy: 262, r: 5, fill: PH_BRIGHT });
+    dv("polyline", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.8,
+      points: "292,268 292,282 284,288" });
+    // the roster, big type
+    const R = [
+      { y: 392, a: "MERCHANT .... WITH THE WAGON", b: "MERCHANT .... LOST (MOONSET)" },
+      { y: 428, a: "ZOXEN x2 .... PULLING",        b: "ZOXEN x2 .... LOST" },
+      { y: 464, a: "TEAMSTER .... DRIVING",        b: "TEAMSTER .... FLED SOUTH" },
+      { y: 500, a: "YOU ......... NOT YET HERE",   b: "YOU ......... INCOMING" },
+    ].map(r => ({ ...r, n: label(svg, 40, r.y, 23, PH) }));
+    // the teamster, fleeing south
+    const flee = el(svg, "g", { opacity: 0 });
+    el(flee, "circle", { cx: 0, cy: -18, r: 5, fill: PH_BRIGHT });
+    el(flee, "line", { x1: 0, y1: -13, x2: 0, y2: 4, stroke: PH_BRIGHT, "stroke-width": 2 });
+    const fleeLegs = el(flee, "polyline", { fill: "none", stroke: PH_BRIGHT,
+      "stroke-width": 1.8 });
+    // the proverb, wrapped, big
+    const F1 = label(svg, 320, 588, 24, FUNGUS); F1.setAttribute("text-anchor", "middle");
+    const F2 = label(svg, 320, 624, 24, FUNGUS); F2.setAttribute("text-anchor", "middle");
+    const F3 = label(svg, 320, 662, 24, PH_BRIGHT); F3.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 10);
+    clock(t => {
+      const T = Math.min(t, 259); // a title card: plays once, holds the tableau
+      doWipe(T);
+      typeOn(hdr, "ROAD TO GNOMON", T, 4, 1.2);
+      const fallen = T >= 130;
+      const dx = fallen ? 0 : -150 + Math.min(T, 96) * 1.5625; // rolls in, arrives ~T=96
+      gW.setAttribute("transform",
+        `translate(${dx} 0)` + (fallen ? " rotate(-10 206 300)" : ""));
+      wheels.forEach(w => w.spokes.forEach((sp, i) => {
+        const a = (fallen ? 0 : t * .5) + i * Math.PI / 3;
+        sp.setAttribute("x1", w.x - Math.cos(a) * 22); sp.setAttribute("y1", w.y - Math.sin(a) * 22);
+        sp.setAttribute("x2", w.x + Math.cos(a) * 22); sp.setAttribute("y2", w.y + Math.sin(a) * 22);
+      }));
+      zox.forEach((z, i) => {
+        if (!fallen) {
+          const st = ((t + i * 2) % 4 < 2) ? 6 : -6;
+          z.legs.setAttribute("points",
+            `${z.x + 2 + st},322 ${z.x + 6},300 ${z.x + 16},300 ${z.x + 16 - st},322 ` +
+            `${z.x + 28 + st},322 ${z.x + 28},300 ${z.x + 38},300 ${z.x + 38 - st},322`);
+          z.body.setAttribute("transform", ""); z.head.setAttribute("transform", "");
+          z.head.setAttribute("opacity", 1);
+        } else {                                    // arranged by the wind, as if asleep
+          z.legs.setAttribute("points",
+            `${z.x - 2},314 ${z.x + 12},318 ${z.x + 26},314 ${z.x + 40},318`);
+          const down = `translate(0 20) rotate(8 ${z.x + 18} ${z.y})`;
+          z.body.setAttribute("transform", down);
+          z.head.setAttribute("transform", down);
+          z.head.setAttribute("opacity", .4);
+        }
+      });
+      // gone from the bench at moonset -- REMOVED, not just faded (Safari
+      // leaves stale paint behind attribute-only hides)
+      if (fallen && driver.isConnected) driver.remove();
+      driver.setAttribute("opacity", fallen ? 0 : 1);
+      if (fallen && T < 176) {                      // the teamster, fleeing south
+        flee.setAttribute("opacity", 1);
+        flee.setAttribute("transform",
+          `translate(${470 + (T - 130) * 4} ${338 + (T - 130) * 1.6})`);
+        const st = (t % 4 < 2) ? 6 : -6;
+        fleeLegs.setAttribute("points", `${-st},16 0,4 ${st},16`);
+      } else if (flee.isConnected && T >= 176) flee.remove();
+      R.forEach((r, i) => {
+        if (!fallen) typeOn(r.n, r.a, T, 16 + i * 12, 1.6);
+        else { r.n.textContent = r.b; r.n.setAttribute("fill", i === 3 ? PH_BRIGHT : PH_DIM); }
+      });
+      typeOn(F1, "THE ROAD TO GNOMON IS WALKED", T, 176, 1.6);
+      typeOn(F2, "ONLY BY THE DESPERATE.", T, 196, 1.6);
+      typeOn(F3, "PROVEN AGAIN.", T, 212, 1.6);
+    });
+  });
+
   /* ---------------- 13-E: the Horror, ablaze, firelit ---------------- */
   FIG._define("autarch-e", "svg", function (svg) {
     el(svg, "rect", { x: 0, y: 0, width: 640, height: 420, fill: BG });
@@ -5728,6 +5843,68 @@
       const up = t % 4 < 2 ? -7 : 5;
       bat.setAttribute("d", `M ${bx - 11} ${by} Q ${bx - 5} ${by + up} ${bx} ${by} ` +
         `Q ${bx + 5} ${by + up} ${bx + 11} ${by}`);
+    });
+  });
+
+  /* ---------------- 21-m: the epitaph (phone twin) ----------------
+     The death stone with its carved ledger -- the twin sets the carving in big
+     type on a taller stone so the score, hints and cause stay readable when the
+     640 card is scaled to a phone column. Reads the same window.TombFigures
+     .context the desktop stone does; terminal.js picks it by rendered width. */
+  FIG._define("epitaph-m", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 30, PH_BRIGHT);
+    const cls = label(svg, 620, 34, 15, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "GRANITE / YOURS";
+    const EDOTS = stipple(svg, "dots-epitaphm", PH, .9);
+    // the ground and its litter
+    el(svg, "line", { x1: 50, y1: 560, x2: 590, y2: 560, stroke: PH, "stroke-width": 1.8 });
+    [[150, 558], [470, 556], [512, 559]].forEach(([x, y]) =>
+      el(svg, "circle", { cx: x, cy: y, r: 4, fill: "none", stroke: PH_DIM }));
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM,
+      points: "444,560 440,544 444,550 447,538 450,550 455,544 452,560" }); // a tuft
+    // THE STONE, big
+    el(svg, "path", { d: "M 190 560 L 190 250 Q 320 148 450 250 L 450 560 Z",
+      fill: EDOTS, stroke: PH, "stroke-width": 2.2 });
+    el(svg, "path", { d: "M 206 560 L 206 260 Q 320 166 434 260 L 434 560",
+      fill: "none", stroke: PH_DIM });
+    // the carving
+    const line = (y, size, color) => {
+      const n = label(svg, 320, y, size, color);
+      n.setAttribute("text-anchor", "middle"); return n;
+    };
+    const L1 = line(300, 26, PH), L2 = line(348, 32, PH_BRIGHT);
+    const L3 = line(392, 22, PH), L4 = line(432, 19, PH_DIM);
+    const score = line(494, 19, PH);
+    const press = line(614, 20, PH_DIM);
+    const foot = label(svg, 320, 664, 24, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const bat = el(svg, "path", { fill: "none", stroke: PH, "stroke-width": 1.8 });
+    // In the game the terminal fills this in at death (score, hints, the wound
+    // that did it); standalone, the stone stays honest and carves neither a
+    // fake score nor an invented cause.
+    const CTX = (typeof window !== "undefined" && window.TombFigures
+      && window.TombFigures.context) || {};
+    const doWipe = wipe(svg, 640, 720, 2, 10);
+    clock(t => {
+      const T = t % 200;
+      doWipe(T);
+      typeOn(hdr, "THE EPITAPH", T, 4, 1.3);
+      L1.textContent = T > 20 ? "HERE LIES" : "";
+      L2.textContent = T > 40 ? "A SCAVENGER" : "";
+      L3.textContent = T > 60 && CTX.cause
+        ? String(CTX.cause).toUpperCase().slice(0, 24) : "";
+      L4.textContent = T > 80 ? "4,000 YRS + 6 DAYS" : "";
+      if (CTX.score != null)
+        typeOn(score, "SCORE " + CTX.score + " OF " + CTX.max
+          + " -- HINTS " + (CTX.hints || 0), T, 96, 1.7);
+      press.textContent = T > 130 && t % 8 < 4 ? "PRESS ENTER TO TRY AGAIN" : "";
+      typeOn(foot, "THE TOMB KEEPS YOU.", T, 140, 1.5);
+      const a = t * .05;                                      // something leathery
+      const bx = 320 + Math.cos(a) * 200, by = 100 + Math.sin(a * 2) * 20;
+      const up = t % 4 < 2 ? -11 : 8;
+      bat.setAttribute("d", `M ${bx - 17} ${by} Q ${bx - 8} ${by + up} ${bx} ${by} ` +
+        `Q ${bx + 8} ${by + up} ${bx + 17} ${by}`);
     });
   });
 

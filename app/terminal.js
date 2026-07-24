@@ -19,6 +19,14 @@ const settingsPanel = document.getElementById("settings");
 
 let api = null;
 
+/* A card is authored in a 640-unit space and scaled to the column width, so on
+   a narrow column (phones, split-screen) its 10-13px type shrinks past reading.
+   Below this rendered card width we prefer a `KEY-m` twin -- the same card
+   re-composed with larger type for that width. 560 keeps the full-size card
+   until it would fall under ~0.85x (13px -> <11px). See
+   docs/design/iphone-animations-plan.md. */
+const MOBILE_FIGURE_W = 560;
+
 /* ---------------------------------------------------------------- settings */
 
 const DEFAULTS = {
@@ -246,7 +254,15 @@ function showFigure(key, opts = {}) {
   try {
     if (opts.prepend) output.prepend(box);
     else output.appendChild(box);
-    F.render(key, box);
+    // The box is in the DOM now, so its width is known (reading clientWidth
+    // flushes layout). On a narrow column prefer the phone-legible `KEY-m`
+    // twin; fall back to the base card when no twin exists, so twins ship one
+    // at a time. The engine only ever cues the base KEY -- this is purely a
+    // client-side rendering choice.
+    const mobileKey = key + "-m";
+    const drawKey =
+      box.clientWidth < MOBILE_FIGURE_W && F.has(mobileKey) ? mobileKey : key;
+    F.render(drawKey, box);
   } catch (e) {
     box.remove();
     return null;

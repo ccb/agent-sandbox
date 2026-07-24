@@ -155,6 +155,18 @@ nothing until twinned.
 2. **Tier 1.** Twin the ~10–15 everyone-sees cards; deploy; re-check on device.
 3. **Tier 2 → 3** incrementally; fallback keeps untwinned cards working.
 
+## Status
+
+- **Plumbing landed** (`terminal.js`): `showFigure` measures the rendered
+  `.figure` width and, under `MOBILE_FIGURE_W` (560px), draws `KEY-m` when it
+  exists — otherwise the base card, so untwinned cards are unaffected.
+- **Two twins shipped as proof:** `road-m` and `epitaph-m`, authored in the reel
+  and regenerated into `figures.js` (`test_figures.py` green, 78 cards).
+  Verified headless at a 356px phone column: no page errors, both animate their
+  full beat, and `epitaph-m` carves the live `window.TombFigures.context` ledger
+  (score / hints / cause) legibly. The scenes were **re-composed** (not scaled
+  copies); a later pass can extract a shared scene helper if duplication grows.
+
 ## Open questions for CCB
 
 - **Breakpoint feel:** switch at ~520–560px, or do you want the phone card even
