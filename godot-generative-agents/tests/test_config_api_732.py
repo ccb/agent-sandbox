@@ -330,6 +330,26 @@ def test_post_config_llm_without_key_is_400(monkeypatch):
     assert client.post("/config", json={"brain": "llm"}).status_code == 400
 
 
+def test_runs_index_carries_the_config_block(tmp_path):
+    """#734: each /runs row exposes its manifest's applied `config` block (or
+    None), so the Past-runs browser can show a run's setup and re-run it
+    without fetching every manifest."""
+    client, stepper = _client(tmp_path)
+    # The boot run was never configured -> its row's config is None, and the
+    # full manifest still stays off the list.
+    rows = client.get("/runs").json()["runs"]
+    assert len(rows) == 1
+    assert rows[0]["config"] is None
+    assert "manifest" not in rows[0]
+    # Configure a run; its row now carries the applied block verbatim.
+    client.post("/config", json={"cast": ["diego"], "tick_seconds": 0.5})
+    rows = client.get("/runs").json()["runs"]
+    current = next(r for r in rows if r["id"] == stepper.run_id)
+    assert current["config"]["cast"] == ["diego"]
+    assert current["config"]["brain"] == "mock"
+    assert current["config"]["run"]["tick_seconds"] == 0.5
+
+
 def test_config_404_without_a_live_loop():
     from backend.api import _demo_game
 

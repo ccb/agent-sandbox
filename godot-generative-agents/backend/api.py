@@ -1301,7 +1301,15 @@ def create_app(
             "available": True,
             "current": current,
             "runs": [
-                {k: v for k, v in row.items() if k != "manifest"}
+                {
+                    **{k: v for k, v in row.items() if k != "manifest"},
+                    # The applied pre-run config block (#732), so the Past-runs
+                    # browser can show a run's setup and re-run it (#734) without
+                    # fetching each manifest. Small (cast + a few knobs); None on
+                    # runs no one configured. The rest of the manifest stays off
+                    # the list -- see the docstring.
+                    "config": row["manifest"].get("config"),
+                }
                 for row in store.list_runs()
             ],
         }
