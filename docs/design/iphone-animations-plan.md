@@ -177,35 +177,49 @@ nothing until twinned.
 - **Scope:** twin all 77 eventually, or deliberately stop at the text-carrying
   subset and let spectacle cards ride the downscale?
 
-## Overnight batch progress (autonomous run)
+## Where this stands (reset — twins to be reworked)
 
-**44 phone twins live** at https://ccb.github.io/tomb-of-nassak-an-rah/animations-iphone/
-(each `KEY-m` authored in the reel; `test_figures.py` green; deploy via
-`./app/deploy_iphone_reel.sh`, which touches only that dir, not the game).
+An autonomous pass hand-drew SVG twins for most cards; the art didn't meet the
+bar, so it was **removed**. Only the two reference twins are kept —
+**`road-m`** (the opening cart) and **`epitaph-m`** (the tombstone) — as working
+templates. Everything else is to be redrawn later (with Fable). The **framework
+below stays**; only the per-card images need authoring.
 
-**Method that works** (use for the rest):
-1. Canon text for every card is in the spec sheet an agent extracted (headers,
-   footers, callouts verbatim) — CCB cares about exact copy, so pull it from the
-   reel block, never invent. (Agent-drafted art is fine; agent-drafted *text*
-   fabricates — always reconcile against canon.)
-2. Families share a phone helper in the reel's helper scope, instantiated from a
-   data table: `cylsCardM` (6), `jarCardM` (5, reuses `headGlyph`), `chimCardM`
-   (4), `autarchCardM` (3), `sphereCardM` (4), `mysticCardM` (3), `spawnCardM`
-   (3), `gutsCardM` (4), `tankCardM` (3), `ulfireCardM` (2).
-3. Convention: 640x720 portrait, rule at y44, big typed header (~22-30px),
-   subject up top, big-type furniture below, footer wrapped to <=2 lines.
-   Author text ~2.5x desktop px. Unique stipple id `dots-<key>`.
-4. Tooling in scratchpad: `integrate.py KEY...` splices `cards/KEY.js` + `.slate`
-   into the reel; `vg.py KEY-m...` renders at 356px and reports pageerrors/empties
-   + a contact sheet to eyeball.
+### The framework that remains (don't re-derive it)
 
-**Done (44):** road, ext1c, ext1e, epitaph, canopic-c, jackal, bats-c,
-cylinders(+b,-a,-c,-v,-o), jar-mantis/jackal/falcon/baboon/human,
-centipede, chimney-f/g/h, autarch/-c/-e, sphere-b/d/e/f, mystic-b/c/f,
-spawn-a/b/c, guts-a/b/c/lash, tank/flood/tank-f, ulfire/-u.
+- **Selection** — `terminal.js`: `showFigure` measures the rendered `.figure`
+  width and, under `MOBILE_FIGURE_W` (560px), draws `KEY-m` if it exists, else
+  the base card. So the game already prefers a phone twin whenever one exists;
+  untwinned cards are unaffected. (Not yet wired live in the game build.)
+- **The reel** — `/animations-iphone/`: a standalone page rendering every `KEY-m`
+  twin at phone width. Build with `app/build_iphone_reel.py`; deploy with
+  `./app/deploy_iphone_reel.sh` (pushes ONLY that dir — never the game).
+- **A twin is just another card:** author a `KEY-m` block + `<svg id="KEY-m">`
+  slate in `app/prototypes/retro-animations.html`; `gen_figures.py` extracts it,
+  `test_figures.py` guards drift. Keep text **verbatim from the base card's
+  canon** (headers/footers/callouts) — never invent copy.
 
-**Remaining SVG (25):** silas, boots, resp, flask, dagger, core, shard, critch,
-hound, wagon, manifest, fungus, seal, seal-b, zoxen, zoxen-b,
-mem-mother/bath/kestrel/raising/embalm (memFrame family), youth-a/b/c/d.
-**Deferred — canvas cards (7):** blade, bats, glowstone/-b/-c, tesseract/-u
-(they draw via ctx/3-D, not SVG; need a canvas-specific pass).
+### Image dimensions & font sizes (the spec to author to)
+
+- **Canvas:** `viewBox="0 0 640 H"`, portrait, **H ≈ 720** (tall, to give the
+  type room). The base cards are ~360–420 tall; the twin gets the extra height.
+- **Why bigger type:** the 640-wide card is scaled to a ~356px phone column
+  (**≈ 0.56×**), so authored px shrink by ~0.56 on screen. Author at **~2.5–3×**
+  the desktop size. Rules of thumb (authored px → on-phone px):
+  - **Header:** ~26–30px (→ ~15–17px). Header rule at `y=44`, header text `y≈34`.
+  - **Body / callouts:** ~18–22px (→ ~10–12px), stacked left at `x≈40`.
+  - **Footer / caption:** ~22–24px (→ ~12–13px), centered, wrapped to ≤2 lines
+    so nothing exceeds `x≈610`.
+  - **Minimum:** don't author below ~16px (→ ~9px) for anything that must read.
+- **Layout:** subject up top (~y90–430), big-type furniture stacked below —
+  one top-to-bottom reading axis, not text rung around the scene.
+- **Selection breakpoint:** twin is chosen under **560px** rendered width; it
+  renders down to ~340px (an older phone) and up to ~560px.
+- Unique `stipple` id per card (`dots-<key>`); keep the motion vocabulary
+  (`wipe` first, `typeOn` for text, stepped motion).
+
+### Tooling still in the session scratchpad (handy, not required)
+
+`integrate.py KEY...` splices `cards/KEY.js` + `KEY.slate` into the reel;
+`vg.py KEY-m...` renders each at 356px, reports page errors / empty cards, and
+writes a contact sheet to eyeball.
