@@ -659,6 +659,22 @@ def build_penn_world(
             game.add_recipe(_boil_recipe())  # boiling = Craft over this Recipe (#300)
         return _gate_conversations_by_perception((game, characters))
 
+    # Validated once here, so an authoring typo fails the bake / the live
+    # server's boot loudly instead of drawing a wrong graph.
+    relationships = relationships_meta(personas, data.get("relationships") or [])
+    # Deliver each edge to the agents it is about (#779). The YAML authors an edge
+    # ONCE, under its first-named persona, but both ends have to know -- so each
+    # spec carries every edge it is an endpoint of, and `cognition.attach_agents`
+    # seeds it into that agent's t=0 memory from its own side. Attached here, at
+    # the one factory every Penn entry point shares (the bake, the live server,
+    # the experiments), rather than threaded through each of them as an argument:
+    # this is exactly the wiring #779 found missing, and a new entry point gets it
+    # for free. Deliberately NOT the key name `relationships` -- load_world_yaml
+    # strips that off persona dicts on purpose (the block lives at world level).
+    for spec in personas:
+        spec["relationship_edges"] = [
+            e for e in relationships if spec["name"] in (e["a"], e["b"])
+        ]
     return PennWorld(
         world_map=world_map,
         personas=personas,
@@ -666,9 +682,7 @@ def build_penn_world(
         meetings=meetings,
         build_world_fn=_build,
         llm=data.get("llm") or None,
-        # Validated once here, so an authoring typo fails the bake / the live
-        # server's boot loudly instead of drawing a wrong graph.
-        relationships=relationships_meta(personas, data.get("relationships") or []),
+        relationships=relationships,
         world_data=world_data,
     )
 
