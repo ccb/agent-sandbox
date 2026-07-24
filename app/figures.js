@@ -10,7 +10,7 @@
    and disconnected nodes drop off the clock automatically. */
 (() => {
   "use strict";
-  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-c-m": ["svg", 640, 720], "autarch-e": ["svg", 640, 420], "autarch-e-m": ["svg", 640, 720], "autarch-m": ["svg", 640, 720], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "bats-c-m": ["svg", 640, 720], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "canopic-c-m": ["svg", 640, 720], "centipede": ["svg", 640, 360], "centipede-m": ["svg", 640, 720], "chimney-f": ["svg", 640, 360], "chimney-f-m": ["svg", 640, 720], "chimney-g": ["svg", 640, 360], "chimney-g-m": ["svg", 640, 720], "chimney-h": ["svg", 640, 360], "chimney-h-m": ["svg", 640, 720], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-a-m": ["svg", 640, 720], "cyl-c": ["svg", 640, 400], "cyl-c-m": ["svg", 640, 720], "cyl-o": ["svg", 640, 400], "cyl-o-m": ["svg", 640, 720], "cyl-v": ["svg", 640, 400], "cyl-v-m": ["svg", 640, 720], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "cylinders-b-m": ["svg", 640, 720], "cylinders-m": ["svg", 640, 720], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-baboon-m": ["svg", 640, 720], "jar-falcon": ["svg", 640, 300], "jar-falcon-m": ["svg", 640, 720], "jar-human": ["svg", 640, 300], "jar-human-m": ["svg", 640, 720], "jar-jackal": ["svg", 640, 300], "jar-jackal-m": ["svg", 640, 720], "jar-mantis": ["svg", 640, 300], "jar-mantis-m": ["svg", 640, 720], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-b-m": ["svg", 640, 720], "mystic-c": ["svg", 640, 400], "mystic-c-m": ["svg", 640, 720], "mystic-f": ["svg", 640, 400], "mystic-f-m": ["svg", 640, 720], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-b-m": ["svg", 640, 720], "sphere-d": ["svg", 640, 420], "sphere-d-m": ["svg", 640, 720], "sphere-e": ["svg", 640, 420], "sphere-e-m": ["svg", 640, 720], "sphere-f": ["svg", 640, 420], "sphere-f-m": ["svg", 640, 720], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
+  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-c-m": ["svg", 640, 720], "autarch-e": ["svg", 640, 420], "autarch-e-m": ["svg", 640, 720], "autarch-m": ["svg", 640, 720], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "bats-c-m": ["svg", 640, 720], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "canopic-c-m": ["svg", 640, 720], "centipede": ["svg", 640, 360], "centipede-m": ["svg", 640, 720], "chimney-f": ["svg", 640, 360], "chimney-f-m": ["svg", 640, 720], "chimney-g": ["svg", 640, 360], "chimney-g-m": ["svg", 640, 720], "chimney-h": ["svg", 640, 360], "chimney-h-m": ["svg", 640, 720], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-a-m": ["svg", 640, 720], "cyl-c": ["svg", 640, 400], "cyl-c-m": ["svg", 640, 720], "cyl-o": ["svg", 640, 400], "cyl-o-m": ["svg", 640, 720], "cyl-v": ["svg", 640, 400], "cyl-v-m": ["svg", 640, 720], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "cylinders-b-m": ["svg", 640, 720], "cylinders-m": ["svg", 640, 720], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-a-m": ["svg", 640, 720], "guts-b": ["svg", 640, 360], "guts-b-m": ["svg", 640, 720], "guts-c": ["svg", 640, 360], "guts-c-m": ["svg", 640, 720], "guts-lash": ["svg", 640, 360], "guts-lash-m": ["svg", 640, 720], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-baboon-m": ["svg", 640, 720], "jar-falcon": ["svg", 640, 300], "jar-falcon-m": ["svg", 640, 720], "jar-human": ["svg", 640, 300], "jar-human-m": ["svg", 640, 720], "jar-jackal": ["svg", 640, 300], "jar-jackal-m": ["svg", 640, 720], "jar-mantis": ["svg", 640, 300], "jar-mantis-m": ["svg", 640, 720], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-b-m": ["svg", 640, 720], "mystic-c": ["svg", 640, 400], "mystic-c-m": ["svg", 640, 720], "mystic-f": ["svg", 640, 400], "mystic-f-m": ["svg", 640, 720], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-a-m": ["svg", 640, 720], "spawn-b": ["svg", 640, 360], "spawn-b-m": ["svg", 640, 720], "spawn-c": ["svg", 640, 360], "spawn-c-m": ["svg", 640, 720], "sphere-b": ["svg", 640, 420], "sphere-b-m": ["svg", 640, 720], "sphere-d": ["svg", 640, 420], "sphere-d-m": ["svg", 640, 720], "sphere-e": ["svg", 640, 420], "sphere-e-m": ["svg", 640, 720], "sphere-f": ["svg", 640, 420], "sphere-f-m": ["svg", 640, 720], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
   const FIG = {
     _defs: {}, _uid: 0, _ticks: [], _timer: null, _target: null,
     MAX_LIVE: 3,
@@ -722,6 +722,152 @@
         s.setAttribute("opacity", cfg.state === "burned" ? Math.max(0, 1 - (t % 120) / 120) : .8); });
       typeOn(foot1, fL1, T, 130, 1.6);
       typeOn(foot2, fL2, T, 130 + fL1.length, 1.6);
+    });
+  }
+
+  // the spawn of brain, phone layout -- shared by spawn-a/b/c-m.
+  // cfg = { key, header, state:'listen'|'step'|'felled', footer }
+  function spawnCardM(svg, cfg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 23, PH_BRIGHT);
+    const BR = stipple(svg, "dots-" + cfg.key, FUNGUS, 1.2);
+    const felled = cfg.state === "felled";
+    el(svg, "line", { x1: 0, y1: 520, x2: 640, y2: 520, stroke: PH_DIM });   // ground
+    const body = el(svg, "g", {});
+    const B = (n, a) => el(body, n, a);
+    if (!felled) {
+      // the worn canopic jar-head, held level
+      B("path", { fill: "none", stroke: PH, "stroke-width": 2.2,
+        d: "M 286 250 L 282 180 Q 282 150 320 148 Q 358 150 358 180 L 354 250 Z" });
+      B("ellipse", { cx: 320, cy: 250, rx: 40, ry: 10, fill: "none", stroke: PH });
+      B("rect", { x: 300, y: 158, width: 40, height: 8, fill: "none", stroke: PH_DIM }); // worn label
+      // the risen brain-body
+      B("path", { fill: BR, stroke: FUNGUS, "stroke-width": 2, d:
+        "M 262 268 Q 250 320 272 372 Q 320 396 368 372 Q 390 320 378 268 Q 320 250 262 268 Z" });
+      B("path", { d: "M 285 300 Q 320 288 355 300 M 290 330 Q 320 320 350 330", fill: "none", stroke: FUNGUS, opacity: .7 });
+      // two backward-kneed wading-bird legs
+      const legs = [-1, 1].map(s => B("polyline", { fill: "none", stroke: PH, "stroke-width": 2.6, "stroke-linecap": "round" }));
+      body._legs = legs;
+    } else {
+      // squashed brain on the ground, legs splayed, jar-head rolled aside
+      B("path", { fill: BR, stroke: FUNGUS, "stroke-width": 2, d:
+        "M 250 500 Q 240 470 300 466 Q 360 464 380 490 Q 388 508 340 512 Q 270 516 250 500 Z" });
+      B("polyline", { fill: "none", stroke: PH, "stroke-width": 2.4, points: "300,486 250,470 214,486" });
+      B("polyline", { fill: "none", stroke: PH, "stroke-width": 2.4, points: "352,486 402,468 440,484" });
+      B("path", { fill: "none", stroke: PH, "stroke-width": 2.2,
+        d: "M 470 512 L 462 470 Q 462 448 500 446 Q 534 448 534 470 L 528 512 Z", transform: "rotate(64 500 480)" });
+    }
+    // last thoughts / ears -- a couple of small pulses above the head
+    const pulses = Array.from({ length: 3 }, (_, i) =>
+      el(svg, "circle", { cx: 320 + (i - 1) * 26, cy: 120, r: 5, fill: "none", stroke: PH_BRIGHT }));
+    const fw = cfg.footer, cut = fw.length > 34 ? fw.lastIndexOf(" ", 34) : -1;
+    const fL1 = cut > 0 ? fw.slice(0, cut) : fw, fL2 = cut > 0 ? fw.slice(cut + 1) : "";
+    const foot1 = label(svg, 320, 616, 22, FUNGUS); foot1.setAttribute("text-anchor", "middle");
+    const foot2 = label(svg, 320, 648, 22, FUNGUS); foot2.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 200;
+      doWipe(T);
+      typeOn(hdr, cfg.header, T, 4, 1.2);
+      if (!felled && body._legs) {
+        const jounce = cfg.state === "step" ? [0, 2, 3, 2][t % 4] : 0;
+        body.setAttribute("transform", `translate(0 ${jounce})`);
+        body._legs.forEach((lg, i) => {
+          const s = i ? 1 : -1;
+          const th = cfg.state === "step" ? ((t % 12) / 12 + i * .5) * Math.PI * 2 : 0;
+          const fx = 320 + s * 26 + Math.cos(th) * 14;
+          lg.setAttribute("points", `${320 + s * 20},372 ${320 + s * 40},430 ${fx},520`);  // backward knee
+        });
+      }
+      pulses.forEach((p, i) => {
+        const on = felled ? Math.max(0, 1 - (t % 60) / 60) * .6 : (cfg.state === "listen" ? (t % 30 < 15 ? 1 : .2) : .5);
+        p.setAttribute("opacity", on);
+        p.setAttribute("r", 4 + (t % 24) * .2 + i);
+      });
+      typeOn(foot1, fL1, T, 130, 1.6);
+      typeOn(foot2, fL2, T, 130 + fL1.length, 1.6);
+    });
+  }
+
+  // the spawn of guts, phone layout -- shared by guts-a/b/c/lash-m.
+  // cfg = { key, header, state:'sway'|'drip'|'claim'|'lash', callouts, footer }
+  function gutsCardM(svg, cfg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 20, PH_BRIGHT);
+    const GD = stipple(svg, "dots-" + cfg.key, PH_DIM, 1.1);
+    const GUT = "#4ee0a8";
+    const close = cfg.state === "drip", claim = cfg.state === "claim", lash = cfg.state === "lash";
+    el(svg, "line", { x1: 0, y1: 540, x2: 640, y2: 540, stroke: PH_DIM });
+    const S = close ? 1.5 : 1, CX = 320, TOP = close ? 150 : 150;
+    const fig = el(svg, "g", { transform: `translate(${CX} ${TOP}) scale(${S})` });
+    const F = (n, a) => el(fig, n, a);
+    if (!claim) {
+      // the falcon-jar helm
+      F("path", { fill: GD, stroke: PH, "stroke-width": 2, d: "M -46 90 L -42 20 Q -42 -8 0 -10 Q 42 -8 42 20 L 46 90 Z" });
+      F("polyline", { fill: "none", stroke: PH, "stroke-width": 2, points: "-8,-6 20,-18 6,2" }); // beak
+      // the eye-cluster face
+      const eyes = [];
+      for (let i = 0; i < 6; i++) {
+        const ex = -30 + (i % 3) * 30, ey = 108 + Math.floor(i / 3) * 26;
+        eyes.push(F("circle", { cx: ex, cy: ey, r: 7, fill: BG, stroke: PH, "stroke-width": 1.6 }));
+        F("circle", { cx: ex, cy: ey, r: 2.6, fill: PH_BRIGHT });
+      }
+      fig._eyes = eyes;
+      // the green gut torus collar
+      F("ellipse", { cx: 0, cy: 168, rx: 58, ry: 20, fill: "none", stroke: GUT, "stroke-width": 3 });
+      F("ellipse", { cx: 0, cy: 168, rx: 34, ry: 11, fill: "none", stroke: GUT, "stroke-width": 1.6, opacity: .6 });
+      // the tendril skirt
+      const skirt = [];
+      for (let i = 0; i < 7; i++) skirt.push(F("polyline", { fill: "none", stroke: GUT, "stroke-width": 2.2 }));
+      fig._skirt = skirt;
+      // the intestine arm (right)
+      fig._arm = F("polyline", { fill: "none", stroke: GUT, "stroke-width": 3, "stroke-linecap": "round" });
+    } else {
+      // collapsed; the falcon-jar helm toppled, settling upright below
+      F("path", { fill: GD, stroke: PH, "stroke-width": 2, d: "M -40 130 L -36 66 Q -36 40 0 38 Q 36 40 36 66 L 40 130 Z" });
+      F("ellipse", { cx: 0, cy: 130, rx: 40, ry: 10, fill: "none", stroke: PH });
+      F("polyline", { fill: "none", stroke: PH, "stroke-width": 2, points: "-6,44 20,32 4,52" });
+    }
+    // drips + the red lash burst
+    const drips = Array.from({ length: 4 }, (_, i) =>
+      el(svg, "circle", { r: 3, fill: GUT, cx: 280 + i * 30, cy: 400, opacity: 0 }));
+    const burst = lash ? el(svg, "g", { opacity: 0 }) : null;
+    if (burst) for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4;
+      el(burst, "line", { x1: 540, y1: 300, x2: 540 + Math.cos(a) * 26, y2: 300 + Math.sin(a) * 26, stroke: "#ff5a5a", "stroke-width": 2.4 }); }
+    const calls = (cfg.callouts || []).slice(0, 4).map((c, i) => label(svg, 40, 576 + i * 28, 16, PH_DIM));
+    const fw = cfg.footer, cut = fw.length > 34 ? fw.lastIndexOf(" ", 34) : -1;
+    const fL1 = cut > 0 ? fw.slice(0, cut) : fw, fL2 = cut > 0 ? fw.slice(cut + 1) : "";
+    const yF = (cfg.callouts && cfg.callouts.length) ? 700 : 636;
+    const foot1 = label(svg, 320, yF - 26, 21, FUNGUS); foot1.setAttribute("text-anchor", "middle");
+    const foot2 = label(svg, 320, yF + 2, 21, FUNGUS); foot2.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 200;
+      doWipe(T);
+      typeOn(hdr, cfg.header, T, 4, 1.1);
+      if (!claim) {
+        const sway = lash ? 0 : Math.sin(t * .08) * (close ? 4 : 10);
+        fig.setAttribute("transform", `translate(${CX + sway} ${TOP}) scale(${S})`);
+        if (fig._eyes) fig._eyes.forEach((e, i) => e.setAttribute("opacity", (t + i * 3) % 24 < 3 ? .2 : 1));
+        if (fig._skirt) fig._skirt.forEach((sk, i) => {
+          const bx = -54 + i * 18, pts = [[bx, 186]];
+          for (let q = 1; q <= 3; q++) pts.push([bx + Math.sin(t * .12 + q + i) * 5, 186 + q * 24]);
+          sk.setAttribute("points", pts.map(p => p.join(",")).join(" "));
+        });
+        if (fig._arm) {
+          const reach = lash ? Math.min(1, (t % 60) / 12) : 0;
+          const ex = 60 + reach * 150, ey = 150 - reach * 30;
+          fig._arm.setAttribute("points", `40,150 ${52 + reach * 20},170 ${ex},${ey}`);
+        }
+      }
+      drips.forEach((d, i) => { const k = (t * 2 + i * 20) % 100;
+        d.setAttribute("cy", 380 + k * 1.4); d.setAttribute("opacity", k > 84 ? 0 : .7); });
+      if (burst) burst.setAttribute("opacity", (t % 60) > 12 && (t % 60) < 22 ? 1 : 0);
+      (cfg.callouts || []).slice(0, 4).forEach((c, i) => typeOn(calls[i], c, T, 40 + i * 14, 1.6));
+      typeOn(foot1, fL1, T, 140, 1.6);
+      typeOn(foot2, fL2, T, 140 + fL1.length, 1.6);
     });
   }
 
@@ -7457,6 +7603,41 @@
   /* ---------------- mystic-f-m (phone twin) ---------------- */
   FIG._define("mystic-f-m", "svg", function (svg) {
     mysticCardM(svg, { key: "mystic-f-m", header: "THE OSSIFIED MYSTIC, BURNED OUT", state: "ash", footer: "NOTHING LEFT TO GIVE." });
+  });
+
+  /* ---------------- spawn-a-m (phone twin) ---------------- */
+  FIG._define("spawn-a-m", "svg", function (svg) {
+    spawnCardM(svg, { key: "spawn-a-m", header: "SPAWN OF BRAIN (IT HEARD THAT)", state: "listen", footer: "NO EYES UNDER THE JAR. IT DOES NOT NEED THEM." });
+  });
+
+  /* ---------------- spawn-b-m (phone twin) ---------------- */
+  FIG._define("spawn-b-m", "svg", function (svg) {
+    spawnCardM(svg, { key: "spawn-b-m", header: "SPAWN OF BRAIN (MID-STEP)", state: "step", footer: "THE HEAD HOLDS LEVEL. THE REST NEGOTIATES." });
+  });
+
+  /* ---------------- spawn-c-m (phone twin) ---------------- */
+  FIG._define("spawn-c-m", "svg", function (svg) {
+    spawnCardM(svg, { key: "spawn-c-m", header: "SPAWN OF BRAIN (AS FOUND)", state: "felled", footer: "FELLED MID-STEP. THE JAR ROLLED TO ITS SIDE." });
+  });
+
+  /* ---------------- guts-a-m (phone twin) ---------------- */
+  FIG._define("guts-a-m", "svg", function (svg) {
+    gutsCardM(svg, { key: "guts-a-m", header: "SPAWN OF GUTS (SWAYING TOWARD EVERY SOUND)", state: "sway", callouts: ["HELM: THE FALCON JAR. THE PLINTH WANTS IT", "EYES: DECORATIVE. IT HUNTS BY EAR", "COLLAR: GUT, RECENTLY PROMOTED", "ARM: A HOSE WITH OPINIONS"], footer: "WHATEVER YOU JUST DID, IT HEARD." });
+  });
+
+  /* ---------------- guts-b-m (phone twin) ---------------- */
+  FIG._define("guts-b-m", "svg", function (svg) {
+    gutsCardM(svg, { key: "guts-b-m", header: "SPAWN OF GUTS (DETAIL. SORRY.)", state: "drip", callouts: [], footer: "THE EYES ARE ORNAMENTAL. THE HUNGER IS NOT." });
+  });
+
+  /* ---------------- guts-c-m (phone twin) ---------------- */
+  FIG._define("guts-c-m", "svg", function (svg) {
+    gutsCardM(svg, { key: "guts-c-m", header: "SPAWN OF GUTS (THE CLAIM)", state: "claim", callouts: [], footer: "THE JAR IS OWED TO A PLINTH TWO FLOORS UP." });
+  });
+
+  /* ---------------- guts-lash-m (phone twin) ---------------- */
+  FIG._define("guts-lash-m", "svg", function (svg) {
+    gutsCardM(svg, { key: "guts-lash-m", header: "SPAWN OF GUTS (IT LASHES OUT)", state: "lash", callouts: [], footer: "THE HOSE HAD OPINIONS. NOW IT HAS REACH." });
   });
 
 })();
