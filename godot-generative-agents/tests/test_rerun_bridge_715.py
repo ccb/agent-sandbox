@@ -27,6 +27,7 @@ _SIM_DIR = _REPO_ROOT / "godot-generative-agents" / "backend" / "penn"
 sys.path.insert(0, str(_SIM_DIR))
 
 from serve_penn import (  # noqa: E402
+    SCENARIOS,
     SCRIPTED,
     PennStepper,
     ReproResult,
@@ -295,6 +296,19 @@ def test_rerun_of_a_react_run_reproduces(tmp_path):
     assert result.steps == RERUN_STEPS
 
 
+def _rewrite_manifest(store, run_id, manifest):
+    """Write a doctored manifest back over a stored run's row -- the idiom for
+    simulating manifests this code no longer writes (older schema versions,
+    hand-edited files)."""
+    con = sqlite3.connect(store.root / "sim.db")
+    con.execute(
+        "UPDATE runs SET manifest = ? WHERE id = ?",
+        (json.dumps(manifest), run_id),
+    )
+    con.commit()
+    con.close()
+
+
 def test_reproduce_run_rejects_a_plan_mode_llm_run(tmp_path):
     # Task 4 review, Addition A: a run recorded with --plan llm makes the
     # re-run PennStepper's OWN guard raise SystemExit (llm=None is never
@@ -307,16 +321,117 @@ def test_reproduce_run_rejects_a_plan_mode_llm_run(tmp_path):
     store, run_id = _record_a_run(tmp_path)
     manifest = store.get_run(run_id)["manifest"]
     manifest["plan_mode"] = "llm"
-    con = sqlite3.connect(store.root / "sim.db")
-    con.execute(
-        "UPDATE runs SET manifest = ? WHERE id = ?",
-        (json.dumps(manifest), run_id),
-    )
-    con.commit()
-    con.close()
+    _rewrite_manifest(store, run_id, manifest)
 
     with pytest.raises(ValueError, match="plan llm"):
         reproduce_run(store, run_id)
+
+
+# --- the scenario field (#747) ----------------------------------------------
+# A run served with --scenario boil/boil_hard used to re-run on the DEFAULT
+# campus (reproduce_run rebuilt via build_penn_world() unconditionally) and
+# report DIVERGED on a run that reproduces perfectly. The manifest now records
+# the scenario name and the re-run rebuilds through the same SCENARIOS dispatch
+# serve_penn boots with.
+
+
+def _record_a_scenario_run(tmp_path, scenario_name):
+    """Record a short scripted run on a named SCENARIOS world, the way main()
+    boots it: the scenario's own builder + pinned vision_r + its name."""
+    scenario = SCENARIOS[scenario_name]
+    store = RunStore(tmp_path / "runs")
+    stepper = PennStepper(
+        num_steps=RERUN_STEPS,
+        world=scenario["world"](),
+        monitor=None,
+        llm=SCRIPTED,
+        run_store=store,
+        seed=0,
+        decide_workers=0,
+        vision_r=scenario["vision_r"],
+        scenario=scenario_name,
+    )
+    for _ in range(RERUN_STEPS):
+        stepper.tick()
+    stepper._finish_run()
+    return store, stepper._run_id
+
+
+def test_manifest_records_the_scenario(tmp_path):
+    # The default stepper (no scenario passed -- every pre-#747 call site)
+    # records the default campus scenario; a scenario stepper records its name.
+    stepper = _scripted_stepper(tmp_path)
+    manifest = json.loads(
+        (tmp_path / "runs" / stepper._run_id / "manifest.json").read_text()
+    )
+    assert manifest["scenario"] == "penn"
+
+    store, run_id = _record_a_scenario_run(tmp_path / "boil", "boil_hard")
+    assert store.get_run(run_id)["manifest"]["scenario"] == "boil_hard"
+
+
+def test_rerun_of_a_scenario_run_reproduces(tmp_path):
+    # The #747 acceptance: a persisted --scenario run re-runs byte-identical.
+    # boil_hard is the hardest case -- its world builder relocates the stove
+    # AND pins vision_r=0, both of which shape the recorded observations (and
+    # so the cassette's request keys): a re-run on the wrong world misses the
+    # cassette and reports DIVERGED.
+    store, run_id = _record_a_scenario_run(tmp_path, "boil_hard")
+    result = reproduce_run(store, run_id)
+    assert result.match is True
+    assert result.first_divergence is None
+    assert result.steps == RERUN_STEPS
+
+
+def test_rerun_unknown_scenario_fails_loudly(tmp_path):
+    # A manifest naming a scenario this build doesn't know (a renamed entry,
+    # a store from a newer checkout) must fail the re-run with a clear message
+    # -- NOT silently rebuild the default campus and report a bogus verdict.
+    store, run_id = _record_a_run(tmp_path)
+    manifest = store.get_run(run_id)["manifest"]
+    manifest["scenario"] = "atlantis"
+    _rewrite_manifest(store, run_id, manifest)
+
+    with pytest.raises(ValueError, match="unknown scenario 'atlantis'"):
+        reproduce_run(store, run_id)
+
+
+def test_http_rerun_unknown_scenario_is_409(tmp_path):
+    # The route maps reproduce_run's ValueError vocabulary to 409, so the loud
+    # failure reaches HTTP callers as a clear conflict, not a 500 or a silent
+    # default-campus DIVERGED.
+    store, run_id = _record_a_run(tmp_path)
+    manifest = store.get_run(run_id)["manifest"]
+    manifest["scenario"] = "atlantis"
+    _rewrite_manifest(store, run_id, manifest)
+    stepper = PennStepper(
+        num_steps=RERUN_STEPS,
+        world=build_penn_world(),
+        monitor=None,
+        llm=SCRIPTED,
+        run_store=store,
+        seed=0,
+        decide_workers=0,
+    )
+    app = create_app(_GameProxy_for(stepper), stepper=stepper, start_paused=True)
+    client = TestClient(app)
+    resp = client.post(f"/runs/{run_id}/rerun")
+    assert resp.status_code == 409
+    assert "unknown scenario" in resp.json()["detail"]
+
+
+def test_rerun_pre_747_manifest_defaults_to_the_campus(tmp_path):
+    # Back-compat: a manifest recorded before the scenario field existed lacks
+    # the key entirely. Those runs could only have been the default campus, so
+    # the re-run treats the absent key as scenario "penn" and still reproduces.
+    store, run_id = _record_a_run(tmp_path)
+    manifest = store.get_run(run_id)["manifest"]
+    del manifest["scenario"]
+    _rewrite_manifest(store, run_id, manifest)
+
+    result = reproduce_run(store, run_id)
+    assert result.match is True
+    assert result.first_divergence is None
 
 
 def test_reproduce_run_threads_manifest_config_into_the_rerun_stepper(
