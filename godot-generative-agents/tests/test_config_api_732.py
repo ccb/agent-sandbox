@@ -24,6 +24,10 @@ from serve_penn import SCENARIOS, SCRIPTED, PennStepper, _GameProxy  # noqa: E40
 
 from backend.build_world import library_personas  # noqa: E402
 from backend.run_store import RunStore  # noqa: E402
+from backend.sim_config import CognitionConfig, SimulationConfig  # noqa: E402
+from text_adventure_games.config import GameConfig  # noqa: E402
+from text_adventure_games.embedding_client import EmbeddingConfig  # noqa: E402
+from text_adventure_games.llm_client import LlmConfig  # noqa: E402
 
 
 def test_library_personas_catalog():
@@ -144,6 +148,39 @@ def test_apply_sim_config_reaches_the_knobs():
     stepper.apply_config(sim_config={"cognition": {"vision_r": 3}})
     assert stepper.cog.vision_r == 3
     assert stepper.describe_config()["knobs"]["current"]["cognition"]["vision_r"] == 3
+
+
+def test_apply_config_preserves_stripped_key_bearing_sections():
+    """#753: GET /config strips embedding + game.llm (they can carry api_key
+    material and never travel over HTTP), so a client posts them back absent.
+    apply_config must MERGE the posted knobs over the live config, not
+    full-replace -- else a server launched with a non-default embedding
+    silently reverts to keyword relevance the moment any knob is edited."""
+    launched = SimulationConfig(
+        embedding=EmbeddingConfig(provider="mock"),
+        game=GameConfig(llm=LlmConfig(provider="mock")),
+        cognition=CognitionConfig(vision_r=5),
+    )
+    stepper = _mock_stepper(sim_config=launched)
+    # Exactly what the client received from GET /config and posts back after
+    # editing one unrelated knob: the full knobs.current, with the two
+    # key-bearing sections already stripped by the server.
+    posted = stepper.describe_config()["knobs"]["current"]
+    assert "embedding" not in posted  # never on the wire
+    assert "llm" not in posted["game"]  # never on the wire
+    posted["cognition"]["vision_r"] = 3  # the user's edit
+
+    stepper.apply_config(sim_config=posted)
+
+    # The edit landed...
+    assert stepper.sim_config.cognition.vision_r == 3
+    # ...and the stripped, key-bearing sections survived (the bug reset them
+    # to None). Compare on the provider string so an enum/str coercion in
+    # rebuild can't make this brittle.
+    assert stepper.sim_config.embedding is not None
+    assert str(stepper.sim_config.embedding.provider) == "mock"
+    assert stepper.sim_config.game.llm is not None
+    assert str(stepper.sim_config.game.llm.provider) == "mock"
 
 
 def test_apply_steps_is_the_new_baseline():
