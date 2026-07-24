@@ -118,7 +118,10 @@ the standard macOS app bundle; live mode also needs `uv sync --extra server`.
 ./godot-generative-agents/run.sh
 
 # Watch the bundled replay: bake it first (from the repo root), then "Play the bundled
-# replay" in the menu. It's a git-ignored artifact regenerated per checkout:
+# replay" in the menu. It's a git-ignored artifact regenerated per checkout. The bake
+# now also saves the run to the shared store by default (#752) — like the viewer and
+# web companion, every entry point default-saves into godot-generative-agents/runs/;
+# pass --no-persist for a throwaway bake:
 LLM_PROVIDER=mock uv run python godot-generative-agents/backend/penn/generate_penn_replay.py
 
 # Follow a live sim (mock brain: real requests, no keys, no spend). Serve it, then

@@ -127,7 +127,11 @@ walking between real buildings on their daily schedules. Godot is just the
 scene reads (the same split as the upstream Phaser replay):
 
 ```bash
-# 1. Run the sim -> maps/penn_replay.json (from the repo root, so uv finds the env):
+# 1. Run the sim -> maps/penn_replay.json (from the repo root, so uv finds the env).
+#    The bake also saves the run to the shared store by default (#752): every entry
+#    point (viewer / this script / web companion) default-saves into
+#    godot-generative-agents/runs/, so a bake shows up in Past runs and is re-runnable.
+#    Add --no-persist for a throwaway bake (replay file only, no store row):
 uv run python godot-generative-agents/backend/penn/generate_penn_replay.py
 
 # 2. Watch it:
