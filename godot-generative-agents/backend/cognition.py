@@ -511,6 +511,16 @@ def attach_agents(
     unset (or missing) path simply skips that seeding and leaves the agent
     byte-identical to before.
 
+    A world YAML's own ``relationships`` edges reach memory the same way (issue
+    #779): a spec carrying ``relationship_edges`` -- the validated edges it is an
+    endpoint of, attached by ``penn_world.build_penn_world`` -- gets one seeded
+    memory per edge, naming the other person, the ``kind``, and the ``closeness``
+    in words (:func:`seed.relationship_statements`). This is what the Penn path
+    always lacked: the edges were validated and drawn in the viewer's
+    social-graph card but never delivered to an agent, so authored rivals,
+    siblings, and TAs behaved like strangers who happened to be standing nearby.
+    No key -> nothing seeded, so a world without a social graph is unchanged.
+
     Pass a ``planner_client`` (an engine ``LlmClient``) to plan each day with a
     real model (:class:`~backend.planner.LLMPlanner`, issue #83). With none -- the
     offline default -- each agent gets a :class:`~backend.planner.MockPlanner` that
@@ -667,7 +677,17 @@ def attach_agents(
         # Seed t=0 social structure (memory) and partial world knowledge
         # (knowledge) when the upstream assets are available (issue #79). Done
         # before planning so a generative planner can reason over them.
-        seed.seed_relationships(agent.memory, relationships.get(char.name, []))
+        # Two sources, one seeder: the upstream Smallville CSV (above) and the
+        # world YAML's own `relationships` edges, handed to each persona spec as
+        # `relationship_edges` by penn_world.build_penn_world (#779 -- before
+        # that these edges reached meta.relationships for the viewer's
+        # social-graph card and NOWHERE else, so an authored `rivals` pair had
+        # no idea they were rivals).
+        statements = list(relationships.get(char.name, []))
+        statements += seed.relationship_statements(
+            char.name, spec.get("relationship_edges") or []
+        )
+        seed.seed_relationships(agent.memory, statements)
         # -- Opt-in seeded memories (#595): author t=0 observations (e.g. an aversive
         # -- "the unboiled water made me sick" memory) so a live brain can retrieve
         # -- and reason from them. Importance 5.0 matches the plan-memory seed so it
