@@ -341,7 +341,11 @@ func _render_config(data: Dictionary) -> void:
 
 	_steps_spin = _spin_row("Steps", 1, 1000000, 1, float(_initial.steps))
 	# Floor > 0: POST /config's tick_seconds is Field(gt=0), so a 0 would 422.
-	_tick_spin = _spin_row("Tick seconds", 0.05, 60.0, 0.1, float(_initial.tick_seconds))
+	# step 0.05 (not 0.1): a SpinBox snaps to `min + round((v-min)/step)*step`, and
+	# with min 0.05 a step of 0.1 makes the grid {0.05, 0.15, 0.25, ...} -- every
+	# round tick (0.1, 0.5, 1.0) gets bumped +0.05 and POSTed as a spurious edit
+	# (base #733 flow and #734 re-run alike). step 0.05 puts those values on-grid.
+	_tick_spin = _spin_row("Tick seconds", 0.05, 60.0, 0.05, float(_initial.tick_seconds))
 	_cost_spin = _spin_row("Cost budget (USD, llm only)", 0.0, 1000.0, 0.5, float(_initial.max_cost))
 
 	var stop := str(run.get("stop_time", ""))
@@ -356,6 +360,7 @@ func _render_config(data: Dictionary) -> void:
 	_set_status("%d persona(s) available. Pick a cast, tweak knobs, then Start." % _persona_checks.size(), false)
 	if not _seed.is_empty():
 		_apply_seed(_seed)
+		_seed = {}  # consumed once (#734): a re-render starts from server values
 
 
 func _apply_seed(seed: Dictionary) -> void:
@@ -365,10 +370,24 @@ func _apply_seed(seed: Dictionary) -> void:
 	# the seed values as edits and the re-run reproduces the saved setup on this
 	# fresh backend. Knobs this scene does not expose aren't reproduced -- this is
 	# "same setup", not the byte-identical re-run #715 owns.
+	#
+	# A re-run can target a backend serving a different world/brains than the saved
+	# run, so a saved cast member or brain may not exist here. Rather than silently
+	# drop it (mock instead of the saved llm; an empty cast), collect what can't be
+	# honored into `unmet` and warn -- the user just clicked "re-run THIS setup".
+	var unmet: Array = []
 	var cast: Variant = seed.get("cast")
 	if typeof(cast) == TYPE_ARRAY:
+		var available := {}
 		for p in _persona_checks:
 			p.cb.button_pressed = p.id in (cast as Array)
+			available[p.id] = true
+		var missing_cast := []
+		for cid in (cast as Array):
+			if not available.has(str(cid)):
+				missing_cast.append(str(cid))
+		if not missing_cast.is_empty():
+			unmet.append("cast not on this backend: %s" % ", ".join(missing_cast))
 	var sim_config: Variant = seed.get("sim_config")
 	if typeof(sim_config) == TYPE_DICTIONARY:
 		for row in _knob_rows:
@@ -380,6 +399,8 @@ func _apply_seed(seed: Dictionary) -> void:
 		var bi := (_brains as Array).find(brain)
 		if bi >= 0:
 			_brain_opt.select(bi)
+		else:
+			unmet.append("brain '%s' not offered here" % brain)
 	var run: Variant = seed.get("run")
 	if typeof(run) == TYPE_DICTIONARY:
 		var r := run as Dictionary
@@ -389,7 +410,14 @@ func _apply_seed(seed: Dictionary) -> void:
 			_tick_spin.value = float(r["tick_seconds"])
 		if r.get("max_cost") != null and _cost_spin != null:
 			_cost_spin.value = float(r["max_cost"])
-	_set_status("Pre-filled from a saved run. Adjust anything, then Start.", false)
+	if unmet.is_empty():
+		_set_status("Pre-filled from a saved run. Adjust anything, then Start.", false)
+	else:
+		_set_status(
+			"Pre-filled from a saved run, but this backend can't match: %s. Adjust, then Start."
+			% "; ".join(unmet),
+			true,
+		)
 
 
 func _spin_row(label: String, lo: float, hi: float, step: float, value: float) -> SpinBox:

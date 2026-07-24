@@ -274,6 +274,15 @@ func _check_seed_prefill(inst: Node) -> int:
 	if edits.get("retrieval", {}).has("alpha_recency"):
 		printerr("  simulation_setup seed: untouched knob leaked as an edit")
 		fails += 1
+	# Run controls pre-fill too, and the seeded tick (0.1) must survive the
+	# SpinBox step grid unchanged -- a coarse step would snap 0.1 to 0.15 and the
+	# re-run would tick ~50% slower than the saved run (#734 tick-snap regression).
+	if inst._steps_spin.value != 200:
+		printerr("  simulation_setup seed: steps not pre-filled (%s)" % str(inst._steps_spin.value))
+		fails += 1
+	if not is_equal_approx(inst._tick_spin.value, 0.1):
+		printerr("  simulation_setup seed: tick_seconds snapped to %s (want 0.1)" % str(inst._tick_spin.value))
+		fails += 1
 	return fails
 
 
