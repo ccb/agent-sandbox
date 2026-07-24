@@ -5869,22 +5869,17 @@
       fill: EDOTS, stroke: PH, "stroke-width": 2.2 });
     el(svg, "path", { d: "M 206 560 L 206 260 Q 320 166 434 260 L 434 560",
       fill: "none", stroke: PH_DIM });
-    // the carving
+    // the carving -- kept to just the two lines that fit the stone at phone
+    // size; the desktop card (21) still carves the full cause/score/hints
+    // ledger, which overran the narrower stone here (CCB).
     const line = (y, size, color) => {
       const n = label(svg, 320, y, size, color);
       n.setAttribute("text-anchor", "middle"); return n;
     };
-    const L1 = line(300, 26, PH), L2 = line(348, 32, PH_BRIGHT);
-    const L3 = line(392, 22, PH), L4 = line(432, 19, PH_DIM);
-    const score = line(494, 19, PH);
+    const L1 = line(332, 28, PH), L2 = line(392, 40, PH_BRIGHT);
     const press = line(614, 20, PH_DIM);
     const foot = label(svg, 320, 664, 24, FUNGUS); foot.setAttribute("text-anchor", "middle");
     const bat = el(svg, "path", { fill: "none", stroke: PH, "stroke-width": 1.8 });
-    // In the game the terminal fills this in at death (score, hints, the wound
-    // that did it); standalone, the stone stays honest and carves neither a
-    // fake score nor an invented cause.
-    const CTX = (typeof window !== "undefined" && window.TombFigures
-      && window.TombFigures.context) || {};
     const doWipe = wipe(svg, 640, 720, 2, 10);
     clock(t => {
       const T = t % 200;
@@ -5892,12 +5887,6 @@
       typeOn(hdr, "THE EPITAPH", T, 4, 1.3);
       L1.textContent = T > 20 ? "HERE LIES" : "";
       L2.textContent = T > 40 ? "A SCAVENGER" : "";
-      L3.textContent = T > 60 && CTX.cause
-        ? String(CTX.cause).toUpperCase().slice(0, 24) : "";
-      L4.textContent = T > 80 ? "4,000 YRS + 6 DAYS" : "";
-      if (CTX.score != null)
-        typeOn(score, "SCORE " + CTX.score + " OF " + CTX.max
-          + " -- HINTS " + (CTX.hints || 0), T, 96, 1.7);
       press.textContent = T > 130 && t % 8 < 4 ? "PRESS ENTER TO TRY AGAIN" : "";
       typeOn(foot, "THE TOMB KEEPS YOU.", T, 140, 1.5);
       const a = t * .05;                                      // something leathery
