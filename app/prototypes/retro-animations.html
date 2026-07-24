@@ -701,6 +701,14 @@
   </section>
 
   <section>
+    <div class="slate"><h2>13 — THE AUTARCH (phone)</h2><span class="kind">LITHO / PHONE TWIN</span></div>
+    <div class="screen">
+      <svg id="autarch-m" viewBox="0 0 640 720" aria-label="13 — THE AUTARCH (phone)"></svg>
+    </div>
+    <p class="spec">Phone twin of autarch: the Autarch's carved face, big.</p>
+  </section>
+
+  <section>
     <div class="slate"><h2>13-C &mdash; THE AUTARCH, HOLLOWED</h2><span class="kind">LITHO / VARIANT</span></div>
     <div class="screen">
       <svg id="autarch-c" viewBox="0 0 640 420" aria-label="The Autarch, hollowed to the skull"></svg>
@@ -712,6 +720,14 @@
   </section>
 
   <section>
+    <div class="slate"><h2>13-C — THE AUTARCH, HOLLOWED (phone)</h2><span class="kind">LITHO / PHONE TWIN</span></div>
+    <div class="screen">
+      <svg id="autarch-c-m" viewBox="0 0 640 720" aria-label="13-C — THE AUTARCH, HOLLOWED (phone)"></svg>
+    </div>
+    <p class="spec">Phone twin of autarch-c: the Autarch's carved face, big.</p>
+  </section>
+
+  <section>
     <div class="slate"><h2>13-E &mdash; THE HORROR, ABLAZE, FIRELIT</h2><span class="kind">LITHO / THE FIGHT</span></div>
     <div class="screen">
       <svg id="autarch-e" viewBox="0 0 640 420" aria-label="The Horror, ablaze, firelit"></svg>
@@ -720,6 +736,14 @@
        thrown left and right of the body, and yellow reflections licking across the blue
        linework of the mask, crown, and carvings as the flames catch them.
        <span class="attach">Alternate for 13-D.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>13-E — THE HORROR, ABLAZE, FIRELIT (phone)</h2><span class="kind">LITHO / PHONE TWIN</span></div>
+    <div class="screen">
+      <svg id="autarch-e-m" viewBox="0 0 640 720" aria-label="13-E — THE HORROR, ABLAZE, FIRELIT (phone)"></svg>
+    </div>
+    <p class="spec">Phone twin of autarch-e: the Autarch's carved face, big.</p>
   </section>
 
   <section>
@@ -1619,6 +1643,101 @@
       }
       typeOn(foot1, fL1, T, 130, 1.6);
       typeOn(foot2, fL2, T, 130 + fL1.length, 1.6);
+    });
+  }
+
+  // the Autarch's carved face, phone layout -- shared by autarch/-c/-e-m.
+  // cfg = { key, header, state:'rest'|'skull'|'fire', footers:[...], gauge }
+  function autarchCardM(svg, cfg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 25, PH_BRIGHT);
+    const SDOTS = stipple(svg, "dots-" + cfg.key, PH, 1);
+    const skull = cfg.state !== "rest", fire = cfg.state === "fire";
+    const CX = 320, CY = 300, ROPE = fire ? "#7a4a24" : FUNGUS;
+    // the spiked halo behind
+    const spikes = [];
+    for (let i = 0; i < 20; i++) {
+      const a = i * Math.PI / 10;
+      spikes.push(el(svg, "polygon", { fill: PH, "fill-opacity": .25, stroke: PH,
+        "stroke-width": 1, points:
+        `${CX + Math.cos(a - .06) * 150},${CY + Math.sin(a - .06) * 150} ` +
+        `${CX + Math.cos(a + .03) * (185 + (i % 2) * 22)},${CY + Math.sin(a + .03) * (185 + (i % 2) * 22)} ` +
+        `${CX + Math.cos(a + .12) * 150},${CY + Math.sin(a + .12) * 150}` }));
+    }
+    el(svg, "circle", { cx: CX, cy: CY, r: 150, fill: "none", stroke: PH_DIM });
+    // the face: a rounded stone/bone mass, knit cap, court-curl beard
+    el(svg, "path", { fill: SDOTS, stroke: PH, "stroke-width": 2.4, d:
+      "M 236 250 Q 236 168 320 164 Q 404 168 404 250 L 398 350 " +
+      "Q 388 402 320 406 Q 252 402 242 350 Z" });
+    // the eyes
+    if (fire) {
+      [284, 356].forEach(x => {
+        el(svg, "ellipse", { cx: x, cy: 286, rx: 20, ry: 15, fill: BG, stroke: PH, "stroke-width": 1.8 });
+        el(svg, "circle", { cx: x, cy: 286, r: 8, fill: "#ffd76a", "fill-opacity": .85 });
+      });
+    } else if (skull) {
+      [284, 356].forEach(x => {
+        el(svg, "ellipse", { cx: x, cy: 286, rx: 20, ry: 16, fill: BG, stroke: PH, "stroke-width": 1.8 });
+        el(svg, "circle", { cx: x, cy: 286, r: 9, fill: FUNGUS, "fill-opacity": .8 });
+      });
+    } else {
+      [284, 356].forEach(x =>
+        el(svg, "path", { d: `M ${x - 18} 286 Q ${x} 296 ${x + 18} 286`, fill: "none",
+          stroke: PH, "stroke-width": 2 }));
+    }
+    // nose + mouth
+    el(svg, "path", { d: "M 320 300 L 312 330 Q 320 338 328 330 Z", fill: BG, stroke: PH, "stroke-width": 1.6 });
+    if (skull) {                                            // a grin, one tooth gone
+      el(svg, "line", { x1: 292, y1: 352, x2: 348, y2: 352, stroke: PH, "stroke-width": 1.8 });
+      for (let x = 294; x <= 346; x += 8)
+        if (x !== 318) el(svg, "line", { x1: x, y1: 352, x2: x, y2: 366, stroke: PH });
+    } else {
+      el(svg, "path", { d: "M 296 352 Q 320 360 344 352", fill: "none", stroke: PH, "stroke-width": 1.8 });
+    }
+    // the beard curls
+    for (let i = 0; i < 7; i++)
+      el(svg, "circle", { cx: 268 + i * 14, cy: 392 + (i % 2) * 6, r: 9, fill: "none",
+        stroke: PH_DIM, "stroke-width": 1.4 });
+    // the fungal ropes / fire
+    const ropes = [];
+    if (skull) {
+      const ANCH = [[236, 250], [404, 250], [280, 176], [360, 176], [320, 410]];
+      ANCH.forEach(([ax, ay], i) => ropes.push({ q: el(svg, "polyline",
+        { fill: "none", stroke: ROPE, "stroke-width": 2.4 }), ax, ay, i }));
+    }
+    const embers = fire ? Array.from({ length: 14 }, (_, i) =>
+      ({ q: el(svg, "circle", { r: 2, fill: "#ffd76a" }), x: 200 + i * 34, ph: i * 17 })) : [];
+    let cells = null;
+    if (cfg.gauge) {
+      label(svg, 40, 556, 20, PH_DIM).textContent = cfg.gauge;
+      cells = Array.from({ length: 10 }, (_, i) => el(svg, "rect", { x: 190 + i * 36, y: 540,
+        width: 26, height: 20, fill: FUNGUS, "fill-opacity": .8 }));
+    }
+    const foots = (cfg.footers || []).filter(f => f !== cfg.gauge)
+      .map((f, i) => { const n = label(svg, 320, 616 + i * 32, 21, FUNGUS);
+        n.setAttribute("text-anchor", "middle"); return { n, f }; });
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 200;
+      doWipe(T);
+      typeOn(hdr, cfg.header, T, 4, 1.2);
+      const breath = 1 + Math.sin(t * .06) * .02;
+      spikes.forEach(s => s.setAttribute("opacity", fire ? .3 + Math.abs(Math.sin(t * .3)) * .5 : .5 + Math.sin(t * .06) * .2));
+      ropes.forEach(r => {
+        const pts = [[r.ax, r.ay]];
+        for (let q = 1; q <= 4; q++) {
+          const sway = (fire ? 1 : Math.sin(t * .12 + q + r.i) * 6);
+          pts.push([r.ax + (r.ax - CX) * .12 * q + sway, r.ay + (r.ay - CY) * .12 * q]);
+        }
+        r.q.setAttribute("points", pts.map(p => p.join(",")).join(" "));
+      });
+      embers.forEach(e => { const k = (t * 3 + e.ph) % 120;
+        e.q.setAttribute("cx", e.x + Math.sin((t + e.ph) * .2) * 10);
+        e.q.setAttribute("cy", 420 - k * 2.6); e.q.setAttribute("opacity", k > 100 ? 0 : .8); });
+      if (cells) { const on = Math.max(0, 10 - Math.floor(T / 20));
+        cells.forEach((r, i) => r.setAttribute("fill-opacity", i < on ? .8 : .1)); }
+      foots.forEach((ft, i) => typeOn(ft.n, ft.f, T, 120 + i * 20, 1.6));
     });
   }
 
@@ -8381,6 +8500,24 @@
   {
     const svg = document.getElementById("chimney-h-m");
     chimCardM(svg, { key: "chimney-h-m", header: "THE FUNGAL CHIMNEY, BURNT", charred: true, centipede: false, gauge: null, footer: "BLACK, BARE, AND BREATHABLE." });
+  }
+
+  /* ---------------- autarch-m (phone twin) ---------------- */
+  {
+    const svg = document.getElementById("autarch-m");
+    autarchCardM(svg, { key: "autarch-m", header: "NASSAK AN-RAH (AT REST)", state: "rest", footers: ["DREAMING SOMETHING KIND, FOUR THOUSAND YEARS IN."], gauge: null });
+  }
+
+  /* ---------------- autarch-c-m (phone twin) ---------------- */
+  {
+    const svg = document.getElementById("autarch-c-m");
+    autarchCardM(svg, { key: "autarch-c-m", header: "NASSAK AN-RAH (HOLLOWED)", state: "skull", footers: ["THE STONE WEARS TO THE SKULL. THE SKULL WEARS ORANGE."], gauge: null });
+  }
+
+  /* ---------------- autarch-e-m (phone twin) ---------------- */
+  {
+    const svg = document.getElementById("autarch-e-m");
+    autarchCardM(svg, { key: "autarch-e-m", header: "THE HORROR, ABLAZE", state: "fire", footers: ["VIGOR", "ABLAZE, IT CANNOT MEND. KEEP CUTTING.", "IT DOES NOT CLOSE AGAIN."], gauge: "VIGOR" });
   }
 
 })();
