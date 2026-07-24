@@ -91,7 +91,10 @@ def load_world_yaml(path, cast: list[str] | None = None) -> dict:
         for fname in sorted(os.listdir(library)):
             if fname.endswith(".yaml"):
                 with open(os.path.join(library, fname), encoding="utf-8") as f:
-                    catalog[fname[:-5]] = yaml.safe_load(f)
+                    try:
+                        catalog[fname[:-5]] = yaml.safe_load(f)
+                    except yaml.YAMLError:
+                        continue  # syntax-broken PARKED file -- referencing it from the cast still fails loudly below
     entries = []
     for pid in ids:
         if pid not in catalog:
