@@ -149,6 +149,23 @@ def test_can_converse_gates_on_audience_and_agents():
     assert convo.can_converse(game, alice, bob) is False
 
 
+def test_can_converse_refuses_dead_participants():
+    a = _talker(["x"])
+    b = _talker(["y"])
+    game, alice, bob = _two_in_a_room(a, b)
+    assert convo.can_converse(game, alice, bob) is True
+    # A dead character may still have an agent attached, but the dead don't
+    # talk -- on either side of the conversation (issue #755).
+    bob.set_property("is_dead", True)
+    assert convo.can_converse(game, alice, bob) is False
+    assert convo.can_converse(game, bob, alice) is False
+    bob.set_property("is_dead", False)
+    alice.set_property("is_dead", True)
+    assert convo.can_converse(game, alice, bob) is False
+    # The pair scan builds on can_converse, so it excludes the pair too.
+    assert convo.find_conversation_pairs(game) == []
+
+
 def test_find_conversation_pairs_returns_each_pair_once():
     a = _talker(["x"])
     b = _talker(["y"])
