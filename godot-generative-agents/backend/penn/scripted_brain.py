@@ -100,6 +100,15 @@ class ScriptedPennBrain(MockLlmClient):
         if tool.get("name") == "speak":
             actor = (self.context or {}).get("actor")
             return {"utterance": _line_for(actor), "done": True}
+        if tool.get("name") == "score_memories":
+            # #759 (a #647 follow-up): answer the importance scorer -- like the
+            # reflector answers its tools -- instead of returning None, which
+            # score_new_memories treats as a failure and so re-sent the same
+            # (growing) batch every tick. An empty scores list is the
+            # schema-valid "no overrides": each record keeps its constant-floor
+            # importance (so scripted-run behavior is otherwise unchanged) but
+            # is marked scored, clearing the batch after a single ask.
+            return {"scores": []}
         return None
 
     def _on_chat(self, messages, max_tokens, temperature):
