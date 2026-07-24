@@ -198,6 +198,9 @@ def _run_bake(out, *, scenario="penn", steps=None, env=None):
         scenario,
         "--out",
         str(out),
+        # #752: the bake now persists by default; these contract/byte-identity
+        # bakes want only the replay file, never a store row.
+        "--no-persist",
     ]
     if steps is not None:
         cmd += ["--steps", str(steps)]

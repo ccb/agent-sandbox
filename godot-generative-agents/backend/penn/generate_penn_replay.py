@@ -180,7 +180,8 @@ def _inject_scripted_conversations(replay, meetings, vision_r):
     print(f"Injected {fired}/{len(meetings)} meetings.")
 
 
-def main() -> int:
+def _build_parser() -> argparse.ArgumentParser:
+    """The bake's CLI, as a seam so the defaults can be pinned offline (#752)."""
     ap = argparse.ArgumentParser(description="Generate the Penn replay for Godot.")
     ap.add_argument(
         "--scenario",
@@ -206,8 +207,12 @@ def main() -> int:
     ap.add_argument(
         "--persist",
         action=argparse.BooleanOptionalAction,
-        default=False,
-        help="also record this bake into the #304 RunStore (runs/<run_id>/ + sim.db)",
+        default=True,
+        help="record this bake durably (#304), ON BY DEFAULT: a runs/<run_id>/ "
+        "entry (frames + events + wishes) plus a sim.db row, under "
+        "godot-generative-agents/runs/ -- so every entry point (viewer/script/web) "
+        "default-saves the run to the one shared store (#752). --no-persist makes "
+        "the bake ephemeral (replay file only, no store rows) for dev/throwaway bakes.",
     )
     ap.add_argument(
         "--runs-dir",
@@ -222,7 +227,11 @@ def main() -> int:
         "bake. scripted: the key-free full-feature brain (#563) -- bakes a replay "
         "that exercises the tool loop, cognition tools, conversation, reflection.",
     )
-    args = ap.parse_args()
+    return ap
+
+
+def main() -> int:
+    args = _build_parser().parse_args()
 
     # Resolve the scenario's world/steps/out, letting explicit flags win.
     scenario = SCENARIOS[args.scenario]

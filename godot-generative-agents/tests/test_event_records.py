@@ -95,7 +95,9 @@ def test_penn_replay_bake_writes_events_key(tmp_path, monkeypatch):
 
     out = tmp_path / "penn_replay.json"
     monkeypatch.setattr(
-        sys, "argv", ["generate_penn_replay", "--steps", "8", "--out", str(out)]
+        sys,
+        "argv",
+        ["generate_penn_replay", "--steps", "8", "--out", str(out), "--no-persist"],
     )
     assert generate_penn_replay.main() == 0
     replay = json.loads(out.read_text())
