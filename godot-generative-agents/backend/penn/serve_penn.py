@@ -524,6 +524,7 @@ class PennStepper:
         sim_config=None,
         world_builder=None,
         vision_r=None,
+        scenario="penn",
     ):
         # What a rebuild without an explicit world (reset()) constructs from:
         # the launch scenario's builder (#728), defaulting to the full campus --
@@ -532,6 +533,11 @@ class PennStepper:
         self._world_builder = (
             world_builder if world_builder is not None else build_penn_world
         )
+        # The scenario NAME behind that builder (#747), recorded into the run
+        # manifest so --re-run rebuilds the same world instead of the default
+        # campus. (If #730/#732's config-in-manifest work settles a fuller
+        # config block, this field's long-term home is there.)
+        self.scenario = scenario
         # The configured cast (#732): persona ids applied by apply_config, or
         # None for the world YAML's own cast. Held here so reset()'s default
         # rebuild keeps the configured cast instead of silently reverting.
@@ -1341,6 +1347,10 @@ class PennStepper:
             **self.meta(),
             "seed": self.seed,
             "engine_sha": self._engine_sha,
+            # Which SCENARIOS entry built this run's world (#747), so a re-run
+            # rebuilds the same world instead of the default campus. Pre-#747
+            # manifests lack the key and read back as the default scenario.
+            "scenario": self.scenario,
             "cognition_tools": self.cognition_tools,
             "react": self.react,
             "plan_mode": self.plan_mode,
@@ -2046,25 +2056,41 @@ def _sim_config_from_manifest(manifest: dict) -> SimulationConfig | None:
     return SimulationConfig.from_dict(data) if data else None
 
 
-def reproduce_run(store: RunStore, run_id: str, world=None) -> ReproResult:
+def reproduce_run(store: RunStore, run_id: str) -> ReproResult:
     """Re-run a persisted run offline from its cassette + seed and check the
     frames come out byte-identical to what the store holds (#715).
 
     Zero network: the world is driven by a ReplayClient over
     runs/<id>/cassette.jsonl -- no provider, no key, no spend. The re-run
-    reconstructs the recorded cognition config (seed, cognition_tools, react,
-    plan_mode, sim_config) from the manifest and always forces decide_workers=0, so
-    byte-identity holds for runs that were recorded under sequential decide
-    (the default for --brain scripted; opt-in via --decide-workers 0 for
-    --brain llm). A run recorded under parallel decide (--decide-workers > 0,
-    the paid default) may have resolved its agents' decisions in a different
-    order than a serial re-run would, so it is outside this guarantee.
+    reconstructs the recorded scenario world (#747) and cognition config
+    (seed, cognition_tools, react, plan_mode, sim_config) from the manifest
+    and always forces decide_workers=0, so byte-identity holds for runs that
+    were recorded under sequential decide (the default for --brain scripted;
+    opt-in via --decide-workers 0 for --brain llm). A run recorded under
+    parallel decide (--decide-workers > 0, the paid default) may have
+    resolved its agents' decisions in a different order than a serial re-run
+    would, so it is outside this guarantee.
     """
     row = store.get_run(run_id)
     if row is None:
         raise KeyError(f"unknown run id: {run_id}")
     manifest = row["manifest"]
     seed = int(manifest.get("seed", 0))
+    # The recorded scenario (#747): rebuild through the SAME SCENARIOS dispatch
+    # serve_penn uses at boot, or a --scenario boil run would be replayed on a
+    # default-campus world and report DIVERGED despite reproducing perfectly.
+    # Pre-#747 manifests lack the key and mean the default scenario (the only
+    # world they could have been recorded on). An unknown name fails loudly --
+    # ValueError, the vocabulary the CLI and the HTTP route (409) both map --
+    # rather than silently building the wrong world.
+    scenario_name = manifest.get("scenario", "penn")
+    scenario = SCENARIOS.get(scenario_name)
+    if scenario is None:
+        raise ValueError(
+            f"run {run_id} was recorded with unknown scenario "
+            f"{scenario_name!r} (this build knows: {', '.join(sorted(SCENARIOS))}); "
+            "refusing to rebuild the default campus and report a bogus verdict"
+        )
     cassette_path = str(store.root / run_id / "cassette.jsonl")
     if not os.path.exists(cassette_path):
         raise ValueError(
@@ -2095,7 +2121,7 @@ def reproduce_run(store: RunStore, run_id: str, world=None) -> ReproResult:
     try:
         stepper = PennStepper(
             num_steps=n,
-            world=world if world is not None else build_penn_world(),
+            world=scenario["world"](),
             monitor=None,
             llm=None,  # the replay branch below supplies the brain; llm is unused
             run_store=None,  # ephemeral: never persist over the original
@@ -2106,6 +2132,10 @@ def reproduce_run(store: RunStore, run_id: str, world=None) -> ReproResult:
             react=manifest.get("react", False),
             plan_mode=manifest.get("plan_mode", "schedule"),
             sim_config=_sim_config_from_manifest(manifest),
+            # The scenario's pinned perception radius (#728) shaped the
+            # recorded observations (and so the cassette's request keys);
+            # None for penn/boil leaves the config/default value, unchanged.
+            vision_r=scenario["vision_r"],
         )
         rerun = []
         miss_at = None
@@ -2494,6 +2524,7 @@ def main() -> int:
             sim_config=sim_config,
             world_builder=scenario["world"],
             vision_r=scenario["vision_r"],
+            scenario=args.scenario,
         )
     except ImportError as e:
         raise SystemExit(f"{e}\n(--brain llm needs the LLM extra: uv sync --extra llm)")
