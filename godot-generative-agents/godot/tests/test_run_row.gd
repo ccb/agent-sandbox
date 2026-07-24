@@ -68,6 +68,15 @@ func _initialize() -> void:
 	_check(RunRow.config_summary(defcast) == "default cast · mock",
 		"null cast + null sim_config: default cast, no temp")
 
+	# temp rides only with the llm brain (#564): a mock/scripted run that recorded
+	# a temperature does not advertise it -- it was inert on that run.
+	var mocktemp := {"config": {
+		"cast": ["a"], "brain": "mock",
+		"sim_config": {"game": {"agent": {"temperature": 0.9}}},
+	}}
+	_check(RunRow.config_summary(mocktemp) == "1 persona(s) · mock",
+		"mock-brain run omits temp even when one was recorded")
+
 	if _failures == 0:
 		print("test_run_row: all checks passed")
 	quit(1 if _failures > 0 else 0)

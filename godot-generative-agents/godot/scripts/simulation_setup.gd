@@ -320,7 +320,7 @@ func _render_config(data: Dictionary) -> void:
 		row.add_child(spin)
 		_form_box.add_child(row)
 		_knob_rows.append({
-			"path": spec.path, "kind": spec.kind, "spin": spin, "initial": spin.value,
+			"label": spec.label, "path": spec.path, "kind": spec.kind, "spin": spin, "initial": spin.value,
 		})
 
 	# --- Run controls ---
@@ -393,7 +393,7 @@ func _apply_seed(seed: Dictionary) -> void:
 		for row in _knob_rows:
 			var v: Variant = _walk(sim_config, row.path)
 			if v != null:
-				row.spin.value = float(v)
+				_seed_spin(row.spin, float(v), str(row.label), unmet)
 	var brain := str(seed.get("brain", ""))
 	if brain != "" and _brain_opt != null:
 		var bi := (_brains as Array).find(brain)
@@ -405,11 +405,11 @@ func _apply_seed(seed: Dictionary) -> void:
 	if typeof(run) == TYPE_DICTIONARY:
 		var r := run as Dictionary
 		if r.get("steps") != null and _steps_spin != null:
-			_steps_spin.value = float(r["steps"])
+			_seed_spin(_steps_spin, float(r["steps"]), "steps", unmet)
 		if r.get("tick_seconds") != null and _tick_spin != null:
-			_tick_spin.value = float(r["tick_seconds"])
+			_seed_spin(_tick_spin, float(r["tick_seconds"]), "tick seconds", unmet)
 		if r.get("max_cost") != null and _cost_spin != null:
-			_cost_spin.value = float(r["max_cost"])
+			_seed_spin(_cost_spin, float(r["max_cost"]), "cost budget", unmet)
 	if unmet.is_empty():
 		_set_status("Pre-filled from a saved run. Adjust anything, then Start.", false)
 	else:
@@ -418,6 +418,19 @@ func _apply_seed(seed: Dictionary) -> void:
 			% "; ".join(unmet),
 			true,
 		)
+
+
+# Assign a seeded value onto a SpinBox and, if the box's step grid or min/max
+# snapped it away from the saved value, record that in `unmet` so the re-run
+# warns instead of silently pacing/sampling differently than the run it claims
+# to reproduce (#734 review follow-up). A SpinBox snaps to `min + round((v-min)
+# /step)*step` then clamps to [min, max], so an off-grid temperature (0.72->0.70)
+# or a below-floor tick (0.02->0.05) would otherwise slip through unflagged --
+# unlike a missing cast member or brain, which already warn.
+static func _seed_spin(spin: SpinBox, requested: float, label: String, unmet: Array) -> void:
+	spin.value = requested
+	if not is_equal_approx(spin.value, requested):
+		unmet.append("%s %s adjusted to %s" % [label, requested, spin.value])
 
 
 func _spin_row(label: String, lo: float, hi: float, step: float, value: float) -> SpinBox:
