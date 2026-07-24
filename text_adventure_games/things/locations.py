@@ -134,7 +134,10 @@ class Location(Thing):
         super().from_primitive(data, instance)
         instance.travel_descriptions = data["travel_descriptions"]
         instance.move_verbs = data.get("move_verbs", {})
-        instance.blocks = data["blocks"]  # skeleton doesnt instantiate blocks
+        # The skeleton keeps blocks as primitive dicts; Game.from_primitive
+        # rebuilds them into Block instances once every location, item, and
+        # character exists (its third pass, issue #744).
+        instance.blocks = data["blocks"]
         instance.connections = data["connections"]
         instance.items = {k: Item.from_primitive(v) for k, v in data["items"].items()}
         instance.characters = data["characters"]
