@@ -1,0 +1,119 @@
+extends SceneTree
+## Headless unit tests for scripts/config_body.gd (issue #733): the pure builder
+## behind the Simulation Setup scene's POST /config body. Run:
+##   godot --headless --path godot-generative-agents/godot \
+##     --script res://tests/test_simulation_setup.gd
+## Exit 0 = all checks pass; 1 = at least one failed (run_smoke_test.sh runs
+## this before the scene smoke).
+
+const ConfigBody := preload("res://scripts/config_body.gd")
+
+var _failures := 0
+
+
+func _check(cond: bool, name: String) -> void:
+	if cond:
+		print("  ok: %s" % name)
+	else:
+		_failures += 1
+		push_error("FAIL: %s" % name)
+
+
+# A GET /config `knobs.current`-shaped blob (only the sections/keys the scene reads).
+func _knobs() -> Dictionary:
+	return {
+		"game": {"agent": {"temperature": 0.7, "max_tokens": 128}},
+		"retrieval": {"alpha_recency": 1.0, "alpha_importance": 1.0, "alpha_relevance": 1.0},
+		"cognition": {"vision_r": 8, "conversation_cooldown_steps": 90, "conversation_max_exchanges": 6},
+	}
+
+
+func _base_state() -> Dictionary:
+	# An untouched form: every value equals its server initial, no knob edits.
+	return {
+		"cast": ["diego", "sofia"],
+		"brain": "mock", "initial_brain": "mock",
+		"steps": 1080, "initial_steps": 1080,
+		"tick": 0.1, "initial_tick": 0.1,
+		"max_cost": 0.0,
+		"knobs_current": _knobs(),
+		"knob_edits": {},
+	}
+
+
+func _initialize() -> void:
+	# --- untouched form: only `cast` is sent (the primary control) ---
+	var body := ConfigBody.build_post_body(_base_state())
+	_check(body.get("cast") == ["diego", "sofia"], "cast always sent")
+	_check(body.size() == 1, "untouched form sends cast only (no brain/steps/tick/sim_config)")
+
+	# --- changed brain is sent ---
+	var s := _base_state()
+	s["brain"] = "scripted"
+	body = ConfigBody.build_post_body(s)
+	_check(body.get("brain") == "scripted", "changed brain is sent")
+
+	# --- changed steps is sent as an int ---
+	s = _base_state()
+	s["steps"] = 500
+	body = ConfigBody.build_post_body(s)
+	_check(body.get("steps") == 500 and typeof(body["steps"]) == TYPE_INT, "changed steps sent as int")
+
+	# --- changed tick is sent as tick_seconds ---
+	s = _base_state()
+	s["tick"] = 0.5
+	body = ConfigBody.build_post_body(s)
+	_check(is_equal_approx(body.get("tick_seconds", -1.0), 0.5), "changed tick sent as tick_seconds")
+
+	# --- max_cost rides only with the llm brain and a positive value ---
+	s = _base_state()
+	s["brain"] = "mock"
+	s["max_cost"] = 10.0
+	body = ConfigBody.build_post_body(s)
+	_check(not body.has("max_cost"), "max_cost dropped on a non-llm brain")
+	s = _base_state()
+	s["brain"] = "llm"
+	s["max_cost"] = 0.0
+	body = ConfigBody.build_post_body(s)
+	_check(not body.has("max_cost"), "max_cost dropped when zero even on llm")
+	s = _base_state()
+	s["brain"] = "llm"
+	s["max_cost"] = 10.0
+	body = ConfigBody.build_post_body(s)
+	_check(is_equal_approx(body.get("max_cost", -1.0), 10.0), "max_cost sent on llm brain when positive")
+
+	# --- a knob edit merges over current; untouched keys are preserved ---
+	s = _base_state()
+	s["knob_edits"] = {"retrieval": {"alpha_recency": 1.5}}
+	body = ConfigBody.build_post_body(s)
+	_check(body.has("sim_config"), "knob edit produces a sim_config block")
+	var sc: Dictionary = body["sim_config"]
+	_check(is_equal_approx(sc["retrieval"]["alpha_recency"], 1.5), "edited retrieval key applied")
+	_check(is_equal_approx(sc["retrieval"]["alpha_relevance"], 1.0), "untouched retrieval key preserved")
+	_check(sc["cognition"]["vision_r"] == 8, "untouched cognition section preserved")
+
+	# --- merge_knobs does not mutate its input ---
+	var cur := _knobs()
+	var merged := ConfigBody.merge_knobs(cur, {"cognition": {"vision_r": 12}})
+	_check(merged["cognition"]["vision_r"] == 12, "merge overlays the edit")
+	_check(cur["cognition"]["vision_r"] == 8, "merge leaves the input dictionary unchanged")
+
+	# --- a NESTED knob edit (game.agent.temperature) merges deep, preserving siblings ---
+	s = _base_state()
+	s["knob_edits"] = {"game": {"agent": {"temperature": 0.9}}}
+	body = ConfigBody.build_post_body(s)
+	sc = body["sim_config"]
+	_check(is_equal_approx(sc["game"]["agent"]["temperature"], 0.9), "nested edited leaf (game.agent.temperature) applied")
+	_check(sc["game"]["agent"]["max_tokens"] == 128, "sibling leaf (game.agent.max_tokens) preserved under a nested edit")
+	_check(sc["cognition"]["vision_r"] == 8, "unrelated section preserved under a nested edit")
+
+	# --- merge_knobs deep-merges a nested path without mutating input ---
+	cur = _knobs()
+	merged = ConfigBody.merge_knobs(cur, {"game": {"agent": {"temperature": 1.2}}})
+	_check(is_equal_approx(merged["game"]["agent"]["temperature"], 1.2), "nested merge overlays the deep leaf")
+	_check(merged["game"]["agent"]["max_tokens"] == 128, "nested merge preserves the deep sibling")
+	_check(is_equal_approx(cur["game"]["agent"]["temperature"], 0.7), "nested merge leaves the input unchanged")
+
+	if _failures == 0:
+		print("test_simulation_setup: all checks passed")
+	quit(1 if _failures > 0 else 0)
