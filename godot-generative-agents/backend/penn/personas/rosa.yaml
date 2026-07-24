@@ -1,0 +1,64 @@
+# Rosa Delgado -- Houston Hall dining staff. Library entry (#762): NOT in the
+# default cast. Coverage: a STAFF role with an EARLY-RISER, one-building day --
+# she opens the food court and never leaves Houston Hall, moving room to room.
+name: Rosa Delgado
+home: Penn campus
+persona: I am Rosa Delgado, 44, and I run the food-court counter at Houston Hall.
+  I have opened the kitchen before sunrise for eleven years, I know half the
+  regulars by their orders, and I keep a clean counter and a full coffee urn.
+emoji: 🍳
+# Starts on the doorstep just outside Houston Hall, so her day opens with the
+# walk in to unlock the food court.
+start_tile:
+- 119
+- 222
+schedule:
+- place: Houston Hall
+  activity: opening the food court before the breakfast rush
+  emoji: 🍳
+  # Gus swaps a trap under the kitchen sink through this same window (see the
+  # `meetings` block below), so the opening shift stays long enough for their
+  # whole exchange.
+  steps: 90
+- place: Houston Hall — Reception Hall
+  activity: wiping down tables in the reception hall
+  emoji: 🧽
+  steps: 60
+- place: Houston Hall
+  activity: serving the lunch rush at the counter
+  emoji: 🍳
+  steps: 200
+- place: Houston Hall — Reading Room
+  activity: resting her feet on a well-earned break
+  emoji: ☕
+  steps: 40
+- place: Houston Hall
+  activity: restocking the counter for the dinner crowd
+  emoji: 🍳
+  steps: 250
+- place: Houston Hall
+  activity: serving the dinner line as the union quiets down
+  emoji: 🍳
+  steps: 300
+- place: Houston Hall
+  activity: closing down the kitchen for the night
+  emoji: 🌙
+
+relationships:
+- a: Rosa Delgado
+  b: Gus Kowalski
+  kind: coworkers
+  closeness: 3
+  description: Rosa and Gus have shared a six a.m. coffee in the Houston Hall
+    kitchen for years -- she feeds him breakfast, he keeps her walk-in fridge
+    humming.
+
+meetings:
+- label: Rosa and Gus open the building (Houston Hall)
+  at: Houston Hall
+  participants: [Rosa Delgado, Gus Kowalski]
+  dialogue:
+  - [Rosa Delgado, "Morning, Gus. Coffee's fresh if you fix my sink first."]
+  - [Gus Kowalski, "Deal. That trap's been leaking since Tuesday, I know."]
+  - [Rosa Delgado, "Third work order I filed. You're faster than the paperwork."]
+  - [Gus Kowalski, "Always am. Save me a corn muffin, I'll be under the sink."]

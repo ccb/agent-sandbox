@@ -29,6 +29,7 @@ from .investigate import Read, Search
 from .talk import Say, Talk, Follow, Unfollow
 from .goals import AdoptGoal, DropGoal
 from .hints import HintMenu
+from .wish import Propose
 from .saves import Save, Restore, Script
 from .vehicles import Mount, Dismount
 from .use import use_item_on

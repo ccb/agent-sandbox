@@ -141,10 +141,26 @@ class CallRecord:
     cost_usd: float
     turn: int | None = None
     actor: str | None = None  # which NPC, when known
-    call_site: str | None = None  # which cognition call: decide|converse|plan|reflect
+    role: str | None = None  # call-site kind: decide/plan/reflect/... (#368)
     attempt: int | None = None  # retry index (replay seam)
     prompt_sha256: str | None = None  # hash of the messages (replay seam)
     latency_ms: float | None = None
+    # Tool-argument schema outcome (#357). schema_invalid marks a reply whose
+    # tool call violated its schema; schema_repaired is None when no repair was
+    # attempted, True/False for the repair round's result. Aggregated in
+    # summary() so a misbehaving model is visible, not mysterious.
+    schema_invalid: bool = False
+    schema_repaired: bool | None = None
+    # Per-call tool metadata (#359): which tools were offered / which the model
+    # chose, the choice mode ("auto"/"any"/"forced"), a truncated JSON digest of
+    # the chosen args (a digest, NOT the payload -- full args live in the RunLog),
+    # and the tool-loop round (None outside run_tool_loop). Stamped at the single
+    # tool-call funnel in llm_client and aggregated in summary().
+    tool_offered: list[str] | None = None
+    tool_chosen: str | None = None
+    tool_choice: str | None = None
+    args_digest: str | None = None
+    round: int | None = None
 
     def to_primitive(self) -> dict:
         """The flattened ``"call"`` line written to a :class:`RunLog`."""
@@ -153,8 +169,13 @@ class CallRecord:
             "kind": "call",
             "turn": self.turn,
             "actor": self.actor,
-            "call_site": self.call_site,
+            "role": self.role,
             "attempt": self.attempt,
+            "tool_offered": self.tool_offered,
+            "tool_chosen": self.tool_chosen,
+            "tool_choice": self.tool_choice,
+            "args_digest": self.args_digest,
+            "round": self.round,
             "prompt_sha256": self.prompt_sha256,
             "provider": u.provider,
             "model": u.model,
@@ -238,16 +259,12 @@ class UsageLedger:
             totals[key] = totals.get(key, 0.0) + r.cost_usd
         return totals
 
-    def totals_by_call_site(self) -> dict[str, float]:
-        """Total cost per cognition call-site (``decide`` / ``converse`` /
-        ``plan`` / ``reflect`` / ...) so a run can see where the spend actually
-        goes -- the signal for model tiering (#368: run a cheap model for the
-        high-volume call-site, a strong one for the rare-but-important one).
-        Calls with no ``call_site`` set land under ``"(unattributed)"``, exactly
-        like :meth:`totals_by_actor`."""
+    def totals_by_role(self) -> dict[str, float]:
+        """Total cost per call site (decide/plan/reflect/...; issue #368).
+        Calls recorded without a role land under ``"(unattributed)"``."""
         totals: dict[str, float] = {}
         for r in self.records:
-            key = r.call_site or "(unattributed)"
+            key = r.role or "(unattributed)"
             totals[key] = totals.get(key, 0.0) + r.cost_usd
         return totals
 
@@ -264,6 +281,26 @@ class UsageLedger:
             ),
         }
 
+    def _by_tool(self) -> dict:
+        out: dict[str, dict] = {}
+        for r in self.records:
+            if r.tool_chosen is None:
+                continue
+            b = out.setdefault(r.tool_chosen, {"calls": 0, "invalid": 0, "repairs": 0})
+            b["calls"] += 1
+            if r.schema_invalid:
+                b["invalid"] += 1
+            if r.schema_repaired is not None:
+                b["repairs"] += 1
+        return out
+
+    def _tool_choice_split(self) -> dict:
+        split = {"auto": 0, "any": 0, "forced": 0}
+        for r in self.records:
+            if r.tool_choice in split:
+                split[r.tool_choice] += 1
+        return split
+
     def summary(self) -> dict:
         """The run footer: call count, total + per-actor cost, token totals."""
         return {
@@ -273,10 +310,23 @@ class UsageLedger:
             "by_actor": {
                 actor: round(cost, 6) for actor, cost in self.totals_by_actor().items()
             },
-            "by_call_site": {
-                site: round(cost, 6)
-                for site, cost in self.totals_by_call_site().items()
+            "by_role": {
+                role: round(cost, 6) for role, cost in self.totals_by_role().items()
             },
+            # Tool-schema health (#357): failing replies, repair attempts, and
+            # repairs that succeeded -- so a misbehaving model surfaces here and
+            # in GET /usage rather than degrading silently.
+            "validation_failures": sum(1 for r in self.records if r.schema_invalid),
+            "repairs": sum(1 for r in self.records if r.schema_repaired is not None),
+            "repair_successes": sum(
+                1 for r in self.records if r.schema_repaired is True
+            ),
+            # Per-tool health (#359): calls, schema failures, and repairs keyed
+            # by the tool the model chose (None-chosen replies aren't a tool).
+            "by_tool": self._by_tool(),
+            # Forced-vs-auto split (#359): how often the model was free to pick
+            # ("auto"/"any") vs pinned to one tool ("forced").
+            "tool_choice_split": self._tool_choice_split(),
             **self.token_totals(),
         }
 
@@ -360,7 +410,8 @@ def record_call(
 ) -> CallRecord | None:
     """Build a normalized :class:`Usage` from a provider's raw usage object,
     price it, attach attribution from *context* (``actor`` / ``turn`` /
-    ``call_site`` / ``attempt``), append a :class:`CallRecord` to *ledger*, and
+    ``role`` / ``attempt``, plus the ``schema_invalid`` / ``schema_repaired``
+    tool-schema outcome, #357), append a :class:`CallRecord` to *ledger*, and
     return it.
 
     This is the single place the four adapter methods (OpenAI/Anthropic x
@@ -386,10 +437,17 @@ def record_call(
             cost_usd=price(model, usage),
             turn=context.get("turn"),
             actor=context.get("actor"),
-            call_site=context.get("call_site"),
+            role=context.get("role"),
             attempt=context.get("attempt"),
             prompt_sha256=(prompt_sha256(messages) if messages is not None else None),
             latency_ms=latency_ms,
+            schema_invalid=context.get("schema_invalid", False),
+            schema_repaired=context.get("schema_repaired"),
+            tool_offered=context.get("tool_offered"),
+            tool_chosen=context.get("tool_chosen"),
+            tool_choice=context.get("tool_choice"),
+            args_digest=context.get("args_digest"),
+            round=context.get("round"),
         )
         ledger.record(rec, messages=messages, response=response_text)
         return rec

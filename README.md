@@ -54,8 +54,8 @@ text_adventure_games/      The engine (the shared framework)
   webapp/                  Flask web UI for playing in the browser
 notebooks/                 Notebooks: HW1 "Action Castle" onboarding + framework demos
 tests/                     Pytest suite (agent layer, ReAct live game, NPC behaviors)
-godot-generative-agents/   Godot 2D frontend + UPenn campus replay  (work lands on the
-tools/geo/                 OSM → tilemap map-generation tooling       godot-ga-main branch; see ONBOARDING §6)
+godot-generative-agents/   Godot 2D frontend + UPenn campus replay  (reviewed by the
+  tools/geo/               OSM → tilemap map-generation tooling       Godot/geo owners; see ONBOARDING §6)
 FEATURE-ROADMAP.md         Technical specs for the framework features to build
 ROADMAP.md                 The summer plan: phases, who owns what
 ONBOARDING.md              Start here on day one
@@ -219,10 +219,11 @@ uv run pytest tests/test_npc_behaviors.py -s  # watch the NPC behavior suite, na
 
 ### Serve a game over HTTP (backend API)
 
-For out-of-process frontends — a Godot/2D renderer, the Phaser viewer, the web
-companion — there's one canonical backend seam: a small FastAPI app that serves
-any engine `Game` over HTTP, so each frontend polls the same JSON endpoints
-(`GET /health`, `GET /world_state`, `POST /command`) instead of embedding Python.
+For out-of-process frontends — a Godot/2D renderer, the web companion — there's a
+backend seam: a small FastAPI app that serves any engine `Game` over HTTP, so each
+frontend polls the same JSON endpoints (`GET /health`, `GET /world_state`,
+`POST /command`) instead of embedding Python. The `backend` package lives under
+`godot-generative-agents/backend/` (its import name is still `backend`).
 
 ```bash
 uv sync --extra server               # adds fastapi + uvicorn
@@ -231,8 +232,9 @@ uv run python -m backend.api         # demo world on http://127.0.0.1:8080
 
 It's **unauthenticated and loopback-only by default** (local dev). Full endpoint
 reference — request/response shapes, status codes, auth (`SIM_API_TOKEN`), and a
-curl walkthrough — is in [`backend/README.md`](backend/README.md); the live
-interactive contract is at `/docs` while the server runs.
+curl walkthrough — is in
+[`godot-generative-agents/backend/README.md`](godot-generative-agents/backend/README.md);
+the live interactive contract is at `/docs` while the server runs.
 
 ### Browse the documentation site
 

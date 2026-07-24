@@ -23,7 +23,11 @@ import pytest
 from text_adventure_games import games, things
 from text_adventure_games.llm_client import LlmClient, MockLlmClient
 from text_adventure_games.llm_parser import WebLlmParser
-from text_adventure_games.npc import make_hybrid_behavior, make_react_behavior
+from text_adventure_games.npc import (
+    build_npc_context,
+    make_hybrid_behavior,
+    make_react_behavior,
+)
 from text_adventure_games.webapp.web_parser import WebParser
 
 
@@ -362,18 +366,66 @@ def test_decide_and_route_attributes_calls_to_actor_and_turn(tiny_game):
     assert rec.turn == tiny_game.turn  # attribution picked up the game's turn
 
 
+def test_agent_observation_lists_exactly_its_offered_tools(tiny_game):
+    """#697: an agent-driven character's observation "Available actions:" line
+    enumerates exactly the verbs it is offered as tools this tick -- not the full
+    ~40-verb registered set -- so propose (the escape hatch) isn't buried among
+    verbs it can't call. The line and the tool menu read one source
+    (offered_action_names), so they agree in membership and count."""
+    from text_adventure_games.llm_client import MockReActClient
+    from text_adventure_games.npc import LLMAgent, tools_for
+
+    troll = tiny_game.characters["troll"]
+    agent = LLMAgent(MockReActClient(), persona="I am the troll.")
+    agent.action_names = ["go", "wait", "propose"]  # a curated subset of the ~40
+    troll.set_agent(agent)
+
+    obs = tiny_game.describe_for(troll)
+    line = next(ln for ln in obs.splitlines() if ln.startswith("Available actions:"))
+    listed = {v.strip() for v in line.split(":", 1)[1].split(",")}
+
+    # Exactly the curated verbs: no more (the unoffered verbs are gone), no less
+    # (propose is present, not buried).
+    assert listed == {"go", "wait", "propose"}
+    # These ARE registered but were NOT offered, so they must not appear.
+    assert "attack" in tiny_game.parser.actions and "attack" not in listed
+    assert "quit" in tiny_game.parser.actions and "quit" not in listed
+    # ...and the line matches the tool menu the agent is actually handed.
+    tools = tools_for(tiny_game.parser, actor=troll, names=agent.action_names)
+    assert len(tools) == len(listed)
+
+
+def test_non_agent_observation_keeps_the_full_action_list(tiny_game):
+    """The #697 change is scoped to agent-driven characters: a plain character
+    (the player, a scripted NPC) still sees every registered verb, so its
+    observation stays byte-identical to before."""
+    obs = tiny_game.describe_for(tiny_game.player)
+    line = next(ln for ln in obs.splitlines() if ln.startswith("Available actions:"))
+    listed = {v.strip() for v in line.split(":", 1)[1].split(",")}
+    assert listed == set(tiny_game.parser.actions.keys())
+
+
 # ----------------------------------------------------------------------
 # Section E: native tool loop wiring (#355) -- reflect in-conversation
 # ----------------------------------------------------------------------
 
 
 def _act_call(action, arguments=""):
-    """A scripted choose_action tool call for the loop's call_tools queue."""
+    """A scripted choose_action tool call for the loop's call_tools queue.
+
+    Includes ``reasoning`` because choose_action is now OpenAI-strict (#357):
+    all three fields are required, so an omitted one would trip validation and
+    trigger a repair round rather than exercising the loop's own is_error retry.
+    """
     return {
         "tool_calls": [
             {
                 "name": "choose_action",
-                "arguments": {"action": action, "arguments": arguments},
+                "arguments": {
+                    "reasoning": "because",
+                    "action": action,
+                    "arguments": arguments,
+                },
             }
         ]
     }
@@ -449,6 +501,223 @@ def test_decide_and_route_falls_back_to_legacy_when_no_tool_call(tiny_game):
     troll.take_turn(tiny_game)
     assert troll.location is tiny_game.locations["Forest"]
     assert len(mock.calls) == 2  # chat fallback drove both attempts
+
+
+# ----------------------------------------------------------------------
+# Section: command-history attribution (issue #629)
+#
+# The shared command_history feeds every agent's "Recent events:" block, so
+# entries must say WHO issued each command (not a blanket "Player:") and an
+# agent must only see commands issued where it stands.
+# ----------------------------------------------------------------------
+
+
+def _add_servant(game):
+    """A second NPC in the Field, to observe what the troll does."""
+    servant = things.Character("servant", "a meek servant", "I serve.")
+    game.add_character(servant)
+    game.locations["Field"].add_character(servant)
+    return servant
+
+
+def test_history_attributes_commands_to_their_actor(tiny_game):
+    tiny_game.set_parser(WebParser(tiny_game))
+    servant = _add_servant(tiny_game)
+    troll = tiny_game.characters["troll"]
+
+    tiny_game.parser.parse_command("go north", actor=troll)
+
+    context = build_npc_context(servant, tiny_game)
+    assert "troll: go north" in context
+    assert "Player: go north" not in context
+
+
+def test_history_labels_own_commands_as_you(tiny_game):
+    tiny_game.set_parser(WebParser(tiny_game))
+    troll = tiny_game.characters["troll"]
+
+    # "go west" has no exit, so the troll stays put (and failed commands are
+    # recorded too -- they were typed, so they were observable).
+    tiny_game.parser.parse_command("go west", actor=troll)
+
+    context = build_npc_context(troll, tiny_game)
+    assert "You: go west" in context
+    assert "troll: go west" not in context
+
+
+def test_history_is_scoped_to_the_observers_location(tiny_game):
+    tiny_game.set_parser(WebParser(tiny_game))
+    servant = _add_servant(tiny_game)
+    troll = tiny_game.characters["troll"]
+
+    tiny_game.parser.parse_command("go north", actor=troll)  # issued in Field
+    tiny_game.parser.parse_command("go west", actor=troll)  # issued in Forest
+
+    context = build_npc_context(servant, tiny_game)  # servant is in the Field
+    assert "troll: go north" in context  # happened here
+    assert "go west" not in context  # happened in the Forest
+
+
+def test_history_keeps_the_player_label_for_unattributed_entries(tiny_game):
+    tiny_game.set_parser(WebParser(tiny_game))
+    troll = tiny_game.characters["troll"]
+
+    # Legacy path (trigger-fired / scripted commands): no actor is passed, so
+    # the entry stays unattributed and renders with the old label, unfiltered.
+    tiny_game.parser.parse_command("wait")
+
+    context = build_npc_context(troll, tiny_game)
+    assert "Player: wait" in context
+
+
+def test_llm_narration_receives_only_chat_keys(tiny_game):
+    """Attribution keys ride on history entries; the chat-completion payload
+    sent to a provider must still be pure role/content messages."""
+    mock = MockLlmClient(default="NARRATED TEXT")
+    tiny_game.set_parser(WebLlmParser(tiny_game, mock))
+    troll = tiny_game.characters["troll"]
+
+    tiny_game.parser.parse_command("go north", actor=troll)
+
+    assert mock.calls  # the move narrated through the LLM
+    for call in mock.calls:
+        for message in call["messages"]:
+            assert set(message) == {"role", "content"}
+
+
+def test_record_call_stamps_tool_metadata():
+    from text_adventure_games.usage import UsageLedger, record_call
+
+    ledger = UsageLedger()
+    ctx = {
+        "actor": "Maya",
+        "tool_offered": ["study", "travel"],
+        "tool_chosen": "study",
+        "tool_choice": "any",
+        "args_digest": '{"subject": "chem"}',
+        "round": 1,
+    }
+    rec = record_call(
+        ledger, ctx, "mock", "mock", None, [{"role": "user", "content": "hi"}], "{}"
+    )
+    assert rec.tool_offered == ["study", "travel"]
+    assert rec.tool_chosen == "study"
+    assert rec.tool_choice == "any"
+    assert rec.args_digest == '{"subject": "chem"}'
+    assert rec.round == 1
+    prim = rec.to_primitive()
+    assert prim["tool_chosen"] == "study" and prim["tool_choice"] == "any"
+    assert prim["round"] == 1
+
+
+def test_call_tools_records_offered_and_chosen():
+    """The funnel (#359): call_tools stamps offered/chosen/choice/args_digest
+    onto the CallRecord it writes, outside a run_tool_loop `round` stays None."""
+    from text_adventure_games.usage import UsageLedger
+
+    ledger = UsageLedger()
+    client = MockLlmClient(
+        ledger=ledger,
+        tool_calls_responses=[
+            {"tool_calls": [{"name": "study", "arguments": {"subject": "chem"}}]}
+        ],
+    )
+    client.context = {"actor": "Maya"}
+    tools = [
+        {
+            "name": "study",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": True,
+            },
+        },
+        {
+            "name": "travel",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": True,
+            },
+        },
+    ]
+    client.call_tools([{"role": "user", "content": "study"}], tools, tool_choice="any")
+    rec = ledger.records[-1]
+    assert rec.tool_offered == ["study", "travel"]
+    assert rec.tool_chosen == "study"
+    assert rec.tool_choice == "any"
+    assert rec.args_digest == '{"subject": "chem"}'
+    assert rec.round is None  # single-shot call, not in a loop
+
+
+def test_run_tool_loop_stamps_round_and_cleans_up():
+    """run_tool_loop (#355) stamps the in-progress round onto client.context
+    before each call_tools round-trip -- so the funnel (#359) can record it onto
+    the CallRecord -- and pops it again once the loop returns, so a caller that
+    reuses the client afterward doesn't see a stale round left behind."""
+    from text_adventure_games.llm_client import run_tool_loop
+    from text_adventure_games.usage import UsageLedger
+
+    ledger = UsageLedger()
+    client = MockLlmClient(
+        ledger=ledger,
+        tool_calls_responses=[
+            {"tool_calls": [{"name": "study", "arguments": {"subject": "chem"}}]},
+            {"tool_calls": [{"name": "study", "arguments": {"subject": "bio"}}]},
+        ],
+    )
+    client.context = {"actor": "Maya"}
+    tools = [
+        {
+            "name": "study",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": True,
+            },
+        }
+    ]
+    messages = [{"role": "user", "content": "study"}]
+    executed = []
+
+    def execute(name, arguments):
+        executed.append((name, arguments))
+        # Terminal only on the 2nd call, so the loop must run 2 rounds.
+        return "ok", False, len(executed) >= 2
+
+    run_tool_loop(client, messages, tools, execute, tool_choice="any")
+
+    assert len(executed) == 2  # the loop actually iterated twice
+    assert len(ledger.records) == 2
+    for i, rec in enumerate(ledger.records):
+        assert rec.round == i  # 0, 1, ... in call order
+    assert "round" not in client.context  # popped once the loop returns
+
+
+def test_summary_aggregates_by_tool_and_choice():
+    from text_adventure_games.usage import UsageLedger, CallRecord, Usage
+
+    ledger = UsageLedger()
+
+    def rec(**kw):
+        ledger.records.append(
+            CallRecord(usage=Usage.zero("mock", "mock"), cost_usd=0.0, **kw)
+        )
+
+    rec(tool_chosen="study", tool_choice="any")
+    rec(
+        tool_chosen="study",
+        tool_choice="any",
+        schema_invalid=True,
+        schema_repaired=True,
+    )
+    rec(tool_chosen="travel", tool_choice="forced")
+    rec(tool_chosen=None, tool_choice="auto")  # a no-tool reply
+    s = ledger.summary()
+    assert s["by_tool"]["study"] == {"calls": 2, "invalid": 1, "repairs": 1}
+    assert s["by_tool"]["travel"]["calls"] == 1
+    assert "None" not in s["by_tool"]  # None-chosen calls are not a tool
+    assert s["tool_choice_split"] == {"auto": 1, "any": 2, "forced": 1}
 
 
 if __name__ == "__main__":

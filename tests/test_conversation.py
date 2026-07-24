@@ -149,6 +149,23 @@ def test_can_converse_gates_on_audience_and_agents():
     assert convo.can_converse(game, alice, bob) is False
 
 
+def test_can_converse_refuses_dead_participants():
+    a = _talker(["x"])
+    b = _talker(["y"])
+    game, alice, bob = _two_in_a_room(a, b)
+    assert convo.can_converse(game, alice, bob) is True
+    # A dead character may still have an agent attached, but the dead don't
+    # talk -- on either side of the conversation (issue #755).
+    bob.set_property("is_dead", True)
+    assert convo.can_converse(game, alice, bob) is False
+    assert convo.can_converse(game, bob, alice) is False
+    bob.set_property("is_dead", False)
+    alice.set_property("is_dead", True)
+    assert convo.can_converse(game, alice, bob) is False
+    # The pair scan builds on can_converse, so it excludes the pair too.
+    assert convo.find_conversation_pairs(game) == []
+
+
 def test_find_conversation_pairs_returns_each_pair_once():
     a = _talker(["x"])
     b = _talker(["y"])
@@ -236,3 +253,49 @@ def test_llm_agent_converse_tool_without_utterance_is_silent():
 def test_base_agent_converse_is_silent():
     # A plain ScriptedAgent with no converse_rule never speaks.
     assert ScriptedAgent(lambda o: "look").converse("obs", "bob") is None
+
+
+# --- the single-line seam (issue #371) ------------------------------------
+
+
+def test_exchange_records_one_line_and_signals_continue():
+    a = _talker(["Hi Bob."], done_on_last=False)  # a line, no wrap-up flag
+    b = _talker([])
+    game, alice, bob = _two_in_a_room(a, b)
+    convo_obj = convo.Conversation(participants=("alice", "bob"))
+
+    cont = convo.exchange(game, convo_obj, alice, bob, turn=3)
+
+    assert cont is True  # a line was said, no wrap-up -> may continue
+    assert convo_obj.lines == [("alice", "Hi Bob.")]
+    # Dual write into both streams + the listener's heard buffer (same as converse).
+    alice_chat = [r for r in alice.agent.memory.records if r.kind is MemoryKind.CHAT]
+    bob_chat = [r for r in bob.agent.memory.records if r.kind is MemoryKind.CHAT]
+    assert len(alice_chat) == 1 and len(bob_chat) == 1
+    assert any("Hi Bob." in line for line in bob.heard)
+    assert alice_chat[0].created_turn == 3
+
+
+def test_exchange_decline_says_nothing_and_signals_stop():
+    a = _talker([])  # declines
+    b = _talker(["ready"])
+    game, alice, bob = _two_in_a_room(a, b)
+    convo_obj = convo.Conversation(participants=("alice", "bob"))
+
+    cont = convo.exchange(game, convo_obj, alice, bob, turn=0)
+
+    assert cont is False
+    assert convo_obj.lines == []
+    assert not [r for r in alice.agent.memory.records if r.kind is MemoryKind.CHAT]
+
+
+def test_exchange_wrap_up_flag_signals_stop():
+    a = _talker(["One and done."])  # _talker flags last_dialogue_done on its last line
+    b = _talker([])
+    game, alice, bob = _two_in_a_room(a, b)
+    convo_obj = convo.Conversation(participants=("alice", "bob"))
+
+    cont = convo.exchange(game, convo_obj, alice, bob, turn=0)
+
+    assert cont is False  # line was said, but the wrap-up flag ends it
+    assert convo_obj.lines == [("alice", "One and done.")]

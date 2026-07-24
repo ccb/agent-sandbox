@@ -35,6 +35,8 @@ from __future__ import annotations
 import datetime
 import json
 import os
+import types
+import typing
 from dataclasses import dataclass, field, fields, is_dataclass
 
 from .llm_client import LlmConfig, LlmClient, create_llm_client
@@ -242,7 +244,10 @@ class GameConfig:
                     "Reading a YAML config needs pyyaml (`pip install pyyaml`), "
                     "or use a .json config file instead."
                 ) from e
-            data = yaml.safe_load(text) or {}
+            try:
+                data = yaml.safe_load(text) or {}
+            except yaml.YAMLError as e:
+                raise ValueError(f"invalid YAML in {path!r}: {e}") from e
         elif lower.endswith(".json"):
             data = json.loads(text) if text.strip() else {}
         else:
@@ -370,8 +375,44 @@ class GameConfig:
         return self.observability.build_run_log(**header)
 
 
+def _type_ok(value, expected_type) -> bool:
+    """True if *value* matches *expected_type* (handles ``X | Y`` and ``Union``).
+
+    A blank YAML scalar parses to ``None`` and is always accepted, even for a
+    field whose type doesn't itself include ``None`` -- YAML's ``key:`` (no
+    value) idiom means "no override, use the default", not "wrong type".
+    """
+    if value is None:
+        return True
+    origin = typing.get_origin(expected_type)
+    if origin in (typing.Union, types.UnionType):
+        return any(_type_ok(value, arg) for arg in typing.get_args(expected_type))
+    if origin is not None:
+        expected_type = origin  # e.g. dict[str, str] -> dict
+    if expected_type is bool:
+        return isinstance(value, bool)
+    if isinstance(value, bool):
+        return False  # bool is an int subclass; don't let it satisfy int/float/etc.
+    if expected_type is float:
+        return isinstance(value, (int, float))  # a YAML int is fine for a float field
+    return isinstance(value, expected_type)
+
+
+def _type_name(expected_type) -> str:
+    """Human-readable name of *expected_type* for an error message."""
+    origin = typing.get_origin(expected_type)
+    if origin in (typing.Union, types.UnionType):
+        return " or ".join(_type_name(a) for a in typing.get_args(expected_type))
+    if origin is not None:
+        expected_type = origin
+    if expected_type is type(None):
+        return "None"
+    return getattr(expected_type, "__name__", str(expected_type))
+
+
 def _build(dataclass_type, data, section_name):
-    """Construct *dataclass_type* from *data*, rejecting unknown keys clearly."""
+    """Construct *dataclass_type* from *data*, rejecting unknown keys and
+    wrong-typed values clearly."""
     if not isinstance(data, dict):
         raise ValueError(f"Config section {section_name!r} must be a mapping")
     valid = {f.name for f in fields(dataclass_type)}
@@ -381,6 +422,14 @@ def _build(dataclass_type, data, section_name):
             f"Unknown key(s) in '{section_name}' config: {sorted(unknown)}. "
             f"Valid keys: {sorted(valid)}."
         )
+    hints = typing.get_type_hints(dataclass_type)
+    for key, value in data.items():
+        expected = hints[key]
+        if not _type_ok(value, expected):
+            raise ValueError(
+                f"Config field '{section_name}.{key}' must be "
+                f"{_type_name(expected)}, got {type(value).__name__}."
+            )
     return dataclass_type(**data)
 
 

@@ -14,6 +14,7 @@ _WEB_TYPE = {
     Channel.AGENT_REASONING: "npc_log",
     Channel.AGENT_ACTION: "npc_log",
     Channel.AGENT_REFLECTION: "npc_reflection",
+    Channel.AGENT_WISH: "npc_wish",
     Channel.AGENT_OBSERVATION: "npc_observation",
     Channel.SYSTEM: "system",
 }
@@ -52,6 +53,8 @@ class WebRenderer(Renderer):
             return wrap_text(f"{m.actor} [action] {m.text}")
         if m.channel is Channel.AGENT_REFLECTION:
             return wrap_text(f"{m.actor} [reflect] {m.text}")
+        if m.channel is Channel.AGENT_WISH:
+            return wrap_text(f"{m.actor} [wish] {m.text}")
         return wrap_text(m.text)
 
     def turn_header(self, turn: int, time: str = None) -> None:

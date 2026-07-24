@@ -36,7 +36,7 @@ from __future__ import annotations
 import re
 
 from . import prompt_templates
-from .actions.base import HIDDEN_ACTIONS, registered_action_entries
+from .actions.base import offered_action_names, registered_action_entries
 from .config import AgentConfig
 from .enums import ReActLabel, Role
 from .llm_client import run_tool_loop
@@ -91,7 +91,11 @@ def build_speak_tool() -> dict:
                     "description": "true if this is your final line (wrapping up)",
                 },
             },
-            "required": ["utterance"],
+            # Full required + additionalProperties:false so OpenAI strict mode
+            # enforces the shape (#357). `done` is semantically optional (defaults
+            # false); requiring it just means the model always states it.
+            "required": ["utterance", "done"],
+            "additionalProperties": False,
         },
     }
 
@@ -145,7 +149,12 @@ def build_choose_action_tool(action_names: list[str]) -> dict:
                     ),
                 },
             },
-            "required": ["action"],
+            # Full required + additionalProperties:false so OpenAI strict mode
+            # enforces the shape (#357). `reasoning`/`arguments` are emptyable
+            # (consumers read them as `.get(...) or ''`), so requiring them only
+            # means the model always includes the (possibly empty) field.
+            "required": ["reasoning", "action", "arguments"],
+            "additionalProperties": False,
         },
     }
 
@@ -282,6 +291,14 @@ def tools_for(parser, actor=None, names=None, max_enum: int | None = _MAX_SCOPE_
     stays the authoritative menu even when it lists a verb the parser hasn't
     registered.
 
+    Affordance curation (issue #612): a verb declaring ``REQUIRED_AFFORDANCES``
+    is offered only when its ``affordance_in_scope`` check passes for *actor* --
+    the same check the verb's precondition gate runs, so a curated verb is
+    offered exactly when the gate's place-check would pass. Verbs with the
+    empty (default) declaration are universal and always offered, which also
+    keeps the curated set non-empty (the built-in go/look/wait never vanish).
+    Without an *actor* there is no scope to read, so nothing is curated.
+
     Token budget: tool definitions count against context and are NOT trimmed by
     :func:`~text_adventure_games.llm_client.limit_context_length`, so scope enums
     are capped (see :data:`_MAX_SCOPE_ENUM`) and a caller may pass a narrower
@@ -291,14 +308,13 @@ def tools_for(parser, actor=None, names=None, max_enum: int | None = _MAX_SCOPE_
         name: (action, desc, aliases)
         for name, action, desc, aliases in registered_action_entries(parser)
     }
-    wanted = list(names) if names else list(entries)
     tools = []
-    seen = set()
     verb_by_tool_name: dict[str, str] = {}
-    for name in wanted:
-        if name in HIDDEN_ACTIONS or name in seen:
-            continue
-        seen.add(name)
+    # offered_action_names applies the menu policy (drop the hidden wrapper,
+    # curate #612 affordances, dedup) -- the SAME source Game.describe_for reads
+    # for the observation's "Available actions:" line, so the menu and the line
+    # can't disagree (#697). We just build a tool per name it returns.
+    for name in offered_action_names(parser, actor, names):
         action, desc, aliases = entries.get(name, (None, "", []))
         tool = _build_action_tool(name, action, desc, aliases, parser, actor, max_enum)
         clash = verb_by_tool_name.get(tool["name"])
@@ -1012,17 +1028,33 @@ def build_npc_context(character, game) -> str:
     # Full environment observation from the game engine
     lines.append(game.describe_for(character))
 
-    # Recent command history (last 5 exchanges)
-    # "Last 5" is a bit misleading, since llm_parser and parser respond differently to failure
-    # Could be something to look into
-    history = game.parser.command_history[-10:]
+    # Recent command history, scoped and attributed (issue #629): a command
+    # only appears if it was issued where this character now stands, and it is
+    # labeled with the name of whoever issued it ("You:" for the character's
+    # own commands). Unattributed entries (trigger-fired/scripted commands,
+    # actor=None) keep the legacy "Player:" label and are never filtered, and
+    # game narrations ("Game:") stay unscoped.
+    here = character.location.name if character.location else None
+    history = []
+    for entry in game.parser.command_history:
+        where = entry.get("location")
+        if entry["role"] == Role.USER and None not in (where, here) and where != here:
+            continue
+        history.append(entry)
+    history = history[-10:]
     if history:
         lines.append("")
         lines.append("Recent events:")
         for entry in history:
-            role = entry["role"]
             content = entry["content"]
-            prefix = "  Player:" if role == Role.USER else "  Game:"
+            if entry["role"] != Role.USER:
+                prefix = "  Game:"
+            elif entry.get("actor") == character.name:
+                prefix = "  You:"
+            elif entry.get("actor"):
+                prefix = f"  {entry['actor']}:"
+            else:
+                prefix = "  Player:"
             lines.append(f"{prefix} {content[:200]}")
 
     # What the character has recently heard. This is scoped per-character: only

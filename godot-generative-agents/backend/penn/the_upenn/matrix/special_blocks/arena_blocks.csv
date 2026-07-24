@@ -1,0 +1,116 @@
+7, UPenn, Claudia Cohen Hall, grounds
+8, UPenn, College Hall, grounds
+14, UPenn, Houston Hall, grounds
+15, UPenn, Irvine Auditorium, grounds
+16, UPenn, Jaffe Building, grounds
+21, UPenn, Meyerson Hall, grounds
+27, UPenn, Sweeten Alumni Building, grounds
+30, UPenn, Van Pelt Library, grounds
+32, UPenn, Williams Hall, grounds
+34, UPenn, Fisher Fine Arts Library, grounds
+36, UPenn, Locust Walk Annex, grounds
+1007, UPenn, Claudia Cohen Hall, lobby
+1008, UPenn, College Hall, lobby
+1014, UPenn, Houston Hall, lobby
+1015, UPenn, Irvine Auditorium, lobby
+1016, UPenn, Jaffe Building, lobby
+1021, UPenn, Meyerson Hall, lobby
+1027, UPenn, Sweeten Alumni Building, lobby
+1030, UPenn, Van Pelt Library, lobby
+1032, UPenn, Williams Hall, lobby
+1034, UPenn, Fisher Fine Arts Library, lobby
+1036, UPenn, Locust Walk Annex, lobby
+10700, UPenn, Claudia Cohen Hall, Kitchen 1
+10701, UPenn, Claudia Cohen Hall, Kitchen 2
+10702, UPenn, Claudia Cohen Hall, Cafeteria 1
+10703, UPenn, Claudia Cohen Hall, Cafeteria 2
+10704, UPenn, Claudia Cohen Hall, Cafeteria 3
+10800, UPenn, College Hall, Kitchen In
+10801, UPenn, College Hall, Kitchen Out
+10802, UPenn, College Hall, Restrooms
+10803, UPenn, College Hall, Central Hall
+10804, UPenn, College Hall, West Wing
+10805, UPenn, College Hall, East Wing
+10806, UPenn, College Hall, East Pavilion 1
+10807, UPenn, College Hall, East Pavilion 2
+10808, UPenn, College Hall, West Pavilion 1
+10809, UPenn, College Hall, West Pavilion 2
+10810, UPenn, College Hall, Great Hall
+11400, UPenn, Houston Hall, Reception Hall
+11401, UPenn, Houston Hall, Billiard Room
+11402, UPenn, Houston Hall, Bathroom
+11403, UPenn, Houston Hall, Shuffle Board Room
+11404, UPenn, Houston Hall, Ladies Parlor
+11405, UPenn, Houston Hall, Secretarys Office
+11406, UPenn, Houston Hall, Chess Room
+11407, UPenn, Houston Hall, Reading Room
+11408, UPenn, Houston Hall, Correspond
+11500, UPenn, Irvine Auditorium, Stage
+11501, UPenn, Irvine Auditorium, Auditorium
+11502, UPenn, Irvine Auditorium, West Foyer
+11503, UPenn, Irvine Auditorium, Lobby
+11504, UPenn, Irvine Auditorium, East Foyer
+12100, UPenn, Meyerson Hall, Cafe
+12101, UPenn, Meyerson Hall, Lounge
+12102, UPenn, Meyerson Hall, West Studio
+12103, UPenn, Meyerson Hall, East Studio
+12104, UPenn, Meyerson Hall, East Offices
+12105, UPenn, Meyerson Hall, South Gallery
+12700, UPenn, Sweeten Alumni Building, Room 1: BD 4
+12701, UPenn, Sweeten Alumni Building, Room 1: BD 3
+12702, UPenn, Sweeten Alumni Building, Room 1: BD 2
+12703, UPenn, Sweeten Alumni Building, Room 1: BD 1
+12704, UPenn, Sweeten Alumni Building, Room 1: BR 1
+12705, UPenn, Sweeten Alumni Building, Room 1: Hallway 2
+12706, UPenn, Sweeten Alumni Building, Room 1: Hallway 1
+12707, UPenn, Sweeten Alumni Building, Room 2: BD 4
+12708, UPenn, Sweeten Alumni Building, Room 2: BD 3
+12709, UPenn, Sweeten Alumni Building, Room 2: BD 2
+12710, UPenn, Sweeten Alumni Building, Room 2: BD 1
+12711, UPenn, Sweeten Alumni Building, Room 2: BR 1
+12712, UPenn, Sweeten Alumni Building, Room 2: BR 2
+12713, UPenn, Sweeten Alumni Building, Room 2: BD 5
+12714, UPenn, Sweeten Alumni Building, Room 2: BD 6
+12715, UPenn, Sweeten Alumni Building, Room 1: Kitchen
+12716, UPenn, Sweeten Alumni Building, Room 1: Living Room
+12717, UPenn, Sweeten Alumni Building, Room 2: Kitchen
+12718, UPenn, Sweeten Alumni Building, Room 2: Living Room
+12719, UPenn, Sweeten Alumni Building, Room 2: Hallway 2
+12720, UPenn, Sweeten Alumni Building, Room 2: Hallway 3
+12721, UPenn, Sweeten Alumni Building, Room 1: Hallway 3
+13000, UPenn, Van Pelt Library, 113
+13001, UPenn, Van Pelt Library, 114
+13002, UPenn, Van Pelt Library, 116
+13003, UPenn, Van Pelt Library, 117
+13004, UPenn, Van Pelt Library, 118
+13005, UPenn, Van Pelt Library, 119
+13006, UPenn, Van Pelt Library, 120
+13007, UPenn, Van Pelt Library, 121
+13008, UPenn, Van Pelt Library, 122
+13009, UPenn, Van Pelt Library, 123
+13010, UPenn, Van Pelt Library, 124
+13011, UPenn, Van Pelt Library, 125
+13012, UPenn, Van Pelt Library, 126
+13013, UPenn, Van Pelt Library, 127
+13014, UPenn, Van Pelt Library, Circulation
+13015, UPenn, Van Pelt Library, Entrance
+13016, UPenn, Van Pelt Library, Hallway
+13017, UPenn, Van Pelt Library, Kamin Gallery
+13018, UPenn, Van Pelt Library, Lounge
+13019, UPenn, Van Pelt Library, Microtext Collection
+13020, UPenn, Van Pelt Library, Moelis Family Grand Reading Room
+13021, UPenn, Van Pelt Library, Research Data and Digital Scholarship Exchange
+13022, UPenn, Van Pelt Library, Staff Area
+13023, UPenn, Van Pelt Library, Study Booths
+13024, UPenn, Van Pelt Library, West Wing Books
+13200, UPenn, Williams Hall, Classroom A
+13201, UPenn, Williams Hall, Classroom B
+13202, UPenn, Williams Hall, Office
+13203, UPenn, Williams Hall, Restroom
+13204, UPenn, Williams Hall, Classroom C
+13400, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room
+13401, UPenn, Fisher Fine Arts Library, Fisher Core Reading Section
+13402, UPenn, Fisher Fine Arts Library, Fisher Rare Books Library
+13403, UPenn, Fisher Fine Arts Library, Ross Gallery
+13404, UPenn, Fisher Fine Arts Library, Staff Office
+13405, UPenn, Fisher Fine Arts Library, Computing & Printing

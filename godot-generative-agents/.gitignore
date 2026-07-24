@@ -1,10 +1,2 @@
-# Godot 4+ editor & import cache — regenerated on first open, never committed.
-.godot/
-/android/
-
-# Keep the *.import / *.uid sidecars: Godot needs them to recognize assets,
-# and they are small text files. Only the .godot/ cache above is excluded.
-
-# Verification screenshots from scripts/snapshot.gd — regenerable, never committed.
-*_snapshot.png
-*_snapshot.png.import
+# First-run-wins backup the geo scripts drop next to the committed map (#641)
+godot/maps/*.tmj.bak

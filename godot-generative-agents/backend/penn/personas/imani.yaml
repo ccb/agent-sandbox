@@ -1,0 +1,57 @@
+# Imani Carter -- varsity sprinter. Library entry (#762): NOT in the default
+# cast. Coverage: an ATHLETE role with an EARLY-RISER day that starts on the
+# campus walks themselves (her first stop is the outdoor hub, so she performs
+# at her spawn tile before the day's first real trip). She anchors the
+# housemates friend group: both of her edges live here (first-named persona --
+# see README.md); the third side of the triangle (Theo -- Priya) lives in
+# theo.yaml.
+name: Imani Carter
+home: Penn campus
+persona: I am Imani Carter, 20, a junior and a sprinter on Penn track and field.
+  I am up before the sun, disciplined to a fault, and always slightly hungry.
+  My housemate Theo keeps philosopher's hours; I keep an athlete's.
+emoji: 🏃
+# Starts on the College Green walks -- stop 1 IS the hub, so she stretches at
+# her spawn tile at dawn before heading in for breakfast.
+start_tile:
+- 125
+- 197
+schedule:
+- place: Penn campus
+  activity: morning stretches and drills on College Green
+  emoji: 🏃
+  steps: 80
+- place: Houston Hall
+  activity: refueling with breakfast after morning practice
+  emoji: 🥞
+  steps: 60
+- place: Williams Hall
+  activity: in a morning language seminar
+  emoji: 🎓
+  steps: 90
+- place: Houston Hall — Billiard Room
+  activity: unwinding over a billiards game
+  emoji: 🎱
+  steps: 70
+- place: Van Pelt — Study Booths
+  activity: cramming problem sets between practices
+  emoji: 📖
+  steps: 150
+- place: Houston Hall
+  activity: winding down over dinner with teammates
+  emoji: 🥗
+
+relationships:
+- a: Imani Carter
+  b: Theo Lindqvist
+  kind: housemates
+  closeness: 4
+  description: Imani and Theo share a house off campus with two other juniors;
+    she drags him out for a sunrise run about once a semester, and he owes her
+    a stack of borrowed mugs.
+- a: Imani Carter
+  b: Priya Nair
+  kind: friends
+  closeness: 3
+  description: Imani and Priya met in a first-year writing seminar and still
+    trade playlists, problem-set gripes, and the occasional Houston Hall lunch.

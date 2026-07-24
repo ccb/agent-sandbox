@@ -1,0 +1,153 @@
+import collections, json, os, shutil, subprocess, sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
+SRC_MATRIX = os.path.join(
+    REPO, "godot-generative-agents", "backend", "penn", "the_upenn", "matrix"
+)
+SRC_MAP = os.path.join(
+    REPO, "godot-generative-agents", "godot", "maps", "upenn_core_urban.tmj"
+)
+W, H = 245, 279
+FISHER = "Fisher Fine Arts Library"
+ROOM_IDS = list(range(13400, 13406))
+ROOMS = {
+    "Seng Tee Lee Reading Room",
+    "Fisher Core Reading Section",
+    "Fisher Rare Books Library",
+    "Ross Gallery",
+    "Staff Office",
+    "Computing & Printing",
+}
+
+
+def _run(tmp):
+    """Copy map+matrix into tmp, run add_entrances against them; return (mdir, tmap)."""
+    mdir = os.path.join(tmp, "matrix")
+    shutil.copytree(SRC_MATRIX, mdir)
+    tmap = os.path.join(tmp, "map.tmj")
+    shutil.copy2(SRC_MAP, tmap)
+    subprocess.run(
+        [
+            sys.executable,
+            os.path.join(HERE, "add_entrances.py"),
+            "--tmj",
+            tmap,
+            "--matrix",
+            mdir,
+        ],
+        check=True,
+        cwd=HERE,
+    )
+    return mdir, tmap
+
+
+def _read_flat(p):
+    return open(p).read().strip().split(", ")
+
+
+def _arena_blocks(mdir):
+    rows = []
+    with open(os.path.join(mdir, "special_blocks", "arena_blocks.csv")) as fh:
+        for line in fh:
+            if line.strip():
+                rows.append([p.strip() for p in line.split(",")])
+    return rows
+
+
+def test_6_fisher_room_arenas_present(tmp_path):
+    mdir, _ = _run(str(tmp_path))
+    rows = _arena_blocks(mdir)
+    fr = [r for r in rows if r[2] == FISHER and r[3] not in ("grounds", "lobby")]
+    assert len(fr) == 6
+    assert sorted(int(r[0]) for r in fr) == ROOM_IDS
+    assert {r[3] for r in fr} == ROOMS
+    # lobby retained for leftover circulation
+    assert any(r[2] == FISHER and r[3] == "lobby" for r in rows)
+
+
+def test_rug_boxes_are_not_arenas(tmp_path):
+    # the 'Rug'-named fisher_arenas boxes are rug-fill regions, never arenas
+    mdir, _ = _run(str(tmp_path))
+    rows = _arena_blocks(mdir)
+    assert not [r for r in rows if "rug" in r[3].lower()]
+
+
+def test_partition_walls_block(tmp_path):
+    import furnish_fisher as ff
+
+    mdir, tmap = _run(str(tmp_path))
+    tmj = json.load(open(tmap))
+    sections = ff.read_sections(tmj)
+    interior = ff.fisher_interior_cells(tmj, mdir)
+    walls = {cell for _side, cell in ff.iter_wall_cells(sections, interior, W)}
+    assert walls, "expected Fisher partition walls"
+    coll = _read_flat(os.path.join(mdir, "maze", "collision_maze.csv"))
+    for x, y in walls:
+        assert coll[y * W + x] == "1", f"partition cell {(x, y)} is not blocking"
+
+
+def test_every_fisher_room_reachable_from_a_door(tmp_path):
+    mdir, _ = _run(str(tmp_path))
+    coll = _read_flat(os.path.join(mdir, "maze", "collision_maze.csv"))
+    arena = _read_flat(os.path.join(mdir, "maze", "arena_maze.csv"))
+    seen = [False] * (W * H)
+    q = collections.deque()
+    for x in range(W):
+        for y in (0, H - 1):
+            i = y * W + x
+            if coll[i] == "0" and not seen[i]:
+                seen[i] = True
+                q.append((x, y))
+    for y in range(H):
+        for x in (0, W - 1):
+            i = y * W + x
+            if coll[i] == "0" and not seen[i]:
+                seen[i] = True
+                q.append((x, y))
+    reached = set()
+    while q:
+        x, y = q.popleft()
+        reached.add(arena[y * W + x])
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < W and 0 <= ny < H:
+                j = ny * W + nx
+                if coll[j] == "0" and not seen[j]:
+                    seen[j] = True
+                    q.append((nx, ny))
+    for rid in ROOM_IDS:
+        assert (
+            str(rid) in reached
+        ), f"Fisher room arena {rid} unreachable through the door"
+
+
+def test_van_pelt_unchanged_regression(tmp_path):
+    mdir, _ = _run(str(tmp_path))
+    rows = _arena_blocks(mdir)
+    vp = [
+        r
+        for r in rows
+        if r[2] == "Van Pelt Library" and r[3] not in ("grounds", "lobby")
+    ]
+    assert len(vp) == 25  # adding Fisher must not disturb Van Pelt's subdivision
+
+
+def test_idempotent(tmp_path):
+    mdir, tmap = _run(str(tmp_path))
+    a = open(os.path.join(mdir, "maze", "arena_maze.csv")).read()
+    c = open(os.path.join(mdir, "maze", "collision_maze.csv")).read()
+    subprocess.run(
+        [
+            sys.executable,
+            os.path.join(HERE, "add_entrances.py"),
+            "--tmj",
+            tmap,
+            "--matrix",
+            mdir,
+        ],
+        check=True,
+        cwd=HERE,
+    )
+    assert open(os.path.join(mdir, "maze", "arena_maze.csv")).read() == a
+    assert open(os.path.join(mdir, "maze", "collision_maze.csv")).read() == c

@@ -3,10 +3,12 @@ from .things.characters import DEFAULT_VISION_R
 from .clock import GameClock
 from .config import GameConfig
 from . import parsing, actions, blocks, perception
+from .actions.base import offered_action_names
 from .enums import EventKind, Property
 from .events import GameEvent
 from .triggers import Trigger, at_turn
 
+import importlib
 import json
 import inspect
 from collections import namedtuple
@@ -158,6 +160,15 @@ class Game:
         # known=False is craftable only once its name/alias is learned via
         # learn_recipe(); recipes with the default known=True ignore this set.
         self.learned_recipes = set()
+
+        # Action wishes (#620): structured "an actor wanted an action the game
+        # doesn't have" records (see wishes.py) — the demand side of the
+        # self-coding loop (#299). Runtime-only, like recipes.
+        self.wishes = []
+        # Optional streaming sink, called with each ActionWish as it is logged
+        # (the UsageLedger._on_record pattern): how an out-of-process consumer
+        # taps the wish stream without a parallel data path.
+        self.on_wish = None
 
         # Posed prompt (issue #110): a question the game is currently asking the
         # player (e.g. "wits or steel?"). Consulted by the parser as a fallback
@@ -405,6 +416,16 @@ class Game:
     def log_event(self, actor, action, summary="", payload=None):
         """Append a GameEvent to the event log (issue #6)."""
         self.events.append(GameEvent(self.turn, actor, action, summary, payload))
+
+    def log_wish(self, wish):
+        """Record an :class:`~text_adventure_games.wishes.ActionWish` (#620):
+        append to ``wishes``, emit the one-line agent trace (with the full
+        record in ``meta``), and fire the optional ``on_wish`` callback."""
+        self.wishes.append(wish)
+        text = wish.desired + (f" — because {wish.reason}" if wish.reason else "")
+        self.parser.agent_wish(wish.actor, text, wish=wish.to_primitive())
+        if self.on_wish is not None:
+            self.on_wish(wish)
 
     def emit_sound(self, location, radius, description):
         """Emit an ambient noise at *location* -- a sound that no actor's command
@@ -737,7 +758,10 @@ class Game:
                     trigger.fired = True
                     fired_this_round.add(trigger)
                     self.log_event(
-                        EventKind.TRIGGER, trigger.name, f"{trigger.name} fired"
+                        None,
+                        EventKind.TRIGGER,
+                        f"{trigger.name} fired",
+                        payload={"trigger": trigger.name},
                     )
                     newly_fired = True
             if not newly_fired:
@@ -1078,10 +1102,18 @@ class Game:
                 inventory_description += "\n"
             self.ok(inventory_description)
 
-    def describe_for(self, character: Character) -> str:
+    def describe_for(
+        self, character: Character, *, agent_action_menu: bool = True
+    ) -> str:
         """
         Describe the game world from a specific character's perspective.
         Used by NPC behaviors and the ReAct loop to observe their environment.
+
+        For an agent-driven character the "Available actions:" line lists exactly
+        the verbs offered as tools this tick (#697); pass
+        ``agent_action_menu=False`` to force the full registered list instead --
+        used where the observation feeds memory retrieval, so changing the menu
+        can't shift which memories surface (the backend's byte-identical bake).
         """
         loc = character.location
         scene = self.perceive(character)
@@ -1110,18 +1142,26 @@ class Game:
                     lines.append(f" * {direction.capitalize()} to {dest.name}")
 
         if scene.sight >= perception.Sight.CLEAR:
-            # Items at location (hidden items are revealed only to those who know)
-            visible_items = [it for it in loc.items.values() if _visible_to(it)]
+            # Items at location (hidden items are revealed only to those who
+            # know; the can_perceive gate hides what's spatially out of range)
+            visible_items = [
+                it
+                for it in loc.items.values()
+                if _visible_to(it) and self.can_perceive(character, it)
+            ]
             if visible_items:
                 lines.append("Items here:")
                 for item in visible_items:
                     lines.append(f" * {_format_item(item)}")
 
-            # Other characters present (hidden ones revealed only to those who know)
+            # Other characters present (hidden ones revealed only to those who
+            # know, spatially distant ones gated by can_perceive -- issue #662)
             others = [
                 c
                 for name, c in loc.characters.items()
-                if name != character.name and _visible_to(c)
+                if name != character.name
+                and _visible_to(c)
+                and self.can_perceive(character, c)
             ]
             if others:
                 lines.append("Characters here:")
@@ -1153,8 +1193,34 @@ class Game:
                 gauge += " (ENCUMBERED: you clatter when you move, and cannot climb)"
             lines.append(gauge)
 
-        # Available actions
-        action_names = sorted(self.parser.actions.keys())
+        # Own health state (issue #634): a set is_sick is a stimulus the
+        # deciding agent must actually perceive -- otherwise there is "no state
+        # change to perceive" (rubric #446 axes 3-4) and the flagship boil-arc
+        # consequence never reaches the prompt. Emitted only while is_sick, so a
+        # game that never sickens a character keeps a byte-identical observation;
+        # the line simply disappears on recovery. Wording is authorable via
+        # sick_self_description.
+        # The Penn port words this line via sick_self_description (set where
+        # its Drink sickens the character); its old cognition-side append
+        # (#594) was dropped in favor of this one when the branches merged.
+        if character.get_property("is_sick"):
+            lines.append(
+                character.get_property("sick_self_description") or "You feel ill."
+            )
+
+        # Available actions. For an agent-driven character this is EXACTLY the
+        # verbs it is offered as tools this tick (#697) -- same source as the
+        # tool menu (npc.tools_for reads the same offered_action_names), so the
+        # observation can't advertise verbs the agent can't call (nor bury the
+        # ones it can, like propose, among 40+ it can't). A non-agent character
+        # (the player, a scripted NPC) keeps the full registered list.
+        agent = getattr(character, "agent", None)
+        if agent is not None and agent_action_menu:
+            action_names = offered_action_names(
+                self.parser, character, getattr(agent, "action_names", None)
+            )
+        else:
+            action_names = sorted(self.parser.actions.keys())
         lines.append(f"Available actions: {', '.join(action_names)}")
 
         # What the character believes about the world (issue #45). This is the
@@ -1228,6 +1294,27 @@ class Game:
                 break  # radius exceeds the map; nothing more to reach
         return result
 
+    def can_perceive(self, observer, thing) -> bool:
+        """Whether *observer* perceives *thing* (a character or item) standing in
+        a location it can see into (issue #662).
+
+        :meth:`perceivable_locations` decides which *rooms* an observer sees
+        into; this decides which of the things standing there it actually
+        notices. The default is True -- room granularity, so a room's occupants
+        are all mutually perceived and every existing game is unchanged.
+        **Override it** when one Location spans real distance and room
+        membership overstates proximity -- the Godot sim's ``TiledGame``, whose
+        outdoor hub is a single Location covering a whole campus, overrides
+        this with a tile-distance check so residents hundreds of tiles apart
+        stop perceiving each other.
+
+        Consulted by :meth:`describe_for` (the "Items here:"/"Characters here:"
+        observation lists) and ``AgentMemory._perceive_presence`` (the
+        "I see X nearby." records). It gates *spatial* awareness only; the
+        knowledge-based ``secret_topic`` gate is separate and still applies.
+        """
+        return True
+
     def audible_rooms(self, origin, radius) -> dict:
         """``{room_name: direction_back_toward_origin}`` for rooms within
         ``radius`` hops of ``origin`` (a Location or its name), excluding the
@@ -1283,7 +1370,9 @@ class Game:
         Note: the clock's configuration is saved, but triggers (including
         scheduled events) are not — their conditions and actions are arbitrary
         functions and can't be serialized. Games that rely on them should
-        re-register them after loading.
+        re-register them after loading. Recipes are runtime-only the same way
+        (their output is a factory callable), but which gated recipes the
+        player has *learned* is plain progress data and is saved (issue #184).
         """
         data = {
             "player": self.player.name,
@@ -1293,6 +1382,8 @@ class Game:
             "game_history": self.game_history,  # TODO this is empty?
             "game_over": self.game_over,
             "game_over_description": self.game_over_description,
+            # Sorted so dumps stay hash-seed-stable (issue #545).
+            "learned_recipes": sorted(self.learned_recipes),
             "characters": [c.to_primitive() for c in self.characters.values()],
             "locations": [l.to_primitive() for l in self.locations.values()],
             "actions": sorted([a for a in self.parser.actions]),
@@ -1450,31 +1541,57 @@ class Game:
                     err_msg = f"ERROR: invalid custom block ({cb})"
                     raise Exception(err_msg)
 
-        # Instantiate all blocks for all locations
-        # CCB - temporarially removing this.
-        # for l in context.locations.values():
-        #     for direction, block_data in l.blocks.items():
-        #         # it is possible for two locations to have the same block, so
-        #         # skip any that have already been instantiated
-        #         if isinstance(block_data, blocks.Block):
-        #             continue
-        #         cls_type = block_map[block_data["_type"]]
-        #         del block_data["_type"]
-        #         # we will copy the properties of relevant items before we
-        #         # install the block, so we can restore them after
-        #         prop_map = {}
-        #         # replace thing names in primitive with thing instances
-        #         for param_name, param in block_data.items():
-        #             if param in context.items:
-        #                 param_instance = context.items[param]
-        #             elif param in context.locations:
-        #                 param_instance = context.locations[param]
-        #             block_data[param_name] = param_instance
-        #             prop_map[param_name] = param_instance.properties.copy()
-        #         instance = cls_type.from_primitive(block_data)
-        #         # restore properties found in primitive data
-        #         for param_name, param in block_data.items():
-        #             param.properties = prop_map[param_name]
+        # Instantiate all blocks for all locations (issue #744). The location
+        # skeletons still hold each block's primitive dict; now that every
+        # location, item, and character exists we can swap the saved thing
+        # names back to instances and rebuild the Block objects.
+        for l in context.locations.values():
+            for direction, block_data in list(l.blocks.items()):
+                # It is possible for two locations to share the same block
+                # (a Locked_Door installs itself on both sides of the door),
+                # so skip any that have already been instantiated.
+                if isinstance(block_data, blocks.Block):
+                    continue
+                # Work on a copy so we never mutate the caller's primitive data.
+                block_data = dict(block_data)
+                cls_name = block_data.pop("_type")
+                module_name = block_data.pop("_module", None)
+                cls_type = block_map.get(cls_name)
+                if cls_type is None and module_name:
+                    # A game-specific block that wasn't registered via
+                    # custom_blocks: re-import it from the module recorded
+                    # at save time (see Block.to_primitive).
+                    module = importlib.import_module(module_name)
+                    cls_type = getattr(module, cls_name, None)
+                if cls_type is None:
+                    err_msg = "".join(
+                        [
+                            f"ERROR: unmapped block ({cls_name}) found in ",
+                            "primitive data; pass its class via custom_blocks",
+                        ]
+                    )
+                    raise Exception(err_msg)
+                # Replace saved thing names with the live instances. Block
+                # constructors may mutate the things they attach to (e.g.
+                # Locked_Door re-locks its door, Darkness re-flags its room
+                # dark), so we copy each referenced thing's properties before
+                # we install the block and restore them after -- the loaded
+                # state must match the save, not the constructor's defaults.
+                prop_map = {}
+                pools = (context.items, context.characters, context.locations)
+                for param_name, param in block_data.items():
+                    if not isinstance(param, str):
+                        continue
+                    for pool in pools:
+                        if param in pool:
+                            block_data[param_name] = pool[param]
+                            prop_map[param_name] = pool[param].properties.copy()
+                            break
+                instance = cls_type.from_primitive(block_data)
+                # restore properties found in primitive data
+                for param_name, snapshot in prop_map.items():
+                    block_data[param_name].properties = snapshot
+                l.blocks[direction] = instance
 
         start_at = context.locations[data["start_at"]]
         player = context.characters[data["player"]]
@@ -1487,6 +1604,8 @@ class Game:
         instance.game_history = data["game_history"]
         instance.game_over = data["game_over"]
         instance.game_over_description = data["game_over_description"]
+        # Missing from saves written before issue #184: default to none learned.
+        instance.learned_recipes = set(data.get("learned_recipes", []))
 
         return instance
 

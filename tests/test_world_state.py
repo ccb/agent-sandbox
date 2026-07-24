@@ -174,6 +174,24 @@ def test_event_payload_is_sorted_and_json_safe():
     game.to_world_json()  # JSON-safe: must not raise
 
 
+def test_trigger_event_exports_the_same_shape_on_both_surfaces():
+    # A trigger-fired event must read identically from the raw event log
+    # (GameEvent.to_primitive, the feed/replay surface) and from the
+    # WorldState snapshot -- actor None, action "trigger" -- not "trigger"
+    # as the actor on one surface and "TRIGGER" on the other (issue #630).
+    from text_adventure_games.triggers import at_turn
+
+    game, *_ = _two_room_game()
+    game.add_trigger("boom", at_turn(1), lambda g: None)
+    game.end_turn()
+
+    raw = next(e for e in game.events if "boom" in e.summary).to_primitive()
+    snap = next(e for e in world_state(game).events if "boom" in e.summary)
+    assert raw["actor"] is None and snap.actor is None
+    assert raw["action"] == "trigger" and snap.action == "trigger"
+    assert snap.payload["trigger"] == "boom"
+
+
 def test_item_quantity_is_exported():
     game, field, *_ = _two_room_game()
     coin = things.Item("coin", "a coin", "A coin.")

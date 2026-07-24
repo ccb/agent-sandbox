@@ -1,0 +1,155 @@
+# A small University of Pennsylvania cast for the generative-agents sim, walking
+# the REAL campus. The map is derived from OpenStreetMap by
+# godot-generative-agents/tools/geo/osm_to_ville.py (the_upenn matrix). Each building now has a walkable
+# interior reached through a single door (godot-generative-agents/tools/geo/add_entrances.py), so each
+# location's `address` is the building's "UPenn:<building>:lobby" INTERIOR address
+# -- "study in Van Pelt Library" walks the agent in through the door rather than
+# stopping at the edge. (The matrix still has "UPenn:<building>:grounds" for the
+# outside, and the pathfinder can only cross the wall ring at the door.) Every
+# `start_tile` is a walkable doorstep tile just outside its building. The mock
+# brain drives each persona through its schedule, so this runs offline,
+# deterministically, and free -- the same as the_ville cast.
+#
+# Buildings used (all real, all inside the 34th-36th x Spruce-Walnut block):
+#   College Hall, Van Pelt Library, Houston Hall, Williams Hall, Meyerson Hall,
+#   Irvine Auditorium. This block is Penn's academic core (College Green) and has
+#   no residence in frame, so each persona starts on the campus walks (`home: Penn
+#   campus`, the outdoor hub) at a `start_tile` just outside their first building --
+#   so even the first stop is a walk *into* the building through its door, not an
+#   activity performed on the doorstep. (The mock brain travels whenever its current
+#   location differs from the stop's place; starting at the hub makes stop 1 a real
+#   trip inside.)
+#
+# Van Pelt Library is furnished into 25 navigable rooms (godot-generative-agents/tools/geo/furnish_van_pelt.py
+# + add_entrances.py, #268), each its own arena address "UPenn:Van Pelt Library:<room>".
+# So instead of stopping in the lobby, the cast below sends its Van Pelt stops to
+# specific rooms: a location like "Van Pelt — Moelis Reading Room" carries the address
+# "UPenn:Van Pelt Library:Moelis Family Grand Reading Room", and the pathfinder routes
+# the agent in through the door and between rooms through the interior doorways. Maya
+# walks a real in-library circuit (circulation desk -> reading room in the morning, the
+# book stacks -> study booths at night), so the replay shows room-to-room movement
+# inside the building rather than an agent frozen at the threshold.
+#
+# Heads-up when adding rooms: a place name must not contain a bare compass word
+# ("north"/"east"/...), because the parser reads "travel to <place>" as a movement
+# command and would treat e.g. "West Wing" as "go west". (That is why the west-wing
+# stacks are named "Book Stacks" here, not "West Wing Stacks".)
+
+# ---------------------------------------------------------------------------
+# The cast, by reference (#731): each id names a persona file in personas/
+# (e.g. `diego` -> personas/diego.yaml), and the loader
+# (backend.build_world.load_world_yaml) composes the run's personas -- plus
+# the relationship edges and scripted meetings that ride in those files --
+# from the cast at build time. See personas/README.md for the full catalog
+# (15 personas; the 12 beyond this default cast are parked while the live-LLM
+# MVP runs 3 agents -- un-park them via the setup scene / POST /config, #730,
+# or a cast= override) and the authoring contract. ORDER MATTERS: cast order
+# is the replay's persona order, so reordering changes the baked bytes (#640).
+cast: [diego, tanaka, sofia]
+
+locations:
+- name: Penn campus
+  description: The streets and walks of Penn's campus, tying every corner together.
+  address: null
+  hub: true
+- name: College Hall
+  description: Penn's oldest building and administrative heart, on College Green.
+  address: UPenn:College Hall:lobby
+- name: Van Pelt Library
+  description: The main university library, where students study at all hours.
+  address: UPenn:Van Pelt Library:lobby
+# Named rooms inside Van Pelt (each a furnished, navigable arena from #268). Targeting
+# these instead of the lobby walks an agent through the door and between rooms.
+- name: Van Pelt — Circulation Desk
+  description: The circulation and reserve desk just inside Van Pelt's doors.
+  address: UPenn:Van Pelt Library:Circulation
+- name: Van Pelt — Moelis Reading Room
+  description: The Moelis Family Grand Reading Room, Van Pelt's flagship study hall.
+  address: UPenn:Van Pelt Library:Moelis Family Grand Reading Room
+  properties: [studyable]
+- name: Van Pelt — Book Stacks
+  description: The west-wing book stacks, rows of open shelving.
+  address: UPenn:Van Pelt Library:West Wing Books
+- name: Van Pelt — Study Booths
+  description: Quiet individual study booths in the west wing.
+  address: UPenn:Van Pelt Library:Study Booths
+  properties: [studyable]
+- name: Van Pelt — Microtext Collection
+  description: The microfilm and microfiche archive of historical print.
+  address: UPenn:Van Pelt Library:Microtext Collection
+- name: Van Pelt — Kamin Gallery
+  description: The Kamin Gallery, Van Pelt's exhibition space.
+  address: UPenn:Van Pelt Library:Kamin Gallery
+- name: Van Pelt — Digital Scholarship Exchange
+  description: The Research Data and Digital Scholarship Exchange, for data and digital work.
+  address: UPenn:Van Pelt Library:Research Data and Digital Scholarship Exchange
+- name: Houston Hall
+  description: The student union -- the nation's first -- with dining and lounges.
+  address: UPenn:Houston Hall:lobby
+  properties: [dining]
+# Named rooms inside Houston Hall (furnished arenas, same pattern as the Van Pelt
+# rooms above). Schedule stops can target these to put an agent in a specific
+# room instead of wherever the whole-building lobby routing settles. Two
+# constraints keep this list curated rather than exhaustive:
+# * Every location entry consumes a slot in the decide tool's location enum
+#   (DECIDE_MAX_ENUM = 20, pinned by test_per_action_decide) -- the other six
+#   Houston arenas (Bathroom, Shuffle Board Room, Ladies Parlor, Secretarys
+#   Office, Chess Room, Correspond) exist in the map and can be promoted here
+#   as needed while slots remain.
+# * The #465 boil-water props (cups/sink/stove/pot) live in the building-level
+#   "Houston Hall" location, so a stop that runs the murky-water commands must
+#   keep targeting "Houston Hall" itself.
+- name: Houston Hall — Reception Hall
+  description: The reception hall just inside Houston Hall's doors.
+  address: UPenn:Houston Hall:Reception Hall
+- name: Houston Hall — Billiard Room
+  description: The billiard room off the student union's main hall.
+  address: UPenn:Houston Hall:Billiard Room
+- name: Houston Hall — Reading Room
+  description: Houston Hall's reading room, armchairs and newspapers.
+  address: UPenn:Houston Hall:Reading Room
+- name: Williams Hall
+  description: A classroom and language-department building just off College Green.
+  address: UPenn:Williams Hall:lobby
+- name: Williams Hall — Classroom A
+  description: A Williams Hall classroom with a blackboard, where problem sessions meet.
+  address: UPenn:Williams Hall:Classroom A
+- name: Meyerson Hall
+  description: Home of the Weitzman School of Design, full of architecture studios.
+  address: UPenn:Meyerson Hall:lobby
+- name: Irvine Auditorium
+  description: The landmark auditorium that hosts lectures and performances.
+  address: UPenn:Irvine Auditorium:lobby
+
+# ---------------------------------------------------------------------------
+# The seed social graph (`relationships`) and scripted `meetings` now ride in
+# the cast's persona files (#731) -- see personas/README.md for the authoring
+# contract (who-owns-which-entry, proximity-honest meetings, closeness 1..5).
+
+# ---------------------------------------------------------------------------
+# LLM configuration for the LIVE server (read by backend/penn/serve_penn.py ONLY, and
+# only when launched with `--brain llm`; the engine's load_world_data never
+# sees this block). The default run (`--brain mock`, or no flag) stays the
+# deterministic, free mock brain no matter what is written here.
+#
+# provider must be "anthropic" -- the Penn runner accepts no other provider,
+# and the API key comes from the ANTHROPIC_API_KEY environment variable alone
+# (never LLM_API_KEY, never OPENAI_API_KEY).
+llm:
+  provider: anthropic
+  # Claude Haiku powers EVERY model call the live MVP makes: the travel/perform
+  # decisions, the conversation lines, and the reflection passes. (Daily
+  # planning stays on the hand-authored schedules above -- see
+  # serve_penn.resolve_llm for why.)
+  model: claude-haiku-4-5
+  # Optional per-role model tiering (issue #368): route a call site to a
+  # different model; anything not listed stays on `model`. Same keys as the
+  # serve_penn --model-for flag (decide, plan, reflect, converse, outcome,
+  # score, react). Spend per role shows up in GET /usage under "by_role".
+  # models:
+  #   plan: claude-sonnet-4-6
+  #   reflect: claude-sonnet-4-6
+  # Hard cost ceiling (USD) for one server run: once cumulative spend reaches
+  # it, the tick loop ends the day (the live loop pauses; the viewer HUD's
+  # budget row shows TRIPPED). Resets do NOT clear spend.
+  max_cost_usd: 5.0

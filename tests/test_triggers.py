@@ -3,6 +3,7 @@
 import pytest
 
 from text_adventure_games import games, things
+from text_adventure_games.enums import EventKind
 from text_adventure_games.triggers import (
     Trigger,
     at_turn,
@@ -166,7 +167,16 @@ def test_from_command_trigger_runs_valid_command(tiny_game):
 def test_trigger_firing_is_logged(tiny_game):
     tiny_game.add_trigger("boom", at_turn(1), lambda g: None)
     tiny_game.end_turn()
-    assert any(e.actor == "trigger" and e.action == "boom" for e in tiny_game.events)
+    fired = [e for e in tiny_game.events if e.action == EventKind.TRIGGER]
+    assert len(fired) == 1
+    event = fired[0]
+    # No actor: a trigger fires from the environment, not from a character.
+    # EventKind.TRIGGER rides in the ACTION field (the events.py contract),
+    # and the trigger's name is data, not a phantom actor.
+    assert event.actor is None
+    assert event.payload["trigger"] == "boom"
+    assert "boom" in event.summary
+    assert event.to_primitive()["action"] == "trigger"
 
 
 def test_cascade_fires_dependent_trigger_one_level(tiny_game):

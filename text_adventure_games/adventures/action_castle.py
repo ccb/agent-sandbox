@@ -414,6 +414,17 @@ class Troll_Block(blocks.Block):
                 return True
         return False
 
+    def to_primitive(self):
+        data = super().to_primitive()
+        data["location"] = self.location.name
+        data["troll"] = self.troll.name
+        return data
+
+    @classmethod
+    def from_primitive(cls, data):
+        # Game.from_primitive has already swapped the names back to instances.
+        return cls(data["location"], data["troll"])
+
 
 class Guard_Block(blocks.Block):
     """
@@ -446,6 +457,17 @@ class Guard_Block(blocks.Block):
             return True
         return False
 
+    def to_primitive(self):
+        data = super().to_primitive()
+        data["location"] = self.location.name
+        data["guard"] = self.guard.name
+        return data
+
+    @classmethod
+    def from_primitive(cls, data):
+        # Game.from_primitive has already swapped the names back to instances.
+        return cls(data["location"], data["guard"])
+
 
 # Darkness is now an engine block (text_adventure_games.blocks.Darkness); this
 # adventure uses it directly (see where dungeon_stairs is wired below).
@@ -470,6 +492,17 @@ class Door_Block(blocks.Block):
             if self.door.get_property("is_locked"):
                 return True
         return False
+
+    def to_primitive(self):
+        data = super().to_primitive()
+        data["location"] = self.location.name
+        data["door"] = self.door.name
+        return data
+
+    @classmethod
+    def from_primitive(cls, data):
+        # Game.from_primitive has already swapped the names back to instances.
+        return cls(data["location"], data["door"])
 
 
 ## NPC Actions

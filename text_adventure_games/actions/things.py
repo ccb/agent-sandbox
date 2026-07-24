@@ -947,6 +947,7 @@ CRAFT_VERBS = (
     "make",
     "cook",
     "brew",
+    "boil",
     "forge",
     "mix",
     "combine",
@@ -1002,6 +1003,26 @@ class Craft(base.Action):
             return True
         learned = getattr(self.game, "learned_recipes", None) or set()
         return any(name in learned for name in recipe.names())
+
+    def _unlearned_match(self) -> bool:
+        """Whether an UNLEARNED recipe (registered, but gated by #135's
+        learning gate) would otherwise have matched the target -- mirrors
+        ``_resolve``'s by-output-name (#1) and by-ingredients (#2) paths, but
+        scans the FULL recipe list, since ``_recipes()`` already filtered
+        these out. Distinguishes "haven't learned it yet" from "truly
+        unknown" in ``check_preconditions`` (#628)."""
+        if not self.target:
+            return False
+        for r in getattr(self.game, "recipes", []) or []:
+            if self._is_known(r):
+                continue
+            if any(n and n in self.target for n in r.names()):
+                return True
+            if r.inputs and all(
+                ing.name and ing.name in self.target for ing in r.inputs
+            ):
+                return True
+        return False
 
     def _held(self):
         """name -> item across the crafter's hands and open carried containers."""
@@ -1086,7 +1107,12 @@ class Craft(base.Action):
                 ):
                     self.recipe, self.named = r, True
                     return
-        # 3) bare verb: the first recipe satisfiable right here.
+        # 3) bare verb: the first recipe satisfiable right here. Only for a
+        #    truly bare verb (#686) -- a specific target that matched neither
+        #    path above falls through to the "don't know how" gap in
+        #    check_preconditions instead of silently crafting something else.
+        if self.target:
+            return
         for r in recipes:
             if self._satisfiable(r):
                 self.recipe = r
@@ -1097,7 +1123,19 @@ class Craft(base.Action):
     def check_preconditions(self) -> bool:
         if self.recipe is None:
             if self.target:
-                self.parser.fail(f"You don't know how to make '{self.target}'.")
+                if self._unlearned_match():
+                    # Case 1 (#628): a recipe for this target exists but the
+                    # crafter hasn't learned it (#135) -- a learnable enabler,
+                    # not missing demand, so no wish here.
+                    self.parser.fail(
+                        f"You haven't learned how to make '{self.target}' yet."
+                    )
+                else:
+                    # Case 2 (#628): no recipe anywhere matches the target --
+                    # truly unknown demand, so log a craft_gap wish alongside
+                    # the (unchanged) failure message.
+                    self.parser.fail(f"You don't know how to make '{self.target}'.")
+                    self.parser.log_craft_gap(self.command, self.character)
             else:
                 self.parser.fail("There's nothing you can make here right now.")
             return False
@@ -1119,6 +1157,14 @@ class Craft(base.Action):
         for item in outputs:
             self.character.accept_item(item)
             names.append(item.name)
+        # Stash what was crafted so the parser's per-command `craft` event can carry
+        # the recipe identity + produced items (see event_payload) -- rather than
+        # self-logging a SECOND `craft` event, which duplicated the parser's (#604).
+        self._crafted = {"recipe": recipe.name or names[0], "outputs": list(names)}
         msg = recipe.result_text or "You make {}.".format(", ".join(names))
         self.parser.ok(msg)
-        self.game.log_event(self.character.name, "craft", recipe.name or names[0])
+
+    def event_payload(self) -> dict:
+        # Enrich the single per-command `craft` event (parsing.py) with what was
+        # made, so a craft logs one event that still names the recipe/outputs (#604).
+        return dict(getattr(self, "_crafted", {}))

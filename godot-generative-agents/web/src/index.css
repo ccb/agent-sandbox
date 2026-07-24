@@ -1,5 +1,7 @@
+@import "./theme.css";
+
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 * {
@@ -11,10 +13,17 @@ body,
 #root {
   height: 100%;
   margin: 0;
+  /* This is a fixed full-height app (header + a stage that fills the rest); the
+     page itself must never scroll. Without this, the embedded Godot canvas —
+     which the engine sizes to the whole window — overflows the stage by the
+     header's height and makes the document scrollable, so a zoom gesture could
+     scroll the header off the top. The overlay pages do their own scrolling
+     inside `.view-llm` (and the like). */
+  overflow: hidden;
 }
 
 body {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  background: #0e1116;
-  color: #e6e6e6;
+  background: var(--color-bg);
+  color: var(--color-text);
 }

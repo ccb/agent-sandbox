@@ -111,6 +111,35 @@ def test_from_dict_rejects_unknown_key():
         GameConfig.from_dict({"engine": {"not_a_real_field": 1}})
 
 
+def test_from_dict_rejects_wrong_type_field_value():
+    with pytest.raises(ValueError, match="agent.temperature.*must be float.*got str"):
+        GameConfig.from_dict({"agent": {"temperature": "hot"}})
+
+
+def test_from_dict_accepts_int_for_float_field():
+    c = GameConfig.from_dict({"agent": {"temperature": 1}})
+    assert c.agent.temperature == 1
+
+
+def test_from_dict_rejects_bool_for_int_field():
+    with pytest.raises(ValueError, match="agent.max_tokens.*must be int.*got bool"):
+        GameConfig.from_dict({"agent": {"max_tokens": True}})
+
+
+def test_from_dict_union_field_accepts_either_type():
+    assert GameConfig.from_dict({"engine": {"phases": True}}).engine.phases is True
+    assert GameConfig.from_dict({"engine": {"phases": {"talk": 0}}}).engine.phases == {
+        "talk": 0
+    }
+
+
+def test_from_dict_union_field_rejects_other_types():
+    with pytest.raises(
+        ValueError, match="engine.phases.*must be bool or dict.*got str"
+    ):
+        GameConfig.from_dict({"engine": {"phases": "always"}})
+
+
 def test_from_file_json(tmp_path):
     path = tmp_path / "config.json"
     path.write_text(
@@ -133,6 +162,16 @@ def test_from_file_yaml(tmp_path):
     c = GameConfig.from_file(path)
     assert c.engine.turn_mode == "simultaneous"
     assert c.agent.temperature == 0.2
+
+
+def test_from_file_malformed_yaml_raises_value_error(tmp_path):
+    # #564 review finding 6: match sim_config.py's SimulationConfig.from_file
+    # wrap exactly, so the two loaders' YAML-error contract doesn't diverge.
+    pytest.importorskip("yaml")
+    path = tmp_path / "bad.yaml"
+    path.write_text("engine: [unclosed", encoding="utf-8")
+    with pytest.raises(ValueError, match="invalid YAML"):
+        GameConfig.from_file(path)
 
 
 def test_from_file_unsupported_extension(tmp_path):

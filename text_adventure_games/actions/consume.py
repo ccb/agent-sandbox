@@ -11,6 +11,9 @@ _conj = base.conjugate
 class Eat(base.Action):
     ACTION_NAME = ActionName.EAT
     ACTION_DESCRIPTION = "Eat something"
+    # Offered to an agent only where something edible is in scope (issue #612);
+    # the gate below reads the same declaration as its place-check.
+    REQUIRED_AFFORDANCES = (Property.EDIBLE,)
 
     def __init__(self, game, command: str, actor=None):
         super().__init__(game, actor=actor)
@@ -22,10 +25,13 @@ class Eat(base.Action):
     def check_preconditions(self) -> bool:
         """
         Preconditions:
+        * Something edible must be in scope (the #612 place-check)
         * There must be a matched item
         * The item must be food
         * The food must be carried by the character (in hand or a container)
         """
+        if not self.has_affordance_in_scope(self.character):
+            return False
         if not self.was_matched(
             self.item, error_message="I don't know what you want to eat"
         ):

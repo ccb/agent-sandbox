@@ -15,6 +15,7 @@ from text_adventure_games import games
 from .things import Character, Item, Location
 from . import actions, blocks
 from .enums import ActionName, Direction, Role
+from .wishes import ActionWish, TRIGGER_CRAFT_GAP, TRIGGER_PARSE_GAP
 from .reporting import Channel, Message, default_renderer, wrap_text
 
 # Maps the one-letter direction shortcuts ("n", "s", "e", "w") onto canonical
@@ -158,8 +159,20 @@ class Parser:
         """
         return wrap_text(text, width)
 
-    def add_command_to_history(self, command: str):
-        message = {"role": Role.USER, "content": command}
+    def add_command_to_history(self, command: str, actor=None):
+        """Record *command*, attributed to the character who issued it and the
+        location they stood in when they did (issue #629). Renderers of the
+        shared history use these to label and scope what other characters
+        perceive; with no *actor* (trigger-fired or scripted commands) both
+        fields stay None and the entry renders and filters as before. Consumers
+        that forward history to a chat-completion API must strip entries down
+        to role/content first (see LlmParser._narrate)."""
+        message = {
+            "role": Role.USER,
+            "content": command,
+            "actor": getattr(actor, "name", None),
+            "location": getattr(getattr(actor, "location", None), "name", None),
+        }
         self.command_history.append(message)
         # CCB - todo - manage command_history size
 
@@ -196,6 +209,24 @@ class Parser:
         Here we have implemented it with a simple keyword match. Later
         we will use AI to do more flexible matching.
         """
+        intent = self._resolve_intent(command, actor=actor)
+        # QUIT ends the session for everyone, so it is the human player's alone:
+        # an autonomous agent (it passes itself as ``actor``, never the player)
+        # must never terminate a live run or bake by emitting a "quit"/"q"
+        # command (#627). Whichever internal path resolved it, drop a QUIT from an
+        # agent so the command falls through to the no-verb gate and is captured
+        # as a parse_gap wish instead.
+        if (
+            intent == ActionName.QUIT
+            and actor is not None
+            and actor is not getattr(self.game, "player", None)
+        ):
+            return None
+        return intent
+
+    def _resolve_intent(self, command: str, actor=None):
+        """Keyword-routing core of ``determine_intent`` -- see the wrapper for
+        the #627 QUIT guard applied to whatever this resolves."""
         # Resolve the acting character (the actor, else a player-default scan).
         # Used below only to interpret directions relative to where they stand.
         character = actor if actor is not None else self.get_character(command)
@@ -203,6 +234,16 @@ class Parser:
         if "," in command:
             # Let the player type in a comma separted sequence of commands
             return ActionName.SEQUENCE
+
+        if command == "propose" or command.startswith("propose "):
+            # The wish channel (#620): propose takes its payload as free text
+            # ("propose talk to the mayor because ...") that may contain any
+            # verb keyword, multi-word alias, or direction. Its exact-prefix
+            # guard can't over-trigger, so it wins first -- before even the
+            # specific-first substring match below, whose naive `alias in
+            # command` test would otherwise let a payload naming "talk to",
+            # "chat with", etc. hijack the whole command and drop the wish.
+            return ActionName.PROPOSE
 
         # Specific-first: if a registered action's MULTI-WORD name or alias
         # appears in the command, it wins over the generic verb keywords below.
@@ -504,6 +545,62 @@ class Parser:
     def agent_reflection(self, actor: str, text: str):
         self._emit(Channel.AGENT_REFLECTION, text, actor=actor)
 
+    def agent_wish(self, actor: str, text: str, wish: dict | None = None):
+        """An actor's recorded wish for a missing action (#620). *wish* is the
+        structured record (``ActionWish.to_primitive()``), carried in ``meta``
+        for surfaces that want more than the one-line trace."""
+        self._emit(
+            Channel.AGENT_WISH,
+            text,
+            actor=actor,
+            meta={"wish": wish} if wish else None,
+        )
+
+    def _build_gap_wish(self, command: str, actor, trigger: str) -> ActionWish:
+        """The situation snapshot (actor, location, non-done goals, scope,
+        turn) shared by every *automatic* wish-capture trigger: parse_gap
+        (#621) and craft_gap (#628). Both use ``desired == raw_command ==
+        command`` -- unlike ``propose``, there's no separate because-clause
+        to split out. Mirrors the propose verb's snapshot (actions/wish.py)
+        so every wishes.jsonl consumer sees one shape regardless of trigger."""
+        char = actor if actor is not None else getattr(self.game, "player", None)
+        location = getattr(char, "location", None)
+        scope = []
+        if char is not None:
+            scope = sorted(self.get_items_in_scope(char).keys())
+            if location is not None:
+                scope += sorted(n for n in location.characters if n != char.name)
+        goals = [
+            g.description
+            for g in getattr(char, "goals", []) or []
+            if not getattr(g, "done", False)
+        ]
+        return ActionWish(
+            actor=char.name if char is not None else None,
+            turn=self.game.turn,
+            location=location.name if location is not None else None,
+            desired=command,
+            trigger=trigger,
+            goals=goals,
+            scope=scope,
+            raw_command=command,
+        )
+
+    def _log_parse_gap(self, command: str, actor=None):
+        """Record a ``trigger="parse_gap"`` ActionWish (#621): *command*
+        matched no verb at all."""
+        self.game.log_wish(self._build_gap_wish(command, actor, TRIGGER_PARSE_GAP))
+
+    def log_craft_gap(self, command: str, actor=None):
+        """Record a ``trigger="craft_gap"`` ActionWish (#628): a crafting
+        command routed into CRAFT (the game has a recipe registered
+        somewhere) but named no recipe the crafter knows OR could learn --
+        the crafting counterpart to ``_log_parse_gap`` for recipe-less games,
+        where the identical command never reaches CRAFT at all. Public, like
+        ``agent_wish``, so the Craft action (``actions/things.py``) can call
+        it directly instead of re-deriving the scope/goals snapshot itself."""
+        self.game.log_wish(self._build_gap_wish(command, actor, TRIGGER_CRAFT_GAP))
+
     def npc_log(self, message: str):
         """Legacy agent-trace shim (a single pre-formatted line). Prefer the
         typed ``agent_*`` methods above; kept so older callers keep working."""
@@ -520,7 +617,7 @@ class Parser:
 
     def parse_command(self, command: str, actor=None) -> bool:
         # add this command to the history
-        self.add_command_to_history(command)
+        self.add_command_to_history(command, actor=actor)
         action = self.parse_action(command, actor=actor)
         if not action:
             # The command didn't name an action. If the game has posed a
@@ -532,6 +629,11 @@ class Parser:
                 # (and so a non-matching answer can't loop back in here).
                 self.game.clear_prompt()
                 return self.parse_command(forwarded, actor=actor)
+            # Parse-gap capture (#621): the command matched no verb at all.
+            # Record what was attempted (the automatic half of the wish
+            # channel, epic #619) before the generic fail. Unconditional for
+            # every actor: player typos are cheap noise the report filters.
+            self._log_parse_gap(command, actor)
             self.fail("I'm not sure what you want to do.")
             return False
         # Resolve the acting character and where they stand *before* the action
@@ -585,6 +687,10 @@ class Parser:
             if radius > 0:
                 # How the sound reads to someone who only hears it (no sight).
                 payload["sound"] = action.sound_description()
+            # Let the action enrich its own event (e.g. Craft's recipe/outputs), so
+            # a rich per-command event replaces a self-logged duplicate (#604).
+            if hasattr(action, "event_payload"):
+                payload.update(action.event_payload() or {})
             self.game.log_event(
                 acting.name if acting is not None else None,
                 action.action_name(),
@@ -934,7 +1040,15 @@ class LlmParser(Parser):
             "best matches the player's command by meaning."
         )
         try:
-            choice = self._pick_one(instructions, options, command, allow_none=False)
+            choice = self._pick_one(
+                instructions,
+                options,
+                command,
+                # Agent-driven actors (#621) may decline: a missing verb then
+                # falls through to the deterministic parser and fails cleanly
+                # (captured as a parse-gap wish) instead of force-mapping.
+                allow_none=getattr(actor, "agent", None) is not None,
+            )
         except Exception:
             choice = None
         return (

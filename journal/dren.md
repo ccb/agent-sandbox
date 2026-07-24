@@ -14,7 +14,6 @@ on top; copy the template block each working day.
 - ...
 -->
 ## 2026-07-23
-
 **Focus:** Energy/food system, scoped to Action Castle only
 
 **Done today:**
@@ -83,6 +82,49 @@ on top; copy the template block each working day.
 - Implement in order: `enums.py` → `Character.__init__` → `Eat.apply_effects`
   → `end_turn()` decay, running the tests after each step.
 
+## 2026-07-20
+**Focus:** Design choice for food system
+**Done today:**
+- Researched a few papers using Notebook LM on how food is incorporated in text world simulations
+- Made a decsion on implementing food as an energy system, starting and 50 and maxing at 100.
+**Blockers / questions:**
+- ... none
+**Next:**
+- Edit Enums to add energy property and energy food
+- Write a test suite for the implementation of the food system
+-->
+## 2026-07-17
+**Focus:** Meeting with CCB
+**Done today:**
+- Meet with CCB and the rest of the team
+- Looked at the codebase and thought of ways to implement a food system
+**Blockers / questions:**
+- Need to familiarize myself better with the code
+**Next:**
+- Implement a food system in Action Castle
+- Read Text world survey paper.
+## 2026-07-16
+**Focus:** Godot Tutorial and more codebase analysis
+**Done today:**
+- Re-read the code base in order as described in the roadmap
+- Looked at a godot tutorial online halfway build a game on godot.
+**Blockers / questions:**
+- Some bugs on the godot game, will vibe code the rest
+**Next:**
+- Finish Godot tutorial
+- Grab an issue to work on
+-->
+## 2026-07-15
+**Focus:** Finished debugging hw1 Continue Reading codebase
+**Done today:**
+- Finished Debugging HW1
+- finished reading things.py, game and others files in order as described in the roadmap.
+**Blockers / questions:**
+- none
+**Next:**
+- Watch a Godot Tutorial
+- Re-read the game to understand it better.
+-->
 ## 2026-07-14
 
 **Focus:** HW1 (Action Castle) — custom actions + Darkness block
