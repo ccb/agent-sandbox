@@ -139,8 +139,9 @@ or a live URL) and **`/serve-backend`** (serve the sim, mock or real-LLM).
 
 ## Known issues / good first fixes
 
-- `Game.from_primitive()` has commented-out block deserialization, so save/load
-  silently drops blocks. Save/load is incomplete — don't rely on it.
+- Save/load round-trips blocks now (#744), but is still incomplete in other
+  ways: a loaded `Game.characters` lists only the player, and NPC behaviors,
+  triggers, and recipes are runtime-only and must be re-registered after a load.
 
 ## Key Patterns
 
