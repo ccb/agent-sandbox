@@ -1254,7 +1254,12 @@ def apply_conversation_outcome(
       the backend-local :data:`CONVERSATION` reason, the ``commitment`` (falling
       back to the transcript) carried as the trigger detail. The existing
       re-anchor guard protects executed/current stops; ``LLMPlanner.revise``
-      already reads trigger detail, and ``MockPlanner.revise`` is a no-op.
+      already reads trigger detail, and ``MockPlanner.revise`` is a no-op. A
+      non-blank ``commitment`` also becomes its own locked PLAN memory
+      (issue #778) in *char*'s own stream -- written before the revision, so
+      the intention survives regardless of what ``maybe_revise_plan`` returns;
+      ``MockPlanner.revise`` being a no-op no longer means the commitment is
+      dropped.
     * ``relationship_note`` -> a high-importance, partner-attributed CHAT memory
       in *char*'s own stream, so retrieval and reflection pick it up, and the
       record is partner-attributed for future social-graph work. Note this does
