@@ -66,7 +66,9 @@ func _ready() -> void:
 	_token = LaunchConfig.live_token
 	_build_shell()
 	_http = HTTPRequest.new()
-	_http.timeout = 10.0
+	# 30s, not 10: a POST /config that switches to the llm brain rebuilds the
+	# world and does a network check_anthropic_key() before responding.
+	_http.timeout = 30.0
 	_http.request_completed.connect(_on_http_completed)
 	add_child(_http)
 	_fetch_config()
@@ -333,7 +335,8 @@ func _render_config(data: Dictionary) -> void:
 	_form_box.add_child(brain_row)
 
 	_steps_spin = _spin_row("Steps", 1, 1000000, 1, float(_initial.steps))
-	_tick_spin = _spin_row("Tick seconds", 0.0, 60.0, 0.1, float(_initial.tick_seconds))
+	# Floor > 0: POST /config's tick_seconds is Field(gt=0), so a 0 would 422.
+	_tick_spin = _spin_row("Tick seconds", 0.05, 60.0, 0.1, float(_initial.tick_seconds))
 	_cost_spin = _spin_row("Cost budget (USD, llm only)", 0.0, 1000.0, 0.5, float(_initial.max_cost))
 
 	var stop := str(run.get("stop_time", ""))
