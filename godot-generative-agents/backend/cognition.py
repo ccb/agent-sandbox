@@ -180,9 +180,23 @@ REACT_TOOL = {
 # Memory importance scoring (issue #583). MemoryRecord.metadata keys the scorer
 # reads/writes: _LOCKED marks a ground-truth importance the model must never
 # re-guess (the #300 sickness signal, the #582 relationship note); _SCORED marks
-# a record the scorer has already examined, so each is asked about at most once.
+# a record the scorer has already examined, so each is asked about at most once;
+# _ATTEMPTS counts sends that came back malformed, so a persistent failure can
+# retire the record instead of re-asking forever (issue #759).
 _IMPORTANCE_LOCKED = "importance_locked"
 _IMPORTANCE_SCORED = "importance_scored"
+_IMPORTANCE_ATTEMPTS = "importance_score_attempts"
+
+# Bounds on the scorer's retry loop (issue #759). The rescan deliberately has no
+# cursor, so a malformed reply is retried next tick -- but unbounded, a brain
+# that keeps failing (or one that never answers score_memories) would re-send an
+# ever-growing batch every tick. Two bounds keep that failure mode flat: one
+# send carries at most SCORE_BATCH_MAX records (a normal tick's new memories are
+# far fewer, so the cap only engages once a failure backlog has built), and a
+# record whose sends have all failed SCORE_MAX_ATTEMPTS times retires at its
+# constant floor rather than riding every future batch.
+SCORE_BATCH_MAX = 25
+SCORE_MAX_ATTEMPTS = 3
 
 # One structured call per acting agent per tick scores that agent's new memories
 # 1-10 (Generative Agents "poignancy"), replacing the hardcoded importance
@@ -1311,6 +1325,13 @@ def score_new_memories(char, step: int) -> None:
       is marked scored (we asked; don't re-ask). Over-budget is inherited: this
       runs only after a successful decide, and decides are gated by the run's
       cost-ceiling kill-switch.
+    * **Failure stays bounded (issue #759).** One send carries at most
+      SCORE_BATCH_MAX records, and every failed send counts against the records
+      it carried: after SCORE_MAX_ATTEMPTS failures a record retires at its
+      constant floor (marked scored). A persistently failing brain therefore
+      degrades to the constants instead of re-sending an ever-growing batch each
+      tick, while a recovery before retirement still scores the whole backlog,
+      cap-sized batch by batch.
     * **Ground-truth stays.** Records flagged ``_IMPORTANCE_LOCKED`` (the #300
       sickness outcome, the #582 relationship note) are skipped entirely -- event
       knowledge the model can't see from text, so it must not re-guess it.
@@ -1350,9 +1371,21 @@ def score_new_memories(char, step: int) -> None:
         if record.metadata.get(_IMPORTANCE_LOCKED):
             record.metadata[_IMPORTANCE_SCORED] = True
             continue
+        # #759: every send this record rode came back malformed -- retire it at
+        # its constant floor rather than re-asking forever. Distinct from the
+        # transient-failure retry below: a record retires only after
+        # SCORE_MAX_ATTEMPTS whole-batch failures, never on the first.
+        if record.metadata.get(_IMPORTANCE_ATTEMPTS, 0) >= SCORE_MAX_ATTEMPTS:
+            record.metadata[_IMPORTANCE_SCORED] = True
+            continue
         candidates.append(record)
     if not candidates:
         return
+    # #759: bound what one send carries. A normal tick's new memories are far
+    # fewer than the cap, so the happy path is unchanged; only a failure backlog
+    # engages it, keeping per-tick token cost flat. The overflow stays unscored
+    # and rides the next tick's rescan (oldest first, memory-stream order).
+    candidates = candidates[:SCORE_BATCH_MAX]
 
     # Attribute the call to this agent (usage.py); "role" labels the monitor line.
     ctx = getattr(brain, "context", None)
@@ -1376,11 +1409,16 @@ def score_new_memories(char, step: int) -> None:
     result = brain.call_tool(
         messages, IMPORTANCE_SCORE_TOOL, max_tokens=agent.max_tokens
     )
-    # Malformed / transient failure: leave everything unscored, floor stands, retry.
-    if not isinstance(result, dict):
-        return
-    scores = result.get("scores")
+    # Malformed / transient failure: leave everything unscored, floor stands,
+    # retry next tick -- but count the failed ask against each record sent
+    # (#759), so a persistent failure retires them (see the candidate scan)
+    # instead of regrowing the batch every tick.
+    scores = result.get("scores") if isinstance(result, dict) else None
     if not isinstance(scores, list):
+        for record in candidates:
+            record.metadata[_IMPORTANCE_ATTEMPTS] = (
+                record.metadata.get(_IMPORTANCE_ATTEMPTS, 0) + 1
+            )
         return
 
     by_id: dict[int, object] = {}
