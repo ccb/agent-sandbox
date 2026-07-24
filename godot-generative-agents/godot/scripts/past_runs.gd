@@ -202,7 +202,8 @@ func _build_row(entry: Dictionary) -> Control:
 		_row_buttons.append(rerun)
 
 		var detail := Label.new()
-		detail.text = RunRow.config_detail(entry)
+		# Pretty-printed lazily on first reveal (#734 review follow-up): most rows
+		# in a long history are never expanded, so don't stringify JSON up front.
 		detail.add_theme_color_override("font_color", HINT_COLOR)
 		detail.add_theme_font_size_override("font_size", 12)
 		detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -213,6 +214,8 @@ func _build_row(entry: Dictionary) -> Control:
 		# A local reveal, not a network action, so it stays clickable while a
 		# request is in flight (kept out of _row_buttons / _set_busy).
 		toggle.pressed.connect(func() -> void:
+			if detail.text == "":
+				detail.text = RunRow.config_detail(entry)
 			detail.visible = not detail.visible
 			toggle.text = "Config ▴" if detail.visible else "Config ▾")
 		actions.add_child(toggle)
