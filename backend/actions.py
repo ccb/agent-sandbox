@@ -33,8 +33,8 @@ class Travel(base.Action):
         """Longest location name appearing in the command (case-insensitive)."""
         cmd = command.lower()
         best = None
-        for name, loc in self.game.locations.items():
-            if name.lower() in cmd and (best is None or len(name) > len(best.name)):
+        for name, loc in self.game.locations.items(): #why items here? why self.location.items()? why do you care there's a stick on garden path?
+            if name.lower() in cmd and (best is None or len(name) > len(best.name)): #this second line I don't get - if name is longer than best then what? why care?
                 best = loc
         return best
 
@@ -66,7 +66,7 @@ class Act(base.Action):
     ACTION_NAME = "perform"
     ACTION_DESCRIPTION = "Perform an activity at the current location"
 
-    def __init__(self, game, command: str, actor=None):
+    def __init__(self, game, command: str, actor=None): #still not 100% sure why this is?
         super().__init__(game, actor=actor)
         self.command = command
         self.character = self.acting_character(command, hint="actor")

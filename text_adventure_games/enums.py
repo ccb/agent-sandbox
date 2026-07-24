@@ -57,6 +57,9 @@ class Property(_StrEnum):
     IS_DRUNK = "is_drunk"
     CHARACTER_TYPE = "character_type"
     EMOTIONAL_STATE = "emotional_state"
+    #PR addition - number unkown for now
+    ENERGY = "energy"
+
 
     # Affordances -- yes/no capabilities of an item. Read by action
     # preconditions ("is this drinkable?") and surfaced to agents as an
@@ -76,6 +79,7 @@ class Property(_StrEnum):
     IS_ALCOHOL = "is_alcohol"
     IS_POISONOUS = "is_poisonous"
     IS_LIT = "is_lit"
+
     # Concealed until found: a hidden item is not described, in scope, or
     # gettable until a SEARCH of its location/holder reveals it (clears this).
     IS_HIDDEN = "is_hidden"
@@ -98,6 +102,8 @@ class Property(_StrEnum):
     IS_MARRIED = "is_married"
     IS_BANISHED = "is_banished"
 
+    #numerical properties
+    ENREGY_VALUE = "energy_value"
 
 # ----------------------------------------------------------------------
 # Movement directions

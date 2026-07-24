@@ -1,5 +1,7 @@
 from text_adventure_games import games, things, actions, blocks
 from text_adventure_games.npc import make_hybrid_behavior
+#import consume in order to override eat 
+from text_adventure_games.actions import consume
 
 
 class ActionCastle(games.Game):
@@ -29,6 +31,65 @@ class ActionCastle(games.Game):
 
 
 # Actions
+#check energy action added to check in game energy
+class Set_energy(actions.Action):
+    ACTION_NAME  = "energy mode"
+    ACTION_DESCRIPTION = "test out energy"
+    ACTION_ALIASES = ["em"]
+    FREE_ACTION = True
+
+    def __init__(self, game,command, actor=None):
+        super().__init__(game, actor = actor)
+        self.character = self.acting_character(command=command)
+    
+    def check_preconditions(self):
+        if not self.was_matched(self.character):
+            return False
+        return True
+    
+    def apply_effects(self):
+        char = self.character
+        char.set_property("energy",50)
+        energy = char.get_property("energy")
+        self.parser.ok(f"{energy} is your energy level")
+
+#check energy action added to check in game energy
+class Check_energy(actions.Action):
+    ACTION_NAME  = "show energy"
+    ACTION_DESCRIPTION = "check how energetic you are"
+    ACTION_ALIASES = ["satiated","hungry"]
+    FREE_ACTION = True
+
+    def __init__(self, game,command, actor=None):
+        super().__init__(game, actor = actor)
+        self.character = self.acting_character(command=command) # why need command? what is command?
+    
+    def check_preconditions(self):
+        if not self.was_matched(self.character):
+            return False
+        return True
+    
+    def apply_effects(self):
+        char = self.character
+        energy = char.get_property("energy")
+        self.parser.ok(f"{energy} is your energy level")
+
+#override main eat method
+class Eat(consume.Eat):
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, command, actor)
+        self.character = self.acting_character(command=command)
+    def check_preconditions(self):
+        return super().check_preconditions()
+    def apply_effects(self):
+        energy_level = self.item.get_property("energy_value")
+        curr_energy = self.character.get_property("energy") 
+        self.character.set_property("energy", min(100, curr_energy + energy_level))
+        super().apply_effects()
+        
+        
+    
+
 class Unlock_Door(actions.Action):
     ACTION_NAME = "unlock door"
     ACTION_DESCRIPTION = "Unlock a door with a key"
@@ -126,6 +187,7 @@ class Read_Runes(actions.Action):
             "Nothing happens. Perhaps if you light the candle first?",
         ):
             return False
+        #add condition - needs to be well nourshed to read
         return True
 
     def apply_effects(self):
@@ -154,6 +216,9 @@ class Read_Runes(actions.Action):
         self.parser.ok(description)
         # remove the ghost from the scene
         self.ghost.location.remove_character(self.ghost)
+        #this action costs 5 energy points
+        curr_energy = self.character.get_property("energy")
+        self.character.set_property("energy",curr_energy - 5)
 
 
 class Propose(actions.Action):
@@ -678,6 +743,11 @@ def make_ghost_behavior():
 def build_game(llm_client=None, embedding_client=None) -> ActionCastle:
     # Locations
     cottage = things.Location("Cottage", "You are standing in a small cottage.")
+    #Test 1 - Eat in action castle - Testing eat food in garden
+    garden = things.Location(
+            "Garden", 
+           " You are standing on a garden full of food"
+    )
     garden_path = things.Location(
         "Garden Path",
         "You are standing on a lush garden path. There is a cottage here.",
@@ -722,6 +792,7 @@ def build_game(llm_client=None, embedding_client=None) -> ActionCastle:
 
     # Map of Locations
     cottage.add_connection("out", garden_path)
+    garden_path.add_connection("east",garden) # garden full of food
     garden_path.add_connection("south", fishing_pond)
     garden_path.add_connection("north", winding_path)
     winding_path.add_connection("up", top_of_tree)
@@ -736,6 +807,7 @@ def build_game(llm_client=None, embedding_client=None) -> ActionCastle:
     feasting_hall.add_connection("east", throne_room)
 
     # Gettable Items
+
     fishing_pole = things.Item(
         "pole",
         "a fishing pole",
@@ -757,6 +829,16 @@ def build_game(llm_client=None, embedding_client=None) -> ActionCastle:
         "break_text", "You snap the stout dead branch free of the tree and take it."
     )
     branch.add_command_hint("break branch")
+    # add some food in the garden
+   
+    #food nr 1 bread
+    bread = things.Item("bread", "a delicious loaf of broad", "It would go so well with some fish")
+    bread.set_property("edible",True)
+    bread.set_property("energy_value",20)
+    #food nr 2 tuna
+    tuna = things.Item("tuna","a delicous tin of tuna", "It would go well with some bread")
+    tuna.set_property("edible",True)
+    tuna.set_property("energy_value",40)
 
     candle = things.Item(
         "candle",
@@ -772,6 +854,8 @@ def build_game(llm_client=None, embedding_client=None) -> ActionCastle:
     cottage.add_item(fishing_pole)
     top_of_tree.add_item(branch)
     feasting_hall.add_item(candle)
+    garden.add_item(tuna)
+    garden.add_item(bread)
 
     # Sceneary Items
     pond = things.Item(
@@ -943,6 +1027,9 @@ def build_game(llm_client=None, embedding_client=None) -> ActionCastle:
         Threaten,
         Haunt,
         Ghost_Touch,
+        Check_energy,
+        Set_energy,
+        Eat
     ]
     game = ActionCastle(cottage, player, characters, custom_actions)
     return game

@@ -50,6 +50,13 @@ class Eat(base.Action):
         """
         self.character.discard_item(self.item)
         self.character.set_property(Property.IS_HUNGRY, False)
+
+        # TODO - your code here
+        # Restore the character's energy from the item's "energy_value"
+        # property (set on food items, e.g. bread.set_property("energy_value", 30)),
+        # capped so it never exceeds MAX_ENERGY (see things/characters.py).
+        # Look at how IS_HUNGRY is cleared just above for the get/set_property pattern.
+
         description = "{name} {verb} the {food}.".format(
             name=self.character.name.capitalize(),
             verb=_conj(self.character, "eat", "eats"),
