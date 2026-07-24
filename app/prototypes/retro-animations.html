@@ -1122,6 +1122,14 @@
   </section>
 
   <section>
+    <div class="slate"><h2>33 — THE ULFIRE LANTERN (phone)</h2><span class="kind">LITHO / PHONE TWIN</span></div>
+    <div class="screen">
+      <svg id="ulfire-m" viewBox="0 0 640 720" aria-label="33 — THE ULFIRE LANTERN (phone)"></svg>
+    </div>
+    <p class="spec">Phone twin of ulfire: the ulfire lantern, big.</p>
+  </section>
+
+  <section>
     <div class="slate"><h2>33-B &mdash; THE ULFIRE LANTERN, UNLIT</h2><span class="kind">LITHO / EXOTICA</span></div>
     <div class="screen">
       <svg id="ulfire-u" viewBox="0 0 640 360" aria-label="The ulfire lantern, unlit"></svg>
@@ -1130,6 +1138,14 @@
        left, but cold -- no flame, no glow, no ray -- and the slab beside it stays SOLID
        and still, its interior hidden, because nothing shines through it.
        <span class="attach">Attaches: EXAMINE / GET the lantern while unlit; DOUSE ULFIRE LANTERN.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>33-B — THE ULFIRE LANTERN, UNLIT (phone)</h2><span class="kind">LITHO / PHONE TWIN</span></div>
+    <div class="screen">
+      <svg id="ulfire-u-m" viewBox="0 0 640 720" aria-label="33-B — THE ULFIRE LANTERN, UNLIT (phone)"></svg>
+    </div>
+    <p class="spec">Phone twin of ulfire-u: the ulfire lantern, big.</p>
   </section>
 
   <section>
@@ -2236,6 +2252,65 @@
       });
       (cfg.callouts || []).slice(0, 4).forEach((c, i) => typeOn(calls[i], c, T, 40 + i * 14, 1.6));
       foots.forEach((ft, i) => typeOn(ft.n, ft.f, T, 130 + i * 20, 1.7));
+    });
+  }
+
+  // the ulfire lantern x-raying a slab, phone layout -- shared by ulfire/-u-m.
+  // cfg = { key, header, lit, callouts, footer }
+  function ulfireCardM(svg, cfg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 24, PH_BRIGHT);
+    const SD = stipple(svg, "dots-" + cfg.key, PH, 1);
+    el(svg, "rect", { x: 150, y: 130, width: 340, height: 380, fill: SD, stroke: PH, "stroke-width": 2.4 });
+    // the interior anatomy (only meaningful when the beam is lit)
+    let coffin = null, mystic = null;
+    if (cfg.lit) {
+      const gi = el(svg, "g", { opacity: .22 });
+      el(gi, "polyline", { fill: "none", stroke: FUNGUS, "stroke-width": 2,
+        points: "320,150 300,220 336,300 306,380 326,470" });      // the fungal channel
+      coffin = el(gi, "ellipse", { cx: 320, cy: 452, rx: 40, ry: 30, fill: "none", stroke: PH, "stroke-width": 2 });
+      mystic = el(gi, "path", { fill: "none", stroke: PH, "stroke-width": 2, d: "M 286 232 Q 320 176 354 232 Z" });
+      el(gi, "circle", { cx: 320, cy: 214, r: 9, fill: PH_BRIGHT });
+    }
+    // the held lantern, low-left
+    const lant = el(svg, "g", { transform: "translate(96 452)" });
+    el(lant, "path", { fill: "none", stroke: PH, "stroke-width": 2, d: "M -22 60 L -16 6 L 16 6 L 22 60 Z" });
+    el(lant, "rect", { x: -18, y: 0, width: 36, height: 8, fill: "none", stroke: PH });
+    el(lant, "line", { x1: 0, y1: -14, x2: 0, y2: 0, stroke: PH });
+    const flame = cfg.lit ? el(lant, "polygon", { points: "-6,28 0,10 6,28", fill: "#dff2ff" })
+      : el(lant, "line", { x1: 0, y1: 30, x2: 0, y2: 22, stroke: PH_DIM, "stroke-width": 2 });
+    let cone = null, band = null;
+    const HUES = ["#ff5a5a", "#ff9a3c", "#ffd76a", "#4ee0a8", "#4db8ff", "#a06aff"];
+    if (cfg.lit) {
+      cone = el(svg, "polygon", { fill: "none", "stroke-width": 1.6, opacity: .5,
+        points: "104,460 150,150 490,150 490,510 150,510" });
+      band = el(svg, "rect", { y: 130, height: 380, width: 64, fill: PH_BRIGHT, opacity: .1 });
+    }
+    const calls = (cfg.callouts || []).slice(0, 3).map((c, i) => label(svg, 40, 590 + i * 30, 16, PH_DIM));
+    const fw = cfg.footer, cut = fw.length > 34 ? fw.lastIndexOf(" ", 34) : -1;
+    const fL1 = cut > 0 ? fw.slice(0, cut) : fw, fL2 = cut > 0 ? fw.slice(cut + 1) : "";
+    const foot1 = label(svg, 320, 690, 21, FUNGUS); foot1.setAttribute("text-anchor", "middle");
+    const foot2 = label(svg, 320, 690, 21, FUNGUS); foot2.setAttribute("text-anchor", "middle");
+    if (fL2) { foot1.setAttribute("y", 668); }
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 220;
+      doWipe(T);
+      typeOn(hdr, cfg.header, T, 4, 1.2);
+      if (cfg.lit) {
+        const hue = HUES[Math.floor(t / 6) % HUES.length];
+        cone.setAttribute("stroke", hue);
+        flame.setAttribute("fill", hue);
+        const bx = 150 + ((t * 5) % 340) - 32;
+        band.setAttribute("x", bx); band.setAttribute("fill", hue);
+        const near = 1 - Math.min(1, Math.abs(bx + 32 - 320) / 130);
+        if (coffin) coffin.setAttribute("stroke", near > .5 ? PH_BRIGHT : PH);
+        if (mystic) mystic.setAttribute("stroke", near > .5 ? PH_BRIGHT : PH);
+      }
+      (cfg.callouts || []).slice(0, 3).forEach((c, i) => typeOn(calls[i], c, T, 40 + i * 16, 1.6));
+      typeOn(foot1, fL1, T, 150, 1.7);
+      typeOn(foot2, fL2, T, 150 + fL1.length, 1.7);
     });
   }
 
@@ -9118,6 +9193,18 @@
   {
     const svg = document.getElementById("tank-f-m");
     tankCardM(svg, { key: "tank-f-m", header: "THE TANK, DECANTED", state: "decanted", callouts: [], footers: ["THE KENNEL, DECANTED."] });
+  }
+
+  /* ---------------- ulfire-m (phone twin) ---------------- */
+  {
+    const svg = document.getElementById("ulfire-m");
+    ulfireCardM(svg, { key: "ulfire-m", header: "THE ULFIRE LANTERN", lit: true, callouts: ["ROOT: THE COFFIN", "SUMMIT: THE MYSTIC", "WHERE IT SHINES, STONE FORGETS TO BE SOLID"], footer: "LEAD WOULD STOP IT. THE TOMB DID NOT THINK OF THAT." });
+  }
+
+  /* ---------------- ulfire-u-m (phone twin) ---------------- */
+  {
+    const svg = document.getElementById("ulfire-u-m");
+    ulfireCardM(svg, { key: "ulfire-u-m", header: "THE ULFIRE LANTERN (UNLIT)", lit: false, callouts: [], footer: "UNLIT, THE STONE KEEPS ITS SECRETS." });
   }
 
 })();
