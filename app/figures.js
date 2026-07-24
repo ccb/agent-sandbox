@@ -10,7 +10,7 @@
    and disconnected nodes drop off the clock automatically. */
 (() => {
   "use strict";
-  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-c-m": ["svg", 640, 720], "autarch-e": ["svg", 640, 420], "autarch-e-m": ["svg", 640, 720], "autarch-m": ["svg", 640, 720], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "bats-c-m": ["svg", 640, 720], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "canopic-c-m": ["svg", 640, 720], "centipede": ["svg", 640, 360], "centipede-m": ["svg", 640, 720], "chimney-f": ["svg", 640, 360], "chimney-f-m": ["svg", 640, 720], "chimney-g": ["svg", 640, 360], "chimney-g-m": ["svg", 640, 720], "chimney-h": ["svg", 640, 360], "chimney-h-m": ["svg", 640, 720], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-a-m": ["svg", 640, 720], "cyl-c": ["svg", 640, 400], "cyl-c-m": ["svg", 640, 720], "cyl-o": ["svg", 640, 400], "cyl-o-m": ["svg", 640, 720], "cyl-v": ["svg", 640, 400], "cyl-v-m": ["svg", 640, 720], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "cylinders-b-m": ["svg", 640, 720], "cylinders-m": ["svg", 640, 720], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-baboon-m": ["svg", 640, 720], "jar-falcon": ["svg", 640, 300], "jar-falcon-m": ["svg", 640, 720], "jar-human": ["svg", 640, 300], "jar-human-m": ["svg", 640, 720], "jar-jackal": ["svg", 640, 300], "jar-jackal-m": ["svg", 640, 720], "jar-mantis": ["svg", 640, 300], "jar-mantis-m": ["svg", 640, 720], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-b-m": ["svg", 640, 720], "sphere-d": ["svg", 640, 420], "sphere-d-m": ["svg", 640, 720], "sphere-e": ["svg", 640, 420], "sphere-e-m": ["svg", 640, 720], "sphere-f": ["svg", 640, 420], "sphere-f-m": ["svg", 640, 720], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
+  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-c-m": ["svg", 640, 720], "autarch-e": ["svg", 640, 420], "autarch-e-m": ["svg", 640, 720], "autarch-m": ["svg", 640, 720], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "bats-c-m": ["svg", 640, 720], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "canopic-c-m": ["svg", 640, 720], "centipede": ["svg", 640, 360], "centipede-m": ["svg", 640, 720], "chimney-f": ["svg", 640, 360], "chimney-f-m": ["svg", 640, 720], "chimney-g": ["svg", 640, 360], "chimney-g-m": ["svg", 640, 720], "chimney-h": ["svg", 640, 360], "chimney-h-m": ["svg", 640, 720], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-a-m": ["svg", 640, 720], "cyl-c": ["svg", 640, 400], "cyl-c-m": ["svg", 640, 720], "cyl-o": ["svg", 640, 400], "cyl-o-m": ["svg", 640, 720], "cyl-v": ["svg", 640, 400], "cyl-v-m": ["svg", 640, 720], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "cylinders-b-m": ["svg", 640, 720], "cylinders-m": ["svg", 640, 720], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-baboon-m": ["svg", 640, 720], "jar-falcon": ["svg", 640, 300], "jar-falcon-m": ["svg", 640, 720], "jar-human": ["svg", 640, 300], "jar-human-m": ["svg", 640, 720], "jar-jackal": ["svg", 640, 300], "jar-jackal-m": ["svg", 640, 720], "jar-mantis": ["svg", 640, 300], "jar-mantis-m": ["svg", 640, 720], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-b-m": ["svg", 640, 720], "mystic-c": ["svg", 640, 400], "mystic-c-m": ["svg", 640, 720], "mystic-f": ["svg", 640, 400], "mystic-f-m": ["svg", 640, 720], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-b-m": ["svg", 640, 720], "sphere-d": ["svg", 640, 420], "sphere-d-m": ["svg", 640, 720], "sphere-e": ["svg", 640, 420], "sphere-e-m": ["svg", 640, 720], "sphere-f": ["svg", 640, 420], "sphere-f-m": ["svg", 640, 720], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
   const FIG = {
     _defs: {}, _uid: 0, _ticks: [], _timer: null, _target: null,
     MAX_LIVE: 3,
@@ -648,6 +648,80 @@
       (cfg.callouts || []).slice(0, 3).forEach((c, i) => typeOn(calls[i], c, T, 40 + i * 16, 1.6));
       typeOn(foot1, fL1, T, 150, 1.7);
       typeOn(foot2, fL2, T, 150 + fL1.length, 1.7);
+    });
+  }
+
+  // the ossified mystic, phone layout -- shared by mystic-b/c/f-m.
+  // cfg = { key, header, state:'gifted'|'burned'|'ash', footer }
+  function mysticCardM(svg, cfg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 24, PH_BRIGHT);
+    const MD = stipple(svg, "dots-" + cfg.key, PH, .9);
+    const ash = cfg.state === "ash", burned = cfg.state !== "gifted";
+    const FCOL = ash ? "#5a3a1e" : burned ? "#7a4a24" : FUNGUS;
+    // the standing stones flanking
+    [[110, 520], [530, 520]].forEach(([x, y]) =>
+      el(svg, "polygon", { fill: MD, stroke: PH, "stroke-width": 1.6,
+        points: `${x - 22},${y} ${x + 22},${y} ${x + 14},${y - 120} ${x - 14},${y - 108}` }));
+    // the robe mound
+    el(svg, "path", { fill: MD, stroke: PH, "stroke-width": 2.4, d:
+      "M 150 520 Q 168 360 250 296 Q 300 262 360 296 Q 452 356 470 520 Z" });
+    el(svg, "path", { d: "M 240 480 Q 268 400 258 340", fill: "none", stroke: PH_DIM });
+    el(svg, "path", { d: "M 372 486 Q 360 404 372 348", fill: "none", stroke: PH_DIM });
+    // the great eye with its lash crown
+    const EX = 310, EY = 300;
+    for (let i = 0; i < 9; i++) {
+      const a = -Math.PI * (.18 + i * .08);
+      el(svg, "polygon", { fill: PH, stroke: PH, "stroke-width": 1, points:
+        `${EX + Math.cos(a) * 50},${EY + Math.sin(a) * 50} ` +
+        `${EX + Math.cos(a + .04) * (74 + (i % 2) * 12)},${EY + Math.sin(a + .04) * (74 + (i % 2) * 12)} ` +
+        `${EX + Math.cos(a + .1) * 50},${EY + Math.sin(a + .1) * 50}` });
+    }
+    el(svg, "circle", { cx: EX, cy: EY, r: 46, fill: BG, stroke: PH, "stroke-width": 2 });
+    const iris = el(svg, "circle", { cx: EX, cy: EY, r: 20, fill: "none", stroke: PH, "stroke-width": 1.6 });
+    const pupil = el(svg, "circle", { cx: EX, cy: EY, r: 8, fill: ash ? PH_DIM : PH_BRIGHT });
+    // the fronds, bound to the flue at right
+    const fronds = Array.from({ length: 5 }, (_, i) =>
+      ({ q: el(svg, "polyline", { fill: "none", stroke: FCOL, "stroke-width": 2.2 }), i }));
+    // the psychic bolt + floating geometry (gone once burned out)
+    const ZAG = [[EX + 40, EY - 30], [EX + 90, EY - 70], [EX + 74, EY - 110],
+      [EX + 150, EY - 120], [EX + 130, EY - 170], [EX + 210, EY - 180]];
+    let bolt = null; const shapes = [];
+    if (!ash) {
+      bolt = el(svg, "polyline", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 2,
+        points: ZAG.map(p => p.join(",")).join(" ") });
+      [[EX + 150, EY - 150, "polygon"], [EX + 210, EY - 190, "rect"], [EX + 110, EY - 120, "circle"]]
+        .forEach(([x, y]) => shapes.push(el(svg, "circle", { cx: x, cy: y, r: 8, fill: "none",
+          stroke: PH_BRIGHT, "stroke-width": 1.4 })));
+    }
+    const fw = cfg.footer, cut = fw.length > 34 ? fw.lastIndexOf(" ", 34) : -1;
+    const fL1 = cut > 0 ? fw.slice(0, cut) : fw, fL2 = cut > 0 ? fw.slice(cut + 1) : "";
+    const foot1 = label(svg, 320, 626, 22, FUNGUS); foot1.setAttribute("text-anchor", "middle");
+    const foot2 = label(svg, 320, 658, 22, FUNGUS); foot2.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 200;
+      doWipe(T);
+      typeOn(hdr, cfg.header, T, 4, 1.2);
+      const look = ash ? 0 : Math.sin(t * .05) * 8;         // the eye considers
+      pupil.setAttribute("cx", EX + look);
+      pupil.setAttribute("opacity", ash ? .4 : 1);
+      fronds.forEach(fr => {
+        const bx = 470 + fr.i * 6, pts = [[bx, 360]];
+        for (let q = 1; q <= 4; q++) {
+          const sway = (ash ? .5 : burned ? 1.5 : 5) * Math.sin(t * .1 + q + fr.i);
+          pts.push([bx + sway - q * 3, 360 - q * (ash ? 8 : 16)]);
+        }
+        fr.q.setAttribute("points", pts.map(p => p.join(",")).join(" "));
+      });
+      if (bolt) bolt.setAttribute("opacity", cfg.state === "burned"
+        ? Math.max(0, 1 - (t % 120) / 120) : .6 + Math.abs(Math.sin(t * .3)) * .4);
+      shapes.forEach((s, i) => { const rise = cfg.state === "burned" ? (t % 120) * 1.2 : Math.sin(t * .1 + i) * 6;
+        s.setAttribute("transform", `translate(0 ${-rise})`);
+        s.setAttribute("opacity", cfg.state === "burned" ? Math.max(0, 1 - (t % 120) / 120) : .8); });
+      typeOn(foot1, fL1, T, 130, 1.6);
+      typeOn(foot2, fL2, T, 130 + fL1.length, 1.6);
     });
   }
 
@@ -7368,6 +7442,21 @@
   /* ---------------- sphere-f-m (phone twin) ---------------- */
   FIG._define("sphere-f-m", "svg", function (svg) {
     sphereCardM(svg, { key: "sphere-f-m", header: "BURIAL SPHERE OF NASSAK AN-RAH", state: "shatter-tenant", gauge: "THE CHURN", callouts: ["TENANT: OUT", "SHARDS: SIX, SPINNING OUTWARD", "THROAT: THE FUNGUS STILL COMES DOWN IT"], footer: "IT MINDED." });
+  });
+
+  /* ---------------- mystic-b-m (phone twin) ---------------- */
+  FIG._define("mystic-b-m", "svg", function (svg) {
+    mysticCardM(svg, { key: "mystic-b-m", header: "THE OSSIFIED MYSTIC, GIFTED", state: "gifted", footer: "THE GIFT DID NOT EXPIRE WITH HIM." });
+  });
+
+  /* ---------------- mystic-c-m (phone twin) ---------------- */
+  FIG._define("mystic-c-m", "svg", function (svg) {
+    mysticCardM(svg, { key: "mystic-c-m", header: "THE OSSIFIED MYSTIC, BURNED", state: "burned", footer: "THE GIFT EXPIRED AFTER ALL." });
+  });
+
+  /* ---------------- mystic-f-m (phone twin) ---------------- */
+  FIG._define("mystic-f-m", "svg", function (svg) {
+    mysticCardM(svg, { key: "mystic-f-m", header: "THE OSSIFIED MYSTIC, BURNED OUT", state: "ash", footer: "NOTHING LEFT TO GIVE." });
   });
 
 })();

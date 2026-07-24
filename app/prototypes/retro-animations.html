@@ -908,6 +908,14 @@
   </section>
 
   <section>
+    <div class="slate"><h2>19-B — THE OSSIFIED MYSTIC, GIFTED (phone)</h2><span class="kind">LITHO / PHONE TWIN</span></div>
+    <div class="screen">
+      <svg id="mystic-b-m" viewBox="0 0 640 720" aria-label="19-B — THE OSSIFIED MYSTIC, GIFTED (phone)"></svg>
+    </div>
+    <p class="spec">Phone twin of mystic-b: the ossified mystic, big.</p>
+  </section>
+
+  <section>
     <div class="slate"><h2>19-C &mdash; THE OSSIFIED MYSTIC, BURNED</h2><span class="kind">LITHO / THE SUMMIT</span></div>
     <div class="screen">
       <svg id="mystic-c" viewBox="0 0 640 400" aria-label="The ossified mystic, burned"></svg>
@@ -923,6 +931,14 @@
   </section>
 
   <section>
+    <div class="slate"><h2>19-C — THE OSSIFIED MYSTIC, BURNED (phone)</h2><span class="kind">LITHO / PHONE TWIN</span></div>
+    <div class="screen">
+      <svg id="mystic-c-m" viewBox="0 0 640 720" aria-label="19-C — THE OSSIFIED MYSTIC, BURNED (phone)"></svg>
+    </div>
+    <p class="spec">Phone twin of mystic-c: the ossified mystic, big.</p>
+  </section>
+
+  <section>
     <div class="slate"><h2>19-F &mdash; THE OSSIFIED MYSTIC, BURNED OUT</h2><span class="kind">LITHO / THE SUMMIT</span></div>
     <div class="screen">
       <svg id="mystic-f" viewBox="0 0 640 400" aria-label="The ossified mystic, burned out"></svg>
@@ -933,6 +949,14 @@
        habit. The eye holds one fixed stare, with nothing left to hand out.
        <span class="attach">Attaches: the Summit and EXAMINE MYSTIC, after the burn (or
        once the fungus is purged) &mdash; replaces 19-B.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>19-F — THE OSSIFIED MYSTIC, BURNED OUT (phone)</h2><span class="kind">LITHO / PHONE TWIN</span></div>
+    <div class="screen">
+      <svg id="mystic-f-m" viewBox="0 0 640 720" aria-label="19-F — THE OSSIFIED MYSTIC, BURNED OUT (phone)"></svg>
+    </div>
+    <p class="spec">Phone twin of mystic-f: the ossified mystic, big.</p>
   </section>
 
   <section>
@@ -1848,6 +1872,80 @@
       (cfg.callouts || []).slice(0, 3).forEach((c, i) => typeOn(calls[i], c, T, 40 + i * 16, 1.6));
       typeOn(foot1, fL1, T, 150, 1.7);
       typeOn(foot2, fL2, T, 150 + fL1.length, 1.7);
+    });
+  }
+
+  // the ossified mystic, phone layout -- shared by mystic-b/c/f-m.
+  // cfg = { key, header, state:'gifted'|'burned'|'ash', footer }
+  function mysticCardM(svg, cfg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 24, PH_BRIGHT);
+    const MD = stipple(svg, "dots-" + cfg.key, PH, .9);
+    const ash = cfg.state === "ash", burned = cfg.state !== "gifted";
+    const FCOL = ash ? "#5a3a1e" : burned ? "#7a4a24" : FUNGUS;
+    // the standing stones flanking
+    [[110, 520], [530, 520]].forEach(([x, y]) =>
+      el(svg, "polygon", { fill: MD, stroke: PH, "stroke-width": 1.6,
+        points: `${x - 22},${y} ${x + 22},${y} ${x + 14},${y - 120} ${x - 14},${y - 108}` }));
+    // the robe mound
+    el(svg, "path", { fill: MD, stroke: PH, "stroke-width": 2.4, d:
+      "M 150 520 Q 168 360 250 296 Q 300 262 360 296 Q 452 356 470 520 Z" });
+    el(svg, "path", { d: "M 240 480 Q 268 400 258 340", fill: "none", stroke: PH_DIM });
+    el(svg, "path", { d: "M 372 486 Q 360 404 372 348", fill: "none", stroke: PH_DIM });
+    // the great eye with its lash crown
+    const EX = 310, EY = 300;
+    for (let i = 0; i < 9; i++) {
+      const a = -Math.PI * (.18 + i * .08);
+      el(svg, "polygon", { fill: PH, stroke: PH, "stroke-width": 1, points:
+        `${EX + Math.cos(a) * 50},${EY + Math.sin(a) * 50} ` +
+        `${EX + Math.cos(a + .04) * (74 + (i % 2) * 12)},${EY + Math.sin(a + .04) * (74 + (i % 2) * 12)} ` +
+        `${EX + Math.cos(a + .1) * 50},${EY + Math.sin(a + .1) * 50}` });
+    }
+    el(svg, "circle", { cx: EX, cy: EY, r: 46, fill: BG, stroke: PH, "stroke-width": 2 });
+    const iris = el(svg, "circle", { cx: EX, cy: EY, r: 20, fill: "none", stroke: PH, "stroke-width": 1.6 });
+    const pupil = el(svg, "circle", { cx: EX, cy: EY, r: 8, fill: ash ? PH_DIM : PH_BRIGHT });
+    // the fronds, bound to the flue at right
+    const fronds = Array.from({ length: 5 }, (_, i) =>
+      ({ q: el(svg, "polyline", { fill: "none", stroke: FCOL, "stroke-width": 2.2 }), i }));
+    // the psychic bolt + floating geometry (gone once burned out)
+    const ZAG = [[EX + 40, EY - 30], [EX + 90, EY - 70], [EX + 74, EY - 110],
+      [EX + 150, EY - 120], [EX + 130, EY - 170], [EX + 210, EY - 180]];
+    let bolt = null; const shapes = [];
+    if (!ash) {
+      bolt = el(svg, "polyline", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 2,
+        points: ZAG.map(p => p.join(",")).join(" ") });
+      [[EX + 150, EY - 150, "polygon"], [EX + 210, EY - 190, "rect"], [EX + 110, EY - 120, "circle"]]
+        .forEach(([x, y]) => shapes.push(el(svg, "circle", { cx: x, cy: y, r: 8, fill: "none",
+          stroke: PH_BRIGHT, "stroke-width": 1.4 })));
+    }
+    const fw = cfg.footer, cut = fw.length > 34 ? fw.lastIndexOf(" ", 34) : -1;
+    const fL1 = cut > 0 ? fw.slice(0, cut) : fw, fL2 = cut > 0 ? fw.slice(cut + 1) : "";
+    const foot1 = label(svg, 320, 626, 22, FUNGUS); foot1.setAttribute("text-anchor", "middle");
+    const foot2 = label(svg, 320, 658, 22, FUNGUS); foot2.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 200;
+      doWipe(T);
+      typeOn(hdr, cfg.header, T, 4, 1.2);
+      const look = ash ? 0 : Math.sin(t * .05) * 8;         // the eye considers
+      pupil.setAttribute("cx", EX + look);
+      pupil.setAttribute("opacity", ash ? .4 : 1);
+      fronds.forEach(fr => {
+        const bx = 470 + fr.i * 6, pts = [[bx, 360]];
+        for (let q = 1; q <= 4; q++) {
+          const sway = (ash ? .5 : burned ? 1.5 : 5) * Math.sin(t * .1 + q + fr.i);
+          pts.push([bx + sway - q * 3, 360 - q * (ash ? 8 : 16)]);
+        }
+        fr.q.setAttribute("points", pts.map(p => p.join(",")).join(" "));
+      });
+      if (bolt) bolt.setAttribute("opacity", cfg.state === "burned"
+        ? Math.max(0, 1 - (t % 120) / 120) : .6 + Math.abs(Math.sin(t * .3)) * .4);
+      shapes.forEach((s, i) => { const rise = cfg.state === "burned" ? (t % 120) * 1.2 : Math.sin(t * .1 + i) * 6;
+        s.setAttribute("transform", `translate(0 ${-rise})`);
+        s.setAttribute("opacity", cfg.state === "burned" ? Math.max(0, 1 - (t % 120) / 120) : .8); });
+      typeOn(foot1, fL1, T, 130, 1.6);
+      typeOn(foot2, fL2, T, 130 + fL1.length, 1.6);
     });
   }
 
@@ -8652,6 +8750,24 @@
   {
     const svg = document.getElementById("sphere-f-m");
     sphereCardM(svg, { key: "sphere-f-m", header: "BURIAL SPHERE OF NASSAK AN-RAH", state: "shatter-tenant", gauge: "THE CHURN", callouts: ["TENANT: OUT", "SHARDS: SIX, SPINNING OUTWARD", "THROAT: THE FUNGUS STILL COMES DOWN IT"], footer: "IT MINDED." });
+  }
+
+  /* ---------------- mystic-b-m (phone twin) ---------------- */
+  {
+    const svg = document.getElementById("mystic-b-m");
+    mysticCardM(svg, { key: "mystic-b-m", header: "THE OSSIFIED MYSTIC, GIFTED", state: "gifted", footer: "THE GIFT DID NOT EXPIRE WITH HIM." });
+  }
+
+  /* ---------------- mystic-c-m (phone twin) ---------------- */
+  {
+    const svg = document.getElementById("mystic-c-m");
+    mysticCardM(svg, { key: "mystic-c-m", header: "THE OSSIFIED MYSTIC, BURNED", state: "burned", footer: "THE GIFT EXPIRED AFTER ALL." });
+  }
+
+  /* ---------------- mystic-f-m (phone twin) ---------------- */
+  {
+    const svg = document.getElementById("mystic-f-m");
+    mysticCardM(svg, { key: "mystic-f-m", header: "THE OSSIFIED MYSTIC, BURNED OUT", state: "ash", footer: "NOTHING LEFT TO GIVE." });
   }
 
 })();
