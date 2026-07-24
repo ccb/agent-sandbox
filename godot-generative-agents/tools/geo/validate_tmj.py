@@ -160,10 +160,10 @@ def catalog_wall_gids(world: World) -> set[int]:
     tilesets are plain sheet images with no per-tile class metadata), so it is
     the tileset-level wall identity #643 asks for: a wall tile is wall art no
     matter which layer it is painted on. Entries resolve against the map's OWN
-    tilesets (name -> firstgid/columns) rather than furnish_building's pinned
-    firstgids, so the set is right even where the two disagree (the committed
-    map predates the expansion-sheet pinning); sheets the map does not embed
-    are skipped, so catalog-free fixture maps get an empty set."""
+    tilesets (name -> firstgid/columns) — the same source of truth
+    furnish_building.bind_sheet_firstgids() now uses, since #746 removed the
+    drifted pinned firstgids; sheets the map does not embed are skipped, so
+    catalog-free fixture maps get an empty set."""
     by_name = {
         ts["name"]: ts for ts in world.tilesets if "firstgid" in ts and "columns" in ts
     }
