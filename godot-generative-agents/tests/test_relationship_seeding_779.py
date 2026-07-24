@@ -79,9 +79,10 @@ def test_both_ends_of_an_edge_hold_it(rivals):
 
 
 def test_the_seeded_text_is_pinned(rivals):
-    # Pins relationship_memory.prompty's exact render, including the raw
-    # apostrophes/double-dashes Jinja autoescaping would have mangled (the
-    # escaping guard prompt_templates/README.md points at for this template).
+    # Pins relationship_memory.prompty's exact render against a real persona
+    # file: the label form, both optional clauses present, single spaces, no
+    # stray colon. (Raw-vs-HTML-escaped output is guarded separately below --
+    # this authored text happens to contain nothing autoescaping would touch.)
     assert _seeded(rivals["Omar Haddad"])[0].text == (
         "I know Bethany Cole: rivals. We know each other a little. "
         "Omar and Bethany are the two front-runners for student body president "
@@ -128,3 +129,22 @@ def test_a_bare_edge_renders_cleanly():
     # 1..5 contributes no sentence -- no stray colons or double spaces.
     bare = [{"a": "Ana", "b": "Bo", "kind": "", "closeness": 0, "description": ""}]
     assert seed.relationship_statements("Ana", bare) == ["I know Bo."]
+
+
+def test_punctuation_reaches_memory_raw():
+    # The escaping guard prompt_templates/README.md points at for this template:
+    # Jinja autoescaping is off, so `&` and `'` must arrive as themselves. The
+    # library's compound kinds ("TA & student", "reporter & source") and
+    # possessive descriptions would otherwise reach the model as &amp; / &#39;.
+    edge = [
+        {
+            "a": "Ana",
+            "b": "Bo",
+            "kind": "TA & student",
+            "closeness": 3,
+            "description": "Bo is Ana's advisee.",
+        }
+    ]
+    assert seed.relationship_statements("Ana", edge) == [
+        "I know Bo: TA & student. We know each other fairly well. Bo is Ana's advisee."
+    ]

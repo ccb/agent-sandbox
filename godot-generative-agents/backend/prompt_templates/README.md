@@ -70,7 +70,7 @@ Smallville/Penn templates is pinned by the memory tests in
 `godot-generative-agents/tests/test_boil_water.py` and
 `godot-generative-agents/tests/test_book_loop_616.py` (`remember_outcome`'s
 `reflection` renders), which guard this escaping behavior for this package.
-`relationship_memory`'s by `godot-generative-agents/tests/test_relationship_seeding_779.py`;
 `decide_context`'s exact output is pinned by `godot-generative-agents/tests/test_decide_context.py`;
 `nearby_affordances`'s by `godot-generative-agents/tests/test_affordance_wiring_613.py`;
+`relationship_memory`'s by `godot-generative-agents/tests/test_relationship_seeding_779.py`;
 `believability_rubric`'s by `godot-generative-agents/tests/test_believability_eval.py`.
