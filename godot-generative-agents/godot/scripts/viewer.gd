@@ -892,7 +892,8 @@ func _apply_record(rec: Variant) -> void:
 	# A newer backend's record kind (a #371 conversation, ...) is still
 	# fail-soft-dropped, but leaves a one-shot breadcrumb so version drift
 	# isn't invisible (#638). `wish` (#622) known as of #625; `intervention`
-	# (a human touching the run, #369) as of #687.
+	# (a human touching the run, #369) as of #687; `deciding` (the per-agent
+	# thinking lifecycle, #551) as of #756.
 	if not PayloadGuards.is_known_kind(kind) and not _warned_feed_kinds.has(kind):
 		_warned_feed_kinds[kind] = true
 		push_warning(
