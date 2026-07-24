@@ -136,8 +136,9 @@ class Location(Thing):
         instance.move_verbs = data.get("move_verbs", {})
         # The skeleton keeps blocks as primitive dicts; Game.from_primitive
         # rebuilds them into Block instances once every location, item, and
-        # character exists (its third pass, issue #744).
-        instance.blocks = data["blocks"]
+        # character exists (its third pass, issue #744). Copied so rebuilding
+        # doesn't write Block instances back into the caller's data.
+        instance.blocks = dict(data["blocks"])
         instance.connections = data["connections"]
         instance.items = {k: Item.from_primitive(v) for k, v in data["items"].items()}
         instance.characters = data["characters"]
