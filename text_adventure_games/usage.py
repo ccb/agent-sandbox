@@ -161,6 +161,12 @@ class CallRecord:
     tool_choice: str | None = None
     args_digest: str | None = None
     round: int | None = None
+    # A FAILED call (#745): the provider exception the adapter degraded to
+    # ``None`` ("ExcClassName: message"), or None for a call that answered.
+    # Failed calls bill nothing (the usage stays zero) but must stay countable
+    # -- a mid-run auth/quota/network outage that never lands a record is
+    # invisible everywhere downstream (/usage, the monitor, the live feed).
+    error: str | None = None
 
     def to_primitive(self) -> dict:
         """The flattened ``"call"`` line written to a :class:`RunLog`."""
@@ -185,6 +191,7 @@ class CallRecord:
             "cache_read_input_tokens": u.cache_read_input_tokens,
             "cost_usd": self.cost_usd,
             "latency_ms": self.latency_ms,
+            "error": self.error,
         }
 
 
@@ -313,6 +320,10 @@ class UsageLedger:
             "by_role": {
                 role: round(cost, 6) for role, cost in self.totals_by_role().items()
             },
+            # Failed calls (#745): API errors the adapters degraded to None --
+            # a mid-run auth/quota/network outage surfaces here and in
+            # GET /usage instead of flatlining at the last good call.
+            "failed_calls": sum(1 for r in self.records if r.error),
             # Tool-schema health (#357): failing replies, repair attempts, and
             # repairs that succeeded -- so a misbehaving model surfaces here and
             # in GET /usage rather than degrading silently.
@@ -407,6 +418,7 @@ def record_call(
     messages: list[dict] | None,
     response_text: str | None,
     latency_ms: float | None = None,
+    error: str | None = None,
 ) -> CallRecord | None:
     """Build a normalized :class:`Usage` from a provider's raw usage object,
     price it, attach attribution from *context* (``actor`` / ``turn`` /
@@ -419,6 +431,10 @@ def record_call(
     ``raw_usage=None`` yields a zero-cost record -- the mock path. Accounting
     must never break a real call, so any failure here is swallowed with a warning
     and the call still returns its reply.
+
+    Pass ``error`` (#745) to record a FAILED call -- the provider exception the
+    adapter is about to degrade to ``None`` -- as a zero-cost error row, so a
+    mid-run auth/quota/network outage stays countable instead of vanishing.
     """
     if ledger is None:
         return None
@@ -448,6 +464,7 @@ def record_call(
             tool_choice=context.get("tool_choice"),
             args_digest=context.get("args_digest"),
             round=context.get("round"),
+            error=error,
         )
         ledger.record(rec, messages=messages, response=response_text)
         return rec
