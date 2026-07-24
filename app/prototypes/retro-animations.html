@@ -142,6 +142,18 @@
   </section>
 
   <section>
+    <div class="slate"><h2>17-C-m &mdash; THE APPROACH, THIN CURLS (phone)</h2><span class="kind">LITHO / PHONE TWIN</span></div>
+    <div class="screen">
+      <svg id="ext1c-m" viewBox="0 0 640 720" aria-label="The approach, thin curls (phone)"></svg>
+    </div>
+    <p class="spec">The phone-legible twin of 17-C. The same scene &mdash; the old man's
+       monolith wearing the thin wandering curls, the scavenger walking up to stand at the
+       door &mdash; carried over whole at 1.5x into the portrait frame, with the title and
+       the footer re-set in big type.
+       <span class="attach">Selected by terminal.js when the card would render under ~560px.</span></p>
+  </section>
+
+  <section>
     <div class="slate"><h2>17-D &mdash; THE APPROACH, ELEVATIONS</h2><span class="kind">LITHO / SURVEY</span></div>
     <div class="screen">
       <svg id="ext1e" viewBox="0 0 640 400" aria-label="The approach, east and west elevations"></svg>
@@ -151,6 +163,18 @@
        great helm face-on -- nasal ridge, split eye-slit, breaths, riveted band), and the
        SUMMIT in plan -- the old man facing you, eyes open to the sky, his mouth a
        chimney radiating tendrils. <span class="attach">Companion to 17-C.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>17-D-m &mdash; THE APPROACH, ELEVATIONS (phone)</h2><span class="kind">LITHO / PHONE TWIN</span></div>
+    <div class="screen">
+      <svg id="ext1e-m" viewBox="0 0 640 720" aria-label="The approach, elevations (phone)"></svg>
+    </div>
+    <p class="spec">The phone-legible twin of 17-D. The surveyor's sheet unchanged &mdash;
+       WEST (the Autarch young), EAST (the helmed warrior), SUMMIT in plan, the bright edge
+       redrawing the slab between views &mdash; enlarged 1.8x, with the sheet captions wrapped
+       to two big-type lines below the drawing.
+       <span class="attach">Selected by terminal.js when the card would render under ~560px.</span></p>
   </section>
 
   <section>
@@ -6133,6 +6157,90 @@
     });
   }
 
+  /* ---------------- 17-C-m: the approach, thin curls (phone twin) ---------------- */
+  /* Phone twin of 17-C. The desktop scene is carried over whole -- every
+     coordinate inside SC is 17-C's scene space, scaled 1.5x into the portrait
+     frame -- and only the type is re-set: a 26px title up top, the 24px footer
+     below the ground. terminal.js picks it by rendered width. */
+  {
+    const svg = document.getElementById("ext1c-m");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const kick = label(svg, 620, 34, 15, PH_DIM); kick.setAttribute("text-anchor", "end");
+    kick.textContent = "ALTERNATE FOR 17";
+    const XDOTS = stipple(svg, "dots-ext1cm", PH, .8);
+    const SC = el(svg, "g", { transform: "translate(-160 8) scale(1.5)" });
+    el(SC, "line", { x1: 0, y1: 300, x2: 640, y2: 300, stroke: FUNGUS,
+      "stroke-width": 1.4, opacity: .8 });
+    el(SC, "polyline", { fill: "none", stroke: PH_DIM,
+      points: "20,296 70,282 120,294 150,288 190,297" });
+    el(SC, "polyline", { fill: "none", stroke: PH_DIM,
+      points: "470,297 520,286 560,292 610,283 640,294" });
+    el(SC, "rect", { x: 0, y: 301, width: 640, height: 99, fill: XDOTS, opacity: .35 });
+    for (let i = 0; i < 14; i++)
+      el(SC, "line", { x1: 30 + (i * 97) % 610, y1: 318 + (i * 37) % 70,
+        x2: 36 + (i * 97) % 610, y2: 316 + (i * 37) % 70, stroke: PH_DIM });
+    const cloud = el(SC, "polyline", { fill: "none", stroke: PH_DIM, opacity: .6,
+      points: "0,0" });
+    el(SC, "polygon", { fill: XDOTS, stroke: PH, "stroke-width": 1.8, points:
+      "286,104 290,74 300,62 314,58 320,64 326,60 332,40 338,52 340,58 " +
+      "344,62 344,76 352,78 354,66 362,68 368,80 " +
+      "372,110 360,190 358,246 354,300 286,300 " +
+      "282,250 288,214 278,196 284,188 276,180 286,172 282,162 288,140 " });
+    el(SC, "path", { d: "M 322 66 Q 326 70 330 67", fill: "none", stroke: PH_DIM });
+    el(SC, "polyline", { fill: "none", stroke: PH_DIM, points:
+      "358,150 350,158 354,168 348,176 356,184" });
+    el(SC, "polyline", { fill: "none", stroke: PH_DIM, opacity: .7,
+      points: "312,84 316,140 308,200 314,260" });
+    el(SC, "circle", { cx: 320, cy: 252, r: 26, fill: "none",
+      stroke: PH, "stroke-width": 1.4 });
+    el(SC, "path", { d: "M 306 246 Q 311 250 316 246", fill: "none",
+      stroke: PH, "stroke-width": 1.2 });
+    el(SC, "path", { d: "M 324 246 Q 329 250 334 246", fill: "none",
+      stroke: PH, "stroke-width": 1.2 });
+    el(SC, "line", { x1: 320, y1: 252, x2: 318, y2: 258, stroke: PH_DIM });
+    el(SC, "path", { d: "M 311 300 L 311 276 Q 320 264 329 276 L 329 300 Z",
+      fill: BG, stroke: PH, "stroke-width": 1.5 });
+    // the thin curls, rising from the mouth like handwriting
+    const tendrils = Array.from({ length: 3 }, () =>
+      el(SC, "polyline", { fill: "none", stroke: FUNGUS, "stroke-width": 1.8 }));
+    const sBody = el(SC, "polyline", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.4 });
+    const sHead = el(SC, "circle", { r: 2.6, fill: PH_BRIGHT });
+    const sLegs = el(SC, "polyline", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.2 });
+    const thought = label(SC, 0, 0, 12, PH_DIM);
+    const foot = label(svg, 320, 672, 24, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 220;
+      doWipe(T);
+      typeOn(hdr, "THE APPROACH, THIN CURLS", T, 4, 1.2);
+      tendrils.forEach((n, i) => {
+        const bx = 344 + i * 4, sway = Math.sin(t * .12 + i * 2) * 6;
+        const pts = Array.from({ length: 7 }, (_, k) => {
+          const a = -Math.PI / 2 + k * .5 * (i % 2 ? 1 : -1) + sway * .02 * k;
+          const r = 8 + k * 5;
+          return `${bx + Math.cos(a) * r * .8 + sway * k * .12},${68 - k * 7 + Math.sin(a) * r * .3}`;
+        });
+        n.setAttribute("points", `${bx},${72 + i * 2} ` + pts.join(" "));
+      });
+      const cx = ((t * .7) % 760) - 60;
+      cloud.setAttribute("points",
+        `${cx},110 ${cx + 24},102 ${cx + 52},106 ${cx + 78},100 ${cx + 96},110`);
+      const wx = Math.min(214, 60 + Math.floor(T * 1.2));
+      const standing = wx >= 214;
+      const step = standing ? 0 : (t % 4 < 2 ? 3 : -3);
+      const sy = 336;
+      sHead.setAttribute("cx", wx + 106); sHead.setAttribute("cy", sy - 15);
+      sBody.setAttribute("points", `${wx + 106},${sy - 12} ${wx + 106},${sy - 4}`);
+      sLegs.setAttribute("points",
+        `${wx + 103 + step * .4},${sy + 4} ${wx + 106},${sy - 4} ${wx + 109 - step * .4},${sy + 4}`);
+      thought.setAttribute("x", wx + 114); thought.setAttribute("y", sy - 22);
+      thought.textContent = standing && (T % 20) > 8 ? ". . ." : "";
+      typeOn(foot, "HIS SENTENCE CONTINUES UNDERGROUND.", T, 168, 1.4);
+    });
+  }
+
 
 
   /* ---------------- 00: the road to Gnomon ---------------- */
@@ -7525,6 +7633,177 @@
       edge.setAttribute("x", Math.min(244 + k * 152, 393));
       edge.setAttribute("opacity", k >= 1 ? 0 : 1);
       typeOn(sheet, CAPTIONS[phase], T % 80, 10, 2.4);
+      tendrils.forEach((n, i) => {                            // the crown, weeping
+        const [x0, y0, ph] = TENDRILS[i];
+        const pts = [[x0, y0]];
+        for (let q = 1; q <= 5; q++) {
+          const sway = Math.sin(t * .22 + q * .9 + ph * 2) * 3 * q * .4;
+          pts.push([x0 + ph * q * 7 + sway, y0 + q * 13 + (ph * ph) * q]);
+        }
+        n.setAttribute("points", pts.map(p2 => p2.join(",")).join(" "));
+        const d = drips[i], dk = (t * 2 + i * 23) % 60;
+        d.setAttribute("cx", pts[5][0]); d.setAttribute("cy", pts[5][1] + dk);
+        d.setAttribute("opacity", dk > 46 ? 0 : .9);
+      });
+      ptend.forEach((n, i) => {                               // the chimney, radiating
+        const a = PLANTENDRILS[i];
+        const pts = [[320 + Math.cos(a) * 14, 254 + Math.sin(a) * 14]];
+        for (let q = 1; q <= 4; q++) {
+          const wob = Math.sin(t * .2 + q * 1.1 + i * 1.7) * 4;
+          const r = 14 + q * 19;
+          pts.push([320 + Math.cos(a + wob * .01 * q) * r * 1.15,
+            254 + Math.sin(a + wob * .01 * q) * r * .95 + wob * .4]);
+        }
+        n.setAttribute("points", pts.map(p2 => p2.join(",")).join(" "));
+      });
+      const blink = (t % 90) > 86;                            // he blinks, rarely
+      eyeL.setAttribute("ry", blink ? 1 : 6.5); eyeL.setAttribute("rx", 6.5);
+      eyeR.setAttribute("ry", blink ? 1 : 6.5); eyeR.setAttribute("rx", 6.5);
+      typeOn(foot, "THREE FACES, TWO DOORS, ONE CHIMNEY.", Math.min(t, 239), 100, 1.7);
+    });
+  }
+
+  /* ---------------- 17-D-m: the approach, elevations (phone twin) ---------------- */
+  /* Phone twin of 17-D. The surveyor's sheet is carried over whole -- every
+     coordinate inside SC is 17-D's scene space, scaled 1.8x so the slab fills
+     the portrait frame -- and the type is re-set outside it: 26px title, the
+     compass letter at the left margin, the sheet caption wrapped to two 20px
+     lines under the drawing, the 22px footer. terminal.js picks it by width. */
+  {
+    const svg = document.getElementById("ext1e-m");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const kick = label(svg, 620, 34, 15, PH_DIM); kick.setAttribute("text-anchor", "end");
+    kick.textContent = "SURVEY";
+    const EDOTS2 = stipple(svg, "dots-ext1em", PH, .85);
+    const SC = el(svg, "g", { transform: "translate(-256 -40) scale(1.8)" });
+    el(SC, "line", { x1: 30, y1: 340, x2: 610, y2: 340, stroke: PH, "stroke-width": 1.4 });
+    el(SC, "polyline", { fill: "none", stroke: PH_DIM,
+      points: "30,336 120,330 210,337 430,331 520,338 610,333" });
+    // THE SLAB, face-on
+    const slab = el(SC, "polygon", { fill: EDOTS2, stroke: PH, "stroke-width": 1.8,
+      points: "252,96 388,96 396,340 244,340" });
+    // the old man at the summit, face to the sky -- constant on the elevations
+    const crownG = el(SC, "g", {});
+    el(crownG, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
+      points: "292,96 298,78 306,72 312,74 316,64 326,62 330,68 336,66 342,74 348,96" });
+    el(crownG, "circle", { cx: 322, cy: 70, r: 1.6, fill: PH_BRIGHT });
+    const TENDRILS = [[318, 66, -1.9], [322, 64, -.6], [326, 66, .6], [330, 68, 1.7]];
+    const tendrils = TENDRILS.map(() => el(crownG, "polyline",
+      { fill: "none", stroke: FUNGUS, "stroke-width": 2 }));
+    const drips = TENDRILS.map(() => el(crownG, "circle", { r: 1.7, fill: FUNGUS }));
+    // each face's MOUTH is the way in: the doors stand on the ground itself
+    const door = parent => {
+      el(parent, "path", { d: "M 306 340 L 306 302 Q 320 288 334 302 L 334 340 Z",
+        fill: BG, stroke: PH, "stroke-width": 1.6 });
+      el(parent, "line", { x1: 306, y1: 340, x2: 334, y2: 340,
+        stroke: PH_BRIGHT, "stroke-width": 1.5 });            // the threshold
+    };
+    // WEST: the Autarch young -- smooth, swaddled, unsettlingly tender
+    const west = el(SC, "g", {});
+    el(west, "ellipse", { cx: 320, cy: 244, rx: 52, ry: 62, fill: "none",
+      stroke: PH, "stroke-width": 1.6 });
+    el(west, "path", { d: "M 296 231 Q 304 225 312 231", fill: "none",
+      stroke: PH, "stroke-width": 1.5 });                     // closed eyes
+    el(west, "path", { d: "M 328 231 Q 336 225 344 231", fill: "none",
+      stroke: PH, "stroke-width": 1.5 });
+    el(west, "path", { d: "M 316 247 Q 320 253 324 247", fill: "none", stroke: PH_DIM });
+    el(west, "path", { d: "M 286 275 Q 320 291 354 275", fill: "none",
+      stroke: PH_DIM });                                      // the round cheekline
+    [0, 1, 2].forEach(k => el(west, "path", { fill: "none", stroke: PH_DIM,
+      d: `M ${268 - k * 4} ${199 + k * 26} Q 320 ${185 + k * 26} ${372 + k * 4} ${199 + k * 26}` }));
+    door(west);
+    // EAST: the helmed warrior -- a great helm, face-on
+    const east = el(SC, "g", {});
+    el(east, "path", { fill: "none", stroke: PH, "stroke-width": 1.8,
+      d: "M 280 296 L 276 196 Q 276 150 320 146 Q 364 150 364 196 L 360 296 " +
+         "Q 344 306 320 308 Q 296 306 280 296 Z" });          // dome to jaw
+    el(east, "line", { x1: 320, y1: 146, x2: 320, y2: 212, stroke: PH,
+      "stroke-width": 1.8 });                                  // the nasal ridge
+    el(east, "polyline", { fill: "none", stroke: PH_DIM,
+      points: "300,146 306,132 334,132 340,146" });            // low crest fin
+    // the eye slit, split by the nasal: two dark windows
+    el(east, "rect", { x: 286, y: 196, width: 28, height: 8, fill: BG,
+      stroke: PH, "stroke-width": 1.5 });
+    el(east, "rect", { x: 326, y: 196, width: 28, height: 8, fill: BG,
+      stroke: PH, "stroke-width": 1.5 });
+    for (let r = 0; r < 2; r++) for (let x = 294; x <= 346; x += 13)
+      el(east, "circle", { cx: x, cy: 226 + r * 12, r: 1.6, fill: PH });  // breaths
+    el(east, "line", { x1: 280, y1: 256, x2: 360, y2: 256, stroke: PH,
+      "stroke-width": 1.4 });                                  // riveted band
+    [290, 310, 330, 350].forEach(x =>
+      el(east, "circle", { cx: x, cy: 262, r: 1.5, fill: PH_BRIGHT }));
+    el(east, "line", { x1: 280, y1: 268, x2: 360, y2: 268, stroke: PH_DIM });
+    door(east);
+    // SUMMIT: the plan view -- he faces the sky, and you
+    const plan = el(SC, "g", {});
+    el(plan, "rect", { x: 254, y: 118, width: 132, height: 200, rx: 16,
+      fill: "none", stroke: PH, "stroke-width": 1.6 });        // the slab footprint
+    [[254, 118], [386, 118], [254, 318], [386, 318]].forEach(([x, y]) => {
+      el(plan, "line", { x1: x - 8, y1: y, x2: x + 8, y2: y, stroke: PH_DIM });
+      el(plan, "line", { x1: x, y1: y - 8, x2: x, y2: y + 8, stroke: PH_DIM });
+    });
+    el(plan, "ellipse", { cx: 320, cy: 218, rx: 50, ry: 64, fill: "none",
+      stroke: PH, "stroke-width": 1.6 });                      // the upturned face
+    el(plan, "path", { d: "M 288 186 Q 298 178 308 184", fill: "none", stroke: PH_DIM });
+    el(plan, "path", { d: "M 332 184 Q 342 178 352 186", fill: "none", stroke: PH_DIM });
+    const eyeL = el(plan, "circle", { cx: 299, cy: 196, r: 6.5, fill: "none",
+      stroke: PH, "stroke-width": 1.5 });
+    const eyeR = el(plan, "circle", { cx: 341, cy: 196, r: 6.5, fill: "none",
+      stroke: PH, "stroke-width": 1.5 });
+    el(plan, "circle", { cx: 299, cy: 196, r: 2.2, fill: PH_BRIGHT });
+    el(plan, "circle", { cx: 341, cy: 196, r: 2.2, fill: PH_BRIGHT });
+    el(plan, "polyline", { fill: "none", stroke: PH_DIM,
+      points: "318,206 316,224 324,224" });                    // the nose, foreshortened
+    el(plan, "path", { d: "M 284 226 Q 292 236 300 240", fill: "none", stroke: PH_DIM });
+    el(plan, "path", { d: "M 356 226 Q 348 236 340 240", fill: "none", stroke: PH_DIM });
+    el(plan, "circle", { cx: 320, cy: 254, r: 13, fill: BG, stroke: PH,
+      "stroke-width": 1.8 });                                  // the mouth: a chimney
+    el(plan, "circle", { cx: 320, cy: 254, r: 6, fill: "none", stroke: FUNGUS,
+      "stroke-width": 1.4 });
+    const PLANTENDRILS = Array.from({ length: 8 }, (_, i) => i * Math.PI / 4 + .35);
+    const ptend = PLANTENDRILS.map(() => el(plan, "polyline",
+      { fill: "none", stroke: FUNGUS, "stroke-width": 2 }));
+    // the sweep: a bright edge redraws the sheet between views
+    const cover = el(SC, "rect", { y: 96, height: 244, fill: BG, opacity: 0 });
+    const edge = el(SC, "rect", { y: 96, width: 3, height: 244,
+      fill: PH_BRIGHT, opacity: 0 });
+    // the type, re-set at phone size outside the scene
+    const compass = label(svg, 44, 374, 44, PH_DIM);
+    const sheet1 = label(svg, 320, 616, 20, PH); sheet1.setAttribute("text-anchor", "middle");
+    const sheet2 = label(svg, 320, 648, 20, PH); sheet2.setAttribute("text-anchor", "middle");
+    const foot = label(svg, 320, 700, 22, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    const CAP1 = [
+      "WEST ELEVATION -- THE AUTARCH, YOUNG.",
+      "EAST ELEVATION -- THE HELMED WARRIOR.",
+      "SUMMIT -- THE OLD MAN GAZES SKYWARD.",
+    ];
+    const CAP2 = [
+      "HIS MOUTH IS A DOOR.",
+      "HIS MOUTH IS A DOOR.",
+      "HIS MOUTH IS A CHIMNEY.",
+    ];
+    clock(t => {
+      const T = t % 240;
+      doWipe(Math.min(t, 239));
+      typeOn(hdr, "THE APPROACH, ELEVATIONS", Math.min(t, 239), 4, 1.4);
+      const phase = Math.floor(T / 80);
+      west.setAttribute("opacity", phase === 0 ? 1 : 0);
+      east.setAttribute("opacity", phase === 1 ? 1 : 0);
+      plan.setAttribute("opacity", phase === 2 ? 1 : 0);
+      crownG.setAttribute("opacity", phase === 2 ? 0 : 1);   // seen from above instead
+      slab.setAttribute("opacity", phase === 2 ? 0 : 1);
+      compass.textContent = ["W", "E", "UP"][phase];
+      const k = Math.min(1, (T % 80) / 12);                   // the sweep, each sheet
+      cover.setAttribute("x", 244 + k * 152);
+      cover.setAttribute("width", Math.max(0, 152 * (1 - k)));
+      cover.setAttribute("opacity", k >= 1 ? 0 : 1);
+      edge.setAttribute("x", Math.min(244 + k * 152, 393));
+      edge.setAttribute("opacity", k >= 1 ? 0 : 1);
+      typeOn(sheet1, CAP1[phase], T % 80, 10, 2.4);
+      typeOn(sheet2, CAP2[phase], T % 80, 28, 2.4);
       tendrils.forEach((n, i) => {                            // the crown, weeping
         const [x0, y0, ph] = TENDRILS[i];
         const pts = [[x0, y0]];
