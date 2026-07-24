@@ -30,7 +30,7 @@ Run order (each step feeds the next; commit the updated artifacts):
     uv run python godot-generative-agents/tools/geo/osm_to_tiled.py --area core --theme urban   # bake the map
     uv run python godot-generative-agents/tools/geo/furnish_building.py                          # furnish Williams
     uv run python godot-generative-agents/tools/geo/frame_edges.py                               # THIS -- run last
-    uv run python godot-generative-agents/backend/penn/generate_penn_replay.py    # re-bake the replay
+    uv run python godot-generative-agents/backend/penn/generate_penn_replay.py --no-persist   # re-bake (--no-persist: skip saving a run for a map tweak, #752)
 
 Why last: it shifts whole layers, so the ``williams_*`` layers furnish_building added
 get translated correctly along with everything else.

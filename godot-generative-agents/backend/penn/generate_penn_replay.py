@@ -19,7 +19,11 @@ Run from the repo root (so `uv run` finds the engine env)::
     uv run python godot-generative-agents/backend/penn/generate_penn_replay.py
     uv run python godot-generative-agents/backend/penn/generate_penn_replay.py --steps 600
 
-Writes: godot-generative-agents/godot/maps/penn_replay.json
+Writes the replay to `godot-generative-agents/godot/maps/penn_replay.json` and,
+since #752, also saves the run to the shared RunStore (`godot-generative-agents/
+runs/`) so it appears in the Past-runs browser and is re-runnable -- like every
+other entry point. Pass `--no-persist` for a throwaway bake (replay file only, no
+stored run), e.g. when iterating on the map.
 """
 
 import argparse

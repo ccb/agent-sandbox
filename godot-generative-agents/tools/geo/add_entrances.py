@@ -47,7 +47,7 @@ Run order::
     uv run python godot-generative-agents/tools/geo/furnish_building.py                          # Williams
     uv run python godot-generative-agents/tools/geo/add_entrances.py                             # doors!
     uv run python godot-generative-agents/backend/penn/generate_building_labels.py
-    uv run python godot-generative-agents/backend/penn/generate_penn_replay.py
+    uv run python godot-generative-agents/backend/penn/generate_penn_replay.py --no-persist  # re-bake (--no-persist: don't save a run for a map tweak, #752)
     # then commit the updated .tmj + matrix CSVs
 """
 
