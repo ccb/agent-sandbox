@@ -1291,7 +1291,8 @@ def create_app(
     def runs_index(_: None = Depends(require_auth)) -> dict:
         """The run history, newest first: row summaries WITHOUT the manifest
         blob (a hundred-run history shouldn't ship a hundred manifests --
-        fetch one run for its manifest), plus which id is live right now."""
+        fetch one run for its manifest), except each run's applied `config`
+        sub-block (#734, None when unconfigured), plus which id is live now."""
         store = _run_store()
         if store is None:
             return {"available": False, "current": None, "runs": []}
@@ -1301,7 +1302,15 @@ def create_app(
             "available": True,
             "current": current,
             "runs": [
-                {k: v for k, v in row.items() if k != "manifest"}
+                {
+                    **{k: v for k, v in row.items() if k != "manifest"},
+                    # The applied pre-run config block (#732), so the Past-runs
+                    # browser can show a run's setup and re-run it (#734) without
+                    # fetching each manifest. Small (cast + a few knobs); None on
+                    # runs no one configured. The rest of the manifest stays off
+                    # the list -- see the docstring.
+                    "config": row["manifest"].get("config"),
+                }
                 for row in store.list_runs()
             ],
         }

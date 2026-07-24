@@ -26,3 +26,44 @@ static func _short_time(iso: String) -> String:
 	if iso.length() < 16 or not iso.contains("T"):
 		return iso
 	return iso.substr(0, 10) + " " + iso.substr(11, 5)
+
+
+# A one-line summary of a run's applied config (#734), for the Past-runs row:
+# "3 persona(s) · llm · temp 0.7". A run no one configured (config == null)
+# reads "no config recorded"; fields absent from an older block are skipped.
+static func config_summary(entry: Dictionary) -> String:
+	var config: Variant = entry.get("config")
+	if typeof(config) != TYPE_DICTIONARY:
+		return "no config recorded"
+	var cfg := config as Dictionary
+	var parts := PackedStringArray()
+	var cast: Variant = cfg.get("cast")
+	if typeof(cast) == TYPE_ARRAY:
+		parts.append("%d persona(s)" % (cast as Array).size())
+	else:
+		parts.append("default cast")
+	parts.append(str(cfg.get("brain", "?")))
+	var temp: Variant = _config_temperature(cfg)
+	if temp != null:
+		parts.append("temp %s" % str(temp))
+	return " · ".join(parts)
+
+
+# The full applied-config block as pretty JSON (#734), for the row's expandable
+# detail view. A run with no block says so.
+static func config_detail(entry: Dictionary) -> String:
+	var config: Variant = entry.get("config")
+	if typeof(config) != TYPE_DICTIONARY:
+		return "No configuration was recorded for this run."
+	return JSON.stringify(config, "  ")
+
+
+# The live sampling temperature buried at sim_config.game.agent.temperature
+# (#564), or null if this block recorded none.
+static func _config_temperature(config: Dictionary) -> Variant:
+	var cur: Variant = config.get("sim_config")
+	for key in ["game", "agent", "temperature"]:
+		if typeof(cur) != TYPE_DICTIONARY or not (cur as Dictionary).has(key):
+			return null
+		cur = (cur as Dictionary)[key]
+	return cur
