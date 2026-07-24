@@ -1,0 +1,51 @@
+# Casey Nguyen -- visiting prospective student. Library entry (#762): NOT in
+# the default cast. Coverage: a VISITOR role with a criss-crossing tour-day
+# shape, and a stranger at t=0 -- deliberately no `relationships:` block, so
+# any edges she gains form on the day itself (#582). Her one scripted meeting
+# (flagging down Marcus's tour) lives here (first-named persona -- see
+# README.md); cast her WITH marcus or it is dropped at load time.
+name: Casey Nguyen
+home: Penn campus
+persona: I am Casey Nguyen, 17, a high-school senior visiting Penn for the day.
+  Everything is a photo, every hall is the coolest one yet, and I am trying very
+  hard to look like I know where I'm going. I do not know where I'm going.
+emoji: 🧢
+# Starts on the walk just south of College Hall, where the admissions info
+# session -- the first stop of her visit -- is about to begin.
+start_tile:
+- 124
+- 198
+schedule:
+- place: College Hall
+  activity: at an admissions information session
+  emoji: 🧢
+  # A long first stop: Marcus's tour reaches College Hall mid-morning (after
+  # his 220-step Houston Hall coffee), and his stop there is short -- this
+  # window has to still be open when he arrives, and the exchange below is
+  # kept to three lines so it fits inside his stop (see README.md on ~14
+  # steps per line).
+  steps: 420
+- place: Houston Hall
+  activity: sampling the food court like a local
+  emoji: 🥨
+  steps: 60
+- place: Irvine Auditorium
+  activity: peeking into the auditorium between events
+  emoji: 🤩
+  steps: 50
+- place: Meyerson Hall
+  activity: wandering the studio halls and dreaming a little
+  emoji: ✨
+  steps: 60
+- place: Van Pelt — Kamin Gallery
+  activity: gawking at the student exhibits before the trip home
+  emoji: 🖼️
+
+meetings:
+- label: A prospective student flags down the tour (College Hall)
+  at: College Hall
+  participants: [Casey Nguyen, Marcus Webb]
+  dialogue:
+  - [Casey Nguyen, "Excuse me -- is this where the campus tour starts?"]
+  - [Marcus Webb, "You found it! I'm Marcus, I'll be your guide today."]
+  - [Casey Nguyen, "Perfect timing -- lead the way."]
