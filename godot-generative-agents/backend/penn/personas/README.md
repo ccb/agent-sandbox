@@ -30,14 +30,39 @@ lists every persona here with `in_default_cast`, and `POST /config {"cast":
 | `nadia` | Nadia Osei, physics postdoc (advisor--advisee pair with `tanaka`) | no (#762) |
 | `rosa` | Rosa Delgado, dining staff (early riser; never leaves Houston Hall) | no (#762) |
 | `theo` | Theo Lindqvist, philosophy junior (night owl; friend group with `imani` + `priya`) | no (#762) |
+| `nina` | Nina Alvarez, a cappella lead (friend-group trio w/ `jamal` + `grace`) | no (#762) |
+| `jamal` | Jamal Reed, a cappella beatboxer | no (#762) |
+| `grace` | Grace Kim, a cappella arranger | no (#762) |
+| `omar` | Omar Haddad, student-gov candidate (rivals with `bethany`) | no (#762) |
+| `bethany` | Bethany Cole, student-gov candidate | no (#762) |
+| `lily` | Lily Zhao, nursing junior (dating `sam`) | no (#762) |
+| `sam` | Sam O'Connor, bioengineering senior | no (#762) |
+| `aiden` | Aiden Park, first-year (just-met roommate of `chris`, closeness 1) | no (#762) |
+| `chris` | Chris Donnelly, first-year roommate | no (#762) |
+| `elena` | Elena Vasquez, senior (sibling of `mateo`) | no (#762) |
+| `mateo` | Mateo Vasquez, first-year, younger sibling | no (#762) |
+| `ravi` | Ravi Deshmukh, physics TA (tutors `hannah`; TA for `tanaka`) | no (#762) |
+| `hannah` | Hannah Whitfield, physics sophomore | no (#762) |
+| `victor` | Victor Nowak, chess club senior (plays `desmond`) | no (#762) |
+| `desmond` | Desmond Clarke, chess club junior | no (#762) |
+| `tessa` | Tessa Byrne, student journalist (interviews `ellis`) | no (#762) |
+| `yuki` | Yuki Sato, exchange student (buddy of `fatima`) | no (#762) |
+| `fatima` | Fatima Al-Rashid, orientation buddy | no (#762) |
+| `wesley` | Wesley Okafor, night-owl CS master's (one-room day; stranger at t=0) | no (#762) |
+| `dana` | Dana Ellsworth, varsity rower (early riser; criss-crosses; knows `imani`) | no (#762) |
 
 The #762 entries grow the library across roles (staff, librarian, athlete,
-visitor, postdoc, admin) and schedule shapes (early-riser vs night-owl,
-one-building days vs campus criss-crossing) without touching the default
-cast, so the baked replay stays byte-identical (#640). The full-library
-sweep in `tests/test_persona_library_762.py` validates every file here:
-it must build, its places must resolve, and its activities must re-parse
-as `perform` (see the wording rules below).
+visitor, postdoc, admin, musicians, journalist, TA) and schedule shapes
+(early-riser vs night-owl, one-building days vs campus criss-crossing) without
+touching the default cast, so the baked replay stays byte-identical (#640). The
+second round adds interaction *threads*: a 3-person friend cluster, competitive
+rivals, a dating couple, a just-met roommate pair (closeness 1, meant to warm
+up live, #582), siblings, a TA/tutee pair, and cross-links into the existing
+cast (`ravi`→`tanaka`, `tessa`→`ellis`, `dana`→`imani`) that fire only when
+both ends are cast. The full-library sweep in
+`tests/test_persona_library_762.py` validates every file here: it must build,
+its places must resolve, and its activities must re-parse as `perform` (see the
+wording rules below).
 
 ## File format
 

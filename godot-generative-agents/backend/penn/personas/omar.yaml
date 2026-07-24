@@ -1,0 +1,38 @@
+# Omar Haddad -- student-gov candidate. Un-parked catalog entry (#762): in the
+# library, NOT in the default cast. Owns the rivalry edge to Bethany and their
+# debate meeting (Omar is participants[0]).
+name: Omar Haddad
+home: Penn campus
+persona: I am Omar Haddad, 21, a junior at Penn running for student body
+  president. I am ambitious, a natural debater, and convinced my housing
+  platform is the best on the ballot.
+emoji: 🗳️
+start_tile:
+- 192
+- 55
+schedule:
+- place: Irvine Auditorium
+  activity: prepping for the big debate
+  emoji: 🗳️
+  steps: 130
+- place: College Hall
+  activity: canvassing near the green
+  emoji: 🗳️
+
+relationships:
+- a: Omar Haddad
+  b: Bethany Cole
+  kind: rivals
+  closeness: 2
+  description: Omar and Bethany are the two front-runners for student body
+    president -- civil in public, fiercely competitive about every endorsement.
+
+meetings:
+- label: Rivals before the debate (Irvine Auditorium)
+  at: Irvine Auditorium
+  participants: [Omar Haddad, Bethany Cole]
+  dialogue:
+  - [Omar Haddad, "May the best platform win, Bethany."]
+  - [Bethany Cole, "Agreed. No cheap shots up there -- just the ideas."]
+  - [Omar Haddad, "Deal. Though my housing plan still runs circles around yours."]
+  - [Bethany Cole, "We'll let the room decide that."]

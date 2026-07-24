@@ -1,0 +1,38 @@
+# Yuki Sato -- exchange student. Un-parked catalog entry (#762): in the library,
+# NOT in the default cast. Owns the buddy-program edge to Fatima and their
+# library meeting (Yuki is participants[0]).
+name: Yuki Sato
+home: Penn campus
+persona: I am Yuki Sato, 20, an exchange student at Penn for the semester,
+  visiting from Japan. I am curious and a little jet-lagged, and everything on
+  this campus is new to me.
+emoji: 🌏
+start_tile:
+- 184
+- 205
+schedule:
+- place: Van Pelt — Circulation Desk
+  activity: figuring out the catalog system
+  emoji: 🌏
+  steps: 120
+- place: Van Pelt — Moelis Reading Room
+  activity: settling into a quiet corner
+  emoji: 🌏
+
+relationships:
+- a: Yuki Sato
+  b: Fatima Al-Rashid
+  kind: buddy program
+  closeness: 2
+  description: Fatima is Yuki's assigned orientation buddy this semester and is
+    showing the exchange student around campus.
+
+meetings:
+- label: Fatima shows Yuki the library (Van Pelt Circulation)
+  at: Van Pelt — Circulation Desk
+  participants: [Yuki Sato, Fatima Al-Rashid]
+  dialogue:
+  - [Fatima Al-Rashid, "First stop on the tour -- the library. You'll basically live here."]
+  - [Yuki Sato, "It's enormous. Back home our whole department fit on one floor."]
+  - [Fatima Al-Rashid, "Let's sort you a card. Then I'll show you the best quiet corner."]
+  - [Yuki Sato, "Lead the way. And thank you -- I was so lost this morning."]

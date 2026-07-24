@@ -130,7 +130,7 @@ def test_growth_personas_are_all_parked(library_ids):
 
 
 def test_full_library_cast_builds(full_world, library_ids):
-    assert len(library_ids) >= 15  # 7 from #731 + the #762 growth batch
+    assert len(library_ids) >= 35  # 7 (#731) + 8 (#762 r1) + 20 (#762 r2)
     assert [p["name"] for p in full_world.personas] == [
         p["name"] for p in load_world_yaml(WORLD_DATA, cast=library_ids)["personas"]
     ]

@@ -1,0 +1,40 @@
+# Tessa Byrne -- student journalist. Un-parked catalog entry (#762): in the
+# library, NOT in the default cast. Owns a cross-link edge + interview meeting
+# with Professor Ellis; both fire only when Ellis is also cast (dropped
+# silently otherwise). She reaches College Hall late, when Ellis is holding
+# his terminal office-hours stop there -- a long shared window.
+name: Tessa Byrne
+home: Penn campus
+persona: I am Tessa Byrne, 21, a junior and a reporter for the Daily
+  Pennsylvanian. I am curious, quick with a follow-up question, and always
+  chasing the next campus story.
+emoji: 📰
+start_tile:
+- 34
+- 262
+schedule:
+- place: Houston Hall — Reading Room
+  activity: drafting interview questions
+  emoji: 📰
+  steps: 230
+- place: College Hall
+  activity: conducting an interview for the paper
+  emoji: 📰
+
+relationships:
+- a: Tessa Byrne
+  b: Professor Ellis
+  kind: reporter & source
+  closeness: 2
+  description: Tessa is writing a feature on the history department's centennial
+    and has lined up Professor Ellis for the on-the-record interview.
+
+meetings:
+- label: Tessa interviews Professor Ellis (College Hall)
+  at: College Hall
+  participants: [Tessa Byrne, Professor Ellis]
+  dialogue:
+  - [Tessa Byrne, "Professor Ellis? Tessa, from the Daily Pennsylvanian -- thanks for the time."]
+  - [Professor Ellis, "Of course. Sit, sit. What's the piece about?"]
+  - [Tessa Byrne, "The department's centennial. What's changed most in your years here?"]
+  - [Professor Ellis, "How much space do you have? Let's start with the students."]

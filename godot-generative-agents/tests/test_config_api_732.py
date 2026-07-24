@@ -43,7 +43,7 @@ def test_library_personas_catalog():
         "priya",
         "ellis",
         "marcus",
-        # ... plus the #762 library growth (all parked, never in the default cast)
+        # ... plus the #762 library growth, round 1 (all parked, never in the default cast)
         "casey",
         "debra",
         "gus",
@@ -52,6 +52,27 @@ def test_library_personas_catalog():
         "nadia",
         "rosa",
         "theo",
+        # ... plus the #762 library growth, round 2 (also all parked)
+        "aiden",
+        "bethany",
+        "chris",
+        "dana",
+        "desmond",
+        "elena",
+        "fatima",
+        "grace",
+        "hannah",
+        "jamal",
+        "lily",
+        "mateo",
+        "nina",
+        "omar",
+        "ravi",
+        "sam",
+        "tessa",
+        "victor",
+        "wesley",
+        "yuki",
     }
     by_id = {e["id"]: e for e in entries}
     assert by_id["diego"]["name"] == "Diego Torres"

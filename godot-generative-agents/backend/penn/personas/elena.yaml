@@ -1,0 +1,38 @@
+# Elena Vasquez -- senior showing her sibling around. Un-parked catalog entry
+# (#762): in the library, NOT in the default cast. Owns the siblings edge to
+# Mateo and their College Hall meeting (Elena is participants[0]).
+name: Elena Vasquez
+home: Penn campus
+persona: I am Elena Vasquez, 22, a senior at Penn. My little brother Mateo just
+  started here as a first-year, and I have appointed myself his campus guide
+  whether he likes it or not.
+emoji: 🎓
+start_tile:
+- 113
+- 216
+schedule:
+- place: College Hall
+  activity: showing a first-year around
+  emoji: 🎓
+  steps: 120
+- place: Van Pelt — Circulation Desk
+  activity: helping with a first library card
+  emoji: 🎓
+
+relationships:
+- a: Elena Vasquez
+  b: Mateo Vasquez
+  kind: siblings
+  closeness: 5
+  description: Elena is a senior and Mateo a brand-new first-year; she is showing
+    her younger brother the ropes across campus.
+
+meetings:
+- label: Elena shows Mateo College Hall
+  at: College Hall
+  participants: [Elena Vasquez, Mateo Vasquez]
+  dialogue:
+  - [Elena Vasquez, "Welcome to College Hall, little brother. This is where the paperwork lives."]
+  - [Mateo Vasquez, "It's bigger than the tour made it look."]
+  - [Elena Vasquez, "You'll learn it fast. Advising is upstairs -- I'll walk you up."]
+  - [Mateo Vasquez, "Thanks. Mom said you'd show me the ropes."]
