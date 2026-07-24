@@ -45,8 +45,10 @@ import sys
 
 # --------------------------------------------------------------------------- #
 # Tileset wiring. Each interior sheet becomes one Tiled tileset appended to the
-# .tmj. GIDs are assigned right after the map's existing tilesets (kenney_urban
-# 1..486, lawn_edges 487..518 -> first free is 519).
+# .tmj. The three base sheets get import-time defaults matching the committed
+# map's layout (kenney_urban 1..486, lawn_edges 487..518 -> first free is 519);
+# bind_sheet_firstgids() re-derives EVERY firstgid from a loaded map, which is
+# the only source of truth (#746).
 # --------------------------------------------------------------------------- #
 FIRST_GID = 519
 SHEETS = [
@@ -55,15 +57,18 @@ SHEETS = [
     ("interior_school", "interior_school.png", 16, 16),  # desks / blackboards
     ("interior_bath", "interior_bath.png", 16, 16),  # toilets / sinks
 ]
-# Franuka expansion sheets (each 32x32) appended later. Their firstgids are
-# PINNED above decor_plants (which ends at gid 2138) so they never collide, and
-# spaced 1024 apart so each sheet owns a clean block.
+# Franuka expansion sheets (each 32x32) appended later. Their firstgids are NOT
+# pinned here: hardcoded pins drifted from the committed map (which holds these
+# sheets at 2139/3163/4187/5211) and painted wrong gids, so they are resolved
+# from the map's own ``tilesets`` array — matched on image filename — by
+# bind_sheet_firstgids() / ensure_sheets() (#746). Until a map is bound, gid()
+# refuses these sheets rather than guessing.
 EXPANSION_SHEETS = [
-    # name, image file, cols, rows, pinned firstgid
-    ("interior_alchemy", "interior_alchemy.png", 32, 32, 3000),
-    ("interior_bedroom", "interior_bedroom.png", 32, 32, 4024),
-    ("interior_clockwork", "interior_clockwork.png", 32, 32, 5048),
-    ("interior_music", "interior_music.png", 32, 32, 6072),
+    # name, image file (next to the .tmj), columns, rows
+    ("interior_alchemy", "interior_alchemy.png", 32, 32),
+    ("interior_bedroom", "interior_bedroom.png", 32, 32),
+    ("interior_clockwork", "interior_clockwork.png", 32, 32),
+    ("interior_music", "interior_music.png", 32, 32),
 ]
 
 # Resolve each sheet's firstgid + column count.
@@ -73,15 +78,22 @@ for name, _image, cols, rows in SHEETS:
     _FIRST[name] = _g
     _COLS[name] = cols
     _g += cols * rows
-for name, _image, cols, rows, firstgid in EXPANSION_SHEETS:
-    _FIRST[name] = firstgid
-    _COLS[name] = cols
+for name, _image, cols, rows in EXPANSION_SHEETS:
+    _COLS[name] = cols  # firstgid comes from the map (bind_sheet_firstgids)
 # every appended interior sheet as (name, image, cols, rows), for tileset insertion
-_ALL_SHEETS = SHEETS + [(n, i, c, r) for (n, i, c, r, _fg) in EXPANSION_SHEETS]
+_ALL_SHEETS = SHEETS + EXPANSION_SHEETS
+_EXPANSION_NAMES = {n for n, *_ in EXPANSION_SHEETS}
 
 
 def gid(sheet: str, col: int, row: int) -> int:
     """Tiled GID for tile (col,row) of an interior sheet."""
+    if sheet not in _FIRST:
+        raise KeyError(
+            f"sheet {sheet!r} has no firstgid for this map -- call "
+            "bind_sheet_firstgids(tmj) (or ensure_sheets) on the loaded map "
+            "before painting; expansion-sheet firstgids are resolved from the "
+            "map's own tilesets, not pinned (#746)"
+        )
     return _FIRST[sheet] + row * _COLS[sheet] + col
 
 
@@ -110,6 +122,101 @@ _SHEET_ALIAS = {
 # real gids too — no extra tileset is appended for them.
 _FIRST["kenney_urban"] = 1
 _COLS["kenney_urban"] = 27
+# kenney_urban's image in the baked maps (osm_to_tiled.py's base tileset), so
+# bind_sheet_firstgids() can re-derive the Kenney block from the map too.
+_KENNEY_IMAGE = "tilemap_packed.png"
+
+
+def bind_sheet_firstgids(tmj):
+    """Re-derive every known sheet's firstgid from THIS map's own ``tilesets``.
+
+    The map is the only source of truth (the #738 pattern): tilesets are
+    matched on image filename, so a map whose tilesets moved or were reordered
+    resolves with zero edits — unlike the hardcoded pins this replaces, which
+    drifted from the committed map and painted wrong gids (#746). Sheets the
+    map does not embed become unbound (expansion sheets — gid() then fails
+    loudly instead of writing junk) or keep their committed-layout defaults
+    (base sheets, so ensure_sheets() can still append them to a fresh bake).
+    The FLOOR/WALL/WINDOW palette gids, baked at import from the defaults, are
+    recomputed to match. Returns {sheet_name: firstgid} for every sheet bound
+    from the map."""
+    by_image = {}
+    for ts in tmj.get("tilesets", []):
+        if "firstgid" in ts and ts.get("image"):
+            by_image[os.path.basename(ts["image"])] = ts
+    bound = {}
+    for name, img, cols, _rows in _ALL_SHEETS + [
+        ("kenney_urban", _KENNEY_IMAGE, 27, 18)
+    ]:
+        ts = by_image.get(img)
+        if ts is None:
+            if name in _EXPANSION_NAMES:
+                _FIRST.pop(name, None)  # unbound -> gid() fails loudly
+            continue
+        _FIRST[name] = ts["firstgid"]
+        _COLS[name] = ts.get("columns", cols)
+        bound[name] = ts["firstgid"]
+    global FLOOR, WALL, WINDOW
+    FLOOR = tile_named("floor_wood_light")
+    WALL = tile_named("wall_brick")
+    WINDOW = tile_named("window")
+    return bound
+
+
+def _next_free_gid(tmj):
+    """First gid after the map's current top tileset block — the allocation
+    scheme that laid out the committed map (each new sheet lands right after
+    the last one's tiles)."""
+    return max(
+        (
+            ts["firstgid"] + ts.get("tilecount", 0)
+            for ts in tmj.get("tilesets", [])
+            if "firstgid" in ts
+        ),
+        default=1,
+    )
+
+
+def ensure_sheets(tmj, names=None):
+    """Make sure interior sheets are tilesets of THIS map, then bind firstgids.
+
+    `names` limits which sheets (default: every interior sheet). A missing
+    sheet is appended right after the map's current top gid — never at a
+    hardcoded pin (#746) — so gids into it resolve even on a freshly-baked map
+    that only has the Kenney sheet. Returns bind_sheet_firstgids(tmj)'s
+    mapping."""
+    if names is not None:
+        unknown = set(names) - {n for n, *_ in _ALL_SHEETS}
+        if unknown:
+            raise KeyError(f"unknown interior sheet(s): {sorted(unknown)}")
+    wanted = (
+        _ALL_SHEETS if names is None else [s for s in _ALL_SHEETS if s[0] in set(names)]
+    )
+    have = {
+        os.path.basename(ts["image"])
+        for ts in tmj.get("tilesets", [])
+        if ts.get("image")
+    }
+    for name, img, cols, rows in wanted:
+        if img in have:
+            continue
+        tmj["tilesets"].append(
+            {
+                "firstgid": _next_free_gid(tmj),
+                "name": name,
+                "image": img,
+                "imagewidth": cols * 16,
+                "imageheight": rows * 16,
+                "tilewidth": 16,
+                "tileheight": 16,
+                "columns": cols,
+                "tilecount": cols * rows,
+                "margin": 0,
+                "spacing": 0,
+            }
+        )
+    tmj["tilesets"].sort(key=lambda t: t["firstgid"])
+    return bind_sheet_firstgids(tmj)
 
 
 def block(sheet, c0, r0, w, h):
@@ -428,23 +535,9 @@ def strip_previous(tmj):
 
 
 def append_tilesets(tmj):
-    for name, img, cols, rows in _ALL_SHEETS:
-        tmj["tilesets"].append(
-            {
-                "firstgid": _FIRST[name],
-                "name": name,
-                "image": img,
-                "imagewidth": cols * 16,
-                "imageheight": rows * 16,
-                "tilewidth": 16,
-                "tileheight": 16,
-                "columns": cols,
-                "tilecount": cols * rows,
-                "margin": 0,
-                "spacing": 0,
-            }
-        )
-    tmj["tilesets"].sort(key=lambda t: t["firstgid"])
+    """Append any missing interior tileset and bind firstgids from the map.
+    (Formerly appended every sheet at a pinned firstgid; see #746.)"""
+    ensure_sheets(tmj)
 
 
 def clear_roof_on(tmj, layer_name, roof, W):

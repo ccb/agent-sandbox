@@ -384,27 +384,11 @@ def find_doors(foot, perimeter, interior, paths, W, H):
 # --------------------------------------------------------------------------- #
 def ensure_interior_tilesets(tmj):
     """Append furnish_building's interior tilesets only if they're missing, so our
-    floor/wall/door gids resolve even on a freshly-baked map."""
-    have = {t.get("name") for t in tmj["tilesets"]}
-    for name, img, cols, rows in fb._ALL_SHEETS:
-        if name in have:
-            continue
-        tmj["tilesets"].append(
-            {
-                "firstgid": fb._FIRST[name],
-                "name": name,
-                "image": img,
-                "imagewidth": cols * 16,
-                "imageheight": rows * 16,
-                "tilewidth": 16,
-                "tileheight": 16,
-                "columns": cols,
-                "tilecount": cols * rows,
-                "margin": 0,
-                "spacing": 0,
-            }
-        )
-    tmj["tilesets"].sort(key=lambda t: t["firstgid"])
+    floor/wall/door gids resolve even on a freshly-baked map. Delegates to
+    fb.ensure_sheets, which appends at the map's next free gid and re-derives
+    every sheet's firstgid from the map's own tilesets (#746) instead of
+    trusting import-time pins."""
+    fb.ensure_sheets(tmj)
 
 
 def strip_entrance_layers(tmj):

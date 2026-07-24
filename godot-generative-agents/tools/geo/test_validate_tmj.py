@@ -420,14 +420,14 @@ def test_catalog_wall_gid_on_solid_cell_is_ok(tmp_path):
 
 
 def test_catalog_wall_gids_resolve_against_this_tmj():
-    # Resolution must use the map's own tilesets, not furnish_building's pinned
-    # firstgids (the committed map predates the pinning): wall_set_silver lives
-    # on interior_music, firstgid 5211 in the tmj (pinned constant says 6072).
+    # Resolution must use the map's own tilesets, not hardcoded firstgids:
+    # wall_set_silver lives on interior_music, firstgid 5211 in the tmj (the
+    # pin furnish_building carried before #746 said 6072).
     w = real_world()
     gids = v.catalog_wall_gids(w)
     assert 543 in gids  # wall_brick, franuka (24,0) @ firstgid 519
     assert 5211 in gids  # wall_set_silver top-left, music (0,0) @ firstgid 5211
-    assert 6072 not in gids  # the pinned-firstgid value would be wrong here
+    assert 6072 not in gids  # the retired-pin value would be wrong here
 
 
 def _seal_rename_edit(walkable_wall_cells):
