@@ -15,6 +15,7 @@ trap 'rm -rf "$WORK"' EXIT
 cd "$HERE/.."
 rm -rf app/dist
 uv run python app/build_dist.py   # CDN runtime: no --with-pyodide for web
+uv run python app/build_iphone_reel.py   # keep /animations-iphone/ alive on deploy
 
 git clone -q --depth 1 "$REPO_URL" "$WORK"
 find "$WORK" -mindepth 1 -maxdepth 1 ! -name .git ! -name README.md -exec rm -rf {} +

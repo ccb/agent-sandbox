@@ -10,7 +10,7 @@
    and disconnected nodes drop off the clock automatically. */
 (() => {
   "use strict";
-  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "bats-c-m": ["svg", 640, 720], "bats-m": ["canvas", 640, 720], "blade": ["canvas", 640, 360], "blade-m": ["canvas", 640, 720], "boots": ["svg", 640, 360], "boots-m": ["svg", 640, 720], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "chimney-f": ["svg", 640, 360], "chimney-g": ["svg", 640, 360], "chimney-h": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-a-m": ["svg", 640, 720], "cyl-c": ["svg", 640, 400], "cyl-c-m": ["svg", 640, 720], "cyl-o": ["svg", 640, 400], "cyl-o-m": ["svg", 640, 720], "cyl-v": ["svg", 640, 400], "cyl-v-m": ["svg", 640, 720], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "cylinders-b-m": ["svg", 640, 720], "cylinders-m": ["svg", 640, 720], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flask-m": ["svg", 640, 720], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-b-m": ["canvas", 640, 720], "glowstone-c": ["canvas", 640, 300], "glowstone-c-m": ["canvas", 640, 720], "glowstone-m": ["canvas", 640, 720], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "resp-m": ["svg", 640, 720], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "silas-m": ["svg", 640, 720], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
+  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "bats-c-m": ["svg", 640, 720], "bats-m": ["canvas", 640, 720], "blade": ["canvas", 640, 360], "blade-m": ["canvas", 640, 720], "boots": ["svg", 640, 360], "boots-m": ["svg", 640, 720], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "chimney-f": ["svg", 640, 360], "chimney-g": ["svg", 640, 360], "chimney-h": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-a-m": ["svg", 640, 720], "cyl-c": ["svg", 640, 400], "cyl-c-m": ["svg", 640, 720], "cyl-o": ["svg", 640, 400], "cyl-o-m": ["svg", 640, 720], "cyl-v": ["svg", 640, 400], "cyl-v-m": ["svg", 640, 720], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "cylinders-b-m": ["svg", 640, 720], "cylinders-m": ["svg", 640, 720], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flask-m": ["svg", 640, 720], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-b-m": ["canvas", 640, 720], "glowstone-c": ["canvas", 640, 300], "glowstone-c-m": ["canvas", 640, 720], "glowstone-m": ["canvas", 640, 720], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-mother-b-m": ["svg", 640, 720], "mem-mother-m": ["svg", 640, 720], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "resp-m": ["svg", 640, 720], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "silas-m": ["svg", 640, 720], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
   const FIG = {
     _defs: {}, _uid: 0, _ticks: [], _timer: null, _target: null,
     MAX_LIVE: 3,
@@ -3710,6 +3710,61 @@
     } };
   }
 
+  /* ---- the memory frame, phone plate (CCB): the facet IS the memory, so
+     it dominates -- scaled into the middle of the portrait frame with the
+     ghost drawing inside it untouched. The Hall's tiling stays as set
+     dressing on the default plate and is dropped on the big crop (big=true,
+     1.75x, side corners off-frame -- the tiles were never the point). Type
+     re-set outside: 26px title, the wear class under the rule, 22px footer.
+     Same return shape as memFrame; memory bodies stamp unchanged. ---- */
+  function memFrameM(svg, clsText, wear, big) {
+    const S = big ? 1.75 : 1.45;
+    const TX = 320 - 320 * S, TY = 355 - 196 * S;
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const cls = label(svg, 20, 70, 16, PH_DIM);
+    cls.textContent = clsText;
+    const SC = el(svg, "g", { transform: `translate(${TX} ${TY}) scale(${S})` });
+    const HEXP = (cx, cy, k) => [[-210, 0], [-150, -108], [150, -108], [210, 0],
+      [150, 108], [-150, 108]].map(([px, py]) =>
+      `${cx + px * k},${cy + py * k}`).join(" ");
+    const inside = (dx, dy, pad) => Math.abs(dy) <= 108 + pad &&
+      Math.abs(dx) <= 210 + pad - 60 * Math.max(0, Math.abs(dy) - pad) / 108;
+    const cells = [], K = .15;
+    if (!big) for (let i = -9; i <= 9; i++) for (let j = -14; j <= 14; j++) {
+      const cx = 320 + i * 360 * K, cy = 196 + (i * 108 + j * 216) * K;
+      if (cy < 30 || cy > 350 || cx < -30 || cx > 670) continue;
+      if (inside(cx - 320, cy - 196, 14)) continue;
+      const base = .05 + ((i * 7 + j * 13 + 200) % 5) * .016;
+      cells.push({ base, cx, cy, q: el(SC, "polygon",
+        { points: HEXP(cx, cy, K * .9), fill: PH, "fill-opacity": base }) });
+    }
+    el(SC, "polygon", { points: "110,196 170,88 470,88 530,196 470,304 170,304",
+      fill: PH, "fill-opacity": .08, stroke: PH_BRIGHT, "stroke-width": 1.5 });
+    el(SC, "polygon", { points: "122,196 176,98 464,98 518,196 464,294 176,294",
+      fill: PH, "fill-opacity": .05, stroke: PH_DIM, opacity: .5 });
+    for (let w = 0; w < wear; w++)                             // the wear, notched
+      el(SC, "line", { x1: 184 + w * 9, y1: 300,
+        x2: 184 + w * 9, y2: w % 4 === 2 ? 312 : 308, stroke: PH_DIM, opacity: .85 });
+    const glint = el(SC, "circle", { r: 2, fill: PH_BRIGHT, opacity: 0 });
+    const ghost = el(SC, "g", {});                             // the memory itself
+    const foot = label(svg, 320, 640, 22, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const MCORN = [[110, 196], [170, 88], [470, 88], [530, 196], [470, 304], [170, 304]];
+    return { hdr, ghost, foot, tick: (t) => {
+      const front = ((t * 4) % 1000) - 30;                     // the wavefront
+      cells.forEach(c2 => {
+        const d = Math.abs(c2.cx + c2.cy - front);
+        c2.q.setAttribute("fill-opacity",
+          d < 44 ? c2.base + .15 * (1 - d / 44) : c2.base);
+      });
+      const c = MCORN[Math.floor(t / 22) % 6];
+      glint.setAttribute("cx", c[0]); glint.setAttribute("cy", c[1]);
+      glint.setAttribute("opacity", (t % 22) < 3 ? .9 : 0);
+      ghost.setAttribute("opacity", .35 + Math.max(0, Math.sin(t * .1)) * .55);
+    } };
+  }
+
   /* ---------------- 41: remember -- his mother ---------------- */
   FIG._define("mem-mother", "svg", function (svg) {
     const F = memFrame(svg, "HALL OF MEMORY / WEAR: NEARLY THROUGH", 13);
@@ -3753,6 +3808,144 @@
     el(hand, "path", { d: "M 24 14 Q 20 22 11 24", fill: "none", stroke: I4,
       "stroke-width": 4.6, "stroke-linecap": "round" });       // the thumb, beneath
     const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 150;
+      doWipe(T);
+      typeOn(F.hdr, "REMEMBER: HIS MOTHER", T, 4, 1.4);
+      F.tick(t);
+      glow.forEach((g2, i) => g2.setAttribute("fill-opacity",
+        [.04, .07, .11][i] * (.7 + (Math.floor(t / 5) % 3) * .2)));
+      const HOME = [372, 210], AWAY = [400, 234];             // a short, gentle settle
+      let hx = AWAY[0], hy = AWAY[1], on = 1;
+      if (T < 12) { on = 0; }
+      else if (T < 40) { const k = (T - 12) / 28;
+        hx = AWAY[0] + Math.round((HOME[0] - AWAY[0]) * k / 2) * 2;
+        hy = AWAY[1] + Math.round((HOME[1] - AWAY[1]) * k / 2) * 2; }
+      else if (T < 104) { hx = HOME[0]; hy = HOME[1] + (T >= 60 && T < 74 ? 2 : 0); }
+      else if (T < 128) { const k = (T - 104) / 24;
+        hx = HOME[0] + Math.round((AWAY[0] - HOME[0]) * k / 2) * 2;
+        hy = HOME[1] + Math.round((AWAY[1] - HOME[1]) * k / 2) * 2; }
+      else on = 0;
+      hand.setAttribute("transform", `translate(${hx} ${hy})`);
+      hand.setAttribute("opacity", on);
+      typeOn(F.foot, "THE MOST CONSULTED BANK IN THE LATTICE.", T, 110, 1.5);
+    });
+  });
+
+  /* ---------------- 41-m: his mother (phone twin, plate A) ---------------- */
+  /* Phone twin of 41 on the default memory plate: the facet at 1.45x with
+     the Hall's tiling kept; the memory body is 41's verbatim. */
+  FIG._define("mem-mother-m", "svg", function (svg) {
+    const F = memFrameM(svg, "HALL OF MEMORY / WEAR: NEARLY THROUGH", 13);
+    const I1 = "#1b4055", I2 = "#25567a", I3 = "#33739c", I4 = "#4a97c6";
+    // the light behind them, breathing
+    const glow = [105, 70, 40].map((r, i) => el(F.ghost, "circle",
+      { cx: 330, cy: 182, r, fill: PH, "fill-opacity": [.04, .07, .11][i] }));
+    // the mother, a dark shape leaning in from the upper left
+    el(F.ghost, "path", { fill: I1, d:
+      "M 226 170 Q 216 114 268 102 Q 306 98 318 128 L 331 159 L 322 180 L 324 192 " +
+      "Q 314 200 300 198 Q 262 198 226 170 Z" });
+    el(F.ghost, "path", { fill: I1, d:
+      "M 226 168 Q 212 202 220 244 Q 240 258 258 248 Q 236 220 240 190 Z" });  // her hair
+    el(F.ghost, "path", { d:
+      "M 316 126 Q 326 142 331 157 Q 324 165 327 171 Q 320 176 324 182 Q 322 188 312 195",
+      fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.8 }); // the lit edge: brow,
+    el(F.ghost, "circle", { cx: 314, cy: 148, r: 1.6, fill: BG });  // nose, lips -- and
+    el(F.ghost, "path", { d: "M 306 148 Q 312 152 318 150", fill: "none",
+      stroke: BG, "stroke-width": 1.4 });                      // her closed eye
+    // the child, looking up out of the glow
+    el(F.ghost, "circle", { cx: 356, cy: 206, r: 22, fill: I3 });
+    el(F.ghost, "path", { d: "M 340 190 Q 352 183 366 191", fill: "none",
+      stroke: PH_BRIGHT, "stroke-width": 1.6 });               // the lit brow
+    el(F.ghost, "circle", { cx: 345, cy: 203, r: 2, fill: BG });   // the open eye,
+    el(F.ghost, "path", { d: "M 340 197 Q 345 194 350 197", fill: "none",
+      stroke: BG, "stroke-width": 1.4 });                      // watching her
+    el(F.ghost, "path", { d: "M 364 200 Q 370 206 364 212", fill: "none",
+      stroke: BG, "stroke-width": 1.4 });                      // the ear
+    el(F.ghost, "path", { fill: I2, d:
+      "M 338 224 Q 314 234 312 256 Q 330 274 362 270 Q 390 260 386 234 Q 378 222 360 220 Z" });
+    // THE HAND -- four fingers following the curve of the small head
+    const hand = el(F.ghost, "g", {});
+    el(hand, "path", { d: "M 26 12 Q 48 30 62 54", fill: "none", stroke: I2,
+      "stroke-width": 9, "stroke-linecap": "round" });         // the forearm
+    el(hand, "path", { fill: I4, d:
+      "M 14 -8 Q 27 -7 28 4 Q 27 16 16 15 Q 20 4 14 -8 Z" }); // the back of the hand
+    ["M 18 -6 Q 0 -9 -6 -4", "M 19 0 Q 0 -2 -7 3",
+     "M 19 6 Q 1 5 -6 10", "M 18 12 Q 3 12 -3 16"].forEach(d =>
+      el(hand, "path", { d, fill: "none", stroke: I4, "stroke-width": 4.2,
+        "stroke-linecap": "round" }));                         // the fingers, cupping
+    el(hand, "path", { d: "M 24 14 Q 20 22 11 24", fill: "none", stroke: I4,
+      "stroke-width": 4.6, "stroke-linecap": "round" });       // the thumb, beneath
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 150;
+      doWipe(T);
+      typeOn(F.hdr, "REMEMBER: HIS MOTHER", T, 4, 1.4);
+      F.tick(t);
+      glow.forEach((g2, i) => g2.setAttribute("fill-opacity",
+        [.04, .07, .11][i] * (.7 + (Math.floor(t / 5) % 3) * .2)));
+      const HOME = [372, 210], AWAY = [400, 234];             // a short, gentle settle
+      let hx = AWAY[0], hy = AWAY[1], on = 1;
+      if (T < 12) { on = 0; }
+      else if (T < 40) { const k = (T - 12) / 28;
+        hx = AWAY[0] + Math.round((HOME[0] - AWAY[0]) * k / 2) * 2;
+        hy = AWAY[1] + Math.round((HOME[1] - AWAY[1]) * k / 2) * 2; }
+      else if (T < 104) { hx = HOME[0]; hy = HOME[1] + (T >= 60 && T < 74 ? 2 : 0); }
+      else if (T < 128) { const k = (T - 104) / 24;
+        hx = HOME[0] + Math.round((AWAY[0] - HOME[0]) * k / 2) * 2;
+        hy = HOME[1] + Math.round((AWAY[1] - HOME[1]) * k / 2) * 2; }
+      else on = 0;
+      hand.setAttribute("transform", `translate(${hx} ${hy})`);
+      hand.setAttribute("opacity", on);
+      typeOn(F.foot, "THE MOST CONSULTED BANK IN THE LATTICE.", T, 110, 1.5);
+    });
+  });
+
+  /* ---------------- 41-m-B: his mother (phone twin, plate B: big crop) ---------------- */
+  /* Framing variant for comparison: the facet at 1.75x, side corners off
+     the frame, no tiling -- the memory close up. Same body verbatim. */
+  FIG._define("mem-mother-b-m", "svg", function (svg) {
+    const F = memFrameM(svg, "HALL OF MEMORY / WEAR: NEARLY THROUGH", 13, true);
+    const I1 = "#1b4055", I2 = "#25567a", I3 = "#33739c", I4 = "#4a97c6";
+    // the light behind them, breathing
+    const glow = [105, 70, 40].map((r, i) => el(F.ghost, "circle",
+      { cx: 330, cy: 182, r, fill: PH, "fill-opacity": [.04, .07, .11][i] }));
+    // the mother, a dark shape leaning in from the upper left
+    el(F.ghost, "path", { fill: I1, d:
+      "M 226 170 Q 216 114 268 102 Q 306 98 318 128 L 331 159 L 322 180 L 324 192 " +
+      "Q 314 200 300 198 Q 262 198 226 170 Z" });
+    el(F.ghost, "path", { fill: I1, d:
+      "M 226 168 Q 212 202 220 244 Q 240 258 258 248 Q 236 220 240 190 Z" });  // her hair
+    el(F.ghost, "path", { d:
+      "M 316 126 Q 326 142 331 157 Q 324 165 327 171 Q 320 176 324 182 Q 322 188 312 195",
+      fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.8 }); // the lit edge: brow,
+    el(F.ghost, "circle", { cx: 314, cy: 148, r: 1.6, fill: BG });  // nose, lips -- and
+    el(F.ghost, "path", { d: "M 306 148 Q 312 152 318 150", fill: "none",
+      stroke: BG, "stroke-width": 1.4 });                      // her closed eye
+    // the child, looking up out of the glow
+    el(F.ghost, "circle", { cx: 356, cy: 206, r: 22, fill: I3 });
+    el(F.ghost, "path", { d: "M 340 190 Q 352 183 366 191", fill: "none",
+      stroke: PH_BRIGHT, "stroke-width": 1.6 });               // the lit brow
+    el(F.ghost, "circle", { cx: 345, cy: 203, r: 2, fill: BG });   // the open eye,
+    el(F.ghost, "path", { d: "M 340 197 Q 345 194 350 197", fill: "none",
+      stroke: BG, "stroke-width": 1.4 });                      // watching her
+    el(F.ghost, "path", { d: "M 364 200 Q 370 206 364 212", fill: "none",
+      stroke: BG, "stroke-width": 1.4 });                      // the ear
+    el(F.ghost, "path", { fill: I2, d:
+      "M 338 224 Q 314 234 312 256 Q 330 274 362 270 Q 390 260 386 234 Q 378 222 360 220 Z" });
+    // THE HAND -- four fingers following the curve of the small head
+    const hand = el(F.ghost, "g", {});
+    el(hand, "path", { d: "M 26 12 Q 48 30 62 54", fill: "none", stroke: I2,
+      "stroke-width": 9, "stroke-linecap": "round" });         // the forearm
+    el(hand, "path", { fill: I4, d:
+      "M 14 -8 Q 27 -7 28 4 Q 27 16 16 15 Q 20 4 14 -8 Z" }); // the back of the hand
+    ["M 18 -6 Q 0 -9 -6 -4", "M 19 0 Q 0 -2 -7 3",
+     "M 19 6 Q 1 5 -6 10", "M 18 12 Q 3 12 -3 16"].forEach(d =>
+      el(hand, "path", { d, fill: "none", stroke: I4, "stroke-width": 4.2,
+        "stroke-linecap": "round" }));                         // the fingers, cupping
+    el(hand, "path", { d: "M 24 14 Q 20 22 11 24", fill: "none", stroke: I4,
+      "stroke-width": 4.6, "stroke-linecap": "round" });       // the thumb, beneath
+    const doWipe = wipe(svg, 640, 720, 2, 12);
     clock(t => {
       const T = t % 150;
       doWipe(T);
