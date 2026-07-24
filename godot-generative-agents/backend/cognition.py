@@ -1621,6 +1621,30 @@ def remember_outcome(
         record.metadata[_IMPORTANCE_LOCKED] = True
 
 
+def remember_decide_timeout(char, step: int) -> None:
+    """Record that ``char``'s decide blew its wall-clock budget (#758).
+
+    The timeout counterpart of :func:`remember_outcome`'s #636 failure branch,
+    deliberately deferred there: a decide that outlives ``decide_timeout``
+    (the parallel-decide -> idle -> late-answer path, #366) chose nothing, so
+    there is no command to remember -- but writing *nothing* leaves repeated
+    timeouts on the same situation invisible to the agent's future reasoning.
+    "I was thinking about what to do at <place> but couldn't decide in time."
+    keys the memory to where the agent stood, so retrieval surfaces it exactly
+    when the agent faces that situation again.
+
+    Same conventions as the #636 failure memory: importance 3.0 (above routine
+    2.0 successes, below the 6-8 causal signals) and NOT locked, so #583's
+    score_new_memories re-scores it at the agent's next completed decide --
+    its unscored-watermark scan picks the record up then; scoring *here* would
+    send another synchronous call to the very brain that just blew its budget,
+    stalling the tick the budget protects.
+    """
+    place = char.location.name if char.location is not None else ""
+    text = render("reflection", timed_out=True, place=place)
+    char.agent.memory.add_observation(text, turn=step, importance=3.0)
+
+
 @dataclass
 class ActiveConversation:
     """A conversation in progress across ticks (issue #371).

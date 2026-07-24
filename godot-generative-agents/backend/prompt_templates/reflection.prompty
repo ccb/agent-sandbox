@@ -14,6 +14,11 @@ description: >
   overrides the verb-selected phrasing. The reason clause is dropped when
   the parser left no message (run_simulation then passes the command back as
   the reason, so "reason == command" reads as "no reason available").
+  A timed-out decide (#758) is recorded as
+  I was thinking about what to do at <place> but couldn't decide in time.
+  -- there is no command on that path (nothing was chosen), so the
+  timed_out flag overrides everything else; the "at <place>" clause is
+  dropped when the agent stands nowhere.
   The memory's importance is chosen in Python (it is data, not text), so
   only the wording lives here.
 inputs:
@@ -56,6 +61,12 @@ inputs:
   reason:
     type: string
     description: The parser's fail message for the blocked attempt (verb-agnostic; used when failed is true, #636).
+  timed_out:
+    type: boolean
+    description: Whether this records a decide that blew its wall-clock budget (#758); overrides every other phrasing (a timeout has no command or verb).
+  place:
+    type: string
+    description: Where the persona stood while deciding (used when timed_out is true, #758); empty when it stands nowhere.
 sample:
   verb: drink
   location: ""
@@ -65,7 +76,11 @@ sample:
   recovered: false
   command: ""
 ---
-{%- if failed and reason and reason != command -%}
+{%- if timed_out and place -%}
+I was thinking about what to do at {{ place }} but couldn't decide in time.
+{%- elif timed_out -%}
+I was thinking about what to do but couldn't decide in time.
+{%- elif failed and reason and reason != command -%}
 I tried to "{{ command }}" but it didn't work: {{ reason }}
 {%- elif failed -%}
 I tried to "{{ command }}" but it didn't work.

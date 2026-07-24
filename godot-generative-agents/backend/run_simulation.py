@@ -39,6 +39,7 @@ from .cognition import (
     memories_for_frame,
     memory_stream_for_persona,
     observe_and_decide,
+    remember_decide_timeout,
     remember_outcome,
     score_new_memories,
 )
@@ -395,6 +396,23 @@ def step(
                     pending[name] = fut
                     decided[name] = None
                     timeouts.append(name)
+                    # #758: leave a first-person "couldn't decide in time"
+                    # memory (#636's failure-memory counterpart for the
+                    # timeout path), so repeated timeouts on the same
+                    # situation bias future retrieval instead of vanishing.
+                    # Once per timeout EVENT, not per parked tick: while the
+                    # straggler stays in flight, later ticks take the
+                    # decide_pending branch above (never this one), and its
+                    # late answer is applied at a decision point where the
+                    # normal success/failure branches remember the OUTCOME --
+                    # a different fact, so no double-write. Concurrency is the
+                    # same containment as the parked future itself: the
+                    # straggler is inside its blocking LLM call (its memory
+                    # writes all happened before it), and record appends are
+                    # GIL-atomic. Unreachable without an executor missing its
+                    # deadline, so simulate()'s serial bakes stay
+                    # byte-identical.
+                    remember_decide_timeout(chars[name], step_idx)
     if decide_info is not None:
         decide_info.update(deciders=len(due), timeouts=timeouts)
 
