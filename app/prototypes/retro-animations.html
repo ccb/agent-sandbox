@@ -734,6 +734,14 @@
   </section>
 
   <section>
+    <div class="slate"><h2>14 — THE MANTIS JAR (phone)</h2><span class="kind">LITHO / PHONE TWIN</span></div>
+    <div class="screen">
+      <svg id="jar-mantis-m" viewBox="0 0 640 720" aria-label="14 — THE MANTIS JAR (phone)"></svg>
+    </div>
+    <p class="spec">Phone twin of jar-mantis: the canopic jar close-up, big.</p>
+  </section>
+
+  <section>
     <div class="slate"><h2>15 &mdash; THE JACKAL JAR</h2><span class="kind">LITHO / CLOSE-UP</span></div>
     <div class="screen">
       <svg id="jar-jackal" viewBox="0 0 640 300" aria-label="The jackal jar, close up"></svg>
@@ -744,6 +752,14 @@
   </section>
 
   <section>
+    <div class="slate"><h2>15 — THE JACKAL JAR (phone)</h2><span class="kind">LITHO / PHONE TWIN</span></div>
+    <div class="screen">
+      <svg id="jar-jackal-m" viewBox="0 0 640 720" aria-label="15 — THE JACKAL JAR (phone)"></svg>
+    </div>
+    <p class="spec">Phone twin of jar-jackal: the canopic jar close-up, big.</p>
+  </section>
+
+  <section>
     <div class="slate"><h2>16 &mdash; THE FALCON JAR</h2><span class="kind">LITHO / CLOSE-UP</span></div>
     <div class="screen">
       <svg id="jar-falcon" viewBox="0 0 640 300" aria-label="The falcon jar, close up"></svg>
@@ -751,6 +767,14 @@
     <p class="spec">The hooked ceremonial stopper with its slow nictitating blink, and through
        the cutaway, the coil of cured intestines turning by degrees. Last worn as a helm by
        the spawn of guts. <span class="attach">Attaches: EXAMINE FALCON JAR; the tribute economy.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>16 — THE FALCON JAR (phone)</h2><span class="kind">LITHO / PHONE TWIN</span></div>
+    <div class="screen">
+      <svg id="jar-falcon-m" viewBox="0 0 640 720" aria-label="16 — THE FALCON JAR (phone)"></svg>
+    </div>
+    <p class="spec">Phone twin of jar-falcon: the canopic jar close-up, big.</p>
   </section>
 
   <section>
@@ -765,6 +789,14 @@
   </section>
 
   <section>
+    <div class="slate"><h2>29 — THE BABOON JAR (phone)</h2><span class="kind">LITHO / PHONE TWIN</span></div>
+    <div class="screen">
+      <svg id="jar-baboon-m" viewBox="0 0 640 720" aria-label="29 — THE BABOON JAR (phone)"></svg>
+    </div>
+    <p class="spec">Phone twin of jar-baboon: the canopic jar close-up, big.</p>
+  </section>
+
+  <section>
     <div class="slate"><h2>30 &mdash; THE HUMAN JAR</h2><span class="kind">LITHO / CLOSE-UP</span></div>
     <div class="screen">
       <svg id="jar-human" viewBox="0 0 640 300" aria-label="The human jar"></svg>
@@ -773,6 +805,14 @@
        decidedly not smiling, lids shut. In the cutaway the liver drips at the patience
        of geology; now and then the carved lids flicker, which they should not.
        <span class="attach">Attaches: EXAMINE HUMAN JAR.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>30 — THE HUMAN JAR (phone)</h2><span class="kind">LITHO / PHONE TWIN</span></div>
+    <div class="screen">
+      <svg id="jar-human-m" viewBox="0 0 640 720" aria-label="30 — THE HUMAN JAR (phone)"></svg>
+    </div>
+    <p class="spec">Phone twin of jar-human: the canopic jar close-up, big.</p>
   </section>
 
   <section>
@@ -1439,6 +1479,44 @@
       });
       typeOn(foot1, fL1, T, 120, 1.6);
       typeOn(foot2, fL2, T, 120 + fL1.length, 1.6);
+    });
+  }
+
+  // a canopic-jar close-up, phone layout -- shared by the jar-*-m twins.
+  // cfg = { key, head, header, callouts:[...], footer }
+  function jarCardM(svg, cfg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 24, PH_BRIGHT);
+    const GEL = stipple(svg, "dots-" + cfg.key, PH_DIM, 1.4);
+    // the jar body: neck, shoulders, tapering body, rounded base
+    el(svg, "path", { fill: GEL, stroke: PH, "stroke-width": 2.2, d:
+      "M 250 196 Q 230 210 228 250 L 236 404 Q 240 432 320 434 " +
+      "Q 400 432 404 404 L 412 250 Q 410 210 390 196 Z" });
+    el(svg, "ellipse", { cx: 320, cy: 196, rx: 70, ry: 12, fill: BG, stroke: PH, "stroke-width": 2 });
+    // the stopper: the animal head glyph, scaled up, seated on the neck
+    const g = el(svg, "g", { transform: "translate(-448 -505) scale(2.4)" });
+    headGlyph(g, cfg.head, 320);
+    // the gel contents -- a coiled thing -- and bubbles rising through it
+    const coil = el(svg, "path", { fill: "none", stroke: PH, "stroke-width": 1.6, opacity: .7,
+      d: "M 292 358 Q 320 328 348 354 Q 356 384 320 388 Q 286 384 300 358" });
+    const bubs = [284, 320, 354].map(x => el(svg, "circle", { cx: x, cy: 400, r: 3,
+      fill: "none", stroke: PH, opacity: .7 }));
+    const calls = (cfg.callouts || []).map((c, i) => label(svg, 40, 486 + i * 36, 18, PH));
+    const fw = cfg.footer, cut = fw.length > 34 ? fw.lastIndexOf(" ", 34) : -1;
+    const fL1 = cut > 0 ? fw.slice(0, cut) : fw, fL2 = cut > 0 ? fw.slice(cut + 1) : "";
+    const foot1 = label(svg, 320, 648, 21, FUNGUS); foot1.setAttribute("text-anchor", "middle");
+    const foot2 = label(svg, 320, 678, 21, FUNGUS); foot2.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 210;
+      doWipe(T);
+      typeOn(hdr, cfg.header, T, 4, 1.1);
+      bubs.forEach((b, i) => b.setAttribute("cy", 400 - ((t * 2 + i * 40) % 200)));
+      coil.setAttribute("opacity", .5 + .3 * Math.abs(Math.sin(t * .1)));
+      (cfg.callouts || []).forEach((c, i) => typeOn(calls[i], c, T, 30 + i * 18, 1.5));
+      typeOn(foot1, fL1, T, 150, 1.6);
+      typeOn(foot2, fL2, T, 150 + fL1.length, 1.6);
     });
   }
 
@@ -8147,6 +8225,36 @@
   {
     const svg = document.getElementById("cyl-o-m");
     cylsCardM(svg, { key: "cyl-o-m", header: "THE BURIAL CYLINDERS, ORANGE DOWN", kicker: "GUARD ISSUE / ONE BURST", burst: ["ORANGE"], footer: "ORANGE FIRST. THE BLOOM THANKS YOU FOR YOUR LUNGS." });
+  }
+
+  /* ---------------- jar-mantis-m (phone twin) ---------------- */
+  {
+    const svg = document.getElementById("jar-mantis-m");
+    jarCardM(svg, { key: "jar-mantis-m", head: "MANTIS", header: "THE MANTIS JAR (SPLIT, LISTENING)", callouts: ["EYES: COMPOUND. THE FACETS STILL COUNT", "THE SPLIT: SOMETHING BUDS IN IT", "IT AMPLIFIES. MAKE NO SOUND HERE"], footer: "IT LISTENS. THEN IT SINGS." });
+  }
+
+  /* ---------------- jar-jackal-m (phone twin) ---------------- */
+  {
+    const svg = document.getElementById("jar-jackal-m");
+    jarCardM(svg, { key: "jar-jackal-m", head: "JACKAL", header: "THE JACKAL JAR (THE BRAIN, STRANGELY)", callouts: ["EARS: STILL LISTENING", "CONTENTS: HIS THOUGHTS, JARRED", "TASTE: SOMEBODY'S BIOGRAPHY"], footer: "APPETITES AND THOUGHTS, JARRED SEPARATELY. BOTH GOT UP." });
+  }
+
+  /* ---------------- jar-falcon-m (phone twin) ---------------- */
+  {
+    const svg = document.getElementById("jar-falcon-m");
+    jarCardM(svg, { key: "jar-falcon-m", head: "FALCON", header: "THE FALCON JAR (THE COIL, CURED)", callouts: ["BEAK: CEREMONIAL, STILL SHARP", "CONTENTS: THE COIL. TRIBUTE, IDEALLY", "LAST WORN AS A HELM, BY SOMETHING BLIND"], footer: "FOOD, TECHNICALLY. TRIBUTE, IDEALLY." });
+  }
+
+  /* ---------------- jar-baboon-m (phone twin) ---------------- */
+  {
+    const svg = document.getElementById("jar-baboon-m");
+    jarCardM(svg, { key: "jar-baboon-m", head: "BABOON", header: "THE BABOON JAR (THE LUNGS, KEPT)", callouts: ["BROW: DISAPPROVING, PROFESSIONALLY", "CONTENTS: THE LUNGS. STILL AT WORK", "THE GLASS FOGS FROM THE INSIDE"], footer: "FOUR THOUSAND YEARS. STILL COUNTING BREATHS." });
+  }
+
+  /* ---------------- jar-human-m (phone twin) ---------------- */
+  {
+    const svg = document.getElementById("jar-human-m");
+    jarCardM(svg, { key: "jar-human-m", head: "HUMAN", header: "THE HUMAN JAR (HIS OWN FACE, YOUNG)", callouts: ["THE FACE: HIS OWN, YOUNG. NOT SMILING", "CONTENTS: THE LIVER. GRUDGES INTACT", "THE LIDS: CARVED SHUT. CHECK ANYWAY"], footer: "THE ONLY JAR WITH ITS OWNER'S FACE. IT ISN'T FLATTERED." });
   }
 
 })();

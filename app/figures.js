@@ -10,7 +10,7 @@
    and disconnected nodes drop off the clock automatically. */
 (() => {
   "use strict";
-  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "bats-c-m": ["svg", 640, 720], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "canopic-c-m": ["svg", 640, 720], "centipede": ["svg", 640, 360], "chimney-f": ["svg", 640, 360], "chimney-g": ["svg", 640, 360], "chimney-h": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-a-m": ["svg", 640, 720], "cyl-c": ["svg", 640, 400], "cyl-c-m": ["svg", 640, 720], "cyl-o": ["svg", 640, 400], "cyl-o-m": ["svg", 640, 720], "cyl-v": ["svg", 640, 400], "cyl-v-m": ["svg", 640, 720], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "cylinders-b-m": ["svg", 640, 720], "cylinders-m": ["svg", 640, 720], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
+  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "bats-c-m": ["svg", 640, 720], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "canopic-c-m": ["svg", 640, 720], "centipede": ["svg", 640, 360], "chimney-f": ["svg", 640, 360], "chimney-g": ["svg", 640, 360], "chimney-h": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-a-m": ["svg", 640, 720], "cyl-c": ["svg", 640, 400], "cyl-c-m": ["svg", 640, 720], "cyl-o": ["svg", 640, 400], "cyl-o-m": ["svg", 640, 720], "cyl-v": ["svg", 640, 400], "cyl-v-m": ["svg", 640, 720], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "cylinders-b-m": ["svg", 640, 720], "cylinders-m": ["svg", 640, 720], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-baboon-m": ["svg", 640, 720], "jar-falcon": ["svg", 640, 300], "jar-falcon-m": ["svg", 640, 720], "jar-human": ["svg", 640, 300], "jar-human-m": ["svg", 640, 720], "jar-jackal": ["svg", 640, 300], "jar-jackal-m": ["svg", 640, 720], "jar-mantis": ["svg", 640, 300], "jar-mantis-m": ["svg", 640, 720], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
   const FIG = {
     _defs: {}, _uid: 0, _ticks: [], _timer: null, _target: null,
     MAX_LIVE: 3,
@@ -367,6 +367,44 @@
       });
       typeOn(foot1, fL1, T, 120, 1.6);
       typeOn(foot2, fL2, T, 120 + fL1.length, 1.6);
+    });
+  }
+
+  // a canopic-jar close-up, phone layout -- shared by the jar-*-m twins.
+  // cfg = { key, head, header, callouts:[...], footer }
+  function jarCardM(svg, cfg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 24, PH_BRIGHT);
+    const GEL = stipple(svg, "dots-" + cfg.key, PH_DIM, 1.4);
+    // the jar body: neck, shoulders, tapering body, rounded base
+    el(svg, "path", { fill: GEL, stroke: PH, "stroke-width": 2.2, d:
+      "M 250 196 Q 230 210 228 250 L 236 404 Q 240 432 320 434 " +
+      "Q 400 432 404 404 L 412 250 Q 410 210 390 196 Z" });
+    el(svg, "ellipse", { cx: 320, cy: 196, rx: 70, ry: 12, fill: BG, stroke: PH, "stroke-width": 2 });
+    // the stopper: the animal head glyph, scaled up, seated on the neck
+    const g = el(svg, "g", { transform: "translate(-448 -505) scale(2.4)" });
+    headGlyph(g, cfg.head, 320);
+    // the gel contents -- a coiled thing -- and bubbles rising through it
+    const coil = el(svg, "path", { fill: "none", stroke: PH, "stroke-width": 1.6, opacity: .7,
+      d: "M 292 358 Q 320 328 348 354 Q 356 384 320 388 Q 286 384 300 358" });
+    const bubs = [284, 320, 354].map(x => el(svg, "circle", { cx: x, cy: 400, r: 3,
+      fill: "none", stroke: PH, opacity: .7 }));
+    const calls = (cfg.callouts || []).map((c, i) => label(svg, 40, 486 + i * 36, 18, PH));
+    const fw = cfg.footer, cut = fw.length > 34 ? fw.lastIndexOf(" ", 34) : -1;
+    const fL1 = cut > 0 ? fw.slice(0, cut) : fw, fL2 = cut > 0 ? fw.slice(cut + 1) : "";
+    const foot1 = label(svg, 320, 648, 21, FUNGUS); foot1.setAttribute("text-anchor", "middle");
+    const foot2 = label(svg, 320, 678, 21, FUNGUS); foot2.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 210;
+      doWipe(T);
+      typeOn(hdr, cfg.header, T, 4, 1.1);
+      bubs.forEach((b, i) => b.setAttribute("cy", 400 - ((t * 2 + i * 40) % 200)));
+      coil.setAttribute("opacity", .5 + .3 * Math.abs(Math.sin(t * .1)));
+      (cfg.callouts || []).forEach((c, i) => typeOn(calls[i], c, T, 30 + i * 18, 1.5));
+      typeOn(foot1, fL1, T, 150, 1.6);
+      typeOn(foot2, fL2, T, 150 + fL1.length, 1.6);
     });
   }
 
@@ -7007,6 +7045,31 @@
   /* ---------------- cyl-o-m (phone twin) ---------------- */
   FIG._define("cyl-o-m", "svg", function (svg) {
     cylsCardM(svg, { key: "cyl-o-m", header: "THE BURIAL CYLINDERS, ORANGE DOWN", kicker: "GUARD ISSUE / ONE BURST", burst: ["ORANGE"], footer: "ORANGE FIRST. THE BLOOM THANKS YOU FOR YOUR LUNGS." });
+  });
+
+  /* ---------------- jar-mantis-m (phone twin) ---------------- */
+  FIG._define("jar-mantis-m", "svg", function (svg) {
+    jarCardM(svg, { key: "jar-mantis-m", head: "MANTIS", header: "THE MANTIS JAR (SPLIT, LISTENING)", callouts: ["EYES: COMPOUND. THE FACETS STILL COUNT", "THE SPLIT: SOMETHING BUDS IN IT", "IT AMPLIFIES. MAKE NO SOUND HERE"], footer: "IT LISTENS. THEN IT SINGS." });
+  });
+
+  /* ---------------- jar-jackal-m (phone twin) ---------------- */
+  FIG._define("jar-jackal-m", "svg", function (svg) {
+    jarCardM(svg, { key: "jar-jackal-m", head: "JACKAL", header: "THE JACKAL JAR (THE BRAIN, STRANGELY)", callouts: ["EARS: STILL LISTENING", "CONTENTS: HIS THOUGHTS, JARRED", "TASTE: SOMEBODY'S BIOGRAPHY"], footer: "APPETITES AND THOUGHTS, JARRED SEPARATELY. BOTH GOT UP." });
+  });
+
+  /* ---------------- jar-falcon-m (phone twin) ---------------- */
+  FIG._define("jar-falcon-m", "svg", function (svg) {
+    jarCardM(svg, { key: "jar-falcon-m", head: "FALCON", header: "THE FALCON JAR (THE COIL, CURED)", callouts: ["BEAK: CEREMONIAL, STILL SHARP", "CONTENTS: THE COIL. TRIBUTE, IDEALLY", "LAST WORN AS A HELM, BY SOMETHING BLIND"], footer: "FOOD, TECHNICALLY. TRIBUTE, IDEALLY." });
+  });
+
+  /* ---------------- jar-baboon-m (phone twin) ---------------- */
+  FIG._define("jar-baboon-m", "svg", function (svg) {
+    jarCardM(svg, { key: "jar-baboon-m", head: "BABOON", header: "THE BABOON JAR (THE LUNGS, KEPT)", callouts: ["BROW: DISAPPROVING, PROFESSIONALLY", "CONTENTS: THE LUNGS. STILL AT WORK", "THE GLASS FOGS FROM THE INSIDE"], footer: "FOUR THOUSAND YEARS. STILL COUNTING BREATHS." });
+  });
+
+  /* ---------------- jar-human-m (phone twin) ---------------- */
+  FIG._define("jar-human-m", "svg", function (svg) {
+    jarCardM(svg, { key: "jar-human-m", head: "HUMAN", header: "THE HUMAN JAR (HIS OWN FACE, YOUNG)", callouts: ["THE FACE: HIS OWN, YOUNG. NOT SMILING", "CONTENTS: THE LIVER. GRUDGES INTACT", "THE LIDS: CARVED SHUT. CHECK ANYWAY"], footer: "THE ONLY JAR WITH ITS OWNER'S FACE. IT ISN'T FLATTERED." });
   });
 
 })();
