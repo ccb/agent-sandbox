@@ -1430,7 +1430,25 @@ class PennStepper:
             raise ValueError("cast: must name at least one persona")
         new_sim_config = self.sim_config
         if sim_config is not None:
-            new_sim_config = SimulationConfig.from_dict(sim_config)
+            # The wire never carries the key-bearing sections: describe_config /
+            # _sim_config_for_manifest strip game.llm + embedding (they can hold
+            # api_key material). So a POST of the stripped knobs.current has them
+            # absent; rebuilding straight from it would reset a non-default
+            # embedding (or game.llm) to None -- silently reverting memory
+            # retrieval to keyword overlap on the first edit (#753). Re-attach
+            # them from the live config (its only source of truth) before the
+            # rebuild. The frontend sends the whole merged knobs.current, so the
+            # ONLY missing pieces are these two top-level sections -- re-attach
+            # them, don't deep-merge.
+            merged = dict(sim_config)
+            if self.sim_config is not None:
+                live = self.sim_config.to_dict()
+                if "embedding" in live:
+                    merged["embedding"] = live["embedding"]
+                live_llm = live.get("game", {}).get("llm")
+                if live_llm is not None:
+                    merged["game"] = {**merged.get("game", {}), "llm": live_llm}
+            new_sim_config = SimulationConfig.from_dict(merged)
         new_llm = self.llm
         if brain is not None:
             if brain not in ("mock", "scripted", "llm"):
