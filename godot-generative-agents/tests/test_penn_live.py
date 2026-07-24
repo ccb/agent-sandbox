@@ -346,6 +346,7 @@ def test_run_usage_rebaselines_on_reset_and_run_rows_carry_run_cost(tmp_path):
     stepper = PennStepper(num_steps=3, world=build_penn_world(), run_store=store)
     assert stepper.run_usage() == {
         "run_calls": 0,
+        "run_failed_calls": 0,
         "run_cost_usd": 0.0,
         "run_by_actor": {},
     }
@@ -353,6 +354,7 @@ def test_run_usage_rebaselines_on_reset_and_run_rows_carry_run_cost(tmp_path):
     _spend(stepper.ledger, 0.05)
     assert stepper.run_usage() == {
         "run_calls": 2,
+        "run_failed_calls": 0,
         "run_cost_usd": 0.3,
         "run_by_actor": {"Diego Torres": 0.3},
     }
@@ -361,6 +363,7 @@ def test_run_usage_rebaselines_on_reset_and_run_rows_carry_run_cost(tmp_path):
     # A mock tick appended $0 records, but run_calls/run_by_actor ignore them.
     assert stepper.run_usage() == {
         "run_calls": 2,
+        "run_failed_calls": 0,
         "run_cost_usd": pytest.approx(0.3),
         "run_by_actor": {"Diego Torres": pytest.approx(0.3)},
     }
@@ -370,6 +373,7 @@ def test_run_usage_rebaselines_on_reset_and_run_rows_carry_run_cost(tmp_path):
     # The new run starts from zero...
     assert stepper.run_usage() == {
         "run_calls": 0,
+        "run_failed_calls": 0,
         "run_cost_usd": 0.0,
         "run_by_actor": {},
     }
@@ -386,6 +390,7 @@ def test_run_usage_rebaselines_on_reset_and_run_rows_carry_run_cost(tmp_path):
     _spend(stepper.ledger, 0.05, actor="Sofia Ramirez")
     assert stepper.run_usage() == {
         "run_calls": 2,
+        "run_failed_calls": 0,
         "run_cost_usd": 0.15,
         "run_by_actor": {"Diego Torres": 0.1, "Sofia Ramirez": 0.05},
     }
@@ -396,6 +401,7 @@ def test_run_usage_rebaselines_on_reset_and_run_rows_carry_run_cost(tmp_path):
     # No store required: a bare stepper offers the same view.
     assert PennStepper(num_steps=1, world=build_penn_world()).run_usage() == {
         "run_calls": 0,
+        "run_failed_calls": 0,
         "run_cost_usd": 0.0,
         "run_by_actor": {},
     }

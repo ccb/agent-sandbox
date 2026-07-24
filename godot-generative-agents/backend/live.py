@@ -82,10 +82,11 @@ class SimStepper(Protocol):
       publisher the stepper buffers as before, so bare :func:`run_loop`
       embeddings are unchanged.
     * ``run_usage() -> dict`` -- additive per-run usage fields
-      (``run_calls``/``run_cost_usd``/``run_by_actor``) merged into
-      ``GET /usage`` beside the lifetime summary (#526, #569); the ledger itself
-      stays lifetime, and ``run_calls``/``run_by_actor`` count real model calls
-      only (the free mock brain's $0 records don't inflate them).
+      (``run_calls``/``run_failed_calls``/``run_cost_usd``/``run_by_actor``)
+      merged into ``GET /usage`` beside the lifetime summary (#526, #569); the
+      ledger itself stays lifetime, and ``run_calls``/``run_by_actor`` count
+      real model calls only (the free mock brain's $0 records don't inflate
+      them). ``run_failed_calls`` (#745) counts the run's failed real calls.
     * ``run_store`` / ``run_id`` -- the #304 persistence seam: the
       :class:`backend.run_store.RunStore` this stepper records into, and the
       id of the run it is currently appending to. When present, the ``/runs``
