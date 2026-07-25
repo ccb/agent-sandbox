@@ -2646,11 +2646,15 @@ def build_game(seed=None):
 
     # The hall's two faces (CCB): in the dark the statues are what your hands
     # make of them (46, the touch-trace); raise a light and they are what the
-    # sculptor made of them (47, the adoration). The same choice greets
-    # arrival and LOOK -- this room, uniquely, deals a card in the dark.
+    # sculptor made of them (47, the adoration) -- with bat-shadows crossing
+    # only while the colony still roosts overhead (47-F once they've flown).
+    # The same choice greets arrival and LOOK -- this room, uniquely, deals a
+    # card in the dark.
     def _youth_card(g):
         lit = perception.sight_for(g.player, youth)[0] >= perception.Sight.CLEAR
-        return "youth-b" if lit else "youth-a"
+        if not lit:
+            return "youth-a"
+        return "youth-b-f" if youth.get_property("bats_flown") else "youth-b"
 
     statues.set_property("figure", _youth_card)
     youth.set_property("figure", _youth_card)

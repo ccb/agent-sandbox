@@ -10,7 +10,7 @@
    and disconnected nodes drop off the clock automatically. */
 (() => {
   "use strict";
-  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-c-m": ["svg", 640, 720], "autarch-e": ["svg", 640, 420], "autarch-e-m": ["svg", 640, 720], "autarch-m": ["svg", 640, 720], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "bats-c-m": ["svg", 640, 720], "bats-m": ["canvas", 640, 720], "blade": ["canvas", 640, 360], "blade-m": ["canvas", 640, 720], "boots": ["svg", 640, 360], "boots-m": ["svg", 640, 720], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "centipede-m": ["svg", 640, 720], "chimney-f": ["svg", 640, 360], "chimney-f-m": ["svg", 640, 720], "chimney-g": ["svg", 640, 360], "chimney-g-m": ["svg", 640, 720], "chimney-h": ["svg", 640, 360], "chimney-h-m": ["svg", 640, 720], "core": ["svg", 640, 360], "core-m": ["svg", 640, 720], "critch": ["svg", 640, 360], "critch-m": ["svg", 640, 720], "cyl-a": ["svg", 640, 400], "cyl-a-m": ["svg", 640, 720], "cyl-c": ["svg", 640, 400], "cyl-c-m": ["svg", 640, 720], "cyl-o": ["svg", 640, 400], "cyl-o-m": ["svg", 640, 720], "cyl-v": ["svg", 640, 400], "cyl-v-m": ["svg", 640, 720], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "cylinders-b-m": ["svg", 640, 720], "cylinders-m": ["svg", 640, 720], "dagger": ["svg", 640, 360], "dagger-m": ["svg", 640, 720], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flask-m": ["svg", 640, 720], "flood": ["svg", 640, 360], "flood-m": ["svg", 640, 720], "fungus": ["svg", 640, 360], "fungus-m": ["svg", 640, 720], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-b-m": ["canvas", 640, 720], "glowstone-c": ["canvas", 640, 300], "glowstone-c-m": ["canvas", 640, 720], "glowstone-m": ["canvas", 640, 720], "guts-a": ["svg", 640, 360], "guts-a-m": ["svg", 640, 720], "guts-b": ["svg", 640, 360], "guts-b-m": ["svg", 640, 720], "guts-c": ["svg", 640, 360], "guts-c-m": ["svg", 640, 720], "guts-lash": ["svg", 640, 360], "guts-lash-m": ["svg", 640, 720], "hound": ["svg", 640, 360], "hound-m": ["svg", 640, 720], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-falcon-m": ["svg", 640, 720], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-jackal-m": ["svg", 640, 720], "jar-mantis": ["svg", 640, 300], "jar-mantis-m": ["svg", 640, 720], "manifest": ["svg", 640, 360], "manifest-m": ["svg", 640, 720], "mem-bath": ["svg", 640, 360], "mem-bath-m": ["svg", 640, 720], "mem-embalm": ["svg", 640, 360], "mem-embalm-m": ["svg", 640, 720], "mem-kestrel": ["svg", 640, 360], "mem-kestrel-m": ["svg", 640, 720], "mem-mother": ["svg", 640, 360], "mem-mother-m": ["svg", 640, 720], "mem-raising": ["svg", 640, 360], "mem-raising-m": ["svg", 640, 720], "mystic-b": ["svg", 640, 400], "mystic-b-m": ["svg", 640, 720], "mystic-c": ["svg", 640, 400], "mystic-c-m": ["svg", 640, 720], "mystic-f": ["svg", 640, 400], "mystic-f-m": ["svg", 640, 720], "resp": ["svg", 640, 360], "resp-m": ["svg", 640, 720], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "seal-b-m": ["svg", 640, 720], "seal-m": ["svg", 640, 720], "shard": ["svg", 640, 360], "shard-m": ["svg", 640, 720], "silas": ["svg", 640, 400], "silas-m": ["svg", 640, 720], "spawn-a": ["svg", 640, 360], "spawn-a-m": ["svg", 640, 720], "spawn-b": ["svg", 640, 360], "spawn-b-m": ["svg", 640, 720], "spawn-c": ["svg", 640, 360], "spawn-c-m": ["svg", 640, 720], "sphere-b": ["svg", 640, 420], "sphere-b-m": ["svg", 640, 720], "sphere-d": ["svg", 640, 420], "sphere-d-m": ["svg", 640, 720], "sphere-e": ["svg", 640, 420], "sphere-e-m": ["svg", 640, 720], "sphere-f": ["svg", 640, 420], "sphere-f-m": ["svg", 640, 720], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tank-f-m": ["svg", 640, 720], "tank-m": ["svg", 640, 720], "tesseract": ["canvas", 640, 360], "tesseract-m": ["canvas", 640, 720], "tesseract-u": ["canvas", 640, 360], "tesseract-u-m": ["canvas", 640, 720], "ulfire": ["svg", 640, 360], "ulfire-m": ["svg", 640, 720], "ulfire-u": ["svg", 640, 360], "ulfire-u-m": ["svg", 640, 720], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-a-m": ["svg", 640, 720], "youth-b": ["svg", 640, 360], "youth-b-m": ["svg", 640, 720], "youth-c": ["svg", 640, 360], "youth-c-m": ["svg", 640, 720], "youth-d": ["svg", 640, 360], "youth-d-m": ["svg", 640, 720], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360], "zoxen-b-m": ["svg", 640, 720], "zoxen-m": ["svg", 640, 720]};
+  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-c-m": ["svg", 640, 720], "autarch-e": ["svg", 640, 420], "autarch-e-m": ["svg", 640, 720], "autarch-m": ["svg", 640, 720], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "bats-c-m": ["svg", 640, 720], "bats-m": ["canvas", 640, 720], "blade": ["canvas", 640, 360], "blade-m": ["canvas", 640, 720], "boots": ["svg", 640, 360], "boots-m": ["svg", 640, 720], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "centipede-m": ["svg", 640, 720], "chimney-f": ["svg", 640, 360], "chimney-f-m": ["svg", 640, 720], "chimney-g": ["svg", 640, 360], "chimney-g-m": ["svg", 640, 720], "chimney-h": ["svg", 640, 360], "chimney-h-m": ["svg", 640, 720], "core": ["svg", 640, 360], "core-m": ["svg", 640, 720], "critch": ["svg", 640, 360], "critch-m": ["svg", 640, 720], "cyl-a": ["svg", 640, 400], "cyl-a-m": ["svg", 640, 720], "cyl-c": ["svg", 640, 400], "cyl-c-m": ["svg", 640, 720], "cyl-o": ["svg", 640, 400], "cyl-o-m": ["svg", 640, 720], "cyl-v": ["svg", 640, 400], "cyl-v-m": ["svg", 640, 720], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "cylinders-b-m": ["svg", 640, 720], "cylinders-m": ["svg", 640, 720], "dagger": ["svg", 640, 360], "dagger-m": ["svg", 640, 720], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flask-m": ["svg", 640, 720], "flood": ["svg", 640, 360], "flood-m": ["svg", 640, 720], "fungus": ["svg", 640, 360], "fungus-m": ["svg", 640, 720], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-b-m": ["canvas", 640, 720], "glowstone-c": ["canvas", 640, 300], "glowstone-c-m": ["canvas", 640, 720], "glowstone-m": ["canvas", 640, 720], "guts-a": ["svg", 640, 360], "guts-a-m": ["svg", 640, 720], "guts-b": ["svg", 640, 360], "guts-b-m": ["svg", 640, 720], "guts-c": ["svg", 640, 360], "guts-c-m": ["svg", 640, 720], "guts-lash": ["svg", 640, 360], "guts-lash-m": ["svg", 640, 720], "hound": ["svg", 640, 360], "hound-m": ["svg", 640, 720], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-falcon-m": ["svg", 640, 720], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-jackal-m": ["svg", 640, 720], "jar-mantis": ["svg", 640, 300], "jar-mantis-m": ["svg", 640, 720], "manifest": ["svg", 640, 360], "manifest-m": ["svg", 640, 720], "mem-bath": ["svg", 640, 360], "mem-bath-m": ["svg", 640, 720], "mem-embalm": ["svg", 640, 360], "mem-embalm-m": ["svg", 640, 720], "mem-kestrel": ["svg", 640, 360], "mem-kestrel-m": ["svg", 640, 720], "mem-mother": ["svg", 640, 360], "mem-mother-m": ["svg", 640, 720], "mem-raising": ["svg", 640, 360], "mem-raising-m": ["svg", 640, 720], "mystic-b": ["svg", 640, 400], "mystic-b-m": ["svg", 640, 720], "mystic-c": ["svg", 640, 400], "mystic-c-m": ["svg", 640, 720], "mystic-f": ["svg", 640, 400], "mystic-f-m": ["svg", 640, 720], "resp": ["svg", 640, 360], "resp-m": ["svg", 640, 720], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "seal-b-m": ["svg", 640, 720], "seal-m": ["svg", 640, 720], "shard": ["svg", 640, 360], "shard-m": ["svg", 640, 720], "silas": ["svg", 640, 400], "silas-m": ["svg", 640, 720], "spawn-a": ["svg", 640, 360], "spawn-a-m": ["svg", 640, 720], "spawn-b": ["svg", 640, 360], "spawn-b-m": ["svg", 640, 720], "spawn-c": ["svg", 640, 360], "spawn-c-m": ["svg", 640, 720], "sphere-b": ["svg", 640, 420], "sphere-b-m": ["svg", 640, 720], "sphere-d": ["svg", 640, 420], "sphere-d-m": ["svg", 640, 720], "sphere-e": ["svg", 640, 420], "sphere-e-m": ["svg", 640, 720], "sphere-f": ["svg", 640, 420], "sphere-f-m": ["svg", 640, 720], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tank-f-m": ["svg", 640, 720], "tank-m": ["svg", 640, 720], "tesseract": ["canvas", 640, 360], "tesseract-m": ["canvas", 640, 720], "tesseract-u": ["canvas", 640, 360], "tesseract-u-m": ["canvas", 640, 720], "ulfire": ["svg", 640, 360], "ulfire-m": ["svg", 640, 720], "ulfire-u": ["svg", 640, 360], "ulfire-u-m": ["svg", 640, 720], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-a-m": ["svg", 640, 720], "youth-b": ["svg", 640, 360], "youth-b-f": ["svg", 640, 360], "youth-b-f-m": ["svg", 640, 720], "youth-b-m": ["svg", 640, 720], "youth-c": ["svg", 640, 360], "youth-c-m": ["svg", 640, 720], "youth-d": ["svg", 640, 360], "youth-d-m": ["svg", 640, 720], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360], "zoxen-b-m": ["svg", 640, 720], "zoxen-m": ["svg", 640, 720]};
   const FIG = {
     _defs: {}, _uid: 0, _ticks: [], _timer: null, _target: null,
     MAX_LIVE: 3,
@@ -6191,6 +6191,113 @@
       plq.forEach(p2 => typeOn(p2.n, p2.s2, T, p2.t0, 2));
       typeOn(F1, "SWADDLED AND ADORED.", T, 96, 1.9);
       typeOn(F2, "THE VAULT ANSWERS THE GLOW.", T, 108, 1.9);
+    });
+  });
+
+  /* ---------------- 47-F: the adoration, undisturbed ---------------- */
+  /* Card 47 with the colony gone: the same lit plate, but no bats cross
+     the upper dark and nothing dims the cone -- the glow holds steady. */
+  FIG._define("youth-b-f", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "HALL OF YOUTH / LIT, UNCONTESTED";
+    const GLASS = "#cfefff";
+    const I1 = "#1b4055", I2 = "#25567a", I3 = "#33739c", I4 = "#4a97c6";
+    el(svg, "line", { x1: 0, y1: 312, x2: 640, y2: 312, stroke: PH_DIM });
+    const cone = el(svg, "polygon", { fill: PH, "fill-opacity": .07,
+      points: "320,330 80,64 560,64" });
+    const scene = el(svg, "g", {});
+    [[150, 44], [320, 34], [478, 40]].forEach(([x, h]) => el(scene, "rect",
+      { x: x - 44, y: 312 - h, width: 88, height: h, fill: I1, stroke: PH_DIM }));
+    // the infant, swaddled
+    el(scene, "ellipse", { cx: 150, cy: 246, rx: 40, ry: 24, fill: I3 });
+    el(scene, "circle", { cx: 150, cy: 216, r: 12, fill: I3 });
+    el(scene, "path", { fill: "none", stroke: GLASS, "stroke-width": 1.3,
+      opacity: .9, d: "M 114 240 Q 150 228 186 240 M 118 252 Q 150 242 184 252" });
+    // the child, palm raised
+    el(scene, "path", { fill: I2, d: "M 296 278 L 298 216 Q 298 202 312 198 " +
+      "L 328 198 Q 342 202 342 216 L 344 278 Z" });
+    el(scene, "circle", { cx: 320, cy: 184, r: 13, fill: I2 });
+    el(scene, "path", { fill: I2, d: "M 342 224 L 362 204 L 368 210 L 350 232 Z" });
+    el(scene, "circle", { cx: 366, cy: 205, r: 5, fill: I4 });  // the palm, adored
+    // the youth
+    el(scene, "path", { fill: I3, d: "M 436 272 L 440 196 Q 440 180 456 176 " +
+      "L 474 176 Q 490 180 490 196 L 494 272 Z" });
+    el(scene, "circle", { cx: 465, cy: 162, r: 14, fill: I3 });
+    el(scene, "path", { fill: "none", stroke: GLASS, "stroke-width": 1.3,
+      opacity: .9, d: "M 472 150 Q 480 158 476 170" });         // the profile line
+    const stone = el(svg, "circle", { cx: 320, cy: 330, r: 5, fill: PH_BRIGHT });
+    const plq = [["THE INFANT", 150], ["THE CHILD", 320], ["THE YOUTH", 478]]
+      .map(([s2, x], i) => { const n = label(svg, x, 304, 8, PH_DIM);
+        n.setAttribute("text-anchor", "middle"); return { n, s2, t0: 22 + i * 16 }; });
+    const foot = label(svg, 624, 350, 10, FUNGUS); foot.setAttribute("text-anchor", "end");
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 160;
+      doWipe(T);
+      typeOn(hdr, "THE ADORATION", T, 4, 1.4);
+      cone.setAttribute("fill-opacity", .06 + Math.sin(t * .7) * .012);
+      stone.setAttribute("opacity", .7 + Math.sin(t * .8) * .3);
+      plq.forEach(p2 => typeOn(p2.n, p2.s2, T, p2.t0, 2));
+      typeOn(foot, "SWADDLED AND ADORED. THE VAULT IS QUIET NOW.", T, 96, 1.9);
+    });
+  });
+
+  /* ---------------- 47-F-m: the adoration, undisturbed (phone twin) ---------------- */
+  /* Phone twin of 47-F on 47-m's framing: the steady lit plate, no bats,
+     footer wrapped big. */
+  FIG._define("youth-b-f-m", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const cls = label(svg, 20, 70, 16, PH_DIM);
+    cls.textContent = "HALL OF YOUTH / LIT, UNCONTESTED";
+    const SX = x => x * 1.4 - 128;
+    const SC = el(svg, "g", { transform: "translate(-128 63) scale(1.4)" });
+    const GLASS = "#cfefff";
+    const I1 = "#1b4055", I2 = "#25567a", I3 = "#33739c", I4 = "#4a97c6";
+    el(SC, "line", { x1: 0, y1: 312, x2: 640, y2: 312, stroke: PH_DIM });
+    const cone = el(SC, "polygon", { fill: PH, "fill-opacity": .07,
+      points: "320,330 80,64 560,64" });
+    const scene = el(SC, "g", {});
+    [[150, 44], [320, 34], [478, 40]].forEach(([x, h]) => el(scene, "rect",
+      { x: x - 44, y: 312 - h, width: 88, height: h, fill: I1, stroke: PH_DIM }));
+    // the infant, swaddled
+    el(scene, "ellipse", { cx: 150, cy: 246, rx: 40, ry: 24, fill: I3 });
+    el(scene, "circle", { cx: 150, cy: 216, r: 12, fill: I3 });
+    el(scene, "path", { fill: "none", stroke: GLASS, "stroke-width": 1.3,
+      opacity: .9, d: "M 114 240 Q 150 228 186 240 M 118 252 Q 150 242 184 252" });
+    // the child, palm raised
+    el(scene, "path", { fill: I2, d: "M 296 278 L 298 216 Q 298 202 312 198 " +
+      "L 328 198 Q 342 202 342 216 L 344 278 Z" });
+    el(scene, "circle", { cx: 320, cy: 184, r: 13, fill: I2 });
+    el(scene, "path", { fill: I2, d: "M 342 224 L 362 204 L 368 210 L 350 232 Z" });
+    el(scene, "circle", { cx: 366, cy: 205, r: 5, fill: I4 });  // the palm, adored
+    // the youth
+    el(scene, "path", { fill: I3, d: "M 436 272 L 440 196 Q 440 180 456 176 " +
+      "L 474 176 Q 490 180 490 196 L 494 272 Z" });
+    el(scene, "circle", { cx: 465, cy: 162, r: 14, fill: I3 });
+    el(scene, "path", { fill: "none", stroke: GLASS, "stroke-width": 1.3,
+      opacity: .9, d: "M 472 150 Q 480 158 476 170" });         // the profile line
+    const stone = el(SC, "circle", { cx: 320, cy: 330, r: 5, fill: PH_BRIGHT });
+    // the plaques, re-set big under the plinths
+    const plq = [["THE INFANT", 150], ["THE CHILD", 320], ["THE YOUTH", 478]]
+      .map(([s2, x], i) => { const n = label(svg, SX(x), 528, 16, PH_DIM);
+        n.setAttribute("text-anchor", "middle"); return { n, s2, t0: 22 + i * 16 }; });
+    const F1 = label(svg, 320, 640, 22, FUNGUS); F1.setAttribute("text-anchor", "middle");
+    const F2 = label(svg, 320, 672, 22, FUNGUS); F2.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 160;
+      doWipe(T);
+      typeOn(hdr, "THE ADORATION", T, 4, 1.4);
+      cone.setAttribute("fill-opacity", .06 + Math.sin(t * .7) * .012);
+      stone.setAttribute("opacity", .7 + Math.sin(t * .8) * .3);
+      plq.forEach(p2 => typeOn(p2.n, p2.s2, T, p2.t0, 2));
+      typeOn(F1, "SWADDLED AND ADORED.", T, 96, 1.9);
+      typeOn(F2, "THE VAULT IS QUIET NOW.", T, 108, 1.9);
     });
   });
 

@@ -161,7 +161,7 @@ def test_every_wired_key_exists_in_the_registry():
                 _walk(it)
     # event-cued keys (not discoverable by walking) + client-cued ones
     wired |= {"seal", "autarch", "autarch-e", "bats", "bats-c", "road", "epitaph",
-              "youth-b", "youth-c", "youth-d",  # lit hall, lesson, reprieve
+              "youth-b", "youth-b-f", "youth-c", "youth-d",  # lit hall (bats/flown), lesson, reprieve
               "flood", "tank-f",  # the burst-tank trigger owns these two
               "tesseract-u"}  # the box's examine, seen by lantern-light
     missing = wired - registry
@@ -299,6 +299,27 @@ def test_the_ceiling_stops_playing_once_the_bats_are_gone():
     youth.set_property("bats_flown", True)  # the colony has followed the dates
     g.do_command("examine ceiling")
     assert cap.texts(Channel.FIGURE)[before:] == []  # bare vault: no card
+
+
+def test_the_adoration_loses_its_bats_once_the_colony_flies():
+    """The lit hall deals the adoration WITH bat-shadows (47) while the
+    colony roosts, and the undisturbed variant (47-F) once bats_flown --
+    on LOOK / arrival and on EXAMINE STATUES alike (CCB)."""
+    g, cap = _game()
+    g.do_command("search merchant")
+    g.do_command("take glowstone")
+    youth = g.locations["Hall of Youth"]
+    g.relocate(g.player, youth)
+    g.do_command("light glowstone")
+    g.do_command("look")
+    assert "youth-b" in cap.texts(Channel.FIGURE)  # the vault still answers
+    assert "youth-b-f" not in cap.texts(Channel.FIGURE)
+    youth.set_property("bats_flown", True)  # the colony has followed the dates
+    g.do_command("look")
+    assert "youth-b-f" in cap.texts(Channel.FIGURE)  # arrival/LOOK, undisturbed
+    before = len(cap.texts(Channel.FIGURE))
+    g.do_command("examine statues")
+    assert "youth-b-f" in cap.texts(Channel.FIGURE)[before:]  # and the statues agree
 
 
 def test_the_tank_is_the_room_and_the_flood_plays_once():
