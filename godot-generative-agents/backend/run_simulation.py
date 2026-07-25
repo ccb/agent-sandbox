@@ -326,6 +326,12 @@ def step(
             # unconditionally so a credit can never outlive the settle that
             # earned it. Absent for the mock (which never converses), so
             # `credited` is False and the branch is byte-identical.
+            # ponytail: this only credits conversation -- an agent frozen by
+            # repeated *blocked* actions still never advances here. Upgrade: a
+            # general stop deadline, rejected for now (bake-drift risk, and
+            # stop_since re-anchors on any arrival so it wouldn't have fixed
+            # the reported agent; see the design spec's "Rejected: a general
+            # stop deadline").
             credited = st.pop("convo_at_stop", False)
             if st.get("on_plan", True) or credited:
                 if char.agent.schedule.advance():

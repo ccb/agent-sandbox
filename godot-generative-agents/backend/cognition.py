@@ -1337,6 +1337,13 @@ def apply_conversation_outcome(
     # above is -- a deliberate high signal the scorer must not re-guess.
     # The transcript fallback is deliberately NOT written: a whole transcript
     # stored as a "plan" is noise, so only a real commitment persists.
+    #
+    # Side effect: AgentMemory._add adds every new record's importance to
+    # importance_since_reflection (memory.py:317), so this second 8.0 write
+    # means a conversation now contributes 16.0 toward the 30.0 reflection
+    # threshold instead of 8.0 -- conversation-heavy agents reflect roughly
+    # twice as often from conversations alone, and reflection is a real LLM
+    # call.
     if has_commitment:
         intent = agent.memory.add_plan(
             f"I agreed with {partner_name}: {detail}",
@@ -1802,9 +1809,15 @@ def _credit_stop_for_conversation(char, st) -> bool:
     flag. The result was that no conversation ever advanced a stop -- not even
     when the conversation *was* the scheduled activity ("sizing up a brand-new
     roommate"), which is how the #778 pair stayed on stop 0 for a whole run.
-    This stamps the credit the pre-pass spends, and sets ``activity`` so the
-    frame stops rendering the ``"spending time"`` placeholder over a stop that
-    actually happened.
+    This stamps the credit the pre-pass spends. Setting ``activity`` does NOT
+    clear the current frame's ``"spending time"`` placeholder -- ``st["desc"]``
+    is only stamped at decide time, so every frame across the credited
+    conversation still renders it. What actually clears the placeholder is the
+    advance this credit unlocks: the agent travels, arrives, and performs the
+    next stop, which stamps its own activity before the next desc is computed.
+    The write here still matters for two other readers: a subsequent
+    *instantaneous* command's desc at this same stop, and ``_doing()``'s
+    encounter memory (behind ``cog.react_enabled``, default off).
 
     Place-match is the same rule the pre-pass already applies for ``on_plan``:
     standing at the scheduled stop means this completed it. Any real

@@ -64,8 +64,8 @@ locked relationship note, plus `talk_to` observations that #583's scorer rates
 the *"you're getting sidetracked"* reflection (importance 6.0) had been
 crowded out of the block entirely.
 
-This spec mitigates the amplifier rather than solving it — see
-[Out of scope](#out-of-scope).
+This spec gives the intention parity inside the crowd rather than shrinking
+the crowd — see [Out of scope](#out-of-scope).
 
 ### 3. Schedule advance is perform-gated, so a talking agent's day freezes
 
@@ -172,10 +172,17 @@ Design points:
 - **Place-match reuses the existing rule.** The same
   `char.location.name == schedule.destination` test already decides `on_plan`
   at `run_simulation.py:547`. No new concept, one authority.
-- **Setting `activity` fixes the `"spending time"` placeholder** on this path,
-  which is #778's fourth bullet. It follows the established pattern: actions
-  set their own activity (`PerformPenn` at `actions.py:133`, `WaitPenn` at
-  `actions.py:182`).
+- **Setting `activity` does not fix the current frame's `"spending time"`
+  placeholder.** `st["desc"]` is only stamped at decide time
+  (`run_simulation.py:576,639`), so every frame across the credited
+  conversation still renders the placeholder. What actually clears it is the
+  advance this credit unlocks: the agent travels, arrives, and performs the
+  next stop, which stamps its own activity before the next desc is computed.
+  The write here still matters for two other readers: a subsequent
+  *instantaneous* command's desc at this same stop, and `_doing()`'s encounter
+  memory (`cognition.py:2109`, behind `cog.react_enabled`, default off). It
+  follows the established pattern: actions set their own activity
+  (`PerformPenn` at `actions.py:133`, `WaitPenn` at `actions.py:182`).
 - **Any real conversation at the scheduled place counts**, regardless of
   whether the stop's authored activity was social. Accepted cost: a short chat
   also completes a long non-social stop. Requiring partial time served was
@@ -261,12 +268,44 @@ run before the PR.
   decay or lengthen the cooldown was considered and dropped: if A and C
   separate the pair, it never binds. Revisit only if a later run loops with
   both fixes in.
-- **The retrieval amplifier itself.** Fix A *mitigates* finding 2 by giving the
-  intention the same weight as the chatter; it does not solve it. That locked
-  8.0 relationship notes accumulate without bound, and can crowd every other
-  memory out of the retrieved block, deserves its own issue.
+- **The retrieval amplifier itself.** Fix A gives the intention the same
+  weight as the chatter — parity inside the crowd, not a smaller crowd. It
+  does not solve finding 2, and it makes the underlying accumulation worse:
+  a conversation now writes two locked importance-8.0 records (the
+  relationship note and the commitment) instead of one, so the mint rate
+  doubles. That locked 8.0 records accumulate without bound, and can crowd
+  every other memory out of the retrieved block, deserves its own issue.
 - **Reflection-to-decide plumbing.** Already working; see finding 1.
 - **`--plan llm`.** These fixes deliberately work under the default
   `plan_mode: "schedule"`. Making the LLM planner consume the commitment better
   is a separate question, and per #760 no run has yet produced both `--plan
   llm` and a conversation.
+
+## Known risks / what to watch
+
+Fix A is new surface area, not a strictly smaller version of finding 2. Three
+things it introduces that the sections above don't spell out:
+
+- **The commitment record has no completion or expiry.** Nothing marks a
+  commitment done, and nothing lets an agent abandon one — it sits at 8.0,
+  locked, indefinitely.
+- **Its recency self-refreshes.** `AgentMemory.retrieve` bumps
+  `last_accessed_turn` on every retrieval
+  (`text_adventure_games/memory.py:670-672`), and recency decays off
+  `last_accessed` — so once a locked 8.0 PLAN record starts surfacing,
+  retrieving it keeps it pinned near recency 1.0 indefinitely. Combined with
+  the point above, and with the fact that live commitments name places the
+  world doesn't have (R2's *"a restaurant a couple blocks away from campus"*
+  is not a `travel` destination), the plausible new failure shape is: retrieve
+  the commitment → decide toward an unreachable place → the precondition gate
+  blocks it → #636 writes a failure memory → repeat. That is a stationary
+  cost loop, and [Rejected: a general stop
+  deadline](#rejected-a-general-stop-deadline) explicitly declines to cover an
+  agent frozen by repeatedly *blocked* actions rather than by conversation.
+- **It doubles the locked-8.0 mint rate** (see [Out of scope](#out-of-scope)
+  above) — a faster version of an already-deferred problem, not a new one.
+
+What the next #760 live run should measure: whether an agent chases an
+unreachable commitment (watch for repeated `travel` precondition failures),
+and whether the credit lets agents fast-forward a day by chatting at each stop
+instead of performing.
