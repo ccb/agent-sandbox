@@ -43,6 +43,7 @@ from serve_penn import DEFAULT_LLM_MODEL, PennStepper, resolve_llm  # noqa: E402
 from text_adventure_games.memory import MemoryKind  # noqa: E402
 from text_adventure_games.usage import UsageLedger, record_call  # noqa: E402
 from backend.planner import LLMPlanner, MockPlanner  # noqa: E402
+from backend.run_store import RunStore  # noqa: E402
 
 # -------------------------------------------------------------- resolve_llm
 
@@ -320,7 +321,14 @@ class _ScriptedBrain:
         return len(text) // 4
 
 
-def _llm_stepper(monkeypatch, max_cost=5.0, fail=False, monitor=None, plan="schedule"):
+def _llm_stepper(
+    monkeypatch,
+    max_cost=5.0,
+    fail=False,
+    monitor=None,
+    plan="schedule",
+    run_store=None,
+):
     """A PennStepper in --brain llm mode, with the factory swapped for fakes."""
 
     def fake_create(config, ledger=None):
@@ -340,6 +348,7 @@ def _llm_stepper(monkeypatch, max_cost=5.0, fail=False, monitor=None, plan="sche
         monitor=monitor,
         llm=llm,
         plan_mode=plan,
+        run_store=run_store,
     )
 
 
@@ -468,6 +477,36 @@ def test_llm_plan_mode_rejects_the_scripted_brain():
         PennStepper(
             num_steps=2, world=build_penn_world(), llm=scripted, plan_mode="llm"
         )
+
+
+def test_planner_attach_spend_lands_on_the_run(monkeypatch, tmp_path):
+    # #782: LLMPlanner authors each day at ATTACH time, inside _build() -- so
+    # the per-run ledger baseline must be snapshotted before the attach, or
+    # _run_cost_usd() subtracts the planning spend straight back out and the
+    # persisted runs.cost under-reports a model-planned run (29% in the #760
+    # batch). The invariant that catches both halves: every dollar the ledger
+    # recorded belongs to exactly one run row.
+    store = RunStore(tmp_path / "runs")
+    stepper = _llm_stepper(monkeypatch, plan="llm", run_store=store)
+    boot = stepper.run_id
+    spent = stepper.ledger.total_cost_usd()
+    assert spent > 0  # the day-planning calls fired at attach time
+    assert stepper.run_usage()["run_cost_usd"] == pytest.approx(spent)
+    # ...and they are the run's calls in every other sense (they land in its
+    # cassette), so the run-scoped call log counts them too.
+    assert stepper.run_usage()["run_calls"] == len(stepper.ledger.records)
+    # The config-session shape (#732): the boot run is closed before it ever
+    # ticks, so nothing but _close_current_run() can record what it spent --
+    # and the replacement run plans a second day of its own on the way up.
+    stepper.reset()
+    rows = {r["id"]: r["cost"] for r in store.list_runs()}
+    assert rows[boot] == pytest.approx(spent)  # the discarded day kept its spend
+    # THE invariant: every dollar the ledger recorded belongs to exactly one
+    # run -- a closed run's persisted row, or the live run's running sum
+    # (which _persist_tick banks on its first tick).
+    assert rows[boot] + stepper.run_usage()["run_cost_usd"] == pytest.approx(
+        stepper.ledger.total_cost_usd()
+    )
 
 
 def test_real_conversation_fires_once_and_cools_down(monkeypatch):
