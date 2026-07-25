@@ -922,6 +922,27 @@ class PennStepper:
             datetime.datetime.fromisoformat(SIM_START), sec_per_step=SEC_PER_STEP
         )
         self.game, self.chars = self.world.build_world_fn(self.world.world_map)
+        # Per-run ledger baseline (#526): the ledger itself survives resets
+        # on purpose (the cost ceiling is lifetime -- money spent stays
+        # spent), so the per-run view SUBTRACTS this snapshot instead of
+        # rebasing anything. Same boundary as the store's run id below.
+        #
+        # Taken HERE, ahead of both create_run and attach_agents, and not at
+        # the end of _build (#782): under --plan llm the LLMPlanner authors
+        # every agent's day inside attach_agents, so ~3 calls/agent are spent
+        # before the first tick. Snapshotting after that attach folded the
+        # planning spend into the BASELINE, and _run_cost_usd() -- the sum
+        # both the run's row and GET /usage serve -- subtracted it straight
+        # back out: a model-planned run under-reported by 29% in the #760
+        # live batch, while its schedule-planned siblings matched to the
+        # cent. Those calls are the run's in every other sense (the planner
+        # client is wrapped in THIS run's RecordingClient just below, so they
+        # land in its cassette), so the call-count base moves with the cost
+        # base and the run's log counts them too. Nothing between here and
+        # the old position spends: the seam below only opens files, and the
+        # per-agent client loop only constructs clients.
+        self._run_ledger_calls_base = len(self.ledger.records)
+        self._run_ledger_cost_base = self.ledger.total_cost_usd()
         # Recording seam (#715): open this run and wrap every real client in a
         # RecordingClient BEFORE attach_agents wires them onto agents, so the
         # agents' decide/converse (agent.llm_client) and reflection
@@ -1131,12 +1152,6 @@ class PennStepper:
             locations=self.world.locations,
         )
         self._step_idx = 0
-        # Per-run ledger baseline (#526): the ledger itself survives resets
-        # on purpose (the cost ceiling is lifetime -- money spent stays
-        # spent), so the per-run view SUBTRACTS this snapshot instead of
-        # rebasing anything. Same boundary as the store's run id above.
-        self._run_ledger_calls_base = len(self.ledger.records)
-        self._run_ledger_cost_base = self.ledger.total_cost_usd()
         # Open this day's run in the store (#304). The manifest is the same
         # meta() blob the live handshake serves; each _build() gets its own id
         # -- unless we are resuming a persisted run (#543), which adopts the
@@ -2033,7 +2048,18 @@ class PennStepper:
             and self._run_id is not None
             and not self._run_finished
         ):
-            self.run_store.update_run(self._run_id, status="reset")
+            # ...and bank what it spent (#782). _persist_tick writes cost per
+            # tick, so a day that ran keeps the sum it already had; a run
+            # closed BEFORE its first tick has never persisted one and would
+            # otherwise keep cost=0.0 no matter what it spent. That is not
+            # hypothetical under --plan llm: the boot run of a config session
+            # (#732) pays for a model-authored day at attach time and is then
+            # discarded by apply_config, so without this its planning spend
+            # is charged to no run at all -- the same hole as the baseline
+            # above, one build later. steps stays _persist_tick's to write.
+            self.run_store.update_run(
+                self._run_id, status="reset", cost=self._run_cost_usd()
+            )
         self._run_id = None
 
     def reset(self) -> None:
