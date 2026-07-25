@@ -43,9 +43,16 @@ def test_missing_file_is_fine(tmp_path):
     assert load_dotenv(tmp_path / "no-such.env") is False
 
 
-def test_default_path_is_the_repo_root(tmp_path):
-    # The default resolves relative to backend/, not the cwd -- so the loader
-    # finds the checkout's own .env no matter where the CLI is launched from.
+def test_default_path_is_the_repo_root():
+    # The default resolves relative to this source tree, not the cwd -- so the
+    # loader finds the checkout's own .env no matter where the CLI is launched
+    # from. Regression for #776: assert what _REPO_ROOT *means* -- the checkout
+    # root, where pyproject.toml and the .env.example template live, i.e. where
+    # the docs tell you to put your .env. (The old self-referential check
+    # re-derived _REPO_ROOT from env.py's location, so it kept passing when
+    # #399 moved backend/ a level deeper and the default silently became
+    # godot-generative-agents/.env.)
     from backend import env
 
-    assert env._REPO_ROOT / "backend" / "env.py" == env.Path(env.__file__).resolve()
+    assert (env._REPO_ROOT / "pyproject.toml").is_file()
+    assert (env._REPO_ROOT / ".env.example").is_file()
