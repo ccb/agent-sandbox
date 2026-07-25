@@ -321,6 +321,33 @@ class _ScriptedBrain:
         return len(text) // 4
 
 
+class _PlanningBrain(_ScriptedBrain):
+    """``_ScriptedBrain`` that also speaks the plural decide route (#354/#356).
+
+    The plain double has only ``call_tool``, and that is load-bearing for every
+    other test here: ``_use_action_tools`` gates the per-action path on
+    ``hasattr(brain, "call_tools")``, so adding it to the base class would move
+    them all onto a different decide route. But a *recorded* run wraps each
+    client in a ``RecordingClient``, which does expose ``call_tools`` -- so the
+    moment a run store is in play the double has to answer it.
+
+    Returning ``None`` is enough: the agent simply takes no action that tick
+    (``cognition.py``'s ``result is None -> return None``), and a recorded
+    ``None`` is a real, replayable answer rather than a cassette miss. What the
+    re-run test is checking is the *planner's* calls, not the decisions'.
+    """
+
+    def call_tools(
+        self, messages, tools, tool_choice="auto", max_tokens=256, temperature=0.0
+    ):
+        self.tool_calls.append("call_tools")
+        if self.fail:
+            self._record_failure(messages)
+            return None
+        self._record(messages, None)
+        return None
+
+
 def _llm_stepper(
     monkeypatch,
     max_cost=5.0,
@@ -328,13 +355,15 @@ def _llm_stepper(
     monitor=None,
     plan="schedule",
     run_store=None,
+    brain_cls=_ScriptedBrain,
+    **kwargs,
 ):
     """A PennStepper in --brain llm mode, with the factory swapped for fakes."""
 
     def fake_create(config, ledger=None):
         assert str(config.provider).lower() == "anthropic"
         assert config.model == "claude-haiku-4-5"
-        return _ScriptedBrain(ledger=ledger, fail=fail)
+        return brain_cls(ledger=ledger, fail=fail)
 
     monkeypatch.setattr(serve_penn, "create_llm_client", fake_create)
     llm = {
@@ -349,6 +378,7 @@ def _llm_stepper(
         llm=llm,
         plan_mode=plan,
         run_store=run_store,
+        **kwargs,
     )
 
 
@@ -507,6 +537,68 @@ def test_planner_attach_spend_lands_on_the_run(monkeypatch, tmp_path):
     assert rows[boot] + stepper.run_usage()["run_cost_usd"] == pytest.approx(
         stepper.ledger.total_cost_usd()
     )
+
+
+def test_plan_auto_gives_a_paying_brain_a_model_authored_day(monkeypatch, tmp_path):
+    # #787: --plan defaulted to "schedule" whatever the brain, so a real-Haiku
+    # run paid for model decide/converse/reflect while its DAY stayed
+    # hand-authored and unrevisable (MockPlanner.revise is a no-op, which is
+    # what forced #778's commitment into memory instead of the plan). "auto"
+    # now resolves to the model planner whenever the model is the one living
+    # the day.
+    store = RunStore(tmp_path / "runs")
+    stepper = _llm_stepper(monkeypatch, plan="auto", run_store=store)
+    assert stepper.plan_mode == "llm"
+    assert stepper.planner_client is not None
+    for name in stepper.order:
+        assert isinstance(stepper.chars[name].agent.planner, LLMPlanner)
+    # ...and the run records where each day actually came from -- "llm" only
+    # for agents whose generated stops survived validation, so a saved run
+    # says what it GOT, not just what it asked for.
+    manifest = store.get_run(stepper.run_id)["manifest"]
+    assert manifest["plan_mode"] == "llm"
+    assert manifest["planner_sources"] == {name: "llm" for name in stepper.order}
+
+
+def test_plan_auto_leaves_the_free_brains_on_the_authored_day():
+    # The other half of #787's default: nothing changes for a brain with no
+    # client to plan with. This is the byte-identity guard -- the bundled bake
+    # and every offline replay run through here.
+    for llm in (None, serve_penn.SCRIPTED):
+        stepper = PennStepper(num_steps=2, world=build_penn_world(), llm=llm)
+        assert stepper.plan_mode == "schedule"
+        assert stepper.planner_client is None
+        for name in stepper.order:
+            assert isinstance(stepper.chars[name].agent.planner, MockPlanner)
+
+
+def test_a_model_planned_run_re_runs_byte_identically(monkeypatch, tmp_path):
+    # #787's blocker 2: reproduce_run used to REFUSE plan_mode "llm", so making
+    # it the live default would have taken every new live run out of #715/#197.
+    # The planner client is wrapped in the run's own RecordingClient, so its
+    # day-authoring calls are in the cassette like any other -- the re-run just
+    # has to replay them instead of falling back to the mock planner.
+    store = RunStore(tmp_path / "runs")
+    steps = 3
+    stepper = _llm_stepper(
+        monkeypatch,
+        plan="auto",
+        run_store=store,
+        brain_cls=_PlanningBrain,
+        decide_workers=0,
+    )
+    run_id = stepper.run_id
+    for _ in range(steps):
+        stepper.tick()
+    stepper._finish_run()
+    assert store.get_run(run_id)["manifest"]["plan_mode"] == "llm"
+
+    # No key, no network, no spend: the whole day -- planning included --
+    # comes back off the cassette.
+    result = serve_penn.reproduce_run(store, run_id)
+    assert result.match is True
+    assert result.first_divergence is None
+    assert result.steps == steps
 
 
 def test_real_conversation_fires_once_and_cools_down(monkeypatch):

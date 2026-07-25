@@ -218,6 +218,30 @@ def _resolve_react(flag: bool, sim_config) -> bool:
     return bool(flag or (sim_config is not None and sim_config.cognition.react_enabled))
 
 
+def _resolve_plan_mode(flag: str, llm) -> str:
+    """Resolve ``--plan``'s ``"auto"`` default (#787): the model plans its own
+    day whenever the model is the one living it.
+
+    ``auto`` -> ``"llm"`` under a paying brain, ``"schedule"`` otherwise. The
+    point of a live run is model cognition, and the day -- what an agent does
+    with its hours -- is the most consequential thing there is to decide; with
+    ``schedule`` the day stays hand-authored and *unrevisable* (``MockPlanner``
+    has a no-op ``revise``, so the whole ``deviation -> revise`` path, #778, is
+    dead on the default live path). ``schedule`` stays an explicit opt-out: the
+    YAML days have hand-tuned overlaps so agents converge for the scripted
+    rendezvous, which a free-play generated day does not guarantee.
+
+    Free brains resolve to ``schedule`` and are untouched -- the mock (None) and
+    the scripted sentinel have no client to plan with, so the bake and every
+    offline replay stay byte-identical. Explicit values pass straight through,
+    which is what keeps the ``--plan llm`` + free-brain combination an error
+    (the caller's own guard) rather than a silent downgrade.
+    """
+    if flag != "auto":
+        return flag
+    return "llm" if _is_paid(llm) else "schedule"
+
+
 def resolve_llm(world_llm, brain, model=None, max_cost=None, model_for=None):
     """Resolve one run's LLM settings: ``None`` for the mock brain, else a dict.
 
@@ -233,12 +257,14 @@ def resolve_llm(world_llm, brain, model=None, max_cost=None, model_for=None):
     (wrong provider, missing key) exit with a one-line fix rather than serving
     an all-day sim whose every model call silently returns ``None``.
 
-    The daily planner is a *separate* switch (``--plan``, #397), not part of
-    this resolution: ``--plan schedule`` (the default) keeps the authored YAML
-    day and its hand-tuned meeting overlaps; ``--plan llm`` lets the model
-    author the day, which is free-play (the scripted rendezvous may not
-    converge). ``--brain llm`` here only decides whether decide/converse/reflect
-    are the model's.
+    The daily planner is a *separate* switch (``--plan``, #397) that this
+    resolution only *feeds*: its ``auto`` default reads the brain resolved here
+    and picks the model planner for a paying run (#787, see
+    ``_resolve_plan_mode``). ``--plan schedule`` keeps the authored YAML day and
+    its hand-tuned meeting overlaps; ``--plan llm`` lets the model author the
+    day, which is free-play (the scripted rendezvous may not converge).
+    ``--brain llm`` here still only decides whether decide/converse/reflect are
+    the model's.
     """
     if brain == "scripted":
         return SCRIPTED
@@ -534,7 +560,7 @@ class PennStepper:
         decide_timeout=30.0,
         mock_latency=0.0,
         stall_seconds=0.0,
-        plan_mode="schedule",
+        plan_mode="auto",
         resume_run_id=None,
         seed=0,
         replay_cassette=None,
@@ -675,17 +701,33 @@ class PennStepper:
         # at all (step() gates it on conversation_enabled), so it is safe to
         # leave on for mechanics demos.
         self.react = _resolve_react(react, sim_config)
-        # Daily planning source (#397): "schedule" (default) keeps the authored
-        # YAML day -- byte-identical, meeting overlaps intact. "llm" lets the
-        # model author each day (LLMPlanner); free-play, so the hand-tuned
-        # rendezvous windows are no longer guaranteed. The planner shares the
-        # run's paid Anthropic client, so llm planning needs --brain llm -- the
-        # free mock (None) and scripted (SCRIPTED) brains have no such client,
-        # so _is_paid gates both out (the scripted sentinel is truthy, so a
-        # plain `llm is None` check would let --brain scripted through and then
-        # crash on the unset _llm_config below).
-        self.plan_mode = plan_mode
-        if plan_mode == "llm" and not _is_paid(llm):
+        # Daily planning source (#397): "schedule" keeps the authored YAML day
+        # -- byte-identical, meeting overlaps intact. "llm" lets the model
+        # author each day (LLMPlanner); free-play, so the hand-tuned rendezvous
+        # windows are no longer guaranteed. "auto" (the default since #787)
+        # picks llm under a paying brain and schedule otherwise -- see
+        # _resolve_plan_mode. Kept raw alongside the resolved value, like the
+        # cognition/react flags above, so apply_config can re-resolve it
+        # against a brain the config session swaps in.
+        self._plan_mode_flag = plan_mode
+        self.plan_mode = _resolve_plan_mode(plan_mode, llm)
+        # Filled by every _build() from attach_agents; empty until the first
+        # one, which is when the boot run's manifest is first written.
+        self._planner_sources: dict = {}
+        # The planner shares the run's paid Anthropic client, so llm planning
+        # needs --brain llm -- the free mock (None) and scripted (SCRIPTED)
+        # brains have no such client, so _is_paid gates both out (the scripted
+        # sentinel is truthy, so a plain `llm is None` check would let --brain
+        # scripted through and then crash on the unset _llm_config below).
+        # Only an EXPLICIT --plan llm can trip this: auto never resolves to llm
+        # on a free brain. A re-run is the third exception -- its brain is the
+        # cassette (llm is None, so never "paid"), and the recorded plan calls
+        # replay from it like every other call (#787).
+        if (
+            self.plan_mode == "llm"
+            and not _is_paid(llm)
+            and self._replay_cassette is None
+        ):
             raise SystemExit(
                 "--plan llm needs --brain llm (the planner shares its client)."
             )
@@ -752,6 +794,17 @@ class PennStepper:
             replay = ReplayClient(self._replay_cassette, strict=True)
             self.llm_client = replay
             self.reflector_client = replay
+            if self.plan_mode == "llm":
+                # ...and the planner too (#787). The recording seam already
+                # wraps the planner client in the run's OWN RecordingClient
+                # (see _build), so a model-authored day is in the cassette
+                # like every other call; without replaying it here the re-run
+                # would fall back to MockPlanner and diverge on step 1. The
+                # planner's prompts are built from persona + t=0 memory + the
+                # clock window, all reproduced by the seed, so the request
+                # keys line up. This is the whole reason --plan llm can be
+                # the live default (#787) without undoing #715.
+                self.planner_client = replay
         elif llm == SCRIPTED:
             # Free, key-free full-feature brain (#563): distinct client objects,
             # so the llm_client-gated paths open. Record each role through the
@@ -1059,6 +1112,19 @@ class PennStepper:
             out_planner_sources=planner_sources,
             extra_action_names=PENN_ACTION_VERBS,
         )
+        # Where each agent's day actually came from (#787): "llm" only if the
+        # model produced usable stops -- a hallucinated place fails
+        # validate_stops and the agent silently falls back to "static", the
+        # authored YAML. Persisted on the manifest so a saved run records
+        # whether it really got model-authored days, rather than only the
+        # plan_mode that was ASKED for.
+        self._planner_sources = planner_sources
+        if self.run_store is not None and self._run_id is not None:
+            # The row was opened above (create_run) so the cassette writer
+            # existed before attach; re-stamp its manifest now that the answer
+            # is known. Cheap and unconditional: schedule-planned runs record
+            # an all-"static" map, which is exactly as informative.
+            self.run_store.update_run(self._run_id, manifest=self._store_manifest())
         if self.planner_client is not None:
             authored = sum(1 for s in planner_sources.values() if s == "llm")
             print(
@@ -1416,6 +1482,17 @@ class PennStepper:
             "cognition_tools": self.cognition_tools,
             "react": self.react,
             "plan_mode": self.plan_mode,
+            # Per-persona plan provenance (#787): {name: "llm"|"static"}. The
+            # plan_mode above is the request; this is what each agent got.
+            "planner_sources": self._planner_sources,
+            # The step BUDGET this run was launched with -- not how many steps
+            # it actually took (that is the row's `steps`). meta() deliberately
+            # omits it, but a re-run needs it (#787): LLMPlanner bounds the day
+            # to the clock window the budget covers and puts that window in its
+            # prompt, so a run stopped early -- at the cost ceiling, or by a
+            # human -- would otherwise re-plan against a shorter window, change
+            # the request key, and miss the cassette.
+            "num_steps": self.num_steps,
             # The #564 --config, so a re-run rebuilds the same retrieval/
             # temperature/cognition and the cassette's request keys line up.
             # A default run stores None; pre-#564 manifests simply lack the key.
@@ -1470,8 +1547,14 @@ class PennStepper:
             "cast": [e["id"] for e in personas if e["name"] in active],
             "knobs": {"defaults": defaults, "current": current},
             "brains": brains,
+            # The planner knob (#787). `plans` is the accepted vocabulary and
+            # `run.plan` the RESOLVED value the current brain would run, so the
+            # setup screen can show "llm" for an auto+llm-brain session without
+            # having to re-derive the auto rule client-side.
+            "plans": ["auto", "schedule", "llm"],
             "run": {
                 "brain": self._brain_name(),
+                "plan": self.plan_mode,
                 "steps": self.num_steps,
                 "stop_time": self._stop_time(),
                 "max_cost": self.ledger.max_cost_usd,
@@ -1483,6 +1566,7 @@ class PennStepper:
         *,
         cast: list[str] | None = None,
         brain: str | None = None,
+        plan: str | None = None,
         sim_config: dict | None = None,
         steps: int | None = None,
         max_cost: float | None = None,
@@ -1527,11 +1611,6 @@ class PennStepper:
                 raise ValueError(
                     f"unknown brain: {brain!r} (valid: mock, scripted, llm)"
                 )
-            if self.plan_mode == "llm" and brain != "llm":
-                raise ValueError(
-                    "this server launched with --plan llm, which needs the "
-                    "llm brain (the planner shares its client)"
-                )
             if max_cost is not None and brain != "llm":
                 raise ValueError("max_cost needs the llm brain")
             try:
@@ -1560,6 +1639,22 @@ class PennStepper:
             if not _is_paid(new_llm):
                 raise ValueError("max_cost needs the llm brain")
             new_llm = dict(new_llm, max_cost_usd=max_cost)
+        # The planner (#787). Resolved against the brain THIS apply lands on,
+        # not the one the server launched with: the config session is the run's
+        # setup authority, so switching to mock must drop an auto-resolved llm
+        # planner back to the schedule rather than fail. Only an explicit
+        # `plan: "llm"` on a free brain is an error -- the same rule (and the
+        # same message, re-voiced as a 400) __init__ applies to --plan llm.
+        new_plan_flag = plan if plan is not None else self._plan_mode_flag
+        if new_plan_flag not in ("auto", "schedule", "llm"):
+            raise ValueError(
+                f"unknown plan: {new_plan_flag!r} (valid: auto, schedule, llm)"
+            )
+        new_plan_mode = _resolve_plan_mode(new_plan_flag, new_llm)
+        if new_plan_mode == "llm" and not _is_paid(new_llm):
+            raise ValueError(
+                "plan 'llm' needs the llm brain (the planner shares its client)"
+            )
         effective_cast = cast if cast is not None else self._cast
         world = (
             self._world_builder(cast=effective_cast)
@@ -1573,7 +1668,16 @@ class PennStepper:
         self.retrieval = (
             new_sim_config.retrieval if new_sim_config is not None else None
         )
-        if brain is not None:
+        # Set BEFORE _init_brain -- that is what reads plan_mode to decide
+        # whether to build the dedicated planner client (#787).
+        plan_changed = new_plan_mode != self.plan_mode
+        self._plan_mode_flag = new_plan_flag
+        self.plan_mode = new_plan_mode
+        if brain is not None or plan_changed:
+            # A plan change alone still needs the brain rebuilt: the planner
+            # client is constructed there, so turning the planner on (or off)
+            # without this would leave plan_mode saying "llm" and every agent
+            # still on the MockPlanner.
             self._init_brain(new_llm)
         else:
             self.llm = new_llm  # a max_cost-only change still lands in meta()
@@ -1605,6 +1709,9 @@ class PennStepper:
             # None = the world YAML's own default cast (never overridden).
             "cast": effective_cast,
             "brain": self._brain_name(),
+            # The RESOLVED planner (#787), matching `brain` above -- what the
+            # run will actually do, not the "auto" that was asked for.
+            "plan": self.plan_mode,
             "sim_config": self._sim_config_for_manifest(),
             "run": {
                 "steps": self.num_steps,
@@ -2235,6 +2342,12 @@ def reproduce_run(store: RunStore, run_id: str) -> ReproResult:
     parallel decide (--decide-workers > 0, the paid default) may have
     resolved its agents' decisions in a different order than a serial re-run
     would, so it is outside this guarantee.
+
+    Model-planned runs re-run too (#787). ``--plan llm`` used to be refused
+    here -- the planner's day was model-authored but the re-run's planner was
+    the mock, so it could only diverge. It now replays out of the same cassette
+    as every other call (see the replay branch in ``_init_brain``), which is
+    what lets ``--plan llm`` be the live default without giving up #715.
     """
     row = store.get_run(run_id)
     if row is None:
@@ -2262,19 +2375,6 @@ def reproduce_run(store: RunStore, run_id: str) -> ReproResult:
             f"run {run_id} has no cassette -- only runs recorded with a real "
             "client (--brain scripted|llm) can be re-run"
         )
-    if manifest.get("plan_mode") == "llm":
-        # #715 review, Addition A: PennStepper.__init__ raises SystemExit for
-        # plan_mode="llm" unless the brain is paid (the re-run brain is
-        # always llm=None, i.e. unpaid) -- and that guard runs BEFORE the
-        # replay branch below, so a --plan llm run would otherwise escape as
-        # SystemExit. Inside the HTTP route's run_in_executor worker thread a
-        # BaseException like SystemExit is swallowed by threading's bootstrap
-        # and hangs the request instead of failing cleanly, so refuse it here
-        # first with the established ValueError vocabulary (404/409 upstream).
-        raise ValueError(
-            f"run {run_id} used --plan llm (a model-authored day); re-run of "
-            "model-planned runs is not supported yet"
-        )
     stored = store.read_frames(run_id)
     n = len(stored)
 
@@ -2283,9 +2383,17 @@ def reproduce_run(store: RunStore, run_id: str) -> ReproResult:
     # tick, so snapshot and restore global random state to isolate the re-run's
     # determinism from the rest of the process.
     _rng_state = random.getstate()
+    rerun = []
+    miss_at = None
     try:
         stepper = PennStepper(
-            num_steps=n,
+            # The recorded BUDGET, not the frame count: it shapes the planner's
+            # prompt (#787), and a run stopped early has fewer frames than
+            # steps. We tick exactly n times below regardless, so a larger
+            # budget only means the re-run doesn't call itself finished.
+            # Pre-#787 manifests lack the key; those runs are schedule-planned,
+            # where num_steps reaches no prompt, so n is as good as anything.
+            num_steps=int(manifest.get("num_steps", n)),
             world=scenario["world"](),
             monitor=None,
             llm=None,  # the replay branch below supplies the brain; llm is unused
@@ -2302,8 +2410,6 @@ def reproduce_run(store: RunStore, run_id: str) -> ReproResult:
             # None for penn/boil leaves the config/default value, unchanged.
             vision_r=scenario["vision_r"],
         )
-        rerun = []
-        miss_at = None
         for _ in range(n):
             try:
                 frame = stepper.tick()
@@ -2321,6 +2427,11 @@ def reproduce_run(store: RunStore, run_id: str) -> ReproResult:
             if frame is None:
                 break
             rerun.append(frame)
+    except CassetteMiss:
+        # The same divergence, one build earlier (#787): under --plan llm the
+        # planner runs inside _build(), so a re-run whose PLANNING diverges
+        # misses the cassette before there is a stepper to tick. Frame 0.
+        miss_at = 0
     finally:
         random.setstate(_rng_state)
 
@@ -2428,12 +2539,14 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     ap.add_argument(
         "--plan",
-        choices=("schedule", "llm"),
-        default="schedule",
-        help="schedule (default): agents follow the authored YAML day, so the "
-        "hand-tuned meeting overlaps hold. llm: the model authors each agent's "
-        "day (LLMPlanner, #397) -- free-play, so scripted rendezvous meetings "
-        "may not converge. Requires --brain llm",
+        choices=("auto", "schedule", "llm"),
+        default="auto",
+        help="auto (default): llm under --brain llm, schedule otherwise (#787) "
+        "-- a run paying for model cognition gets a model-authored day. "
+        "schedule: agents follow the authored YAML day, so the hand-tuned "
+        "meeting overlaps hold. llm: the model authors each agent's day "
+        "(LLMPlanner, #397) -- free-play, so scripted rendezvous meetings may "
+        "not converge; requires --brain llm",
     )
     ap.add_argument(
         "--model",
