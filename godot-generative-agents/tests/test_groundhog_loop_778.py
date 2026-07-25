@@ -324,3 +324,95 @@ def test_mock_brain_credits_nothing():
     assert happened == 0
     for name in order:
         assert "convo_at_stop" not in state[name]
+
+
+from backend.run_simulation import step  # noqa: E402
+
+_LOOP_LOCATIONS = [
+    {"name": "Plaza", "description": "the plaza", "address": None, "hub": True},
+    {"name": "Library", "description": "a library", "address": "T:Library:desk"},
+]
+
+
+class _StubMap:
+    """No-op world map (pattern from test_dead_talk_settle_689.py): a `travel`
+    decide always calls walk_path, so a bare stub keeps that path harmless."""
+
+    def walk_path(self, src, address, furniture=None):
+        return [(1, 1)]
+
+
+def _loop_persona(name):
+    """Two stops, so an advance is observable as stop_index moving."""
+    return {
+        "name": name,
+        "home": "Plaza",
+        "persona": f"I am {name}.",
+        "emoji": "\U0001f9d1",
+        "start_tile": [0, 0],
+        "destination": "Plaza",
+        "activity": "reading",
+        "schedule": [
+            {"place": "Plaza", "activity": "reading", "emoji": None, "steps": 5},
+            {"place": "Library", "activity": "studying", "emoji": None, "steps": 5},
+        ],
+        "vision_r": 3,
+    }
+
+
+def _full_state(tile=(0, 0)):
+    """A state entry with every key step() reads (from
+    test_dead_talk_settle_689.py). Deliberately has NO 'convo_at_stop' key --
+    the pre-pass must tolerate its absence."""
+    return {
+        "tile": tuple(tile),
+        "path": [],
+        "pron": "\U0001f9d1",
+        "desc": "reading",
+        "performing": False,
+        "perform_until": None,
+        "reasoning": "(r)",
+        "memories": [],
+        "chat": None,
+        "stop_since": 0,
+        "on_plan": True,
+        "conversing": False,
+    }
+
+
+def _pair_mid_dead_talk_settle():
+    """Two co-located mock agents; Diego is latched in a #689 dead-talk settle
+    (performing, on_plan False, expiring at step 30) -- exactly the state a
+    talk_to leaves behind."""
+    personas = [_loop_persona("Diego Cruz"), _loop_persona("Sofia Reyes")]
+    game, chars = build_world(None, personas, _LOOP_LOCATIONS)
+    attach_agents(chars, personas, llm_client=None)
+    order = ["Diego Cruz", "Sofia Reyes"]
+    state = {n: _full_state() for n in order}
+    state["Diego Cruz"].update(
+        {"performing": True, "on_plan": False, "perform_until": 30}
+    )
+    emoji = {n: "\U0001f9d1" for n in order}
+    return game, chars, state, order, emoji
+
+
+def test_credited_settle_expiry_advances_the_schedule():
+    game, chars, state, order, emoji = _pair_mid_dead_talk_settle()
+    # The credit Task 2 stamps when the conversation ended at the scheduled place.
+    state["Diego Cruz"]["convo_at_stop"] = True
+
+    step(game, chars, state, 30, order=order, world_map=_StubMap(), emoji=emoji)
+
+    assert chars["Diego Cruz"].agent.schedule.stop_index == 1
+    # Consumed, so a credit can never outlive the settle that earned it.
+    assert "convo_at_stop" not in state["Diego Cruz"]
+
+
+def test_uncredited_settle_expiry_does_not_advance():
+    """Pins today's behaviour: an uncredited dead-talk settle still routes
+    through the deviation branch and leaves the pointer alone (#689)."""
+    game, chars, state, order, emoji = _pair_mid_dead_talk_settle()
+
+    step(game, chars, state, 30, order=order, world_map=_StubMap(), emoji=emoji)
+
+    assert chars["Diego Cruz"].agent.schedule.stop_index == 0

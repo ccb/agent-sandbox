@@ -320,7 +320,14 @@ def step(
             and step_idx >= st["perform_until"]
             and not st.get("conversing")
         ):
-            if st.get("on_plan", True):
+            # #778: a real conversation held at the scheduled place counts as
+            # having done that stop. cognition._credit_stop_for_conversation
+            # stamps the credit; this is where it is spent. Popped
+            # unconditionally so a credit can never outlive the settle that
+            # earned it. Absent for the mock (which never converses), so
+            # `credited` is False and the branch is byte-identical.
+            credited = st.pop("convo_at_stop", False)
+            if st.get("on_plan", True) or credited:
                 if char.agent.schedule.advance():
                     st["performing"] = False
                     # A new stop begins now: the decide-context block (#580)
