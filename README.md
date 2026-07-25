@@ -268,3 +268,12 @@ framework demo (mock-LLM agents, clock, triggers, event log).
 Engine adapted from the UPenn Interactive Fiction class
 ([interactive-fiction-class.org](https://interactive-fiction-class.org/)),
 itself inspired by the Adventuron Classroom design by Chris Ainsley. Licensed MIT.
+
+## The Tomb of Nassak An-Rah has moved
+
+The tomb game (web app, iOS wrapper, Playdate port, its adventure module,
+tests, and design docs) now lives in its own repository with full history:
+https://github.com/ccb/tomb-of-nassak-an-rah
+
+That repo vendors a frozen copy of the `text_adventure_games` engine; the
+engine's home for ongoing development remains here.
