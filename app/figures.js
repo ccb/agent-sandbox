@@ -10,7 +10,7 @@
    and disconnected nodes drop off the clock automatically. */
 (() => {
   "use strict";
-  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "bats-c-m": ["svg", 640, 720], "bats-m": ["canvas", 640, 720], "blade": ["canvas", 640, 360], "blade-m": ["canvas", 640, 720], "boots": ["svg", 640, 360], "boots-m": ["svg", 640, 720], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "chimney-f": ["svg", 640, 360], "chimney-g": ["svg", 640, 360], "chimney-h": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-a-m": ["svg", 640, 720], "cyl-c": ["svg", 640, 400], "cyl-c-m": ["svg", 640, 720], "cyl-o": ["svg", 640, 400], "cyl-o-m": ["svg", 640, 720], "cyl-v": ["svg", 640, 400], "cyl-v-m": ["svg", 640, 720], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "cylinders-b-m": ["svg", 640, 720], "cylinders-m": ["svg", 640, 720], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flask-m": ["svg", 640, 720], "flood": ["svg", 640, 360], "flood-m": ["svg", 640, 720], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-b-m": ["canvas", 640, 720], "glowstone-c": ["canvas", 640, 300], "glowstone-c-m": ["canvas", 640, 720], "glowstone-m": ["canvas", 640, 720], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "hound-m": ["svg", 640, 720], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "manifest": ["svg", 640, 360], "manifest-m": ["svg", 640, 720], "mem-bath": ["svg", 640, 360], "mem-bath-m": ["svg", 640, 720], "mem-embalm": ["svg", 640, 360], "mem-embalm-m": ["svg", 640, 720], "mem-kestrel": ["svg", 640, 360], "mem-kestrel-m": ["svg", 640, 720], "mem-mother": ["svg", 640, 360], "mem-mother-m": ["svg", 640, 720], "mem-raising": ["svg", 640, 360], "mem-raising-m": ["svg", 640, 720], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "resp-m": ["svg", 640, 720], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "silas-m": ["svg", 640, 720], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tank-f-m": ["svg", 640, 720], "tank-m": ["svg", 640, 720], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-a-m": ["svg", 640, 720], "youth-b": ["svg", 640, 360], "youth-b-m": ["svg", 640, 720], "youth-c": ["svg", 640, 360], "youth-c-m": ["svg", 640, 720], "youth-d": ["svg", 640, 360], "youth-d-m": ["svg", 640, 720], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
+  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "bats-c-m": ["svg", 640, 720], "bats-m": ["canvas", 640, 720], "blade": ["canvas", 640, 360], "blade-m": ["canvas", 640, 720], "boots": ["svg", 640, 360], "boots-m": ["svg", 640, 720], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "chimney-f": ["svg", 640, 360], "chimney-g": ["svg", 640, 360], "chimney-h": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-a-m": ["svg", 640, 720], "cyl-c": ["svg", 640, 400], "cyl-c-m": ["svg", 640, 720], "cyl-o": ["svg", 640, 400], "cyl-o-m": ["svg", 640, 720], "cyl-v": ["svg", 640, 400], "cyl-v-m": ["svg", 640, 720], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "cylinders-b-m": ["svg", 640, 720], "cylinders-m": ["svg", 640, 720], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flask-m": ["svg", 640, 720], "flood": ["svg", 640, 360], "flood-m": ["svg", 640, 720], "fungus": ["svg", 640, 360], "fungus-m": ["svg", 640, 720], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-b-m": ["canvas", 640, 720], "glowstone-c": ["canvas", 640, 300], "glowstone-c-m": ["canvas", 640, 720], "glowstone-m": ["canvas", 640, 720], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "hound-m": ["svg", 640, 720], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "manifest": ["svg", 640, 360], "manifest-m": ["svg", 640, 720], "mem-bath": ["svg", 640, 360], "mem-bath-m": ["svg", 640, 720], "mem-embalm": ["svg", 640, 360], "mem-embalm-m": ["svg", 640, 720], "mem-kestrel": ["svg", 640, 360], "mem-kestrel-m": ["svg", 640, 720], "mem-mother": ["svg", 640, 360], "mem-mother-m": ["svg", 640, 720], "mem-raising": ["svg", 640, 360], "mem-raising-m": ["svg", 640, 720], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "resp-m": ["svg", 640, 720], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "silas-m": ["svg", 640, 720], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-b-m": ["svg", 640, 720], "sphere-d": ["svg", 640, 420], "sphere-d-m": ["svg", 640, 720], "sphere-e": ["svg", 640, 420], "sphere-e-m": ["svg", 640, 720], "sphere-f": ["svg", 640, 420], "sphere-f-m": ["svg", 640, 720], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tank-f-m": ["svg", 640, 720], "tank-m": ["svg", 640, 720], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-a-m": ["svg", 640, 720], "youth-b": ["svg", 640, 360], "youth-b-m": ["svg", 640, 720], "youth-c": ["svg", 640, 360], "youth-c-m": ["svg", 640, 720], "youth-d": ["svg", 640, 360], "youth-d-m": ["svg", 640, 720], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
   const FIG = {
     _defs: {}, _uid: 0, _ticks: [], _timer: null, _target: null,
     MAX_LIVE: 3,
@@ -2660,6 +2660,107 @@
       const c = CALLS[Math.floor(T / 30) % CALLS.length];
       if (T > 14) {
         callLead.setAttribute("points", `${c.at[0]},${c.at[1]} 448,58 454,58`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      const on = Math.min(10, Math.floor(T / 14));
+      cells.forEach((r, i) => r.setAttribute("fill-opacity", i < on ? .8 : .08));
+      typeOn(foot, "MEANT FOR SOMEONE LONELIER THAN YOU.", T, 140, 1.6);
+    });
+  });
+
+  /* ---------------- 12-m: friend's fungus (phone twin) ---------------- */
+  /* Phone twin of 12. The cluster is carried over whole -- every coordinate
+     inside SC is 12's scene space at 1.5x -- and the type is re-set outside:
+     22px title (the long one), class line under the rule, the cycling
+     callout at 18px, AGREEABILITY and the footer big below. */
+  FIG._define("fungus-m", "svg", function (svg) {
+    const PINK = "#ff5fd7";
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 22, PH_BRIGHT);
+    const cls = label(svg, 20, 70, 16, PH_DIM);
+    cls.textContent = "SUMMIT / STATE GIFT";
+    const SX = x => x * 1.5 - 160, SY = y => y * 1.5 + 64;
+    const SC = el(svg, "g", { transform: "translate(-160 64) scale(1.5)" });
+    const PDOTS = stipple(svg, "dots-pinkm", PINK, 1.2);
+    // the mound it grows from
+    el(SC, "ellipse", { cx: 320, cy: 302, rx: 110, ry: 13, fill: PDOTS,
+      stroke: PH_DIM });
+    // the cluster: one tall, two middling, two buttons -- angular litho caps
+    const shroom = (cx, capY, capW, stemW, spot) => {
+      el(SC, "polygon", { points:
+        `${cx - stemW},304 ${cx + stemW},304 ${cx + stemW - 2},${capY + 12} ${cx - stemW + 2},${capY + 12}`,
+        fill: "none", stroke: PINK, "stroke-width": 1.4 });
+      el(SC, "polygon", { points:
+        `${cx - capW},${capY + 14} ${cx - capW * .55},${capY - 8} ${cx},${capY - 16} ` +
+        `${cx + capW * .55},${capY - 8} ${cx + capW},${capY + 14}`,
+        fill: PDOTS, stroke: PINK, "stroke-width": 1.6 });
+      for (let g = 1; g < 4; g++)                     // the gills beneath
+        el(SC, "line", { x1: cx - capW + g * (capW / 2), y1: capY + 13,
+          x2: cx - capW + g * (capW / 2) + 3, y2: capY + 6, stroke: PH_DIM });
+      if (spot) [[-capW * .4, -2], [capW * .3, -8], [0, 4]].forEach(([dx, dy]) =>
+        el(SC, "circle", { cx: cx + dx, cy: capY + dy, r: 2.2, fill: BG,
+          stroke: PINK, "stroke-width": 1 }));
+      return [cx, capY - 16];                         // the apex, for the rings
+    };
+    const apexes = [
+      shroom(320, 168, 36, 6, true),     // tall and slender now
+      shroom(250, 214, 24, 4.5, true),
+      shroom(392, 224, 22, 4, false),
+      shroom(286, 268, 11, 2.6, false),
+      shroom(356, 274, 10, 2.4, false),
+    ];
+    // agreeability, radiating: two staggered rings per big cap
+    const rings = [];
+    apexes.slice(0, 3).forEach(([x, y], i) => {
+      for (let k = 0; k < 2; k++)
+        rings.push({ x, y: y - 4, off: i * 9 + k * 14,
+          q: el(SC, "circle", { cx: x, cy: y - 4, r: 8, fill: "none",
+            stroke: PINK, "stroke-width": 1.2 }) });
+    });
+    // spores, rising with a sway -- and among them, briefly, small smiles
+    const spores = Array.from({ length: 9 }, (_, i) =>
+      ({ x: 240 + (i * 53) % 180, ph: i * 31,
+         q: el(SC, "circle", { r: 1.4, fill: PINK, opacity: .8 }) }));
+    const smiles = [[262, 150], [352, 120], [312, 96]].map(([x, y], i) =>
+      ({ off: i * 40, q: el(SC, "path", { d:
+        `M ${x - 5} ${y} Q ${x} ${y + 6} ${x + 5} ${y}`,
+        fill: "none", stroke: PINK, "stroke-width": 1.3 }) }));
+    // callouts + the agreeability gauge, re-set at phone size
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 620, 116, 18, PH); call.setAttribute("text-anchor", "end");
+    const CALLS = [
+      { at: [320, 154], text: "CAPS: PINK, SOFT, FAINTLY WARM" },
+      { at: [250, 200], text: "DOSAGE: A CRUMB IS A MICRODOSE" },
+      { at: [392, 212], text: "EFFECT: EXTREME AGREEABILITY, FOR HOURS" },
+      { at: [320, 302], text: "KEPT IN THE MYSTIC'S CLASPED HANDS" },
+    ];
+    label(svg, 40, 600, 18, PH_DIM).textContent = "AGREEABILITY";
+    const cells = Array.from({ length: 10 }, (_, i) =>
+      el(svg, "rect", { x: 210 + i * 30, y: 584, width: 22, height: 18,
+        fill: PINK, "fill-opacity": .08 }));
+    const foot = label(svg, 320, 656, 22, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 180;
+      doWipe(T);
+      typeOn(hdr, "FRIEND'S FUNGUS (PINK, HALLUCINOGENIC)", T, 4, 1.4);
+      rings.forEach(r => {
+        const k = ((t + r.off) % 28) / 28;             // out, fading, again
+        r.q.setAttribute("r", 8 + k * 44);
+        r.q.setAttribute("opacity", Math.max(0, .8 - k));
+      });
+      spores.forEach(sp => {
+        const k = (t * 2 + sp.ph) % 220;
+        sp.q.setAttribute("cx", sp.x + Math.sin((t + sp.ph) * .25) * 7);
+        sp.q.setAttribute("cy", 290 - k);
+        sp.q.setAttribute("opacity", k > 200 ? 0 : .85);
+      });
+      smiles.forEach(sm =>                             // they mean well
+        sm.q.setAttribute("opacity", ((t + sm.off) % 80) < 12 ? .9 : 0));
+      const c = CALLS[Math.floor(T / 30) % CALLS.length];
+      if (T > 14) {
+        callLead.setAttribute("points", `${SX(c.at[0])},${SY(c.at[1])} 548,94 556,94`);
         call.textContent = c.text;
       } else { call.textContent = ""; callLead.setAttribute("points", ""); }
       const on = Math.min(10, Math.floor(T / 14));
@@ -6864,6 +6965,106 @@
     });
   });
 
+  /* ---------------- 11-B-m: the burial sphere, upright (phone twin) ---------------- */
+  /* Phone twin of 11-B. The chamber is carried over whole -- every
+     coordinate inside SC is 11-B's scene space at 1.4x -- and the type is
+     re-set outside: 26px title, class line under the rule, the cycling
+     callout at 18px, THE CHURN and the footer big below. */
+  FIG._define("sphere-b-m", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const cls = label(svg, 20, 70, 16, PH_DIM);
+    cls.textContent = "CHAMBER 6 / ZERO-G / TENANTED";
+    const SX = x => x * 1.4 - 128, SY = y => y * 1.4 + 68;
+    const SC = el(svg, "g", { transform: "translate(-128 68) scale(1.4)" });
+    const CDOTS = stipple(svg, "dots-spherebm", PH, .9);
+    el(SC, "line", { x1: 296, y1: 44, x2: 296, y2: 102, stroke: PH, "stroke-width": 1.6 });
+    el(SC, "line", { x1: 344, y1: 44, x2: 344, y2: 102, stroke: PH, "stroke-width": 1.6 });
+    el(SC, "line", { x1: 290, y1: 96, x2: 350, y2: 96, stroke: PH_DIM });
+    el(SC, "circle", { cx: 320, cy: 228, r: 132, fill: "none",
+      stroke: PH_BRIGHT, "stroke-width": 2 });
+    el(SC, "circle", { cx: 320, cy: 228, r: 122, fill: "none",
+      stroke: PH_DIM, "stroke-dasharray": "5 4" });
+    for (let a = 0; a < 24; a++) {
+      const th = a * Math.PI / 12;
+      el(SC, "line", { x1: 320 + Math.cos(th) * 114, y1: 228 + Math.sin(th) * 114,
+        x2: 320 + Math.cos(th) * 108, y2: 228 + Math.sin(th) * 108, stroke: PH_DIM });
+    }
+    el(SC, "ellipse", { cx: 320, cy: 356, rx: 26, ry: 7, fill: BG,
+      stroke: PH, "stroke-width": 1.4 });
+    const six = label(SC, 424, 300, 64, PH_DIM);
+    six.setAttribute("opacity", .3); six.textContent = "6";
+    const strands = Array.from({ length: 3 }, () =>
+      el(SC, "polyline", { fill: "none", stroke: FUNGUS, "stroke-width": 1.5 }));
+    // THE COFFIN, upright: a standing glass egg, seam running vertical
+    const gCof = el(SC, "g", {});
+    const coffin = el(gCof, "ellipse", { cx: 320, cy: 232, rx: 30, ry: 52,
+      fill: CDOTS, stroke: PH_BRIGHT, "stroke-width": 1.8 });
+    el(SC, "line", { x1: 320, y1: 180, x2: 320, y2: 284, stroke: PH_DIM,
+      "stroke-dasharray": "2 4" });                          // the seam, vertical
+    const knot = el(gCof, "circle", { cx: 320, cy: 234, r: 13, fill: FUNGUS,
+      "fill-opacity": .28, stroke: FUNGUS, "stroke-width": 1.4 });
+    const tendrils = Array.from({ length: 9 }, (_, i) => {
+      const under = i >= 5;
+      return el(gCof, "polyline", { fill: "none", stroke: FUNGUS,
+        "stroke-width": under ? 1.1 : 1.6, opacity: under ? .45 : 1 });
+    });
+    const motes = Array.from({ length: 8 }, (_, i) =>
+      ({ q: el(SC, "circle", { r: i % 3 ? 1 : 1.6, fill: PH_DIM }),
+         R: 44 + (i * 29) % 68, ph: i * .8, sp: .04 + (i % 3) * .015 }));
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 20, 116, 18, PH);
+    const CALLS = [
+      { at: [320, 96], text: "THROAT: THE FUNGUS COMES DOWN IT" },
+      { at: [320, 180], text: "SEAM: VERTICAL, FINE AS A HAIR" },
+      { at: [320, 234], text: "TENANT: COILED TALL, BREATHING SLOW" },
+      { at: [204, 310], text: "PRAYERS: READ FROM EVERY DIRECTION AT ONCE" },
+    ];
+    label(svg, 40, 612, 18, PH_DIM).textContent = "THE CHURN";
+    const breath = label(svg, 180, 612, 18, FUNGUS);
+    const foot = label(svg, 320, 656, 22, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 170;
+      doWipe(T);
+      typeOn(hdr, "BURIAL SPHERE OF NASSAK AN-RAH", T, 4, 1.4);
+      const br = [0, 1, 2, 3, 4, 4, 3, 2, 1, 0][Math.floor(t / 3) % 10];
+      knot.setAttribute("r", 12 + br);
+      coffin.setAttribute("stroke-width", 1.4 + br * .18);
+      breath.textContent = "(" + "~".repeat(3 + br) + ")";
+      tendrils.forEach((n, i) => {                           // coiling TALL
+        const under = i >= 5;
+        const a0 = i * (Math.PI * 2 / (under ? 4 : 5)) + t * (under ? -.06 : .09);
+        const w = Math.sin(t * .5 + i * 1.7) * 5;
+        const reach = under ? .8 : 1;
+        const pts = [1, 2, 3, 4].map(k => {
+          const r = (8 + k * (7 + br * .8)) * reach;
+          const a = a0 + w * .02 * k + Math.sin(t * .3 + k * 1.3 + i) * .22;
+          return `${320 + Math.cos(a) * r * .55},${234 + Math.sin(a) * r}`;
+        });
+        n.setAttribute("points", `320,234 ` + pts.join(" "));
+      });
+      strands.forEach((n, i) => {
+        const sw = Math.sin(t * .22 + i * 2.1) * 5;
+        n.setAttribute("points",
+          `${306 + i * 14},46 ${306 + i * 14 + sw},96 ` +
+          `${312 + i * 8 + sw},140 ${318 + i * 2},178`);     // meeting the crown
+      });
+      motes.forEach(m => {
+        const a = t * m.sp + m.ph;
+        m.q.setAttribute("cx", 320 + Math.cos(a) * m.R);
+        m.q.setAttribute("cy", 228 + Math.sin(a) * m.R * .85);
+      });
+      const c = CALLS[Math.floor(T / 30) % CALLS.length];
+      if (T > 14) {
+        callLead.setAttribute("points", `${SX(c.at[0])},${SY(c.at[1])} 92,94 84,94`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      typeOn(foot, "PRY IT, AND IT WILL MIND.", T, 120, 1.6);
+    });
+  });
+
   /* ---------------- 11-E: the burial sphere, shattered, full-cut ---------------- */
   FIG._define("sphere-e", "svg", function (svg) {
     el(svg, "rect", { x: 0, y: 0, width: 640, height: 420, fill: BG });
@@ -6974,6 +7175,123 @@
       const c = CALLS[Math.floor(T / 30) % CALLS.length];
       if (T > 14) {
         callLead.setAttribute("points", `${c.at[0]},${c.at[1]} 160,66 166,66`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      typeOn(foot, "THE SHARDS REMEMBER THEIR PLACES.", T, 120, 1.6);
+    });
+  });
+
+  /* ---------------- 11-E-m: shattered, full-cut (phone twin) ---------------- */
+  /* Phone twin of 11-E on 11-B-m's framing: the six full-cut shards drift
+     and seat verbatim inside SC at 1.4x; callout, THE DRIFT, and the
+     footer re-set at phone size. */
+  FIG._define("sphere-e-m", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const cls = label(svg, 20, 70, 16, PH_DIM);
+    cls.textContent = "CHAMBER 6 / ZERO-G / VACANT";
+    const SX = x => x * 1.4 - 128, SY = y => y * 1.4 + 68;
+    const SC = el(svg, "g", { transform: "translate(-128 68) scale(1.4)" });
+    const CDOTS = stipple(svg, "dots-sphereem", PH, .9);
+    el(SC, "line", { x1: 296, y1: 44, x2: 296, y2: 102, stroke: PH, "stroke-width": 1.6 });
+    el(SC, "line", { x1: 344, y1: 44, x2: 344, y2: 102, stroke: PH, "stroke-width": 1.6 });
+    el(SC, "line", { x1: 290, y1: 96, x2: 350, y2: 96, stroke: PH_DIM });
+    el(SC, "circle", { cx: 320, cy: 228, r: 132, fill: "none",
+      stroke: PH_BRIGHT, "stroke-width": 2 });
+    el(SC, "circle", { cx: 320, cy: 228, r: 122, fill: "none",
+      stroke: PH_DIM, "stroke-dasharray": "5 4" });
+    for (let a = 0; a < 24; a++) {
+      const th = a * Math.PI / 12;
+      el(SC, "line", { x1: 320 + Math.cos(th) * 114, y1: 228 + Math.sin(th) * 114,
+        x2: 320 + Math.cos(th) * 108, y2: 228 + Math.sin(th) * 108, stroke: PH_DIM });
+    }
+    el(SC, "ellipse", { cx: 320, cy: 356, rx: 26, ry: 7, fill: BG,
+      stroke: PH, "stroke-width": 1.4 });
+    const six = label(SC, 424, 300, 64, PH_DIM);
+    six.setAttribute("opacity", .3); six.textContent = "6";
+    // the ghost of the oval: where the pieces agree, once a cycle
+    el(SC, "ellipse", { cx: 320, cy: 232, rx: 30, ry: 52, fill: "none",
+      stroke: PH_DIM, "stroke-dasharray": "2 5", opacity: .5 });
+    const IMPACT = [312, 220];                       // the pry landed off-heart
+    const crackPts = (j) => {                        // impact -> rim, jagged
+      const jj = j % 6;
+      const bx = 320 + Math.cos(jj * Math.PI / 3) * 30,
+            by = 232 + Math.sin(jj * Math.PI / 3) * 52;
+      const dx = bx - IMPACT[0], dy = by - IMPACT[1], L = Math.hypot(dx, dy);
+      const pts = [];
+      for (let k = 1; k < 4; k++) {
+        const f = k / 4, jog = Math.sin(jj * 2.7 + k * 3.1) * 4.5;
+        pts.push([IMPACT[0] + dx * f - dy / L * jog,
+                  IMPACT[1] + dy * f + dx / L * jog]);
+      }
+      return pts;
+    };
+    const SHARDS = Array.from({ length: 6 }, (_, i) => {
+      const base = [IMPACT.slice()];
+      base.push(...crackPts(i));                     // out along crack i
+      const arc0 = base.length;
+      for (let k = 0; k <= 6; k++) {                 // the rim, arc i..i+1
+        const a = (i + k / 6) * Math.PI / 3;
+        base.push([320 + Math.cos(a) * 30, 232 + Math.sin(a) * 52]);
+      }
+      const arc1 = base.length;
+      base.push(...crackPts(i + 1).reverse());       // home along crack i+1
+      const cxm = base.reduce((s, p) => s + p[0], 0) / base.length;
+      const cym = base.reduce((s, p) => s + p[1], 0) / base.length;
+      return {
+        base, arc0, arc1, cxm, cym,
+        mid: (i + .5) * Math.PI / 3,
+        body: el(SC, "polygon", { fill: CDOTS, stroke: PH,
+          "stroke-width": .9, "stroke-opacity": .7 }),
+        rim: el(SC, "polyline", { fill: "none", stroke: PH_BRIGHT,
+          "stroke-width": 1.8 }),
+      };
+    });
+    const motes = Array.from({ length: 8 }, (_, i) =>
+      ({ q: el(SC, "circle", { r: i % 3 ? 1 : 1.6, fill: PH_DIM }),
+         R: 44 + (i * 29) % 68, ph: i * .8, sp: .04 + (i % 3) * .015 }));
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 20, 116, 18, PH);
+    const CALLS = [
+      { at: [352, 198], text: "SHARDS: SIX, FULL-CUT, KEEPING THEIR CURVE" },
+      { at: [312, 220], text: "CRACKS: SIX, ALL TELLING THE SAME STORY" },
+      { at: [204, 310], text: "PRAYERS: ONE OF THEM IS A MENDING" },
+    ];
+    label(svg, 40, 612, 18, PH_DIM).textContent = "THE DRIFT";
+    const drift = label(svg, 180, 612, 18, PH_DIM);
+    const foot = label(svg, 320, 656, 22, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 170;
+      doWipe(T);
+      typeOn(hdr, "BURIAL SPHERE OF NASSAK AN-RAH", T, 4, 1.4);
+      // the envelope: seated whole through the wipe, apart by mid-cycle,
+      // and home -- held home -- while the footer makes its claim.
+      const ramp = (x) => x <= 0 ? 0 : x >= 1 ? 1 : (1 - Math.cos(Math.PI * x)) / 2;
+      const e = ramp((T - 26) / 34) * (1 - ramp((T - 110) / 40));
+      SHARDS.forEach((s, i) => {
+        const d = e * (20 + 7 * Math.sin(t * .05 + i * 1.9));
+        const spin = e * Math.sin(t * .03 + i * 2.4) * .5;
+        const ox = Math.cos(s.mid) * d * .9, oy = Math.sin(s.mid) * d;
+        const cs = Math.cos(spin), sn = Math.sin(spin);
+        const put = s.base.map(([px, py]) => {
+          const rx0 = px - s.cxm, ry0 = py - s.cym;
+          return ((s.cxm + rx0 * cs - ry0 * sn + ox).toFixed(1) + "," +
+                  (s.cym + rx0 * sn + ry0 * cs + oy).toFixed(1));
+        });
+        s.body.setAttribute("points", put.join(" "));
+        s.rim.setAttribute("points", put.slice(s.arc0, s.arc1).join(" "));
+      });
+      drift.textContent = "(" + "~".repeat(1 + Math.round(e * 4)) + ")";
+      motes.forEach(m => {
+        const a = t * m.sp + m.ph;
+        m.q.setAttribute("cx", 320 + Math.cos(a) * m.R);
+        m.q.setAttribute("cy", 228 + Math.sin(a) * m.R * .85);
+      });
+      const c = CALLS[Math.floor(T / 30) % CALLS.length];
+      if (T > 14) {
+        callLead.setAttribute("points", `${SX(c.at[0])},${SY(c.at[1])} 92,94 84,94`);
         call.textContent = c.text;
       } else { call.textContent = ""; callLead.setAttribute("points", ""); }
       typeOn(foot, "THE SHARDS REMEMBER THEIR PLACES.", T, 120, 1.6);
@@ -7121,6 +7439,152 @@
     });
   });
 
+  /* ---------------- 11-F-m: shattered, tenanted (phone twin) ---------------- */
+  /* Phone twin of 11-F on 11-B-m's framing: the tenant out among its
+     spinning shards, throat still feeding, all verbatim inside SC at 1.4x;
+     callout, THE CHURN, and the footer re-set at phone size. */
+  FIG._define("sphere-f-m", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const cls = label(svg, 20, 70, 16, PH_DIM);
+    cls.textContent = "CHAMBER 6 / ZERO-G / TENANTED";
+    const SX = x => x * 1.4 - 128, SY = y => y * 1.4 + 68;
+    const SC = el(svg, "g", { transform: "translate(-128 68) scale(1.4)" });
+    const CDOTS = stipple(svg, "dots-spherefm", PH, .9);
+    el(SC, "line", { x1: 296, y1: 44, x2: 296, y2: 102, stroke: PH, "stroke-width": 1.6 });
+    el(SC, "line", { x1: 344, y1: 44, x2: 344, y2: 102, stroke: PH, "stroke-width": 1.6 });
+    el(SC, "line", { x1: 290, y1: 96, x2: 350, y2: 96, stroke: PH_DIM });
+    el(SC, "circle", { cx: 320, cy: 228, r: 132, fill: "none",
+      stroke: PH_BRIGHT, "stroke-width": 2 });
+    el(SC, "circle", { cx: 320, cy: 228, r: 122, fill: "none",
+      stroke: PH_DIM, "stroke-dasharray": "5 4" });
+    for (let a = 0; a < 24; a++) {
+      const th = a * Math.PI / 12;
+      el(SC, "line", { x1: 320 + Math.cos(th) * 114, y1: 228 + Math.sin(th) * 114,
+        x2: 320 + Math.cos(th) * 108, y2: 228 + Math.sin(th) * 108, stroke: PH_DIM });
+    }
+    el(SC, "ellipse", { cx: 320, cy: 356, rx: 26, ry: 7, fill: BG,
+      stroke: PH, "stroke-width": 1.4 });
+    const six = label(SC, 424, 300, 64, PH_DIM);
+    six.setAttribute("opacity", .3); six.textContent = "6";
+    // the ghost of the oval: the house, as it stood
+    el(SC, "ellipse", { cx: 320, cy: 232, rx: 30, ry: 52, fill: "none",
+      stroke: PH_DIM, "stroke-dasharray": "2 5", opacity: .5 });
+    // the throat still feeds it
+    const strands = Array.from({ length: 3 }, () =>
+      el(SC, "polyline", { fill: "none", stroke: FUNGUS, "stroke-width": 1.5 }));
+    // 11-E's full-cut shards, spinning outward -- and never coming home
+    const IMPACT = [312, 220];
+    const crackPts = (j) => {
+      const jj = j % 6;
+      const bx = 320 + Math.cos(jj * Math.PI / 3) * 30,
+            by = 232 + Math.sin(jj * Math.PI / 3) * 52;
+      const dx = bx - IMPACT[0], dy = by - IMPACT[1], L = Math.hypot(dx, dy);
+      const pts = [];
+      for (let k = 1; k < 4; k++) {
+        const f = k / 4, jog = Math.sin(jj * 2.7 + k * 3.1) * 4.5;
+        pts.push([IMPACT[0] + dx * f - dy / L * jog,
+                  IMPACT[1] + dy * f + dx / L * jog]);
+      }
+      return pts;
+    };
+    const SHARDS = Array.from({ length: 6 }, (_, i) => {
+      const base = [IMPACT.slice()];
+      base.push(...crackPts(i));
+      const arc0 = base.length;
+      for (let k = 0; k <= 6; k++) {
+        const a = (i + k / 6) * Math.PI / 3;
+        base.push([320 + Math.cos(a) * 30, 232 + Math.sin(a) * 52]);
+      }
+      const arc1 = base.length;
+      base.push(...crackPts(i + 1).reverse());
+      const cxm = base.reduce((s, p) => s + p[0], 0) / base.length;
+      const cym = base.reduce((s, p) => s + p[1], 0) / base.length;
+      return {
+        base, arc0, arc1, cxm, cym,
+        mid: (i + .5) * Math.PI / 3,
+        body: el(SC, "polygon", { fill: CDOTS, stroke: PH,
+          "stroke-width": .9, "stroke-opacity": .7 }),
+        rim: el(SC, "polyline", { fill: "none", stroke: PH_BRIGHT,
+          "stroke-width": 1.8 }),
+      };
+    });
+    // THE TENANT, out: the coil at the heart of its broken house (from 11-B)
+    const knot = el(SC, "circle", { cx: 320, cy: 234, r: 13, fill: FUNGUS,
+      "fill-opacity": .28, stroke: FUNGUS, "stroke-width": 1.4 });
+    const tendrils = Array.from({ length: 9 }, (_, i) => {
+      const under = i >= 5;
+      return el(SC, "polyline", { fill: "none", stroke: FUNGUS,
+        "stroke-width": under ? 1.1 : 1.6, opacity: under ? .45 : 1 });
+    });
+    const motes = Array.from({ length: 8 }, (_, i) =>
+      ({ q: el(SC, "circle", { r: i % 3 ? 1 : 1.6, fill: PH_DIM }),
+         R: 44 + (i * 29) % 68, ph: i * .8, sp: .04 + (i % 3) * .015 }));
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 20, 116, 18, PH);
+    const CALLS = [
+      { at: [320, 234], text: "TENANT: OUT" },
+      { at: [352, 198], text: "SHARDS: SIX, SPINNING OUTWARD" },
+      { at: [320, 96], text: "THROAT: THE FUNGUS STILL COMES DOWN IT" },
+      { at: [204, 310], text: "PRAYERS: ONE OF THEM IS A WRATH" },
+    ];
+    label(svg, 40, 612, 18, PH_DIM).textContent = "THE CHURN";
+    const breath = label(svg, 180, 612, 18, FUNGUS);
+    const foot = label(svg, 320, 656, 22, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 170;
+      doWipe(T);
+      typeOn(hdr, "BURIAL SPHERE OF NASSAK AN-RAH", T, 4, 1.4);
+      SHARDS.forEach((s, i) => {
+        const d = 20 + 7 * Math.sin(t * .05 + i * 1.9);
+        const spin = Math.sin(t * .03 + i * 2.4) * .5;
+        const ox = Math.cos(s.mid) * d * .9, oy = Math.sin(s.mid) * d;
+        const cs = Math.cos(spin), sn = Math.sin(spin);
+        const put = s.base.map(([px, py]) => {
+          const rx0 = px - s.cxm, ry0 = py - s.cym;
+          return ((s.cxm + rx0 * cs - ry0 * sn + ox).toFixed(1) + "," +
+                  (s.cym + rx0 * sn + ry0 * cs + oy).toFixed(1));
+        });
+        s.body.setAttribute("points", put.join(" "));
+        s.rim.setAttribute("points", put.slice(s.arc0, s.arc1).join(" "));
+      });
+      const br = [0, 1, 2, 3, 4, 4, 3, 2, 1, 0][Math.floor(t / 3) % 10];
+      knot.setAttribute("r", 12 + br);
+      breath.textContent = "(" + "~".repeat(3 + br) + ")";
+      tendrils.forEach((n, i) => {                           // coiling TALL
+        const under = i >= 5;
+        const a0 = i * (Math.PI * 2 / (under ? 4 : 5)) + t * (under ? -.06 : .09);
+        const w = Math.sin(t * .5 + i * 1.7) * 5;
+        const reach = under ? .8 : 1;
+        const pts = [1, 2, 3, 4].map(k => {
+          const r = (8 + k * (7 + br * .8)) * reach;
+          const a = a0 + w * .02 * k + Math.sin(t * .3 + k * 1.3 + i) * .22;
+          return `${320 + Math.cos(a) * r * .55},${234 + Math.sin(a) * r}`;
+        });
+        n.setAttribute("points", `320,234 ` + pts.join(" "));
+      });
+      strands.forEach((n, i) => {
+        const sw = Math.sin(t * .22 + i * 2.1) * 5;
+        n.setAttribute("points",
+          `${306 + i * 14},46 ${306 + i * 14 + sw},96 ` +
+          `${312 + i * 8 + sw},140 ${318 + i * 2},210`);     // reaching the tenant
+      });
+      motes.forEach(m => {
+        const a = t * m.sp + m.ph;
+        m.q.setAttribute("cx", 320 + Math.cos(a) * m.R);
+        m.q.setAttribute("cy", 228 + Math.sin(a) * m.R * .85);
+      });
+      const c = CALLS[Math.floor(T / 30) % CALLS.length];
+      if (T > 14) {
+        callLead.setAttribute("points", `${SX(c.at[0])},${SY(c.at[1])} 92,94 84,94`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      typeOn(foot, "IT MINDED.", T, 120, 1.6);
+    });
+  });
+
   /* ---------------- 11-D: the burial sphere, reforged ---------------- */
   FIG._define("sphere-d", "svg", function (svg) {
     el(svg, "rect", { x: 0, y: 0, width: 640, height: 420, fill: BG });
@@ -7191,6 +7655,86 @@
         call.textContent = c.text;
       } else { call.textContent = ""; callLead.setAttribute("points", ""); }
       typeOn(foot, "FOUR THOUSAND YEARS INTO A GOOD NIGHT'S SLEEP.", T, 120, 1.6);
+    });
+  });
+
+  /* ---------------- 11-D-m: reforged (phone twin) ---------------- */
+  /* Phone twin of 11-D on 11-B-m's framing: the mended oval breathing
+     sleep-slow inside SC at 1.4x; callout, THE KEEPING, and the footer
+     wrapped to two lines. */
+  FIG._define("sphere-d-m", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const cls = label(svg, 20, 70, 16, PH_DIM);
+    cls.textContent = "CHAMBER 6 / ZERO-G / AT REST";
+    const SX = x => x * 1.4 - 128, SY = y => y * 1.4 + 68;
+    const SC = el(svg, "g", { transform: "translate(-128 68) scale(1.4)" });
+    const CDOTS = stipple(svg, "dots-spheredm", PH, .9);
+    el(SC, "line", { x1: 296, y1: 44, x2: 296, y2: 102, stroke: PH, "stroke-width": 1.6 });
+    el(SC, "line", { x1: 344, y1: 44, x2: 344, y2: 102, stroke: PH, "stroke-width": 1.6 });
+    el(SC, "line", { x1: 290, y1: 96, x2: 350, y2: 96, stroke: PH_DIM });
+    el(SC, "circle", { cx: 320, cy: 228, r: 132, fill: "none",
+      stroke: PH_BRIGHT, "stroke-width": 2 });
+    el(SC, "circle", { cx: 320, cy: 228, r: 122, fill: "none",
+      stroke: PH_DIM, "stroke-dasharray": "5 4" });
+    for (let a = 0; a < 24; a++) {
+      const th = a * Math.PI / 12;
+      el(SC, "line", { x1: 320 + Math.cos(th) * 114, y1: 228 + Math.sin(th) * 114,
+        x2: 320 + Math.cos(th) * 108, y2: 228 + Math.sin(th) * 108, stroke: PH_DIM });
+    }
+    el(SC, "ellipse", { cx: 320, cy: 356, rx: 26, ry: 7, fill: BG,
+      stroke: PH, "stroke-width": 1.4 });
+    const six = label(SC, 424, 300, 64, PH_DIM);
+    six.setAttribute("opacity", .3); six.textContent = "6";
+    // THE COFFIN, reforged: the oval whole, no seam left to point at
+    const ring = el(SC, "ellipse", { cx: 320, cy: 234, fill: "none",
+      stroke: PH, "stroke-width": 1 });                       // each breath leaves it
+    const coffin = el(SC, "ellipse", { cx: 320, cy: 232, rx: 30, ry: 52,
+      fill: CDOTS, stroke: PH_BRIGHT, "stroke-width": 1.8 });
+    const pulse = el(SC, "circle", { cx: 320, cy: 234, fill: PH,
+      "fill-opacity": .22, stroke: PH, "stroke-width": 1.2 });
+    const motes = Array.from({ length: 8 }, (_, i) =>
+      ({ q: el(SC, "circle", { r: i % 3 ? 1 : 1.6, fill: PH_DIM }),
+         R: 44 + (i * 29) % 68, ph: i * .8, sp: .04 + (i % 3) * .015 }));
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 20, 116, 18, PH);
+    const CALLS = [
+      { at: [320, 106], text: "FIELD: ANTI-ENTROPY, HOLDING" },
+      { at: [320, 180], text: "SEAM: CLOSED. THE GLASS FORGAVE IT" },
+      { at: [320, 234], text: "TENANT: ASLEEP, DREAMING SOMETHING KIND" },
+      { at: [204, 310], text: "PRAYERS: ANSWERED" },
+    ];
+    label(svg, 40, 612, 18, PH_DIM).textContent = "THE KEEPING";
+    const breath = label(svg, 200, 612, 18, PH);
+    const F1 = label(svg, 320, 648, 22, FUNGUS); F1.setAttribute("text-anchor", "middle");
+    const F2 = label(svg, 320, 680, 22, FUNGUS); F2.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 170;
+      doWipe(T);
+      typeOn(hdr, "BURIAL SPHERE OF NASSAK AN-RAH", T, 4, 1.4);
+      const C = 60;                                 // sleep-slow: five seconds a breath
+      const ph = (t % C) / C;
+      const br = Math.round(Math.sin(ph * Math.PI) * 4);      // 0..4..0, quantized
+      pulse.setAttribute("r", 9 + br);
+      coffin.setAttribute("stroke-width", 1.6 + br * .1);
+      ring.setAttribute("rx", 12 + ph * 14);                  // the exhale walks
+      ring.setAttribute("ry", 12 + ph * 36);                  // out to the glass
+      ring.setAttribute("opacity", Math.max(0, .5 - ph * .5).toFixed(2));
+      breath.textContent = "(" + "~".repeat(2 + br) + ")";
+      motes.forEach(m => {
+        const a = t * m.sp + m.ph;
+        m.q.setAttribute("cx", 320 + Math.cos(a) * m.R);
+        m.q.setAttribute("cy", 228 + Math.sin(a) * m.R * .85);
+      });
+      const c = CALLS[Math.floor(T / 30) % CALLS.length];
+      if (T > 14) {
+        callLead.setAttribute("points", `${SX(c.at[0])},${SY(c.at[1])} 92,94 84,94`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      typeOn(F1, "FOUR THOUSAND YEARS INTO", T, 120, 1.6);
+      typeOn(F2, "A GOOD NIGHT'S SLEEP.", T, 136, 1.6);
     });
   });
 
