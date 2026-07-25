@@ -283,6 +283,38 @@ def test_switching_to_a_free_brain_clears_a_tripped_ceiling():
     assert stepper.tick() is not None
 
 
+def test_plan_follows_the_configured_brain_and_is_overridable():
+    # #787: the setup screen picks a brain, and the planner follows it -- the
+    # config session is the run's setup authority, so a server launched on the
+    # default "auto" must re-resolve against the brain THIS apply lands on
+    # rather than being frozen at boot.
+    stepper = _mock_stepper()
+    assert stepper.plan_mode == "schedule"  # free brain: the authored day
+    assert stepper.apply_config(brain="scripted")["plan"] == "schedule"
+    # An explicit planner on a brain with no client to plan with is refused
+    # (a 400 upstream), the same rule --plan llm applies at launch.
+    with pytest.raises(ValueError, match="needs the llm brain"):
+        stepper.apply_config(plan="llm")
+    # ...and an explicit "schedule" sticks: it survives later applies, so a
+    # deliberate opt-out isn't silently undone by the auto rule.
+    stepper.apply_config(plan="schedule")
+    assert stepper._plan_mode_flag == "schedule"
+    with pytest.raises(ValueError, match="unknown plan"):
+        stepper.apply_config(plan="nonsense")
+
+
+def test_post_config_accepts_the_plan_knob():
+    client, stepper = _client()
+    body = client.get("/config").json()
+    assert body["plans"] == ["auto", "schedule", "llm"]
+    assert body["run"]["plan"] == "schedule"
+    resp = client.post("/config", json={"plan": "schedule", "brain": "scripted"})
+    assert resp.status_code == 200
+    assert resp.json()["applied"]["plan"] == "schedule"
+    # A model planner with no model to plan with is a 400, not a 500.
+    assert client.post("/config", json={"plan": "llm"}).status_code == 400
+
+
 def test_create_run_drops_a_prior_applied_config(tmp_path):
     stepper = _mock_stepper(run_store=RunStore(tmp_path / "runs"))
     stepper.apply_config(cast=["diego"])
