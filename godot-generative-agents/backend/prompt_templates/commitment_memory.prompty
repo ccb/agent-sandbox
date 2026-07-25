@@ -1,0 +1,30 @@
+---
+name: commitment_memory
+description: >
+  The commitment a finished conversation produced, as a first-person PLAN memory
+  in the participant's own stream (backend/cognition.py,
+  apply_conversation_outcome; issue #778). Written when the #582 outcome pass
+  reports `plans_changed: true` with a non-blank `commitment`. Before this, the
+  commitment reached only `maybe_revise_plan` -- and the default plan_mode
+  "schedule" wires MockPlanner, whose revise() returns the plan unchanged -- so
+  an agreement the model stated outright was dropped and re-negotiated on every
+  cooldown expiry. The other person is named in full deliberately, matching
+  relationship_memory: the conversation path retrieves with
+  `query=listener.name`, so naming them is what makes the prior surface in the
+  dialogue that needs it. Memory text, not a live model prompt.
+inputs:
+  other:
+    type: string
+    description: The person the commitment was made with, e.g. "Chris Donnelly".
+  commitment:
+    type: string
+    description: >
+      The commitment, verbatim from the `conversation_outcome` tool call -- the
+      agent's own words for what it agreed to, so it is never rewritten. Only a
+      real, non-blank commitment is written; the transcript is deliberately NOT
+      used as a fallback, since a whole transcript stored as a "plan" is noise.
+sample:
+  other: Chris Donnelly
+  commitment: Pizza place near campus with Chris Donnelly in about 20 minutes
+---
+I agreed with {{ other }}: {{ commitment }}

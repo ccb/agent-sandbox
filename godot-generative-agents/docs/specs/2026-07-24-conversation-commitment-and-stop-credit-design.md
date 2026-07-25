@@ -9,6 +9,12 @@ PR #783.
 Related: #582 (conversation consequences), #636 (failure memory), #760 (the
 run log this came out of).
 
+> **Amended 2026-07-24 after code review**, so this describes what shipped. Fix C
+> now sets the pre-pass's existing `on_plan` flag instead of adding a
+> `convo_at_stop` key with its own stamp/pop protocol, and it no longer writes
+> `activity`. Both changes are argued in Fix C's design points below. Fix A's
+> memory text moved into a `.prompty`, per the repo's template rule.
+
 ## What the run data actually shows
 
 The evidence is `run-20260724-194343-78858a` (R2 in PR #783): cast
@@ -43,7 +49,7 @@ commitment.** Not vague ones —
   blocks away from campus, leaving right now"`
 
 Every one evaporated. `apply_conversation_outcome`
-(`backend/cognition.py:1295-1303`) passes the commitment only as a
+(`backend/cognition.py:1320-1359`) passes the commitment only as a
 `RevisionTrigger` detail into `maybe_revise_plan`. R2 ran the default
 `plan_mode: "schedule"`, so the planner is `MockPlanner`, whose `revise()` is
 `return plan` (`backend/planner.py:61-65`). The commitment string is **never
@@ -70,7 +76,7 @@ the crowd — see [Out of scope](#out-of-scope).
 ### 3. Schedule advance is perform-gated, so a talking agent's day freezes
 
 `schedule.advance()` fires from exactly one place: the latch-expiry pre-pass
-at `backend/run_simulation.py:316-335`, and only when `st["on_plan"]` is true.
+at `backend/run_simulation.py:317-355`, and only when `st["on_plan"]` is true.
 
 - A successful `talk_to` is an instantaneous command. It routes through
   `_settle_after_dead_talk` (`run_simulation.py:147-159`), which sets
@@ -85,7 +91,7 @@ So no conversation ever advances a stop. Aiden's stop 0 activity was literally
 *"sizing up a brand-new roommate"* at Houston Hall — Reading Room: the
 conversation **was** the scheduled activity, and it earned no credit. He stayed
 on stop 0 for the whole run, `activity` was never set, and every frame rendered
-the `"spending time"` placeholder (`run_simulation.py:551,614`).
+the `"spending time"` placeholder (`run_simulation.py:588,651`).
 
 `BEHIND_SCHEDULE` cannot rescue him either — it requires `st["path"]` to be
 non-empty (`run_simulation.py:303-309`), so it only fires while *walking*. A
@@ -108,12 +114,18 @@ non-empty `commitment` string, write it into the agent's own stream:
 
 ```python
 agent.memory.add_plan(
-    f"I agreed with {partner_name}: {commitment}",
+    render("commitment_memory", other=partner_name, commitment=commitment),
     turn=step,
     importance=RELATIONSHIP_NOTE_IMPORTANCE,
 )
 # ...and lock it, like the relationship note above.
 ```
+
+The text is a `.prompty` (`prompt_templates/commitment_memory.prompty`), not an
+inline f-string: the repo rule is that agent-facing strings live in a template,
+appear in the `prompt_templates/README.md` table, and have their output pinned by
+a test. `plan_memory` (the other `add_plan` in this file) and #779's
+`relationship_memory` are the same class of string.
 
 Design points, each load-bearing:
 
@@ -121,8 +133,13 @@ Design points, each load-bearing:
   the one number in the change that must not be lowered. `add_plan`'s default
   is 5.0, and finding 2 shows that a 5.0 intention is buried by the 8.0 locked
   notes the same conversation produces — a 5.0 here silently reproduces the
-  bug. Locking is the same argument #582 already made for the note: this is a
-  deliberate high signal, not an importance the #583 scorer should re-guess.
+  bug.
+- **The lock is inert today**, unlike the note's. `score_new_memories` filters to
+  OBSERVATION/CHAT *before* it consults `_IMPORTANCE_LOCKED`, so a PLAN record is
+  already exempt (pinned by `test_reflection_and_plan_records_are_not_rescored`).
+  It is written anyway, so that widening that kind filter later cannot silently
+  re-guess an authored importance — but it is belt-and-braces, not the mechanism
+  protecting the 8.0. Do not cite the note's rationale for it.
 - **Reuses the constant, adds none.** `RELATIONSHIP_NOTE_IMPORTANCE` and
   `_IMPORTANCE_LOCKED` both already exist for the note.
 - **Zero new LLM calls.** The commitment is already in the response body that
@@ -145,53 +162,69 @@ bake path.
 
 Two small edits.
 
-**1. Stamp the credit when a real conversation finishes.** In
-`cognition._advance_conversation`, in the `if ac.convo.happened:` branch
-(`cognition.py:1761-1765`) where both participants are already being marked
-`conversing`, for each participant whose `char.location.name` equals its
-`schedule.destination`:
-
-- set `state[nm]["convo_at_stop"] = True`
-- set `char.set_property("activity", schedule.activity)`
-
-**2. Honour the credit at settle expiry.** In `run_simulation`'s latch-expiry
-block (`run_simulation.py:322`), pop the flag and treat it as on-plan:
+**1. Credit the stop when a real conversation finishes.** In
+`cognition._advance_conversation`, under `if ac.convo.happened:`
+(`cognition.py:1888`), call `_credit_stop_for_conversation`
+(`cognition.py:1804`) for each participant. It sets **the pre-pass's own
+`on_plan` flag** for a settled agent standing at its `schedule.destination`:
 
 ```python
-credited = st.pop("convo_at_stop", False)
-if st.get("on_plan", True) or credited:
-    if char.agent.schedule.advance():
-        ...
+if not st.get("performing"):
+    return False
+place = getattr(char.agent.schedule, "destination", None)
+if not place or char.location is None or char.location.name != place:
+    return False
+st["on_plan"] = True
 ```
 
-The flag is popped unconditionally so a stale credit cannot leak into a later
-stop.
+**2. Nothing to honour at settle expiry.** The latch-expiry block
+(`run_simulation.py:319`) already advances on `on_plan`, so it needs no new
+branch — only a comment recording that a conversation is now one of the things
+that sets the flag.
 
 Design points:
 
+- **No second signal, and one-shot for free.** `on_plan` is read in exactly one
+  place (that pre-pass) and re-stamped by every path that sets `perform_until`
+  (`_settle_after_dead_talk`, and the decide-time perform branch at
+  `run_simulation.py:587`), so a credit is consumed by the settle that earned it
+  and cannot leak onto a later stop. An earlier draft invented a separate
+  `convo_at_stop` key with a stamp/pop protocol split across two modules; it was
+  a parallel authority for something `on_plan` already expressed, and its "popped
+  unconditionally" claim was not even true (the pop sat inside the expiry guard,
+  so a credit stamped while `perform_until is None` was never popped).
 - **Place-match reuses the existing rule.** The same
   `char.location.name == schedule.destination` test already decides `on_plan`
-  at `run_simulation.py:547`. No new concept, one authority.
-- **Setting `activity` does not fix the current frame's `"spending time"`
-  placeholder.** `st["desc"]` is only stamped at decide time
-  (`run_simulation.py:576,639`), so every frame across the credited
-  conversation still renders the placeholder. What actually clears it is the
-  advance this credit unlocks: the agent travels, arrives, and performs the
-  next stop, which stamps its own activity before the next desc is computed.
-  The write here still matters for two other readers: a subsequent
-  *instantaneous* command's desc at this same stop, and `_doing()`'s encounter
-  memory (`cognition.py:2109`, behind `cog.react_enabled`, default off). It
-  follows the established pattern: actions set their own activity
-  (`PerformPenn` at `actions.py:133`, `WaitPenn` at `actions.py:182`).
+  at `run_simulation.py:587`. No new concept, one authority.
+- **Credited before the outcome pass.** `_finish_conversation` runs
+  `apply_conversation_outcome`, whose revision can rewrite the schedule the
+  place-match reads. `replace_schedule` preserves the current stop by contract,
+  so this is ordering hygiene rather than a live bug — but the credit should not
+  depend on that contract.
+- **Deliberately does not write `activity`.** An earlier draft did, to clear the
+  frame's `"spending time"` placeholder — but that does not work: `st["desc"]` is
+  stamped only at decide time (`run_simulation.py:612,653`), so nothing
+  recomputes it mid-conversation. What clears the placeholder is the advance this
+  credit unlocks. Worse, the write was actively wrong under a real brain, where
+  `PerformPenn` sets `activity` from the model's own argument
+  (`actions.py:133`): overwriting it with the schedule's planned activity makes
+  `_doing()`'s encounter memory (`cognition.py:2124`) and any later
+  instantaneous-command desc report the plan instead of what the agent did.
+- **At the final stop the agent settles in place.** `advance()` returns False, so
+  `performing` stays True with `perform_until` None and the agent stays put for
+  the rest of the run. That is the same end-of-day "stay put" rule an on-plan
+  agent already gets, and it is load-bearing for the bake: un-latching there
+  would make the mock re-decide at its last stop and drift every later frame.
+  Pinned by `test_credit_at_the_last_stop_settles_in_place`.
 - **Any real conversation at the scheduled place counts**, regardless of
   whether the stop's authored activity was social. Accepted cost: a short chat
   also completes a long non-social stop. Requiring partial time served was
   considered and rejected as a new tunable plus a re-anchoring problem for no
   demonstrated benefit.
 
-Mock byte-identity by vacuity: the mock never converses, so `convo_at_stop` is
-never stamped and the pre-pass sees exactly what it sees today. This is the
-same argument #636 used.
+Mock byte-identity by vacuity: the mock never converses, so nothing is ever
+credited and the pre-pass sees exactly what it sees today. This is the same
+argument #636 used.
 
 ### Expected effect on R2
 
@@ -251,12 +284,16 @@ Fix A:
 
 Fix C:
 
-- A finished real conversation at the agent's scheduled place stamps
-  `convo_at_stop` and sets `activity` to the stop's activity.
-- The same conversation held somewhere else stamps neither.
-- One loop-level test: after a credited conversation, settle expiry advances
-  the schedule pointer; without the credit it does not (pinning today's
-  behaviour so the change is visible).
+- A finished real conversation at the agent's scheduled place flips `on_plan`
+  from the False `_settle_after_dead_talk` left behind.
+- The same conversation held somewhere else leaves it False.
+- An unsettled (`performing` False) agent is never credited, tested by calling
+  the helper directly — routing through `maybe_converse` would be vacuous, since
+  its pairing already requires both agents settled.
+- Loop-level: after a credited conversation, settle expiry advances the schedule
+  pointer; without the credit it does not (pinning today's behaviour so the
+  change is visible); and at the *final* stop the credited agent stays latched in
+  place rather than un-latching, which is what protects the bake.
 
 Byte-identity: the existing `test_mock_brain_runs_no_outcome_calls` plus
 `test_bake_is_byte_identical` (3× `PYTHONHASHSEED`) are the guard. Both must

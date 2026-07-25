@@ -1333,10 +1333,15 @@ def apply_conversation_outcome(
     # RELATIONSHIP_NOTE_IMPORTANCE, not add_plan's 5.0 default, is load-bearing:
     # the same conversation mints an 8.0 relationship note and 7-8 #583-scored
     # talk observations, so a 5.0 intention is crowded out of the retrieved
-    # block by its own partner-chatter. Locked for the same reason the note
-    # above is -- a deliberate high signal the scorer must not re-guess.
+    # block by its own partner-chatter.
     # The transcript fallback is deliberately NOT written: a whole transcript
     # stored as a "plan" is noise, so only a real commitment persists.
+    #
+    # The lock is INERT today, unlike the note's above: score_new_memories
+    # filters to OBSERVATION/CHAT *before* it consults _IMPORTANCE_LOCKED, so a
+    # PLAN record is already exempt (pinned by
+    # test_reflection_and_plan_records_are_not_rescored). Written anyway so that
+    # widening that kind filter can't silently re-guess an authored importance.
     #
     # Side effect: AgentMemory._add adds every new record's importance to
     # importance_since_reflection (memory.py:317), so this second 8.0 write
@@ -1346,7 +1351,7 @@ def apply_conversation_outcome(
     # call.
     if has_commitment:
         intent = agent.memory.add_plan(
-            f"I agreed with {partner_name}: {detail}",
+            render("commitment_memory", other=partner_name, commitment=detail),
             turn=step,
             importance=RELATIONSHIP_NOTE_IMPORTANCE,
         )
@@ -1809,15 +1814,12 @@ def _credit_stop_for_conversation(char, st) -> bool:
     flag. The result was that no conversation ever advanced a stop -- not even
     when the conversation *was* the scheduled activity ("sizing up a brand-new
     roommate"), which is how the #778 pair stayed on stop 0 for a whole run.
-    This stamps the credit the pre-pass spends. Setting ``activity`` does NOT
-    clear the current frame's ``"spending time"`` placeholder -- ``st["desc"]``
-    is only stamped at decide time, so every frame across the credited
-    conversation still renders it. What actually clears the placeholder is the
-    advance this credit unlocks: the agent travels, arrives, and performs the
-    next stop, which stamps its own activity before the next desc is computed.
-    The write here still matters for two other readers: a subsequent
-    *instantaneous* command's desc at this same stop, and ``_doing()``'s
-    encounter memory (behind ``cog.react_enabled``, default off).
+    This sets the pre-pass's own ``on_plan`` flag rather than inventing a second
+    signal for it to consult. ``on_plan`` is read in exactly one place (that
+    pre-pass) and is re-stamped by every path that sets ``perform_until`` --
+    ``_settle_after_dead_talk`` and the decide-time perform branch -- so it is
+    one-shot by construction: a credit written here is consumed by the settle it
+    was earned at and cannot leak forward onto an unrelated stop.
 
     Place-match is the same rule the pre-pass already applies for ``on_plan``:
     standing at the scheduled stop means this completed it. Any real
@@ -1825,23 +1827,27 @@ def _credit_stop_for_conversation(char, st) -> bool:
     concept.
 
     ``performing`` is required so a conversation started mid-walk by
-    ``maybe_react`` (#370), which pins a *walking* agent, cannot leave a credit
-    lying in state to be spent later on an unrelated stop. Every path that
-    should credit still does: ``maybe_converse``'s own pairing already requires
-    both agents settled.
+    ``maybe_react`` (#370), which pins a *walking* agent, cannot mark a stop the
+    agent never reached as done. Every path that should credit still does:
+    ``maybe_converse``'s own pairing already requires both agents settled.
 
-    Returns whether a credit was stamped (for tests; callers ignore it).
+    Deliberately does NOT write ``activity``. The scheduled activity is not
+    necessarily what the agent did (under a real brain ``PerformPenn`` sets it
+    from the model's own argument), and it would not clear the frame's
+    ``"spending time"`` placeholder anyway -- ``st["desc"]`` is stamped only at
+    decide time. What clears the placeholder is the advance this credit unlocks:
+    the agent travels, arrives, and performs the next stop, stamping its own
+    activity before the next desc is computed.
+
+    Returns whether the stop was credited (for tests; callers ignore it).
     """
     if not st.get("performing"):
         return False
-    schedule = getattr(getattr(char, "agent", None), "schedule", None)
+    schedule = char.agent.schedule
     place = getattr(schedule, "destination", None)
     if not place or char.location is None or char.location.name != place:
         return False
-    st["convo_at_stop"] = True
-    activity = getattr(schedule, "activity", None)
-    if activity:
-        char.set_property("activity", activity)
+    st["on_plan"] = True
     return True
 
 
@@ -1879,6 +1885,13 @@ def _advance_conversation(
         state[ac.a]["conversing"] = True
         state[ac.b]["conversing"] = True
         return False, 0
+    if ac.convo.happened:
+        # #778: credit the scheduled stop this conversation just completed --
+        # BEFORE the outcome pass below, whose plan revision can rewrite the very
+        # schedule the place-match reads. (`replace_schedule` preserves the
+        # current stop by contract, so this is ordering hygiene, not a live bug.)
+        for nm in (ac.a, ac.b):
+            _credit_stop_for_conversation(chars[nm], state[nm])
     delta = _finish_conversation(
         chars[ac.a], chars[ac.b], ac.convo, step, cooldowns, clock
     )
@@ -1886,9 +1899,6 @@ def _advance_conversation(
         ac.hold_until = step + len(ac.convo.lines) * line_playback_steps
         state[ac.a]["conversing"] = True
         state[ac.b]["conversing"] = True
-        # #778: credit the scheduled stop this conversation just completed.
-        for nm in (ac.a, ac.b):
-            _credit_stop_for_conversation(chars[nm], state[nm])
         return False, delta
     state[ac.a]["conversing"] = False
     state[ac.b]["conversing"] = False

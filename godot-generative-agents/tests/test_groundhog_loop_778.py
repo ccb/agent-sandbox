@@ -13,7 +13,9 @@ The commitment now becomes a durable PLAN memory in the speaker's own stream.
 routes through `_settle_after_dead_talk`, which sets `on_plan = False` (#689).
 So no conversation ever advanced a stop -- not even when the conversation WAS
 the scheduled activity. A real conversation held at the scheduled place now
-credits that stop.
+credits that stop, by setting the pre-pass's own `on_plan` flag -- no second
+signal, and one-shot for free, since every path that sets `perform_until`
+re-stamps `on_plan`.
 
 Fully offline (fake brains + fake planners). Run from the repo root::
 
@@ -37,6 +39,20 @@ from text_adventure_games.planning import DailyPlan, Stop  # noqa: E402
 from text_adventure_games.things import Character  # noqa: E402
 
 from backend import cognition  # noqa: E402
+from backend.prompt_templates import render  # noqa: E402
+
+
+def test_commitment_memory_renders_from_its_template():
+    """The memory text is a .prompty, per the repo rule that agent-facing strings
+    are never hand-built inline -- pinned here like #779's relationship_memory."""
+    assert (
+        render(
+            "commitment_memory",
+            other="Chris Donnelly",
+            commitment="Pizza place near campus in about 20 minutes",
+        )
+        == "I agreed with Chris Donnelly: Pizza place near campus in about 20 minutes"
+    )
 
 
 class _OutcomeBrain:
@@ -246,7 +262,13 @@ def _pair_talking_in(place_name, *, performing=True):
         if ch.location is not None:
             ch.location.remove_character(ch)
         room.add_character(ch)
-    state = {n: {"performing": performing, "path": None, "chat": None} for n in order}
+    # on_plan starts False, exactly as _settle_after_dead_talk (#689) leaves it
+    # after the talk_to that opened this conversation -- so each test below
+    # asserts the credit flipped that flag, not merely that it is set.
+    state = {
+        n: {"performing": performing, "path": None, "chat": None, "on_plan": False}
+        for n in order
+    }
     frame = {n: {} for n in order}
     return game, chars, state, frame, order
 
@@ -258,11 +280,9 @@ def test_conversation_at_the_scheduled_place_credits_the_stop():
 
     assert happened == 1
     for name in order:
-        # The credit Task 3's pre-pass spends to advance the schedule.
-        assert state[name]["convo_at_stop"] is True
-        # ...and the activity is now set, so the frame stops rendering the
-        # "spending time" placeholder over a stop that actually happened.
-        assert chars[name].get_property("activity") == "reading"
+        # The flag the pre-pass reads to advance the schedule, flipped from the
+        # False that _settle_after_dead_talk left behind.
+        assert state[name]["on_plan"] is True
 
 
 def test_conversation_away_from_the_scheduled_place_does_not_credit():
@@ -274,7 +294,7 @@ def test_conversation_away_from_the_scheduled_place_does_not_credit():
 
     assert happened == 1  # they did talk...
     for name in order:
-        assert "convo_at_stop" not in state[name]  # ...but nothing was credited
+        assert state[name]["on_plan"] is False  # ...but nothing was credited
 
 
 def test_unsettled_agent_is_never_credited():
@@ -284,8 +304,8 @@ def test_unsettled_agent_is_never_credited():
     requires both agents settled, so no conversation would open and the
     assertion would pass for the wrong reason. The only way an unsettled agent
     reaches the credit is a conversation maybe_react (#370) started mid-walk,
-    which pins a WALKING agent that completed no stop -- and without this guard
-    its credit would linger in state and be spent on a later, unrelated stop.
+    which pins a WALKING agent that completed no stop -- crediting it would mark
+    a stop the agent has not even arrived at as done.
     """
     game, chars, state, frame, order = _pair_talking_in("Cafe", performing=False)
     maria, st = chars["Maria Lopez"], state["Maria Lopez"]
@@ -296,11 +316,11 @@ def test_unsettled_agent_is_never_credited():
     credited = cognition._credit_stop_for_conversation(maria, st)
 
     assert credited is False
-    assert "convo_at_stop" not in st
+    assert st["on_plan"] is False
     # And the positive control: flip the one flag and the same call credits.
     st["performing"] = True
     assert cognition._credit_stop_for_conversation(maria, st) is True
-    assert st["convo_at_stop"] is True
+    assert st["on_plan"] is True
 
 
 def test_mock_brain_credits_nothing():
@@ -316,14 +336,17 @@ def test_mock_brain_credits_nothing():
         if ch.location is not None:
             ch.location.remove_character(ch)
         cafe.add_character(ch)
-    state = {n: {"performing": True, "path": None, "chat": None} for n in order}
+    state = {
+        n: {"performing": True, "path": None, "chat": None, "on_plan": False}
+        for n in order
+    }
     frame = {n: {} for n in order}
 
     happened = maybe_converse(game, chars, state, frame, 4, {}, order, clock=None)
 
     assert happened == 0
     for name in order:
-        assert "convo_at_stop" not in state[name]
+        assert state[name]["on_plan"] is False
 
 
 from backend.run_simulation import step  # noqa: E402
@@ -362,8 +385,7 @@ def _loop_persona(name):
 
 def _full_state(tile=(0, 0)):
     """A state entry with every key step() reads (from
-    test_dead_talk_settle_689.py). Deliberately has NO 'convo_at_stop' key --
-    the pre-pass must tolerate its absence."""
+    test_dead_talk_settle_689.py)."""
     return {
         "tile": tuple(tile),
         "path": [],
@@ -398,14 +420,39 @@ def _pair_mid_dead_talk_settle():
 
 def test_credited_settle_expiry_advances_the_schedule():
     game, chars, state, order, emoji = _pair_mid_dead_talk_settle()
-    # The credit Task 2 stamps when the conversation ended at the scheduled place.
-    state["Diego Cruz"]["convo_at_stop"] = True
+    diego, st = chars["Diego Cruz"], state["Diego Cruz"]
+    # Produce the credit the way a real conversation does rather than hand-setting
+    # the flag, so this pins the whole seam: credit -> pre-pass -> advance. Diego
+    # is settled at Plaza, his current scheduled stop.
+    assert cognition._credit_stop_for_conversation(diego, st) is True
 
     step(game, chars, state, 30, order=order, world_map=_StubMap(), emoji=emoji)
 
-    assert chars["Diego Cruz"].agent.schedule.stop_index == 1
-    # Consumed, so a credit can never outlive the settle that earned it.
-    assert "convo_at_stop" not in state["Diego Cruz"]
+    assert diego.agent.schedule.stop_index == 1
+
+
+def test_credit_at_the_last_stop_settles_in_place():
+    """At the FINAL stop advance() returns False, so the agent stays latched and
+    settles there for the rest of the run.
+
+    That is deliberate -- the same end-of-day "stay put" rule an on-plan agent
+    gets -- and load-bearing for the mock bake: un-latching here would make the
+    mock re-decide at its last stop and drift every later frame. Pinned because
+    the credit is what newly routes a *conversing* agent onto this branch (before
+    #778 it took the deviation branch and un-latched)."""
+    game, chars, state, order, emoji = _pair_mid_dead_talk_settle()
+    diego, st = chars["Diego Cruz"], state["Diego Cruz"]
+    diego.agent.schedule.stop_index = 1  # the last of two stops: Library
+    library = game.locations["Library"]
+    diego.location.remove_character(diego)
+    library.add_character(diego)
+    assert cognition._credit_stop_for_conversation(diego, st) is True
+
+    step(game, chars, state, 30, order=order, world_map=_StubMap(), emoji=emoji)
+
+    assert diego.agent.schedule.stop_index == 1  # nothing left to advance to
+    assert st["performing"] is True  # still latched, i.e. settled for the run
+    assert st["perform_until"] is None
 
 
 def test_uncredited_settle_expiry_does_not_advance():

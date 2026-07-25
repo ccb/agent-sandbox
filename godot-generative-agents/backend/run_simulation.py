@@ -320,20 +320,26 @@ def step(
             and step_idx >= st["perform_until"]
             and not st.get("conversing")
         ):
-            # #778: a real conversation held at the scheduled place counts as
-            # having done that stop. cognition._credit_stop_for_conversation
-            # stamps the credit; this is where it is spent. Popped
-            # unconditionally so a credit can never outlive the settle that
-            # earned it. Absent for the mock (which never converses), so
-            # `credited` is False and the branch is byte-identical.
-            # ponytail: this only credits conversation -- an agent frozen by
-            # repeated *blocked* actions still never advances here. Upgrade: a
-            # general stop deadline, rejected for now (bake-drift risk, and
-            # stop_since re-anchors on any arrival so it wouldn't have fixed
-            # the reported agent; see the design spec's "Rejected: a general
-            # stop deadline").
-            credited = st.pop("convo_at_stop", False)
-            if st.get("on_plan", True) or credited:
+            # #778: `on_plan` is now also set by
+            # cognition._credit_stop_for_conversation, so a real conversation
+            # held at the scheduled place advances the pointer exactly like a
+            # performed activity. Byte-identical for the mock, which never
+            # converses.
+            #
+            # When advance() returns False (this was the last stop) `performing`
+            # stays True with `perform_until` None, so the agent settles at its
+            # final stop for the rest of the run. That is deliberate -- the same
+            # "stay put" end-of-day rule as the perform branch below -- and it is
+            # load-bearing for the mock bake: un-latching here would make the
+            # mock re-decide at its last stop and drift every later frame.
+            #
+            # ponytail: only a performed activity or a conversation credits a
+            # stop -- an agent frozen by repeated *blocked* actions still never
+            # advances here. Upgrade: a general stop deadline, rejected for now
+            # (bake-drift risk, and stop_since re-anchors on any arrival so it
+            # wouldn't have fixed the reported agent; see the design spec's
+            # "Rejected: a general stop deadline").
+            if st.get("on_plan", True):
                 if char.agent.schedule.advance():
                     st["performing"] = False
                     # A new stop begins now: the decide-context block (#580)
