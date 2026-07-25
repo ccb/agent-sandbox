@@ -10,7 +10,7 @@
    and disconnected nodes drop off the clock automatically. */
 (() => {
   "use strict";
-  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-c-m": ["svg", 640, 720], "autarch-e": ["svg", 640, 420], "autarch-e-m": ["svg", 640, 720], "autarch-m": ["svg", 640, 720], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "bats-c-m": ["svg", 640, 720], "bats-m": ["canvas", 640, 720], "blade": ["canvas", 640, 360], "blade-m": ["canvas", 640, 720], "boots": ["svg", 640, 360], "boots-m": ["svg", 640, 720], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "centipede-m": ["svg", 640, 720], "chimney-f": ["svg", 640, 360], "chimney-f-m": ["svg", 640, 720], "chimney-g": ["svg", 640, 360], "chimney-g-m": ["svg", 640, 720], "chimney-h": ["svg", 640, 360], "chimney-h-m": ["svg", 640, 720], "core": ["svg", 640, 360], "core-m": ["svg", 640, 720], "critch": ["svg", 640, 360], "critch-m": ["svg", 640, 720], "cyl-a": ["svg", 640, 400], "cyl-a-m": ["svg", 640, 720], "cyl-c": ["svg", 640, 400], "cyl-c-m": ["svg", 640, 720], "cyl-o": ["svg", 640, 400], "cyl-o-m": ["svg", 640, 720], "cyl-v": ["svg", 640, 400], "cyl-v-m": ["svg", 640, 720], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "cylinders-b-m": ["svg", 640, 720], "cylinders-m": ["svg", 640, 720], "dagger": ["svg", 640, 360], "dagger-m": ["svg", 640, 720], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flask-m": ["svg", 640, 720], "flood": ["svg", 640, 360], "flood-m": ["svg", 640, 720], "fungus": ["svg", 640, 360], "fungus-m": ["svg", 640, 720], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-b-m": ["canvas", 640, 720], "glowstone-c": ["canvas", 640, 300], "glowstone-c-m": ["canvas", 640, 720], "glowstone-m": ["canvas", 640, 720], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "hound-m": ["svg", 640, 720], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-falcon-m": ["svg", 640, 720], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-jackal-m": ["svg", 640, 720], "jar-mantis": ["svg", 640, 300], "jar-mantis-m": ["svg", 640, 720], "manifest": ["svg", 640, 360], "manifest-m": ["svg", 640, 720], "mem-bath": ["svg", 640, 360], "mem-bath-m": ["svg", 640, 720], "mem-embalm": ["svg", 640, 360], "mem-embalm-m": ["svg", 640, 720], "mem-kestrel": ["svg", 640, 360], "mem-kestrel-m": ["svg", 640, 720], "mem-mother": ["svg", 640, 360], "mem-mother-m": ["svg", 640, 720], "mem-raising": ["svg", 640, 360], "mem-raising-m": ["svg", 640, 720], "mystic-b": ["svg", 640, 400], "mystic-b-m": ["svg", 640, 720], "mystic-c": ["svg", 640, 400], "mystic-c-m": ["svg", 640, 720], "mystic-f": ["svg", 640, 400], "mystic-f-m": ["svg", 640, 720], "resp": ["svg", 640, 360], "resp-m": ["svg", 640, 720], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "seal-b-m": ["svg", 640, 720], "seal-m": ["svg", 640, 720], "shard": ["svg", 640, 360], "shard-m": ["svg", 640, 720], "silas": ["svg", 640, 400], "silas-m": ["svg", 640, 720], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-b-m": ["svg", 640, 720], "sphere-d": ["svg", 640, 420], "sphere-d-m": ["svg", 640, 720], "sphere-e": ["svg", 640, 420], "sphere-e-m": ["svg", 640, 720], "sphere-f": ["svg", 640, 420], "sphere-f-m": ["svg", 640, 720], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tank-f-m": ["svg", 640, 720], "tank-m": ["svg", 640, 720], "tesseract": ["canvas", 640, 360], "tesseract-m": ["canvas", 640, 720], "tesseract-u": ["canvas", 640, 360], "tesseract-u-m": ["canvas", 640, 720], "ulfire": ["svg", 640, 360], "ulfire-m": ["svg", 640, 720], "ulfire-u": ["svg", 640, 360], "ulfire-u-m": ["svg", 640, 720], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-a-m": ["svg", 640, 720], "youth-b": ["svg", 640, 360], "youth-b-m": ["svg", 640, 720], "youth-c": ["svg", 640, 360], "youth-c-m": ["svg", 640, 720], "youth-d": ["svg", 640, 360], "youth-d-m": ["svg", 640, 720], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360], "zoxen-b-m": ["svg", 640, 720], "zoxen-m": ["svg", 640, 720]};
+  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-c-m": ["svg", 640, 720], "autarch-e": ["svg", 640, 420], "autarch-e-m": ["svg", 640, 720], "autarch-m": ["svg", 640, 720], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "bats-c-m": ["svg", 640, 720], "bats-m": ["canvas", 640, 720], "blade": ["canvas", 640, 360], "blade-m": ["canvas", 640, 720], "boots": ["svg", 640, 360], "boots-m": ["svg", 640, 720], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "centipede-m": ["svg", 640, 720], "chimney-f": ["svg", 640, 360], "chimney-f-m": ["svg", 640, 720], "chimney-g": ["svg", 640, 360], "chimney-g-m": ["svg", 640, 720], "chimney-h": ["svg", 640, 360], "chimney-h-m": ["svg", 640, 720], "core": ["svg", 640, 360], "core-m": ["svg", 640, 720], "critch": ["svg", 640, 360], "critch-m": ["svg", 640, 720], "cyl-a": ["svg", 640, 400], "cyl-a-m": ["svg", 640, 720], "cyl-c": ["svg", 640, 400], "cyl-c-m": ["svg", 640, 720], "cyl-o": ["svg", 640, 400], "cyl-o-m": ["svg", 640, 720], "cyl-v": ["svg", 640, 400], "cyl-v-m": ["svg", 640, 720], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "cylinders-b-m": ["svg", 640, 720], "cylinders-m": ["svg", 640, 720], "dagger": ["svg", 640, 360], "dagger-m": ["svg", 640, 720], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flask-m": ["svg", 640, 720], "flood": ["svg", 640, 360], "flood-m": ["svg", 640, 720], "fungus": ["svg", 640, 360], "fungus-m": ["svg", 640, 720], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-b-m": ["canvas", 640, 720], "glowstone-c": ["canvas", 640, 300], "glowstone-c-m": ["canvas", 640, 720], "glowstone-m": ["canvas", 640, 720], "guts-a": ["svg", 640, 360], "guts-a-m": ["svg", 640, 720], "guts-b": ["svg", 640, 360], "guts-b-m": ["svg", 640, 720], "guts-c": ["svg", 640, 360], "guts-c-m": ["svg", 640, 720], "guts-lash": ["svg", 640, 360], "guts-lash-m": ["svg", 640, 720], "hound": ["svg", 640, 360], "hound-m": ["svg", 640, 720], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-falcon-m": ["svg", 640, 720], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-jackal-m": ["svg", 640, 720], "jar-mantis": ["svg", 640, 300], "jar-mantis-m": ["svg", 640, 720], "manifest": ["svg", 640, 360], "manifest-m": ["svg", 640, 720], "mem-bath": ["svg", 640, 360], "mem-bath-m": ["svg", 640, 720], "mem-embalm": ["svg", 640, 360], "mem-embalm-m": ["svg", 640, 720], "mem-kestrel": ["svg", 640, 360], "mem-kestrel-m": ["svg", 640, 720], "mem-mother": ["svg", 640, 360], "mem-mother-m": ["svg", 640, 720], "mem-raising": ["svg", 640, 360], "mem-raising-m": ["svg", 640, 720], "mystic-b": ["svg", 640, 400], "mystic-b-m": ["svg", 640, 720], "mystic-c": ["svg", 640, 400], "mystic-c-m": ["svg", 640, 720], "mystic-f": ["svg", 640, 400], "mystic-f-m": ["svg", 640, 720], "resp": ["svg", 640, 360], "resp-m": ["svg", 640, 720], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "seal-b-m": ["svg", 640, 720], "seal-m": ["svg", 640, 720], "shard": ["svg", 640, 360], "shard-m": ["svg", 640, 720], "silas": ["svg", 640, 400], "silas-m": ["svg", 640, 720], "spawn-a": ["svg", 640, 360], "spawn-a-m": ["svg", 640, 720], "spawn-b": ["svg", 640, 360], "spawn-b-m": ["svg", 640, 720], "spawn-c": ["svg", 640, 360], "spawn-c-m": ["svg", 640, 720], "sphere-b": ["svg", 640, 420], "sphere-b-m": ["svg", 640, 720], "sphere-d": ["svg", 640, 420], "sphere-d-m": ["svg", 640, 720], "sphere-e": ["svg", 640, 420], "sphere-e-m": ["svg", 640, 720], "sphere-f": ["svg", 640, 420], "sphere-f-m": ["svg", 640, 720], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tank-f-m": ["svg", 640, 720], "tank-m": ["svg", 640, 720], "tesseract": ["canvas", 640, 360], "tesseract-m": ["canvas", 640, 720], "tesseract-u": ["canvas", 640, 360], "tesseract-u-m": ["canvas", 640, 720], "ulfire": ["svg", 640, 360], "ulfire-m": ["svg", 640, 720], "ulfire-u": ["svg", 640, 360], "ulfire-u-m": ["svg", 640, 720], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-a-m": ["svg", 640, 720], "youth-b": ["svg", 640, 360], "youth-b-m": ["svg", 640, 720], "youth-c": ["svg", 640, 360], "youth-c-m": ["svg", 640, 720], "youth-d": ["svg", 640, 360], "youth-d-m": ["svg", 640, 720], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360], "zoxen-b-m": ["svg", 640, 720], "zoxen-m": ["svg", 640, 720]};
   const FIG = {
     _defs: {}, _uid: 0, _ticks: [], _timer: null, _target: null,
     MAX_LIVE: 3,
@@ -7336,6 +7336,60 @@
     });
   });
 
+  // 23-m: THE LISTENER (phone twin) -- the creature at 1.5x; the
+  // sound-ripples ride the phone frame's own edges (scene x 150 / 490)
+  FIG._define("spawn-a-m", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const DOTS = stipple(svg, "sam-dots", PH, 1.2);
+    const SC = el(svg, "g", { transform: "translate(-160 112) scale(1.5)" });
+    const gg = document.createElementNS(NS, "g"); SC.appendChild(gg);
+    const legT1 = el(SC, "polyline", { fill: "none", stroke: PH, "stroke-width": 3.4,
+      "stroke-linecap": "round" });
+    const legS1 = el(SC, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.8 });
+    const legT2 = el(SC, "polyline", { fill: "none", stroke: PH, "stroke-width": 2.6,
+      "stroke-linecap": "round", opacity: .5 });
+    const legS2 = el(SC, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.4, opacity: .5 });
+    birdLeg(legT1, legS1, 300, 236, 0, 0);
+    birdLeg(legT2, legS2, 336, 232, .8, 0);
+    brainBody(svg, gg, 320, 190, 78, 62, stipple(svg, "sam-orange", FUNGUS, 1.2));
+    const H = jarHead(svg, gg, 312, 90);
+    // the fungal fringe at the neck
+    el(SC, "polyline", { fill: "none", stroke: PH_DIM, points:
+      "290,132 296,142 302,132 310,144 318,132 326,142 334,130 342,140 350,132" });
+    const ripL = Array.from({ length: 2 }, () => el(SC, "path", { fill: "none",
+      stroke: FUNGUS, "stroke-width": 1.4, opacity: 0 }));
+    const ripR = Array.from({ length: 2 }, () => el(SC, "path", { fill: "none",
+      stroke: FUNGUS, "stroke-width": 1.4, opacity: 0 }));
+    for (let x = 96; x < 548; x += 16)
+      el(SC, "line", { x1: x, y1: 312, x2: x + 7, y2: 312, stroke: PH_DIM });
+    const foot1 = label(svg, 320, 648, 22, FUNGUS); foot1.setAttribute("text-anchor", "middle");
+    const foot2 = label(svg, 320, 680, 22, FUNGUS); foot2.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 160;
+      doWipe(T);
+      typeOn(hdr, "SPAWN OF BRAIN (IT HEARD THAT)", T, 4, 1.4);
+      const phase = Math.floor(T / 40) % 4;                    // sounds alternate sides
+      const side = phase === 1 ? -1 : phase === 3 ? 1 : 0;
+      const lean = side * 5;
+      gg.setAttribute("transform", `rotate(${lean} 320 300)`);
+      prickEars(H, side !== 0 ? 8 : 0);
+      [[ripL, 150, -1], [ripR, 490, 1]].forEach(([rips, x, dir]) => {
+        rips.forEach((r, i) => {
+          const on = (dir === -1 && side === -1) || (dir === 1 && side === 1);
+          const k = ((t * 2 + i * 10) % 24) / 24;
+          r.setAttribute("d", `M ${x + dir * 14 * (1 + k)} 186 ` +
+            `Q ${x + dir * (26 + k * 26)} 206 ${x + dir * 14 * (1 + k)} 226`);
+          r.setAttribute("opacity", on ? Math.max(0, .9 - k) : 0);
+        });
+      });
+      typeOn(foot1, "NO EYES UNDER THE JAR.", T, 112, 1.6);
+      typeOn(foot2, "IT DOES NOT NEED THEM.", T, 128, 1.6);
+    });
+  });
+
   // 24: MID-STEP -- the head holds level while everything else jounces
   FIG._define("spawn-b", "svg", function (svg) {
     el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
@@ -7378,6 +7432,54 @@
       gHead.setAttribute("transform", "translate(0 0)");        // the head refuses to
       gGround.setAttribute("transform", `translate(${-(t * 4) % 16} 0)`);
       typeOn(foot, "THE HEAD HOLDS LEVEL. THE REST NEGOTIATES.", T, 104, 1.6);
+    });
+  });
+
+  // 24-m: MID-STEP (phone twin) -- 23-m's framing; the gait verbatim
+  FIG._define("spawn-b-m", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const DOTS = stipple(svg, "sbm-dots", PH, 1.2);
+    const SC = el(svg, "g", { transform: "translate(-160 112) scale(1.5)" });
+    const legT1 = el(SC, "polyline", { fill: "none", stroke: PH, "stroke-width": 3.4,
+      "stroke-linecap": "round" });
+    const legS1 = el(SC, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.8 });
+    const legT2 = el(SC, "polyline", { fill: "none", stroke: PH, "stroke-width": 2.6,
+      "stroke-linecap": "round", opacity: .5 });
+    const legS2 = el(SC, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.4, opacity: .5 });
+    const gBody = document.createElementNS(NS, "g"); SC.appendChild(gBody);
+    brainBody(svg, gBody, 320, 190, 78, 62, stipple(svg, "sbm-orange", FUNGUS, 1.2));
+    const gHead = document.createElementNS(NS, "g"); SC.appendChild(gHead);
+    const H = jarHead(svg, gHead, 312, 90);
+    prickEars(H, 0);
+    const gGround = document.createElementNS(NS, "g");
+    for (let x = 96; x < 548; x += 16) {
+      const l = document.createElementNS(NS, "line");
+      l.setAttribute("x1", x); l.setAttribute("y1", 312);
+      l.setAttribute("x2", x + 7); l.setAttribute("y2", 312);
+      l.setAttribute("stroke", PH_DIM); gGround.appendChild(l);
+    }
+    SC.appendChild(gGround);
+    const foot1 = label(svg, 320, 648, 22, FUNGUS); foot1.setAttribute("text-anchor", "middle");
+    const foot2 = label(svg, 320, 680, 22, FUNGUS); foot2.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 150;
+      doWipe(T);
+      typeOn(hdr, "SPAWN OF BRAIN (MID-STEP)", T, 4, 1.4);
+      const th = (t % 16) / 16 * Math.PI * 2;
+      birdLeg(legT1, legS1, 300, 236, Math.cos(th) * .8,
+        Math.max(0, Math.sin(th)) * 20);
+      birdLeg(legT2, legS2, 336, 232, Math.cos(th + Math.PI) * .8,
+        Math.max(0, Math.sin(th + Math.PI)) * 20);
+      const jounce = [0, 2, 4, 2, 0, 2, 4, 2][t % 8];          // the body takes it
+      gBody.setAttribute("transform",
+        `translate(0 ${jounce}) rotate(${jounce - 2} 320 190)`);
+      gHead.setAttribute("transform", "translate(0 0)");        // the head refuses to
+      gGround.setAttribute("transform", `translate(${-(t * 4) % 16} 0)`);
+      typeOn(foot1, "THE HEAD HOLDS LEVEL.", T, 104, 1.6);
+      typeOn(foot2, "THE REST NEGOTIATES.", T, 120, 1.6);
     });
   });
 
@@ -7424,6 +7526,55 @@
         q.setAttribute("opacity", Math.max(0, (.7 - k) * strength));
       });
       typeOn(foot, "FELLED MID-STEP. THE JAR ROLLED TO ITS SIDE.", T, 120, 1.6);
+    });
+  });
+
+  // 25-m: FELLED (phone twin) -- the felled scene at 1.5x
+  FIG._define("spawn-c-m", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const DOTS = stipple(svg, "scm-dots", PH, 1.2);
+    const SC = el(svg, "g", { transform: "translate(-122 132) scale(1.5)" });
+    for (let x = 60; x < 600; x += 16)
+      el(SC, "line", { x1: x, y1: 292, x2: x + 7, y2: 292, stroke: PH_DIM });
+    // the body, down: the brain mass squashed against the ground
+    const gg = document.createElementNS(NS, "g"); SC.appendChild(gg);
+    brainBody(svg, gg, 300, 246, 88, 44, stipple(svg, "scm-orange", FUNGUS, 1.2));
+    // the legs, where the stride left them
+    el(SC, "polyline", { fill: "none", stroke: PH, "stroke-width": 3,
+      "stroke-linecap": "round", points: "356,244 408,232 446,252" });
+    el(SC, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.8,
+      points: "446,252 486,246 496,252 486,258 446,258" });
+    el(SC, "polyline", { fill: "none", stroke: PH, "stroke-width": 2.6,
+      "stroke-linecap": "round", opacity: .6, points: "344,268 390,276 428,270" });
+    // the jar, rolled to its side, rocking itself still
+    const gJar = document.createElementNS(NS, "g"); SC.appendChild(gJar);
+    const jh = jarHead(svg, gJar, 0, 0);
+    prickEars(jh, 0);
+    // the last thoughts, pulsing out and fading
+    const pulses = Array.from({ length: 2 }, () =>
+      el(SC, "circle", { cx: 300, cy: 240, r: 10, fill: "none",
+        stroke: FUNGUS, opacity: 0 }));
+    const foot1 = label(svg, 320, 648, 22, FUNGUS); foot1.setAttribute("text-anchor", "middle");
+    const foot2 = label(svg, 320, 680, 22, FUNGUS); foot2.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 180;
+      doWipe(T);
+      typeOn(hdr, "SPAWN OF BRAIN (AS FOUND)", T, 4, 1.4);
+      const settle = Math.max(0, 1 - T / 50);                  // the rocking dies
+      const rock = Math.sin(t * .55) * 14 * settle;
+      gJar.setAttribute("transform",
+        `translate(150 258) rotate(${78 + rock} 0 20)`);
+      pulses.forEach((q, i) => {                               // the thought, winding down
+        const k = ((t * 2 + i * 12) % 26) / 26;
+        const strength = Math.max(0, 1 - T / 110);
+        q.setAttribute("r", 10 + k * 34);
+        q.setAttribute("opacity", Math.max(0, (.7 - k) * strength));
+      });
+      typeOn(foot1, "FELLED MID-STEP.", T, 120, 1.6);
+      typeOn(foot2, "THE JAR ROLLED TO ITS SIDE.", T, 136, 1.6);
     });
   });
 
@@ -7600,6 +7751,58 @@
     });
   });
 
+  // 26-m: THE SWAY (phone twin) -- the creature at 1.55x; callouts 18px
+  // top-left; the long desktop title trims to fit 26px
+  FIG._define("guts-a-m", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const DOTS = stipple(svg, "gam-dots", PH, 1.2);
+    const SX = x => x * 1.55 - 176, SY = y => y * 1.55 + 93;
+    const SC = el(svg, "g", { transform: "translate(-176 93) scale(1.55)" });
+    for (let x = 60; x < 600; x += 16)
+      el(SC, "line", { x1: x, y1: 314, x2: x + 7, y2: 314, stroke: PH_DIM });
+    const gg = document.createElementNS(NS, "g"); SC.appendChild(gg);
+    gutsArm(gg);
+    const skirt = gutsSkirt(gg, 6);
+    gutsFace(gg, DOTS);
+    gutsHelm(gg);
+    // the drip
+    const drips = Array.from({ length: 5 }, (_, i) =>
+      ({ x: 270 + i * 24, ph: i * 29, q: el(SC, "line", { stroke: G_DRIP,
+        "stroke-width": 1.4, opacity: .8 }) }));
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 20, 116, 18, PH);
+    const CALLS = [
+      { at: [322, 40], text: "HELM: THE FALCON JAR. THE PLINTH WANTS IT" },
+      { at: [322, 146], text: "EYES: DECORATIVE. IT HUNTS BY EAR" },
+      { at: [370, 190], text: "COLLAR: GUT, RECENTLY PROMOTED" },
+      { at: [214, 260], text: "ARM: A HOSE WITH OPINIONS" },
+    ];
+    const foot = label(svg, 320, 656, 22, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 160;
+      doWipe(T);
+      typeOn(hdr, "SPAWN OF GUTS (THE SWAY)", T, 4, 1.4);
+      gg.setAttribute("transform",
+        `rotate(${Math.round(Math.sin(t * .09) * 3) * 1.4} 320 310)`);
+      skirtTick(skirt, t, 0);
+      drips.forEach(d => {
+        const k = (t * 5 + d.ph) % 110;
+        d.q.setAttribute("x1", d.x); d.q.setAttribute("x2", d.x);
+        d.q.setAttribute("y1", 206 + k); d.q.setAttribute("y2", 212 + k);
+        d.q.setAttribute("opacity", k > 100 ? 0 : .8);
+      });
+      const c = CALLS[Math.floor(T / 28) % CALLS.length];
+      if (T > 14) {
+        callLead.setAttribute("points", `${SX(c.at[0])},${SY(c.at[1])} 92,94 84,94`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      typeOn(foot, "WHATEVER YOU JUST DID, IT HEARD.", T, 112, 1.6);
+    });
+  });
+
   // 27: THE DRIP -- the face, closer than anyone wants
   FIG._define("guts-b", "svg", function (svg) {
     el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
@@ -7641,6 +7844,49 @@
     });
   });
 
+  // 27-m: THE DRIP (phone twin) -- the face at 2.6x, whole helm kept in
+  // frame; the drip re-laid down the tall card
+  FIG._define("guts-b-m", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const DOTS = stipple(svg, "gbm-dots", PH, 1.2);
+    const gg = document.createElementNS(NS, "g"); svg.appendChild(gg);
+    gg.setAttribute("transform", "translate(-512 -16) scale(2.6)");
+    const eyes = gutsFace(gg, DOTS);
+    gutsHelm(gg);
+    const drips = Array.from({ length: 7 }, (_, i) =>
+      ({ x: 120 + i * 68, ph: i * 23, q: el(svg, "line", { stroke: G_DRIP,
+        "stroke-width": 2.2 }),
+        splat: el(svg, "polyline", { fill: "none", stroke: G_DIM,
+          points: "0,0", opacity: 0 }) }));
+    const foot1 = label(svg, 320, 668, 22, FUNGUS); foot1.setAttribute("text-anchor", "middle");
+    const foot2 = label(svg, 320, 700, 22, FUNGUS); foot2.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 150;
+      doWipe(T);
+      typeOn(hdr, "SPAWN OF GUTS (DETAIL. SORRY.)", T, 4, 1.4);
+      eyes.forEach((e, i) => {                                // out-of-sequence blinks
+        const open = ((t + i * 7) % 30) > 4;
+        e.pupil.setAttribute("opacity", open ? 1 : 0);
+        e.ball.setAttribute("fill", open ? BG : PH_DIM);
+      });
+      drips.forEach(d => {
+        const k = (t * 6 + d.ph) % 130;
+        d.q.setAttribute("x1", d.x); d.q.setAttribute("x2", d.x);
+        d.q.setAttribute("y1", 548 + k * .55); d.q.setAttribute("y2", 561 + k * .55);
+        d.q.setAttribute("opacity", k > 120 ? 0 : .85);
+        const landed = k > 116;
+        d.splat.setAttribute("points",
+          `${d.x - 9},634 ${d.x - 3},629 ${d.x + 4},634 ${d.x + 10},630`);
+        d.splat.setAttribute("opacity", landed ? .8 : 0);
+      });
+      typeOn(foot1, "THE EYES ARE ORNAMENTAL.", T, 100, 1.6);
+      typeOn(foot2, "THE HUNGER IS NOT.", T, 116, 1.6);
+    });
+  });
+
   // 28: THE CLAIM -- it goes down, the jar survives
   FIG._define("guts-c", "svg", function (svg) {
     el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
@@ -7678,6 +7924,53 @@
       gHelm.setAttribute("transform", `translate(${hx} ${hy}) rotate(${rot} 320 118)`);
       prize.textContent = T > 112 ? "[+5 -- THE FALCON JAR]" : "";
       typeOn(foot, "THE JAR IS OWED TO A PLINTH TWO FLOORS UP.", T, 130, 1.6);
+    });
+  });
+
+  // 28-m: THE CLAIM (phone twin) -- 26-m's framing; the sinking body is
+  // clipped at the scene's own frame line so it exits behind the footer
+  FIG._define("guts-c-m", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const DOTS = stipple(svg, "gcm-dots", PH, 1.2);
+    const clip = el(svg, "clipPath", { id: "clip-gutscm" });
+    el(clip, "rect", { x: 0, y: 0, width: 640, height: 340 });
+    const SC = el(svg, "g", { transform: "translate(-176 93) scale(1.55)",
+      "clip-path": "url(#clip-gutscm)" });
+    for (let x = 60; x < 600; x += 16)
+      el(SC, "line", { x1: x, y1: 314, x2: x + 7, y2: 314, stroke: PH_DIM });
+    const gBody = document.createElementNS(NS, "g"); SC.appendChild(gBody);
+    gutsArm(gBody);
+    const skirt = gutsSkirt(gBody, 6);
+    gutsFace(gBody, DOTS);
+    const gHelm = document.createElementNS(NS, "g"); SC.appendChild(gHelm);
+    gutsHelm(gHelm);
+    const prize = label(svg, 620, 612, 18, FUNGUS); prize.setAttribute("text-anchor", "end");
+    const foot1 = label(svg, 320, 648, 22, FUNGUS); foot1.setAttribute("text-anchor", "middle");
+    const foot2 = label(svg, 320, 680, 22, FUNGUS); foot2.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 200;
+      doWipe(T);
+      typeOn(hdr, "SPAWN OF GUTS (THE CLAIM)", T, 4, 1.4);
+      const down = Math.max(0, Math.min(1, (T - 60) / 20));   // it goes down
+      gBody.setAttribute("transform",
+        `translate(0 ${down * 80}) rotate(${down * 8} 320 310)`);
+      gBody.setAttribute("opacity", 1 - down * .35);
+      skirtTick(skirt, T < 60 ? t : 0, down * 26);
+      // the helm topples forward, bounces once, settles upright
+      let hx = 0, hy = 0, rot = 0;
+      if (T >= 60) {
+        const k = Math.min(1, (T - 60) / 26);
+        rot = k * 92 - (T > 86 && T < 96 ? (96 - T) : 0) * 2; // the bounce
+        hx = k * 120; hy = k * 190;
+        if (T > 100) { rot = 0; hx = 128; hy = 196; }         // upright, waiting
+      }
+      gHelm.setAttribute("transform", `translate(${hx} ${hy}) rotate(${rot} 320 118)`);
+      prize.textContent = T > 112 ? "[+5 -- THE FALCON JAR]" : "";
+      typeOn(foot1, "THE JAR IS OWED TO A PLINTH", T, 130, 1.6);
+      typeOn(foot2, "TWO FLOORS UP.", T, 148, 1.6);
     });
   });
 
@@ -7756,6 +8049,86 @@
         r.setAttribute("opacity", hit ? .8 : 0);
       });
       typeOn(foot, "THE HOSE HAD OPINIONS. NOW IT HAS REACH.", T, 40, 1.7);
+    });
+  });
+
+  // 26-B-m: THE LASH (phone twin) -- creature and strike-reach at 1.3x,
+  // shifted right so the whole snap lands inside the phone frame
+  FIG._define("guts-lash-m", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const cls = label(svg, 20, 70, 16, PH_DIM);
+    cls.textContent = "CREATURE / THE BLOW";
+    const DOTS = stipple(svg, "glm-dots", PH, 1.2);
+    const SC = el(svg, "g", { transform: "translate(80 172) scale(1.3)" });
+    for (let x = -30; x < 440; x += 16)
+      el(SC, "line", { x1: x, y1: 314, x2: x + 7, y2: 314, stroke: PH_DIM });
+    const streaks = Array.from({ length: 5 }, () =>
+      el(SC, "path", { fill: "none", stroke: G_ARM, opacity: 0 }));
+    const gg = document.createElementNS(NS, "g"); SC.appendChild(gg);
+    const arm = lashArm(gg);
+    const skirt = gutsSkirt(gg, 6);
+    gutsFace(gg, DOTS);
+    gutsHelm(gg);
+    const drips = Array.from({ length: 3 }, (_, i) =>
+      ({ x: 300 + i * 22, ph: i * 31, q: el(gg, "line", { stroke: G_DRIP, "stroke-width": 1.4, opacity: .7 }) }));
+    const burst = el(SC, "g", {});
+    const star = el(burst, "polygon", { fill: "#ff5a5a", opacity: 0, points:
+      "0,-16 4,-5 15,-6 6,2 11,14 0,6 -11,14 -6,2 -15,-6 -4,-5" });
+    const rays = Array.from({ length: 6 }, () =>
+      el(burst, "line", { stroke: "#ff5a5a", "stroke-width": 1.6, opacity: 0 }));
+    burst.setAttribute("transform", "translate(52 300)");
+    const foot = label(svg, 320, 656, 22, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    const REST =   [[266,192],[252,216],[240,246],[238,276],[218,298],[200,306]];
+    const STRIKE = [[266,192],[224,214],[182,236],[140,258], [96,280], [52,300]];
+    const lerp = (a, b, k) => a + (b - a) * k;
+    clock(t => {
+      const T = t % 104;
+      doWipe(T);
+      typeOn(hdr, "SPAWN OF GUTS (IT LASHES OUT)", T, 4, 1.3);
+      let reach, jitter = 0;
+      if (T < 14) reach = -0.16 * (T / 14);
+      else if (T < 24) { const p = (T - 14) / 10; reach = lerp(-0.16, 1.18, p * p); jitter = p; }
+      else if (T < 34) { const p = (T - 24) / 10; reach = lerp(1.18, 1.0, p); jitter = (10 - (T - 24)) / 10; }
+      else if (T < 66) { const p = (T - 34) / 32; reach = lerp(1.0, 0, p * p); }
+      else reach = Math.sin((T - 66) * .12) * .05;
+      const C = REST.map((_, k) => {
+        const x = lerp(REST[k][0], STRIKE[k][0], reach);
+        const y = lerp(REST[k][1], STRIKE[k][1], reach);
+        const wob = Math.sin(t * .8 - k * .9) * jitter * (k / 5) * 8;
+        return [x, y - wob];
+      });
+      arm(C);
+      const sway = Math.sin(t * .09) * 2;
+      gg.setAttribute("transform",
+        `translate(${-reach * 12} ${reach * 7}) rotate(${reach * 5 + sway} 320 300)`);
+      skirtTick(skirt, t, Math.max(0, reach) * 4);
+      drips.forEach(d => {
+        const k = (t * 5 + d.ph) % 120;
+        d.q.setAttribute("x1", d.x); d.q.setAttribute("x2", d.x);
+        d.q.setAttribute("y1", 202 + k); d.q.setAttribute("y2", 208 + k);
+        d.q.setAttribute("opacity", k > 108 ? 0 : .6);
+      });
+      const snapping = T >= 16 && T < 30;
+      streaks.forEach((s, i) => {
+        if (!snapping) { s.setAttribute("opacity", 0); return; }
+        const k = .45 + i * .11;
+        const sx = lerp(266, 52, k), sy = lerp(192, 300, k);
+        s.setAttribute("d", `M ${sx + 34} ${sy - 10} Q ${sx + 10} ${sy} ${sx} ${sy + 6}`);
+        s.setAttribute("opacity", .22 + (i % 2) * .1);
+      });
+      const hit = T >= 22 && T < 32;
+      star.setAttribute("opacity", hit ? (T % 2 ? .95 : .4) : 0);
+      star.setAttribute("transform", `scale(${hit ? 1 + (T - 22) * .06 : 1})`);
+      rays.forEach((r, i) => {
+        const a = i * Math.PI / 3 + .2, len = 20 + Math.max(0, T - 22) * 1.6;
+        r.setAttribute("x1", Math.cos(a) * 10); r.setAttribute("y1", Math.sin(a) * 10);
+        r.setAttribute("x2", Math.cos(a) * len); r.setAttribute("y2", Math.sin(a) * len);
+        r.setAttribute("opacity", hit ? .8 : 0);
+      });
+      typeOn(foot, "THE HOSE HAD OPINIONS. NOW IT HAS REACH.", T, 40, 1.6);
     });
   });
 
