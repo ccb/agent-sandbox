@@ -671,6 +671,16 @@
   </section>
 
   <section>
+    <div class="slate"><h2>46-m &mdash; THE STATUES, BY TOUCH (phone)</h2><span class="kind">DARK-CRAFT / PHONE TWIN</span></div>
+    <div class="screen">
+      <svg id="youth-a-m" viewBox="0 0 640 720" aria-label="The statues traced by hand in the dark (phone)"></svg>
+    </div>
+    <p class="spec">The phone-legible twin of 46. The tracing carried over whole at 1.4x;
+       the verdicts and the footer re-set in big type below the statues.
+       <span class="attach">Selected by terminal.js when the card would render under ~560px.</span></p>
+  </section>
+
+  <section>
     <div class="slate"><h2>47 &mdash; THE ADORATION</h2><span class="kind">LITHO / HALL OF YOUTH</span></div>
     <div class="screen">
       <svg id="youth-b" viewBox="0 0 640 360" aria-label="The statues lit from below, bats crossing"></svg>
@@ -680,6 +690,16 @@
        glowstone at your feet, while wheeling bat-shadows cross the upper dark and dim
        the cone with every pass.
        <span class="attach">Attaches: the same two cues, once a light is raised.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>47-m &mdash; THE ADORATION (phone)</h2><span class="kind">LITHO / PHONE TWIN</span></div>
+    <div class="screen">
+      <svg id="youth-b-m" viewBox="0 0 640 720" aria-label="The statues lit from below, bats crossing (phone)"></svg>
+    </div>
+    <p class="spec">The phone-legible twin of 47. The lit museum plate at 1.4x, bat-shadows
+       still dimming the cone; plinth plaques and the footer re-set in big type.
+       <span class="attach">Selected by terminal.js when the card would render under ~560px.</span></p>
   </section>
 
   <section>
@@ -696,6 +716,17 @@
   </section>
 
   <section>
+    <div class="slate"><h2>48-m &mdash; THE LESSON (phone)</h2><span class="kind">STORY BEAT / PHONE TWIN</span></div>
+    <div class="screen">
+      <svg id="youth-c-m" viewBox="0 0 640 720" aria-label="Light the glowstone and the swarm answers (phone)"></svg>
+    </div>
+    <p class="spec">The phone-legible twin of 48, framed on the descent at 1.3x &mdash; the
+       roost bleeds off the right edge, which only makes the vault bigger. The command
+       line, REGRET meter, and footer re-set in big type below.
+       <span class="attach">Selected by terminal.js when the card would render under ~560px.</span></p>
+  </section>
+
+  <section>
     <div class="slate"><h2>49 &mdash; THE MANIFEST</h2><span class="kind">DOCUMENT / THE CARAVAN</span></div>
     <div class="screen">
       <svg id="manifest" viewBox="0 0 640 360" aria-label="The merchant's manifest, stamped"></svg>
@@ -706,6 +737,17 @@
        the red stamp slams in: CONSIGNEE: THE SAND.
        <span class="attach">Attaches: READ LEDGER (the engine deals a document's card
        on READ, like WEAR for wearables) and EXAMINE LEDGER.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>49-m &mdash; THE MANIFEST (phone)</h2><span class="kind">DOCUMENT / PHONE TWIN</span></div>
+    <div class="screen">
+      <svg id="manifest-m" viewBox="0 0 640 720" aria-label="The merchant's manifest, stamped (phone)"></svg>
+    </div>
+    <p class="spec">The phone-legible twin of 49. A document is type, so the page itself is
+       re-laid as a tall sheet: same rows, icons half again as big, each worth dropped to
+       its own line under the dotted leader, the red stamp slamming in at phone size.
+       <span class="attach">Selected by terminal.js when the card would render under ~560px.</span></p>
   </section>
 
   <section>
@@ -758,6 +800,16 @@
        settles. Grudgingly.
        <span class="attach">Attaches: DOUSE in the Hall of Youth, while the colony
        still roosts there -- forced every time; contrition is always current.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>53-m &mdash; THE LESSON, LEARNED (phone)</h2><span class="kind">STORY BEAT / PHONE TWIN</span></div>
+    <div class="screen">
+      <svg id="youth-d-m" viewBox="0 0 640 720" aria-label="Douse the light and the swarm climbs home (phone)"></svg>
+    </div>
+    <p class="spec">The phone-legible twin of 53, on 48-m's framing: the retreat at 1.3x,
+       the settle line, command, REGRET meter, and footer re-set in big type.
+       <span class="attach">Selected by terminal.js when the card would render under ~560px.</span></p>
   </section>
 
   <section>
@@ -5886,6 +5938,97 @@
     });
   }
 
+  /* ---------------- 46-m: the statues, by touch (phone twin) ---------------- */
+  /* Phone twin of 46. The tracing is carried over whole -- every coordinate
+     inside SC is 46's scene space at 1.4x -- and the type is re-set outside:
+     26px command header, class line under the rule, the verdicts at 16px
+     under the statues, the footer wrapped. terminal.js picks it by width. */
+  {
+    const svg = document.getElementById("youth-a-m");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const cls = label(svg, 20, 70, 16, PH_DIM);
+    cls.textContent = "HALL OF YOUTH / PITCH DARK / TOUCH";
+    const SC = el(svg, "g", { transform: "translate(-118 69) scale(1.4)" });
+    const GLASS = "#cfefff";
+    // the ceiling, heard not seen
+    const seethe = Array.from({ length: 30 }, (_, i) => el(SC, "polyline",
+      { fill: "none", stroke: PH_DIM, "stroke-width": 1, opacity: .12,
+        points: `${14 + i * 21},52 ${20 + i * 21},46 ${26 + i * 21},52` }));
+    const ell2 = (cx2, cy2, rx2, ry2, n) => Array.from({ length: n + 1 }, (_, i) => {
+      const a = -Math.PI / 2 + i * 2 * Math.PI / n;
+      return [cx2 + Math.cos(a) * rx2, cy2 + Math.sin(a) * ry2];
+    });
+    const STAT = [
+      { paths: [ell2(150, 262, 46, 28, 22),
+          [[116, 250], [150, 240], [184, 250]],
+          [[112, 264], [150, 254], [188, 264]],
+          [[120, 278], [150, 270], [180, 278]],
+          ell2(150, 226, 13, 12, 12)],
+        lx: 150, s: "AN INFANT." },
+      { paths: [[[296, 306], [298, 240], [290, 232], [292, 212], [302, 200],
+          [318, 196], [334, 200], [344, 212], [346, 232], [338, 240], [340, 306]],
+          [[298, 252], [284, 268], [286, 276]],
+          [[338, 252], [352, 268], [350, 276]]],
+        lx: 318, s: "A BOY." },
+      { paths: [[[452, 306], [456, 214], [446, 204], [448, 186], [460, 174],
+          [478, 170], [494, 176], [502, 190], [500, 206], [490, 214], [494, 306]],
+          [[456, 226], [438, 202], [428, 172], [434, 166]],
+          [[494, 228], [510, 244], [512, 260]]],
+        lx: 476, s: "LARGER THAN LIFE." },
+    ];
+    const strokes = [];
+    STAT.forEach((st, si) => st.paths.forEach(pts =>
+      strokes.push({ si, pts, q: el(SC, "polyline",
+        { fill: "none", stroke: PH, "stroke-width": 1.6, opacity: .85 }) })));
+    const total = strokes.reduce((a, s2) => a + s2.pts.length, 0);
+    const hand = el(SC, "g", { opacity: 0 });
+    el(hand, "circle", { r: 4, fill: "none", stroke: GLASS, "stroke-width": 1.4 });
+    [[-3, -6], [1, -7], [4, -5]].forEach(([dx, dy]) =>
+      el(hand, "line", { x1: 0, y1: 0, x2: dx * 1.8, y2: dy * 1.8, stroke: GLASS,
+        "stroke-width": 1.2 }));
+    // the verdicts, re-set big under the statues
+    const NX = [92, 327, 540];
+    const names = STAT.map((st, i) => { const n = label(svg, NX[i], 560, 16, FUNGUS);
+      n.setAttribute("text-anchor", "middle"); return n; });
+    const plinth = STAT.map(st => el(SC, "line", { x1: st.lx - 52, y1: 308,
+      x2: st.lx + 52, y2: 308, stroke: PH_DIM, opacity: 0 }));
+    const F1 = label(svg, 320, 640, 22, FUNGUS); F1.setAttribute("text-anchor", "middle");
+    const F2 = label(svg, 320, 672, 22, FUNGUS); F2.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 190;
+      doWipe(T);
+      typeOn(hdr, "> FEEL STATUES", T, 4, 1.6);
+      seethe.forEach((q, i) => q.setAttribute("opacity",
+        .06 + ((t + i * 3) % 11 < 2 ? .1 : 0)));
+      const reach = Math.max(0, (T - 14) * (total / 130));
+      let acc = 0, hx = null, hy = null;
+      strokes.forEach(s2 => {
+        const kk = Math.max(0, Math.min(s2.pts.length, reach - acc));
+        s2.q.setAttribute("points",
+          s2.pts.slice(0, Math.ceil(kk)).map(p => p.join(",")).join(" "));
+        if (kk > 0 && kk < s2.pts.length) {
+          const p = s2.pts[Math.floor(kk)]; hx = p[0]; hy = p[1];
+        }
+        acc += s2.pts.length;
+      });
+      hand.setAttribute("opacity", hx !== null ? .9 : 0);
+      if (hx !== null) hand.setAttribute("transform",
+        `translate(${hx + 10} ${hy + 12}) rotate(-24)`);
+      let upto = 0;
+      STAT.forEach((st, si) => {
+        upto += st.paths.reduce((a, p) => a + p.length, 0);
+        const done = reach >= upto;
+        names[si].textContent = done ? st.s : "";
+        plinth[si].setAttribute("opacity", done ? .6 : 0);
+      });
+      typeOn(F1, "COLD, SMOOTH STONE.", T, 152, 1.9);
+      typeOn(F2, "YOU CANNOT SEE A THING.", T, 164, 1.9);
+    });
+  }
+
   /* ---------------- 47: the adoration ---------------- */
   {
     const svg = document.getElementById("youth-b");
@@ -5949,6 +6092,81 @@
       stone.setAttribute("opacity", .7 + Math.sin(t * .8) * .3);
       plq.forEach(p2 => typeOn(p2.n, p2.s2, T, p2.t0, 2));
       typeOn(foot, "SWADDLED AND ADORED. THE VAULT ANSWERS THE GLOW.", T, 96, 1.9);
+    });
+  }
+
+  /* ---------------- 47-m: the adoration (phone twin) ---------------- */
+  /* Phone twin of 47. The museum plate is carried over whole -- every
+     coordinate inside SC is 47's scene space at 1.4x -- and the type is
+     re-set outside: 26px title, class line under the rule, plinth plaques
+     at 16px, the footer wrapped. terminal.js picks it by rendered width. */
+  {
+    const svg = document.getElementById("youth-b-m");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const cls = label(svg, 20, 70, 16, PH_DIM);
+    cls.textContent = "HALL OF YOUTH / LIT, FOR NOW";
+    const SX = x => x * 1.4 - 128;
+    const SC = el(svg, "g", { transform: "translate(-128 63) scale(1.4)" });
+    const GLASS = "#cfefff";
+    const I1 = "#1b4055", I2 = "#25567a", I3 = "#33739c", I4 = "#4a97c6";
+    el(SC, "line", { x1: 0, y1: 312, x2: 640, y2: 312, stroke: PH_DIM });
+    const cone = el(SC, "polygon", { fill: PH, "fill-opacity": .07,
+      points: "320,330 80,64 560,64" });
+    const scene = el(SC, "g", {});
+    [[150, 44], [320, 34], [478, 40]].forEach(([x, h]) => el(scene, "rect",
+      { x: x - 44, y: 312 - h, width: 88, height: h, fill: I1, stroke: PH_DIM }));
+    // the infant, swaddled
+    el(scene, "ellipse", { cx: 150, cy: 246, rx: 40, ry: 24, fill: I3 });
+    el(scene, "circle", { cx: 150, cy: 216, r: 12, fill: I3 });
+    el(scene, "path", { fill: "none", stroke: GLASS, "stroke-width": 1.3,
+      opacity: .9, d: "M 114 240 Q 150 228 186 240 M 118 252 Q 150 242 184 252" });
+    // the child, palm raised
+    el(scene, "path", { fill: I2, d: "M 296 278 L 298 216 Q 298 202 312 198 " +
+      "L 328 198 Q 342 202 342 216 L 344 278 Z" });
+    el(scene, "circle", { cx: 320, cy: 184, r: 13, fill: I2 });
+    el(scene, "path", { fill: I2, d: "M 342 224 L 362 204 L 368 210 L 350 232 Z" });
+    el(scene, "circle", { cx: 366, cy: 205, r: 5, fill: I4 });  // the palm, adored
+    // the youth
+    el(scene, "path", { fill: I3, d: "M 436 272 L 440 196 Q 440 180 456 176 " +
+      "L 474 176 Q 490 180 490 196 L 494 272 Z" });
+    el(scene, "circle", { cx: 465, cy: 162, r: 14, fill: I3 });
+    el(scene, "path", { fill: "none", stroke: GLASS, "stroke-width": 1.3,
+      opacity: .9, d: "M 472 150 Q 480 158 476 170" });         // the profile line
+    const stone = el(SC, "circle", { cx: 320, cy: 330, r: 5, fill: PH_BRIGHT });
+    const bats = Array.from({ length: 5 }, (_, i) => {
+      const g = el(SC, "g", { opacity: 0 });
+      el(g, "path", { fill: "#01070c", stroke: PH_DIM, "stroke-width": 1, d:
+        "M -16 0 Q -8 -8 0 0 Q 8 -8 16 0 Q 8 4 0 2 Q -8 4 -16 0 Z" });
+      return { g, ph: i * 37 };
+    });
+    // the plaques, re-set big under the plinths
+    const plq = [["THE INFANT", 150], ["THE CHILD", 320], ["THE YOUTH", 478]]
+      .map(([s2, x], i) => { const n = label(svg, SX(x), 528, 16, PH_DIM);
+        n.setAttribute("text-anchor", "middle"); return { n, s2, t0: 22 + i * 16 }; });
+    const F1 = label(svg, 320, 640, 22, FUNGUS); F1.setAttribute("text-anchor", "middle");
+    const F2 = label(svg, 320, 672, 22, FUNGUS); F2.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 160;
+      doWipe(T);
+      typeOn(hdr, "THE ADORATION", T, 4, 1.4);
+      let dim = 0;
+      bats.forEach((b, i) => {
+        const x = (t * (3.2 + (i % 3) * .8) + b.ph * 9) % 900 - 130;
+        const y = 70 + (i % 3) * 26 + Math.sin((t + b.ph) * .2) * 8;
+        b.g.setAttribute("opacity", x > -40 && x < 680 ? .95 : 0);
+        const flap = Math.sin(t * .9 + i) * .5 + 1.1;
+        b.g.setAttribute("transform", `translate(${x} ${y}) scale(1.3 ${flap})`);
+        if (x > 240 && x < 400) dim = Math.max(dim, .5);
+      });
+      cone.setAttribute("fill-opacity", (.06 + Math.sin(t * .7) * .012) * (1 - dim));
+      scene.setAttribute("opacity", 1 - dim * .5);
+      stone.setAttribute("opacity", .7 + Math.sin(t * .8) * .3);
+      plq.forEach(p2 => typeOn(p2.n, p2.s2, T, p2.t0, 2));
+      typeOn(F1, "SWADDLED AND ADORED.", T, 96, 1.9);
+      typeOn(F2, "THE VAULT ANSWERS THE GLOW.", T, 108, 1.9);
     });
   }
 
@@ -6016,6 +6234,77 @@
     });
   }
 
+  /* ---------------- 48-m: the lesson (phone twin) ---------------- */
+  /* Phone twin of 48, framed on the descent -- every coordinate inside SC
+     is 48's scene space at 1.3x, centered on the stone, so the roost bleeds
+     off the right edge (the vault continues beyond view). Command line,
+     REGRET meter, and the wrapped footer re-set below. */
+  {
+    const svg = document.getElementById("youth-c-m");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const cls = label(svg, 20, 70, 16, PH_DIM);
+    cls.textContent = "HALL OF YOUTH / THE VAULT ANSWERS";
+    const SC = el(svg, "g", { transform: "translate(46 68) scale(1.3)" });
+    const GLASS = "#cfefff";
+    const ROOST = [];
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 13; c++)
+      ROOST.push([44 + c * 44 + (r % 2) * 22, 52 + r * 15]);
+    // you, and the stone held up
+    el(SC, "circle", { cx: 148, cy: 296, r: 9, fill: PH_DIM });
+    el(SC, "path", { fill: "none", stroke: PH_DIM, "stroke-width": 3,
+      d: "M 148 305 L 148 336 M 148 314 L 176 288" });
+    const cone = el(SC, "polygon", { fill: PH, "fill-opacity": 0,
+      points: "180,284 60,80 430,80" });
+    const stone = el(SC, "circle", { cx: 180, cy: 284, r: 5, fill: PH_BRIGHT });
+    const bats = ROOST.map(([rx, ry], i) => {
+      const q = el(SC, "polyline", { fill: "none", stroke: GLASS,
+        "stroke-width": 1.4, opacity: .55 });
+      return { q, rx, ry, i };
+    });
+    const cmd = label(svg, 40, 560, 20, GLASS);
+    label(svg, 340, 560, 18, PH_DIM).textContent = "REGRET";
+    const cells = Array.from({ length: 6 }, (_, i) => el(svg, "rect",
+      { x: 430 + i * 28, y: 544, width: 20, height: 16, fill: GLASS,
+        "fill-opacity": .08 }));
+    const F1 = label(svg, 320, 640, 22, FUNGUS); F1.setAttribute("text-anchor", "middle");
+    const F2 = label(svg, 320, 672, 22, FUNGUS); F2.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 132;
+      doWipe(T);
+      typeOn(hdr, "THE LESSON", T, 4, 1.4);
+      const lit = T >= 10;
+      typeOn(cmd, "> LIGHT GLOWSTONE", T, 8, 2.4);
+      cone.setAttribute("fill-opacity", lit ? .06 + Math.sin(t * .8) * .015 : 0);
+      stone.setAttribute("opacity", lit ? 1 : .2);
+      let closest = 1e9;
+      bats.forEach(b => {
+        const t0 = 18 + (b.i % 17) * 3;
+        let x = b.rx, y = b.ry, spread = 5;
+        if (T >= t0) {                                         // the descent
+          const k = Math.min(1, (T - t0) / 30);
+          const ang = T * .22 + b.i * 1.7;
+          const rad = 150 - k * 105 + Math.sin(T * .3 + b.i) * 9;
+          x = b.rx + (180 + Math.cos(ang) * rad - b.rx) * k;
+          y = b.ry + (270 + Math.sin(ang) * rad * .55 - b.ry) * k;
+          spread = 7;
+        }
+        const fl = Math.sin(t * 1.1 + b.i) * 3;
+        b.q.setAttribute("points",
+          `${x - spread},${y + fl * .4} ${x},${y - 3 - fl} ${x + spread},${y + fl * .4}`);
+        const d2 = Math.hypot(x - 180, y - 284);
+        if (d2 < closest) closest = d2;
+      });
+      const on = T < 10 ? 0
+        : Math.min(6, Math.max(0, Math.round((190 - closest) / 28)));
+      cells.forEach((r2, i) => r2.setAttribute("fill-opacity", i < on ? .8 : .08));
+      typeOn(F1, "WHAT ROOSTS HERE HATES A LAMP", T, 64, 2);
+      typeOn(F2, "WORSE THAN A SHOUT.", T, 80, 2);
+    });
+  }
+
   /* ---------------- 49: the manifest ---------------- */
   {
     const svg = document.getElementById("manifest");
@@ -6068,6 +6357,79 @@
     stx.textContent = "CONSIGNEE: THE SAND";
     const foot = label(svg, 624, 350, 10, FUNGUS); foot.setAttribute("text-anchor", "end");
     const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 170;
+      doWipe(T);
+      typeOn(hdr, "THE MANIFEST", T, 4, 1.4);
+      typeOn(title, "MANIFEST -- FOR THE SOUKS OF GNOMON", T, 8, 2);
+      typeOn(sub, "NINTH DAY. TOMORROW, GNOMON.", T, 22, 2);
+      rows.forEach(r => {
+        typeOn(r.n, r.name, T, r.t0, 2);
+        typeOn(r.w, r.worth, T, r.t0 + 10, 2);
+        r.boxes.forEach((b, i2) => b.setAttribute("fill-opacity",
+          T > r.t0 + 14 + i2 * 3 && i2 < r.slots ? .7 : .06));
+      });
+      stamp.setAttribute("opacity", T > 118 ? (T < 122 ? (T % 2 ? 1 : .3) : .9) : 0);
+      typeOn(foot, "THE CACKLEMAW DO NOT TRADE.", T, 132, 1.8);
+    });
+  }
+
+  /* ---------------- 49-m: the manifest (phone twin) ---------------- */
+  /* Phone twin of 49. A document is type, so the page itself is re-laid
+     as a tall sheet: the same three rows on the same clock, icons half
+     again as big, each worth dropped to its own line under the dotted
+     leader, the stamp at phone size. terminal.js picks it by width. */
+  {
+    const svg = document.getElementById("manifest-m");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const cls = label(svg, 20, 70, 16, PH_DIM);
+    cls.textContent = "THE WAGON'S HOLD / PAPERWORK";
+    const GLASS = "#cfefff";
+    // the page, a tall sheet
+    el(svg, "rect", { x: 32, y: 96, width: 576, height: 560, fill: GLASS,
+      "fill-opacity": .05, stroke: PH_DIM });
+    for (let y = 208; y <= 592; y += 48)
+      el(svg, "line", { x1: 56, y1: y, x2: 584, y2: y, stroke: PH_DIM, opacity: .25 });
+    const title = label(svg, 320, 140, 20, PH); title.setAttribute("text-anchor", "middle");
+    const sub = label(svg, 320, 172, 16, PH_DIM); sub.setAttribute("text-anchor", "middle");
+    // saffron: a bound bale
+    el(svg, "ellipse", { cx: 86, cy: 234, rx: 20, ry: 13, fill: "none",
+      stroke: FUNGUS, "stroke-width": 2 });
+    [-8, 0, 8].forEach(dx => el(svg, "line", { x1: 86 + dx, y1: 222,
+      x2: 86 + dx, y2: 246, stroke: FUNGUS, opacity: .7 }));
+    // dates: a cluster
+    [[76, 330], [90, 323], [100, 333]].forEach(([x, y]) =>
+      el(svg, "ellipse", { cx: x, cy: y, rx: 7, ry: 9.5, fill: "#b36b2a" }));
+    // silk: a loose coil
+    el(svg, "path", { d: "M 60 428 q 13 -19 26 0 q 13 19 26 0 q 10 -14 19 -3",
+      fill: "none", stroke: GLASS, "stroke-width": 2, opacity: .8 });
+    const rows = [
+      ["SAFFRON, ONE BALE", "A SEASON'S WATER", 2, 240],
+      ["DATES, ONE CRATE", "A MONTH OF MEALS", 2, 336],
+      ["SPIDER-SILK, ONE BOLT", "LIGHT, AND KNOWS IT", 1, 432],
+    ].map(([name, worth, slots, y], i) => {
+      const n = label(svg, 130, y, 20, PH);
+      const w = label(svg, 584, y + 34, 16, PH_DIM); w.setAttribute("text-anchor", "end");
+      el(svg, "line", { x1: 130, y1: y + 8, x2: 584, y2: y + 8, stroke: PH_DIM,
+        "stroke-dasharray": "3 7", opacity: .5 });
+      const boxes = Array.from({ length: 3 }, (_, b) => el(svg, "rect",
+        { x: 130 + b * 26, y: y + 20, width: 18, height: 18, fill: PH,
+          "fill-opacity": .06, stroke: PH_DIM }));
+      return { n, w, name, worth, slots, boxes, t0: 30 + i * 26 };
+    });
+    label(svg, 56, 524, 14, PH_DIM).textContent =
+      "SLOTS SHOWN ACTUAL SIZE. THE BALE KNOWS ITS WEIGHT.";
+    // the stamp
+    const stamp = el(svg, "g", { transform: "rotate(-11 320 600)", opacity: 0 });
+    el(stamp, "rect", { x: 140, y: 576, width: 360, height: 48, fill: "none",
+      stroke: "#ff5a5a", "stroke-width": 3 });
+    const stx = label(stamp, 320, 608, 24, "#ff5a5a");
+    stx.setAttribute("text-anchor", "middle");
+    stx.textContent = "CONSIGNEE: THE SAND";
+    const foot = label(svg, 320, 700, 22, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
     clock(t => {
       const T = t % 170;
       doWipe(T);
@@ -6407,6 +6769,77 @@
     settle.setAttribute("text-anchor", "middle");
     const foot = label(svg, 624, 316, 10, FUNGUS); foot.setAttribute("text-anchor", "end");
     const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 150;
+      doWipe(T);
+      typeOn(hdr, "THE LESSON, LEARNED", T, 4, 1.6);
+      const lit = T < 16;
+      typeOn(cmd, "> DOUSE GLOWSTONE. QUICKLY.", T, 4, 2.4);
+      cone.setAttribute("fill-opacity", lit ? .06 + Math.sin(t * .8) * .015 : 0);
+      stone.setAttribute("opacity", lit ? 1 : .2);
+      bats.forEach(b => {
+        let x, y, spread = 7;
+        if (lit) {                                             // the swarm, in office
+          const ang = T * .22 + b.i * 1.7;
+          const rad = 45 + Math.sin(T * .3 + b.i) * 9;
+          x = 180 + Math.cos(ang) * rad;
+          y = 270 + Math.sin(ang) * rad * .55;
+        } else {                                               // the retreat
+          const kk = Math.min(1, Math.max(0, (T - 16 - (b.i % 11)) / 26));
+          const ang = 16 * .22 + b.i * 1.7;
+          const rad = 45 + Math.sin(16 * .3 + b.i) * 9;
+          const ax = 180 + Math.cos(ang) * rad;
+          const ay = 270 + Math.sin(ang) * rad * .55;
+          x = ax + (b.rx - ax) * kk; y = ay + (b.ry - ay) * kk;
+          spread = 7 - kk * 2;
+        }
+        const fl = Math.sin(t * 1.1 + b.i) * 3;
+        b.q.setAttribute("points",
+          `${x - spread},${y + fl * .4} ${x},${y - 3 - fl} ${x + spread},${y + fl * .4}`);
+      });
+      const on = lit ? 6 : Math.max(0, 6 - Math.floor((T - 16) / 5));
+      cells.forEach((r2, i) => r2.setAttribute("fill-opacity", i < on ? .8 : .08));
+      settle.textContent = T >= 58 && T < 146 ? "THE VAULT SETTLES. GRUDGINGLY." : "";
+      typeOn(foot, "NO LIGHT, NO FURTHER OPINIONS.", T, 88, 2);
+    });
+  }
+
+  /* ---------------- 53-m: the lesson, learned (phone twin) ---------------- */
+  /* Phone twin of 53 on 48-m's framing: the retreat verbatim inside SC at
+     1.3x centered on the stone; the settle line, command, REGRET meter,
+     and footer re-set at phone size. terminal.js picks it by width. */
+  {
+    const svg = document.getElementById("youth-d-m");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const cls = label(svg, 20, 70, 16, PH_DIM);
+    cls.textContent = "HALL OF YOUTH / TUTORIAL: DOUSE";
+    const SC = el(svg, "g", { transform: "translate(46 68) scale(1.3)" });
+    const GLASS = "#cfefff";
+    const ROOST = [];
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 13; c++)
+      ROOST.push([44 + c * 44 + (r % 2) * 22, 52 + r * 15]);
+    el(SC, "circle", { cx: 148, cy: 296, r: 9, fill: PH_DIM });
+    el(SC, "path", { fill: "none", stroke: PH_DIM, "stroke-width": 3,
+      d: "M 148 305 L 148 336 M 148 314 L 176 288" });
+    const cone = el(SC, "polygon", { fill: PH, "fill-opacity": 0,
+      points: "180,284 60,80 430,80" });
+    const stone = el(SC, "circle", { cx: 180, cy: 284, r: 5, fill: PH_BRIGHT });
+    const bats = ROOST.map(([rx, ry], i) => {
+      const q = el(SC, "polyline", { fill: "none", stroke: GLASS,
+        "stroke-width": 1.4, opacity: .55 });
+      return { q, rx, ry, i };
+    });
+    const cmd = label(svg, 40, 560, 20, GLASS);
+    label(svg, 428, 560, 18, PH_DIM).textContent = "REGRET";
+    const cells = Array.from({ length: 6 }, (_, i) => el(svg, "rect",
+      { x: 505 + i * 22, y: 546, width: 16, height: 14, fill: GLASS,
+        "fill-opacity": .08 }));
+    const settle = label(svg, 320, 340, 18, PH_DIM);
+    settle.setAttribute("text-anchor", "middle");
+    const foot = label(svg, 320, 640, 22, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
     clock(t => {
       const T = t % 150;
       doWipe(T);
