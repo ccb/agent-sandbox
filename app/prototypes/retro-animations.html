@@ -765,6 +765,17 @@
   </section>
 
   <section>
+    <div class="slate"><h2>50-m &mdash; THE TANK, IN SECTION (phone)</h2><span class="kind">BLUEPRINT / PHONE TWIN</span></div>
+    <div class="screen">
+      <svg id="tank-m" viewBox="0 0 640 720" aria-label="The embalming tank, drawn in section (phone)"></svg>
+    </div>
+    <p class="spec">The phone-legible twin of 50. The whole drawing at 1.35x, all ten
+       coursers in their ranks; the drafting callouts re-set at phone size around the
+       vessel, the footer wrapped.
+       <span class="attach">Selected by terminal.js when the card would render under ~560px.</span></p>
+  </section>
+
+  <section>
     <div class="slate"><h2>51 &mdash; THE FLOOD</h2><span class="kind">STORY BEAT / HALL OF HOUNDS</span></div>
     <div class="screen">
       <svg id="flood" viewBox="0 0 640 360" aria-label="The tank breaks and the whole kennel washes out"></svg>
@@ -774,6 +785,17 @@
        wave with the WHOLE kennel tumbling in it, glass falling inside the standing
        frame; then the settle, all ten dogs strewn wall to wall, each at its own angle.
        <span class="attach">Attaches: BREAK TANK -- forced, once.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>51-m &mdash; THE FLOOD (phone)</h2><span class="kind">STORY BEAT / PHONE TWIN</span></div>
+    <div class="screen">
+      <svg id="flood-m" viewBox="0 0 640 720" aria-label="The tank breaks and the kennel washes out (phone)"></svg>
+    </div>
+    <p class="spec">The phone-legible twin of 51 at 1.25x, framed to keep the breaking tank
+       whole; the kennel thins to eight coursers so the strewn row still reads wall to
+       wall. CRACK. and the footer re-set big.
+       <span class="attach">Selected by terminal.js when the card would render under ~560px.</span></p>
   </section>
 
   <section>
@@ -787,6 +809,16 @@
        in slow rotation.
        <span class="attach">Attaches: arrival and EXAMINE TANK (the wreckage answers
        to the old name), once the wall is down.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>52-m &mdash; THE TANK, DECANTED (phone)</h2><span class="kind">LITHO / PHONE TWIN</span></div>
+    <div class="screen">
+      <svg id="tank-f-m" viewBox="0 0 640 720" aria-label="The empty frame over a floor of gel and hounds (phone)"></svg>
+    </div>
+    <p class="spec">The phone-legible twin of 52 &mdash; 51-m's final frame, kept: the same
+       framing, the same eight coursers at the same rest angles, lenses still blinking.
+       <span class="attach">Selected by terminal.js when the card would render under ~560px.</span></p>
   </section>
 
   <section>
@@ -834,6 +866,17 @@
        embalming gel behind the plexiglas, goggled eye dark, piston legs limp, drifting
        by millimetres on the tank's own slow currents. Bubbles on the step clock.
        <span class="attach">Attaches: the Hall of Hounds tank; EXAMINE HOUNDS.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>10-m &mdash; SYNTH-HOUND (phone)</h2><span class="kind">LITHO / PHONE TWIN</span></div>
+    <div class="screen">
+      <svg id="hound-m" viewBox="0 0 640 720" aria-label="Synth-hound preserved in the gel tank (phone)"></svg>
+    </div>
+    <p class="spec">The phone-legible twin of 10. The tank re-proportions to portrait (a
+       vessel is a vessel), the specimen drifting inside at 1.3x with 10's exact currents;
+       callouts, PRESERVATION, and the verdict re-set in big type.
+       <span class="attach">Selected by terminal.js when the card would render under ~560px.</span></p>
   </section>
 
   <section>
@@ -3745,6 +3788,130 @@
     });
   }
 
+  /* ---------------- 10-m: the synth-hound (phone twin) ---------------- */
+  /* Phone twin of 10. The tank re-proportions to portrait (same width,
+     taller -- it is only a vessel); the specimen rides an outer 1.3x
+     transform so the drift math is 10's verbatim. Callouts, PRESERVATION,
+     and the two-line verdict re-set at phone size. */
+  {
+    const svg = document.getElementById("hound-m");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const cls = label(svg, 20, 70, 16, PH_DIM);
+    cls.textContent = "MACHINA / HALL OF HOUNDS / IN GEL";
+    // THE TANK: plexiglas, corner bolts, the gel a luminous stipple field
+    const GEL = stipple(svg, "gel-houndm", PH, .9);
+    el(svg, "rect", { x: 36, y: 140, width: 568, height: 400, fill: GEL,
+      stroke: PH, "stroke-width": 2 });
+    [[44, 148], [596, 148], [44, 532], [596, 532]].forEach(([x, y]) =>
+      el(svg, "circle", { cx: x, cy: y, r: 2.2, fill: "none", stroke: PH_DIM }));
+    el(svg, "line", { x1: 96, y1: 148, x2: 66, y2: 532, stroke: PH_BRIGHT,
+      opacity: .18, "stroke-width": 6 });                    // the glass glare
+    // THE SPECIMEN, floating: 10's group verbatim inside an outer 1.3x
+    const SX = x => x * 1.3 - 96, SY = y => y * 1.3 + 93;
+    const OUT = el(svg, "g", { transform: "translate(-96 93) scale(1.3)" });
+    const gg = el(OUT, "g", {});
+    const H = (name, attrs) => el(gg, name, attrs);
+    H("polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+      "196,138 226,124 262,126 300,136 348,158 396,178 " +   // croup to skull
+      "492,212" });                                          // the long taper to the nose
+    H("polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+      "492,212 486,222 448,210 424,202 412,196 " +           // jaw, back to throat
+      "392,190 356,196 330,206 " +                           // the DEEP chest
+      "282,176 244,170 214,166 " +                           // the tuck, and the waist
+      "196,158 190,150 196,138" });                          // the rear, closed
+    H("polyline", { fill: "none", stroke: PH, "stroke-width": 1,
+      points: "458,210 463,218 468,208 473,218 478,210 483,219" }); // needle teeth
+    // the ears: small triangles folded back along the neck
+    H("polygon", { points: "396,178 376,162 390,172", fill: PH,
+      "fill-opacity": .5, stroke: PH, "stroke-width": 1.2 });
+    H("polygon", { points: "404,182 388,164 400,176", fill: "none",
+      stroke: PH_DIM, "stroke-width": 1.1 });
+    H("circle", { cx: 428, cy: 193, r: 7, fill: "none",
+      stroke: PH_DIM, "stroke-width": 1.6 });                // the goggle, unlit
+    H("circle", { cx: 430, cy: 194, r: 2.6, fill: PH_DIM, opacity: .35 });
+    // ROBOT PARTS: vertebra ticks down the neck, shoulder actuator, hip
+    // cylinder, access hatch, a throat hose -- Autarchy pattern
+    [[352, 161], [364, 166], [376, 171], [388, 176]].forEach(([x, y]) =>
+      H("line", { x1: x, y1: y - 4, x2: x - 3, y2: y + 4, stroke: PH_DIM }));
+    H("circle", { cx: 306, cy: 162, r: 8, fill: "none", stroke: PH, "stroke-width": 1.4 });
+    H("circle", { cx: 306, cy: 162, r: 2.6, fill: "none", stroke: PH_DIM }); // shoulder
+    H("rect", { x: 200, y: 138, width: 24, height: 13, fill: "none",
+      stroke: PH, "stroke-width": 1.3 });                    // the hip cylinder
+    H("line", { x1: 207, y1: 138, x2: 207, y2: 151, stroke: PH_DIM });
+    H("rect", { x: 254, y: 146, width: 20, height: 11, fill: "none",
+      stroke: PH_DIM });                                     // the access hatch
+    H("circle", { cx: 258, cy: 149, r: .9, fill: PH_DIM });
+    H("polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "4 3",
+      points: "414,198 396,216 366,210 344,202" });          // the throat hose
+    [242, 268, 294].forEach(x =>
+      H("circle", { cx: x, cy: 136 + (x - 242) * .18, r: 1.1, fill: PH_DIM }));
+    // heraldry, someone else's, on the flank
+    H("polygon", { points: "262,164 276,164 269,176", fill: PH, "fill-opacity": .7 });
+    H("circle", { cx: 292, cy: 172, r: 4, fill: PH, "fill-opacity": .7 });
+    // the LIMP legs: long and fine, piston thighs into strut shins, hanging
+    [[322, 204, 332, 244, 326, 282], [306, 198, 298, 236, 304, 274],
+     [214, 166, 226, 208, 216, 250], [200, 162, 192, 202, 198, 244]].forEach(([ax, ay, kx, ky, fx, fy], i) => {
+      const near = i % 2 === 0;
+      H("polyline", { fill: "none", stroke: PH, "stroke-linecap": "round",
+        "stroke-width": near ? 4 : 2.8, opacity: near ? 1 : .5,
+        points: `${ax},${ay} ${kx},${ky}` });
+      H("polyline", { fill: "none", stroke: PH, "stroke-linecap": "round",
+        "stroke-width": near ? 2 : 1.5, opacity: near ? 1 : .5,
+        points: `${kx},${ky} ${fx},${fy} ${fx + 6},${fy + 4}` });
+      H("circle", { cx: kx, cy: ky, r: 2.2, fill: "none", stroke: PH_DIM });
+      H("line", { x1: (ax + kx) / 2 - 3, y1: (ay + ky) / 2,
+        x2: (ax + kx) / 2 + 3, y2: (ay + ky) / 2, stroke: PH_DIM }); // piston collar
+    });
+    // the tail: a long fine cable, drifting low
+    H("polyline", { fill: "none", stroke: PH, "stroke-width": 1.2, points:
+      "192,150 156,166 132,196 126,232" });
+    [[170, 158], [142, 182], [128, 214]].forEach(([x, y]) =>
+      H("line", { x1: x - 3, y1: y - 3, x2: x + 3, y2: y + 3, stroke: PH_DIM }));
+    // bubbles, rising through the taller gel on the step clock
+    const bubbles = Array.from({ length: 7 }, (_, i) =>
+      ({ q: el(svg, "circle", { cx: 80 + i * 78, cy: 0, r: 1.8, fill: "none",
+        stroke: PH, opacity: .7 }), phase: i * 41 }));
+    // callouts + the preservation ledger, re-set at phone size
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 20, 116, 18, PH);
+    const CALLS = [
+      { at: [428, 193], text: "EYE: DARK, AND BEST LEFT SO" },
+      { at: [292, 172], text: "PANELS: SOMEONE ELSE'S HERALDRY" },
+      { at: [212, 144], text: "HIP: PISTON-HOCKED, AUTARCHY PATTERN" },
+      { at: [126, 232], text: "TAIL: A CABLE. THE LEASH RING IS GONE" },
+    ];
+    label(svg, 40, 584, 18, PH_DIM).textContent = "PRESERVATION";
+    const cells = Array.from({ length: 10 }, (_, i) =>
+      el(svg, "rect", { x: 210 + i * 30, y: 568, width: 22, height: 18,
+        fill: PH, "fill-opacity": .8 }));
+    const verdict = label(svg, 320, 644, 22, FUNGUS);
+    verdict.setAttribute("text-anchor", "middle");
+    const verdict2 = label(svg, 320, 676, 22, FUNGUS);
+    verdict2.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 160;
+      doWipe(T);
+      typeOn(hdr, "SYNTH-HOUND (PRESERVED SPECIMEN)", T, 4, 1.4);
+      // the drift: millimetres, on the tank's own slow currents
+      const drift = [0, 1, 2, 3, 3, 2, 1, 0, -1, -2, -3, -2, -1, 0][Math.floor(t / 4) % 14];
+      gg.setAttribute("transform",
+        `translate(0 ${drift * 1.1}) rotate(${drift * .35} 320 190)`);
+      bubbles.forEach(b => b.q.setAttribute("cy", 528 - ((t * 2 + b.phase) % 376)));
+      const c = CALLS[Math.floor(T / 28) % CALLS.length];
+      if (T > 14) {
+        callLead.setAttribute("points", `${SX(c.at[0])},${SY(c.at[1])} 92,94 84,94`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      cells.forEach((r, i) => r.setAttribute("fill-opacity",
+        i < 10 ? .8 : .08));                                 // four thousand years, holding
+      typeOn(verdict, "FOUR THOUSAND YEARS, HOLDING.", T, 90, 1.6);
+      typeOn(verdict2, "DO NOT LIGHT THE GEL.", T, 110, 1.6);
+    });
+  }
+
 
   /* ---------------- 12: friend's fungus ---------------- */
   {
@@ -6589,6 +6756,94 @@
     });
   }
 
+  /* ---------------- 50-m: the tank, in section (phone twin) ---------------- */
+  /* Phone twin of 50. The whole drawing -- vessel, hatching, all ten
+     coursers -- carried over at 1.35x inside SC; the drafting callouts,
+     title block, and wrapped footer re-set at phone size in canvas space.
+     terminal.js picks it by rendered width. */
+  {
+    const svg = document.getElementById("tank-m");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const cls = label(svg, 20, 70, 16, PH_DIM);
+    cls.textContent = "HALL OF HOUNDS / IN SECTION";
+    const SC = el(svg, "g", { transform: "translate(-125 53) scale(1.35)" });
+    const GLASS = "#cfefff", HONEY = "#ffd76a";
+    el(SC, "rect", { x: 140, y: 72, width: 380, height: 234, fill: "none",
+      stroke: PH, "stroke-width": 2 });
+    for (let y = 76; y < 306; y += 12) {
+      el(SC, "line", { x1: 128, y1: y + 10, x2: 140, y2: y, stroke: PH_DIM,
+        opacity: .5 });
+      el(SC, "line", { x1: 520, y1: y, x2: 532, y2: y + 10, stroke: PH_DIM,
+        opacity: .5 });
+    }
+    el(SC, "rect", { x: 142, y: 94, width: 376, height: 210, fill: HONEY,
+      "fill-opacity": .09 });
+    const meniscus = el(SC, "polyline", { fill: "none", stroke: HONEY,
+      "stroke-width": 1.5, opacity: .7 });
+    // crazing at the corners
+    [[142, 304], [518, 304]].forEach(([cx2, cy2]) => [0, 1, 2].forEach(k =>
+      el(SC, "line", { x1: cx2, y1: cy2,
+        x2: cx2 + (cx2 < 300 ? 1 : -1) * (14 + k * 9), y2: cy2 - 8 - k * 7,
+        stroke: GLASS, opacity: .5 })));
+    // ten coursers, two ranks, mid-stride
+    const hounds = [];
+    for (let r = 0; r < 2; r++) for (let c = 0; c < 5; c++) {
+      const { g, eye } = houndSil2(SC, PACK[r * 5 + c]);
+      hounds.push({ g, eye, x: 196 + c * 68, y: 142 + r * 84, ph: (r * 5 + c) * 1.3 });
+    }
+    const bubbles = Array.from({ length: 8 }, (_, i) => ({ ph: i * 53,
+      x: 160 + (i * 47) % 340,
+      q: el(SC, "circle", { r: 1.5 + (i % 3), fill: "none", stroke: HONEY,
+        opacity: .5 }) }));
+    // the callouts, re-set at phone size (canvas coordinates)
+    const callouts = [
+      [164, 130, 175, 212, "LENSES: OPEN", 40],
+      [466, 130, 466, 212, "GEL: OLD HONEY, LUMINOUS", 18],
+      [140, 512, 80, 461, "PLEXIGLAS: CRAZED", 62],
+      [485, 512, 485, 366, "HOUNDS: TEN (10)", 84],
+    ].map(([tx2, ty2, px2, py2, s2, t0]) => {
+      const L2 = el(svg, "line", { x1: tx2, y1: ty2 + (ty2 < 300 ? 6 : -18),
+        x2: px2, y2: py2, stroke: PH_DIM, opacity: 0 });
+      const n = label(svg, tx2, ty2, 16, PH); n.setAttribute("text-anchor", "middle");
+      return { L2, n, s2, t0 };
+    });
+    const dwg = label(svg, 566, 453, 12, PH_DIM); dwg.setAttribute("text-anchor", "end");
+    dwg.textContent = "DWG 7-K / KENNEL & BENCH JOINT WORKS";
+    const F1 = label(svg, 320, 640, 22, FUNGUS); F1.setAttribute("text-anchor", "middle");
+    const F2 = label(svg, 320, 672, 22, FUNGUS); F2.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 160;
+      doWipe(T);
+      typeOn(hdr, "THE TANK, IN SECTION", T, 4, 1.6);
+      const mp = [];
+      for (let x = 142; x <= 518; x += 20)
+        mp.push(`${x},${94 + Math.sin(x * .05 + t * .12) * 2}`);
+      meniscus.setAttribute("points", mp.join(" "));
+      hounds.forEach(h => {
+        h.g.setAttribute("transform",
+          `translate(${h.x + Math.sin((t + h.ph * 9) * .04) * 2} ` +
+          `${h.y + Math.sin((t + h.ph * 13) * .05) * 2.5}) scale(.85) ` +
+          `rotate(${Math.sin((t + h.ph) * .03) * 3})`);
+        h.eye.setAttribute("opacity", .6 + Math.sin(t * .1 + h.ph) * .4);
+      });
+      bubbles.forEach(b => {
+        const k = (t * .9 + b.ph) % 210;
+        b.q.setAttribute("cx", b.x + Math.sin(k * .08) * 4);
+        b.q.setAttribute("cy", 300 - k);
+        b.q.setAttribute("opacity", k > 190 ? 0 : .45);
+      });
+      callouts.forEach(c => {
+        typeOn(c.n, c.s2, T, c.t0, 2);
+        c.L2.setAttribute("opacity", T > c.t0 + 4 ? .7 : 0);
+      });
+      typeOn(F1, "PERFECTLY PRESERVED.", T, 110, 1.9);
+      typeOn(F2, "THE LENSES ARE OPEN.", T, 122, 1.9);
+    });
+  }
+
   /* ---------------- 51: the flood ---------------- */
   {
     const svg = document.getElementById("flood");
@@ -6693,6 +6948,116 @@
     });
   }
 
+  /* ---------------- 51-m: the flood (phone twin) ---------------- */
+  /* Phone twin of 51 at 1.25x, framed so the breaking tank stays whole
+     (the wave still exits stage-left); the kennel thins to eight coursers
+     so the strewn row reads wall to wall at the bigger scale. CRACK. and
+     the footer re-set at phone size. terminal.js picks it by width. */
+  {
+    const svg = document.getElementById("flood-m");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const cls = label(svg, 20, 70, 16, PH_DIM);
+    cls.textContent = "HALL OF HOUNDS / ONE GOOD BLOW";
+    const SC = el(svg, "g", { transform: "translate(-149 105) scale(1.25)" });
+    const GLASS = "#cfefff", HONEY = "#ffd76a";
+    el(SC, "line", { x1: 0, y1: 316, x2: 640, y2: 316, stroke: PH_DIM });
+    const gel = el(SC, "rect", { x: 414, y: 82, width: 212, height: 232,
+      fill: HONEY, "fill-opacity": .12 });
+    const still = [[452, 140], [560, 128], [472, 224], [576, 236]].map(([x, y], i) => {
+      const { g } = houndSil2(SC, PACK[[1, 0, 6, 7][i]]);
+      return { g, x, y, ph: i * 2 };
+    });
+    el(SC, "rect", { x: 412, y: 80, width: 216, height: 236, fill: "none",
+      stroke: GLASS, "stroke-width": 2.5 });                   // the frame keeps
+    const face = el(SC, "g", {});
+    const cracks = [];
+    for (let r = 0; r < 8; r++) {
+      const a = r * Math.PI / 4 + .3, len = 40 + (r % 3) * 26;
+      const mx = 500 + Math.cos(a) * len * .5, my = 198 + Math.sin(a) * len * .5;
+      const ex = 500 + Math.cos(a + .35) * len, ey = 198 + Math.sin(a + .35) * len;
+      cracks.push(el(face, "line", { x1: 500, y1: 198, x2: mx, y2: my,
+        stroke: GLASS, "stroke-width": 1.2, opacity: 0 }));
+      cracks.push(el(face, "line", { x1: mx, y1: my, x2: ex, y2: ey,
+        stroke: GLASS, "stroke-width": 1, opacity: 0 }));
+    }
+    const star = el(SC, "polygon", { fill: PH_BRIGHT, opacity: 0, points:
+      "500,186 504,194 513,192 506,199 512,206 502,203 498,212 496,202 " +
+      "486,204 494,196 488,189 497,193" });
+    const crackTx = label(svg, 501, 332, 20, PH_BRIGHT);
+    const wavePoly = el(SC, "polygon", { fill: HONEY, "fill-opacity": .16,
+      opacity: 0 });
+    const crest = el(SC, "polyline", { fill: "none", stroke: HONEY, opacity: 0,
+      "stroke-width": 1.6 });
+    const pool = el(SC, "rect", { x: 0, y: 300, width: 640, height: 16,
+      fill: HONEY, "fill-opacity": 0 });
+    const shards = Array.from({ length: 6 }, () => el(SC, "polygon",
+      { fill: "none", stroke: GLASS, opacity: 0, points: "0,0 10,4 4,12" }));
+    // eight of the kennel wash out -- the row still reads wall to wall
+    const tumb = Array.from({ length: 8 }, (_, i) => {
+      const { g } = houndSil2(SC, PACK[i]);
+      g.setAttribute("opacity", 0);
+      return g;
+    });
+    const foot = label(svg, 320, 640, 22, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 200;
+      doWipe(T);
+      typeOn(hdr, "THE FLOOD", T, 4, 1.4);
+      const pre = T < 54;
+      face.setAttribute("opacity", pre ? 1 : 0);
+      gel.setAttribute("fill-opacity", pre ? .12 : .02);
+      const nshow = Math.max(0, (T - 30) * .8);
+      cracks.forEach((c, i) => c.setAttribute("opacity",
+        pre && i < nshow ? .9 : 0));
+      star.setAttribute("opacity", T >= 30 && T < 38 ? (T % 2 ? 1 : .4) : 0);
+      if (T >= 30 && T < 54) typeOn(crackTx, "CRACK.", T, 30, 2);
+      else crackTx.textContent = "";
+      still.forEach(s => {
+        s.g.setAttribute("opacity", pre ? 1 : 0);
+        s.g.setAttribute("transform",
+          `translate(${s.x} ${s.y + Math.sin((t + s.ph * 7) * .05) * 2.5}) ` +
+          `scale(.8) rotate(${Math.sin((t + s.ph) * .04) * 4})`);
+      });
+      const Tf = Math.min(T, 112);
+      const fx = 620 - Math.max(0, Tf - 54) * 9.6;             // the front
+      const flooding = T >= 54 && T < 112;
+      wavePoly.setAttribute("opacity", flooding ? 1 : 0);
+      crest.setAttribute("opacity", flooding ? .8 : 0);
+      if (flooding) {
+        const top = [];
+        for (let x = 628; x >= fx; x -= 16) {
+          const hump = 34 * Math.exp(-Math.pow((x - fx) / 70, 2));
+          top.push(`${x},${294 - hump + Math.sin(x * .1 + t * .6) * 3}`);
+        }
+        top.push(`${fx},316`);
+        wavePoly.setAttribute("points", `628,316 ${top.join(" ")}`);
+        crest.setAttribute("points", top.join(" "));
+      }
+      pool.setAttribute("fill-opacity", T >= 112
+        ? Math.min(.15, .10 + (T - 112) * .01) : (flooding ? .10 : 0));
+      shards.forEach((s2, i) => {                           // glass, in the tank
+        const k = T - 54;
+        s2.setAttribute("opacity", flooding && k < 30 ? .8 : 0);
+        s2.setAttribute("transform", `translate(${448 + i * 32} ` +
+          `${Math.min(190 + i * 9 + k * 7, 306)}) rotate(${k * 30 + i * 60})`);
+      });
+      const REST = [152, 216, 280, 344, 408, 470, 532, 592];
+      const ANG = [12, -165, 95, -8, 178, 25, 142, 78];
+      tumb.forEach((g2, i) => {
+        g2.setAttribute("opacity", T >= 54 ? 1 : 0);
+        const settled = T >= 112;
+        const x = Math.max(fx + 30 + i * 40, REST[i]);
+        const y = settled ? 298 + (i % 3) * 4 : 292 + Math.sin(T * .5 + i * 2) * 4;
+        const rot = settled ? ANG[i] : Math.min(T - 54, 58) * (22 + i * 7);
+        g2.setAttribute("transform", `translate(${x} ${y}) scale(.7) rotate(${rot})`);
+      });
+      typeOn(foot, "THE KENNEL, DECANTED.", T, 126, 1.8);
+    });
+  }
+
   /* ---------------- 52: the tank, decanted ---------------- */
   {
     const svg = document.getElementById("tank-f");
@@ -6722,6 +7087,54 @@
     });
     const foot = label(svg, 624, 350, 10, FUNGUS); foot.setAttribute("text-anchor", "end");
     const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 140;
+      doWipe(T);
+      typeOn(hdr, "THE TANK, DECANTED", T, 4, 1.6);
+      const mp = [];
+      for (let x = 0; x <= 640; x += 24)
+        mp.push(`${x},${298 + Math.sin(x * .04 + t * .1) * 1.5}`);
+      meniscus.setAttribute("points", mp.join(" "));
+      pool.setAttribute("fill-opacity", .12 + Math.sin(t * .15) * .03);
+      pack.forEach(p => p.eye.setAttribute("opacity",          // the lenses, still open
+        (Math.floor(t / 4) + p.i) % 9 ? .9 : .15));
+      typeOn(foot, "THE KENNEL, DECANTED.", T, 72, 1.8);
+    });
+  }
+
+  /* ---------------- 52-m: the tank, decanted (phone twin) ---------------- */
+  /* Phone twin of 52 -- 51-m's final frame, kept: the same 1.25x framing,
+     the same eight coursers at the same rest positions and angles, lenses
+     blinking in the same rotation. terminal.js picks it by width. */
+  {
+    const svg = document.getElementById("tank-f-m");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const cls = label(svg, 20, 70, 16, PH_DIM);
+    cls.textContent = "HALL OF HOUNDS / AFTERMATH";
+    const SC = el(svg, "g", { transform: "translate(-149 105) scale(1.25)" });
+    const GLASS = "#cfefff", HONEY = "#ffd76a";
+    el(SC, "line", { x1: 0, y1: 316, x2: 640, y2: 316, stroke: PH_DIM });
+    el(SC, "rect", { x: 412, y: 80, width: 216, height: 236, fill: "none",
+      stroke: GLASS, "stroke-width": 2.5, opacity: .8 });      // the frame keeps
+    Array.from({ length: 7 }, (_, i) => el(SC, "polygon",      // glass, where it fell
+      { fill: "none", stroke: GLASS, opacity: .5, points: "0,0 10,4 4,12",
+        transform: `translate(${430 + i * 28} ${300 + (i % 3) * 5}) rotate(${i * 47})` }));
+    const pool = el(SC, "rect", { x: 0, y: 298, width: 640, height: 18,
+      fill: HONEY, "fill-opacity": .14 });
+    const meniscus = el(SC, "polyline", { fill: "none", stroke: HONEY,
+      "stroke-width": 1.2, opacity: .6 });
+    const REST = [152, 216, 280, 344, 408, 470, 532, 592];
+    const ANG = [12, -165, 95, -8, 178, 25, 142, 78];
+    const pack = REST.map((rx, i) => {
+      const { g, eye } = houndSil2(SC, PACK[i]);
+      g.setAttribute("transform",
+        `translate(${rx} ${298 + (i % 3) * 4}) scale(.7) rotate(${ANG[i]})`);
+      return { eye, i };
+    });
+    const foot = label(svg, 320, 640, 22, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 720, 2, 12);
     clock(t => {
       const T = t % 140;
       doWipe(T);
