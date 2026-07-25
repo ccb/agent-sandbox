@@ -188,3 +188,139 @@ def test_plans_unchanged_writes_no_plan_memory():
     cognition.apply_conversation_outcome(maria, "Ayesha Khan", "t", step=1)
 
     assert _plans(maria) == []
+
+
+from backend.build_world import build_world  # noqa: E402
+from backend.cognition import attach_agents, maybe_converse  # noqa: E402
+
+_LOCATIONS = [
+    {"name": "Plaza", "description": "the plaza", "address": None, "hub": True},
+    {"name": "Library", "description": "a library", "address": "T:Library:desks"},
+    {"name": "Cafe", "description": "a cafe", "address": "T:Cafe:counter"},
+]
+
+
+def _convo_persona(name):
+    """A persona whose single scheduled stop is the Cafe, so a conversation held
+    IN the Cafe is at the scheduled place and one held in the Plaza is not."""
+    return {
+        "name": name,
+        "home": "Plaza",
+        "persona": f"I am {name}.",
+        "emoji": "\U0001f9d1",
+        "start_tile": [0, 0],
+        "destination": "Cafe",
+        "activity": "reading",
+        "schedule": [
+            {"place": "Cafe", "activity": "reading", "emoji": None, "steps": 5}
+        ],
+    }
+
+
+class _ConvoThenOutcomeBrain:
+    """A real-shaped brain that both talks (one line, then done) and answers
+    conversation_outcome. Shared by both agents, like the live path."""
+
+    def __init__(self):
+        self.context: dict = {}
+        self.outcome_calls = 0
+
+    def call_tool(self, messages, tool, max_tokens=256, temperature=0.0):
+        if tool["name"] == "conversation_outcome":
+            self.outcome_calls += 1
+            return {"plans_changed": True, "commitment": "meet at the Library"}
+        # The engine's dialogue seam (Agent.converse) forces the "speak" tool.
+        return {"utterance": "Library later?", "done": True}
+
+
+def _pair_talking_in(place_name, *, performing=True):
+    """Co-locate two Cafe-scheduled agents in `place_name` and mark them settled.
+    Returns (game, chars, state, frame, order) ready for maybe_converse."""
+    personas = [_convo_persona("Maria Lopez"), _convo_persona("Ayesha Khan")]
+    game, chars = build_world(None, personas, _LOCATIONS)
+    attach_agents(chars, personas, llm_client=_ConvoThenOutcomeBrain())
+    order = ["Maria Lopez", "Ayesha Khan"]
+    room = game.locations[place_name]
+    for name in order:
+        ch = chars[name]
+        if ch.location is not None:
+            ch.location.remove_character(ch)
+        room.add_character(ch)
+    state = {n: {"performing": performing, "path": None, "chat": None} for n in order}
+    frame = {n: {} for n in order}
+    return game, chars, state, frame, order
+
+
+def test_conversation_at_the_scheduled_place_credits_the_stop():
+    game, chars, state, frame, order = _pair_talking_in("Cafe")
+
+    happened = maybe_converse(game, chars, state, frame, 4, {}, order, clock=None)
+
+    assert happened == 1
+    for name in order:
+        # The credit Task 3's pre-pass spends to advance the schedule.
+        assert state[name]["convo_at_stop"] is True
+        # ...and the activity is now set, so the frame stops rendering the
+        # "spending time" placeholder over a stop that actually happened.
+        assert chars[name].get_property("activity") == "reading"
+
+
+def test_conversation_away_from_the_scheduled_place_does_not_credit():
+    """A chat in the Plaza is a deviation, not the scheduled Cafe stop. Same
+    place-match rule the pre-pass already uses for on_plan."""
+    game, chars, state, frame, order = _pair_talking_in("Plaza")
+
+    happened = maybe_converse(game, chars, state, frame, 4, {}, order, clock=None)
+
+    assert happened == 1  # they did talk...
+    for name in order:
+        assert "convo_at_stop" not in state[name]  # ...but nothing was credited
+
+
+def test_unsettled_agent_is_never_credited():
+    """`performing` is required -- tested by calling the helper DIRECTLY.
+
+    Going through maybe_converse here would be vacuous: its own pairing already
+    requires both agents settled, so no conversation would open and the
+    assertion would pass for the wrong reason. The only way an unsettled agent
+    reaches the credit is a conversation maybe_react (#370) started mid-walk,
+    which pins a WALKING agent that completed no stop -- and without this guard
+    its credit would linger in state and be spent on a later, unrelated stop.
+    """
+    game, chars, state, frame, order = _pair_talking_in("Cafe", performing=False)
+    maria, st = chars["Maria Lopez"], state["Maria Lopez"]
+    # Same agent, same room as the crediting test above -- only `performing`
+    # differs, so this isolates the guard itself.
+    assert maria.location.name == maria.agent.schedule.destination
+
+    credited = cognition._credit_stop_for_conversation(maria, st)
+
+    assert credited is False
+    assert "convo_at_stop" not in st
+    # And the positive control: flip the one flag and the same call credits.
+    st["performing"] = True
+    assert cognition._credit_stop_for_conversation(maria, st) is True
+    assert st["convo_at_stop"] is True
+
+
+def test_mock_brain_credits_nothing():
+    """Byte-identity guard at the unit level: the mock never converses, so the
+    credit is never stamped and the pre-pass sees exactly what it sees today."""
+    personas = [_convo_persona("Maria Lopez"), _convo_persona("Ayesha Khan")]
+    game, chars = build_world(None, personas, _LOCATIONS)
+    attach_agents(chars, personas, llm_client=None)  # mock brain
+    order = ["Maria Lopez", "Ayesha Khan"]
+    cafe = game.locations["Cafe"]
+    for name in order:
+        ch = chars[name]
+        if ch.location is not None:
+            ch.location.remove_character(ch)
+        cafe.add_character(ch)
+    state = {n: {"performing": True, "path": None, "chat": None} for n in order}
+    frame = {n: {} for n in order}
+
+    happened = maybe_converse(game, chars, state, frame, 4, {}, order, clock=None)
+
+    assert happened == 0
+    for name in order:
+        assert "convo_at_stop" not in state[name]

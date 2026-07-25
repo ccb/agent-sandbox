@@ -1789,6 +1789,49 @@ def _finish_conversation(a, b, convo_obj, step, cooldowns, clock) -> int:
     return 1
 
 
+def _credit_stop_for_conversation(char, st) -> bool:
+    """A real conversation held AT the agent's scheduled place completes that
+    stop (issue #778).
+
+    ``schedule.advance()`` fires from exactly one place -- ``run_simulation``'s
+    latch-expiry pre-pass -- and only for an ON-PLAN settle. But a ``talk_to``
+    is an instantaneous command that routes through
+    ``_settle_after_dead_talk``, which sets ``on_plan = False`` (#689,
+    correctly: a *dead* talk completed nothing), and a talk that went on to open
+    a REAL conversation took that same path first, so it inherited the same
+    flag. The result was that no conversation ever advanced a stop -- not even
+    when the conversation *was* the scheduled activity ("sizing up a brand-new
+    roommate"), which is how the #778 pair stayed on stop 0 for a whole run.
+    This stamps the credit the pre-pass spends, and sets ``activity`` so the
+    frame stops rendering the ``"spending time"`` placeholder over a stop that
+    actually happened.
+
+    Place-match is the same rule the pre-pass already applies for ``on_plan``:
+    standing at the scheduled stop means this completed it. Any real
+    conversation there counts, social activity or not -- one authority, no new
+    concept.
+
+    ``performing`` is required so a conversation started mid-walk by
+    ``maybe_react`` (#370), which pins a *walking* agent, cannot leave a credit
+    lying in state to be spent later on an unrelated stop. Every path that
+    should credit still does: ``maybe_converse``'s own pairing already requires
+    both agents settled.
+
+    Returns whether a credit was stamped (for tests; callers ignore it).
+    """
+    if not st.get("performing"):
+        return False
+    schedule = getattr(getattr(char, "agent", None), "schedule", None)
+    place = getattr(schedule, "destination", None)
+    if not place or char.location is None or char.location.name != place:
+        return False
+    st["convo_at_stop"] = True
+    activity = getattr(schedule, "activity", None)
+    if activity:
+        char.set_property("activity", activity)
+    return True
+
+
 def _advance_conversation(
     game,
     ac,
@@ -1830,6 +1873,9 @@ def _advance_conversation(
         ac.hold_until = step + len(ac.convo.lines) * line_playback_steps
         state[ac.a]["conversing"] = True
         state[ac.b]["conversing"] = True
+        # #778: credit the scheduled stop this conversation just completed.
+        for nm in (ac.a, ac.b):
+            _credit_stop_for_conversation(chars[nm], state[nm])
         return False, delta
     state[ac.a]["conversing"] = False
     state[ac.b]["conversing"] = False
