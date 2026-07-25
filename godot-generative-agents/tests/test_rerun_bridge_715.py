@@ -309,22 +309,66 @@ def _rewrite_manifest(store, run_id, manifest):
     con.close()
 
 
-def test_reproduce_run_rejects_a_plan_mode_llm_run(tmp_path):
-    # Task 4 review, Addition A: a run recorded with --plan llm makes the
-    # re-run PennStepper's OWN guard raise SystemExit (llm=None is never
-    # "paid") before reproduce_run's replay branch ever executes. SystemExit
-    # is a BaseException that, inside the HTTP route's run_in_executor worker
-    # thread, is silently swallowed by threading's bootstrap and HANGS the
-    # request instead of failing cleanly. reproduce_run must refuse this case
-    # itself, with its established ValueError vocabulary (the route maps
-    # ValueError -> 409, the CLI catches it too).
+def test_a_plan_mode_llm_run_takes_the_replay_path_not_a_systemexit(tmp_path):
+    # reproduce_run used to REFUSE plan_mode "llm" outright (#715 review,
+    # Addition A). #787 made the model planner the live default and taught the
+    # re-run to replay its calls out of the same cassette, so the refusal is
+    # gone -- but the reason it was a ValueError and not a bare SystemExit
+    # still matters: PennStepper.__init__ raises SystemExit for plan llm on an
+    # unpaid brain (the re-run brain always is), and inside the HTTP route's
+    # run_in_executor worker thread a BaseException is swallowed by threading's
+    # bootstrap and HANGS the request instead of failing cleanly. Pin that the
+    # re-run path is exempt from that guard.
+    #
+    # The manifest here is DOCTORED onto a schedule-recorded run, so its
+    # cassette has no planning calls and the replay legitimately diverges --
+    # a CassetteMiss (caught as a mismatch), which is the honest answer. The
+    # end-to-end "a real model-planned run reproduces" case needs a paid brain
+    # to record it and lives in test_penn_live_llm.py.
     store, run_id = _record_a_run(tmp_path)
     manifest = store.get_run(run_id)["manifest"]
     manifest["plan_mode"] = "llm"
     _rewrite_manifest(store, run_id, manifest)
 
-    with pytest.raises(ValueError, match="plan llm"):
-        reproduce_run(store, run_id)
+    result = reproduce_run(store, run_id)
+    assert result.match is False  # no plan calls recorded -> honest divergence
+
+
+def test_rerun_uses_the_recorded_step_budget_not_the_frame_count(tmp_path):
+    # #787: LLMPlanner bounds the day to the clock window the step BUDGET
+    # covers and puts that window in its prompt -- so a run stopped early (the
+    # cost ceiling, a human, --endless) has fewer frames than steps, and
+    # rebuilding the re-run from the frame count would re-plan against a
+    # shorter window and miss the cassette. The budget is recorded and used.
+    store = RunStore(tmp_path / "runs")
+    rec = PennStepper(
+        num_steps=RERUN_STEPS + 7,  # a budget deliberately larger than we tick
+        world=build_penn_world(),
+        monitor=None,
+        llm=SCRIPTED,
+        run_store=store,
+        seed=0,
+        decide_workers=0,
+    )
+    run_id = rec._run_id
+    for _ in range(RERUN_STEPS):
+        rec.tick()
+    rec._finish_run()
+    assert store.get_run(run_id)["manifest"]["num_steps"] == RERUN_STEPS + 7
+
+    captured = {}
+    orig = PennStepper.__init__
+
+    def spy(self, *a, **kw):
+        captured.update(kw)
+        return orig(self, *a, **kw)
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(PennStepper, "__init__", spy)
+        result = reproduce_run(store, run_id)
+    assert captured["num_steps"] == RERUN_STEPS + 7
+    assert result.match is True  # ...and it still compares only the n frames
+    assert result.steps == RERUN_STEPS
 
 
 # --- the scenario field (#747) ----------------------------------------------

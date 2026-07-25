@@ -242,8 +242,14 @@ Claude Haiku (`claude-haiku-4-5`) on every model call** — each agent's
 travel/perform decisions, every line of dialogue when the routing brings two
 agents within perception range (the scripted `meetings:` dialogue stands down;
 what you see is the model's own words), and the periodic reflection passes.
-The daily itinerary stays on the authored schedules for now (a Penn-aware LLM
-planner is follow-up work).
+The daily itinerary is the model's too: since #787 `--plan` defaults to `auto`,
+which under a paying brain means `LLMPlanner` (#397) authors each agent's day
+at attach — so the plan is something the agent can also *revise* when the day
+turns, which the authored schedule never could. Pass `--plan schedule` to force
+the hand-authored days back; their stop windows are tuned so agents converge for
+the scripted rendezvous, which a free-play generated day does not guarantee.
+The mock and scripted brains are unaffected (no client to plan with), so the
+bundled bake and every offline replay stay byte-identical.
 
 ```bash
 # One-time: the llm extra alongside server (installs the anthropic SDK):

@@ -146,9 +146,20 @@ class RunStore:
         status: str | None = None,
         cost: float | None = None,
         steps: int | None = None,
+        manifest: dict | None = None,
     ) -> None:
-        """Partial update of the mutable columns; unknown id raises KeyError."""
+        """Partial update of the mutable columns; unknown id raises KeyError.
+
+        ``manifest`` replaces the recorded blob in BOTH places create_run wrote
+        it -- the column and manifest.json -- for the facts a run only learns
+        after its row is open (#787: which agents got a model-authored day is
+        only known once attach_agents has run, and the row has to exist before
+        that so the planner's calls land in the run's cassette).
+        """
         sets, vals = [], []
+        if manifest is not None:
+            sets.append("manifest = ?")
+            vals.append(json.dumps(manifest, ensure_ascii=False))
         if status is not None:
             sets.append("status = ?")
             vals.append(status)
@@ -166,6 +177,10 @@ class RunStore:
             )
             if cur.rowcount == 0:
                 raise KeyError(f"unknown run id: {run_id}")
+        if manifest is not None:
+            (self.root / run_id / "manifest.json").write_text(
+                json.dumps(manifest, ensure_ascii=False), encoding="utf-8"
+            )
 
     @staticmethod
     def _run_row(row: sqlite3.Row) -> dict:

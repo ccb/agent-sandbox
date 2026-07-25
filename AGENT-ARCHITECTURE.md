@@ -229,13 +229,16 @@ exists — the invariant is offered ⇔ place-check.
 
 `DailyPlan` is a list of `Stop(place, activity, steps, emoji, furniture)`.
 
-- **`MockPlanner`** (`planner.py:36`, the default) replays the authored schedule.
-  Its `revise()` is `return plan` — a genuine no-op. **If you write a feature
-  whose only consumer is `revise()`, it does nothing on a default run.** That was
-  the #778 bug.
-- **`LLMPlanner`** (`planner.py:169`, `--plan llm`) plans a day in three passes:
-  day outline → hourly → minute-level stops, validated against the world's real
-  place names, falling back to the static schedule on anything unusable.
+- **`MockPlanner`** (`planner.py:36`, the default on a *free* brain) replays the
+  authored schedule. Its `revise()` is `return plan` — a genuine no-op. **If you
+  write a feature whose only consumer is `revise()`, it does nothing on a mock
+  or scripted run.** That was the #778 bug.
+- **`LLMPlanner`** (`planner.py:169`, the default under `--brain llm` since
+  #787) plans a day in three passes: day outline → hourly → minute-level stops,
+  validated against the world's real place names, falling back to the static
+  schedule on anything unusable. Force the authored day back with
+  `--plan schedule` — worth doing when you need the hand-tuned rendezvous
+  overlaps, which a free-play generated day does not guarantee.
 
 **Advancing a stop happens in exactly one place** — the latch-expiry pre-pass
 (`run_simulation.py:317-355`) — and only when the completed activity was
@@ -304,7 +307,7 @@ This is the table people come here for. Defaults for
 | --- | --- | --- |
 | Brain | **mock** (free, deterministic) | `--brain llm` / `scripted` |
 | Conversation | **off** — implied by the mock brain | any real brain |
-| Daily planning | **schedule** (authored, `revise()` is a no-op) | `--plan llm` |
+| Daily planning | **auto** → `llm` under a paid brain, else **schedule** (authored, `revise()` is a no-op) | `--plan schedule` to force the authored day |
 | Reflection | **off** — needs a reflector client | real provider |
 | LLM importance scoring | **off** — needs a real brain | real provider |
 | Cognition tools (`recall`, …) | **off** | `--cognition-tools`, config, or scripted brain |
