@@ -10,7 +10,7 @@
    and disconnected nodes drop off the clock automatically. */
 (() => {
   "use strict";
-  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-c-m": ["svg", 640, 720], "autarch-e": ["svg", 640, 420], "autarch-e-m": ["svg", 640, 720], "autarch-m": ["svg", 640, 720], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "bats-c-m": ["svg", 640, 720], "bats-m": ["canvas", 640, 720], "blade": ["canvas", 640, 360], "blade-m": ["canvas", 640, 720], "boots": ["svg", 640, 360], "boots-m": ["svg", 640, 720], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "chimney-f": ["svg", 640, 360], "chimney-g": ["svg", 640, 360], "chimney-h": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-a-m": ["svg", 640, 720], "cyl-c": ["svg", 640, 400], "cyl-c-m": ["svg", 640, 720], "cyl-o": ["svg", 640, 400], "cyl-o-m": ["svg", 640, 720], "cyl-v": ["svg", 640, 400], "cyl-v-m": ["svg", 640, 720], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "cylinders-b-m": ["svg", 640, 720], "cylinders-m": ["svg", 640, 720], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flask-m": ["svg", 640, 720], "flood": ["svg", 640, 360], "flood-m": ["svg", 640, 720], "fungus": ["svg", 640, 360], "fungus-m": ["svg", 640, 720], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-b-m": ["canvas", 640, 720], "glowstone-c": ["canvas", 640, 300], "glowstone-c-m": ["canvas", 640, 720], "glowstone-m": ["canvas", 640, 720], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "hound-m": ["svg", 640, 720], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-falcon-m": ["svg", 640, 720], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-jackal-m": ["svg", 640, 720], "jar-mantis": ["svg", 640, 300], "jar-mantis-m": ["svg", 640, 720], "manifest": ["svg", 640, 360], "manifest-m": ["svg", 640, 720], "mem-bath": ["svg", 640, 360], "mem-bath-m": ["svg", 640, 720], "mem-embalm": ["svg", 640, 360], "mem-embalm-m": ["svg", 640, 720], "mem-kestrel": ["svg", 640, 360], "mem-kestrel-m": ["svg", 640, 720], "mem-mother": ["svg", 640, 360], "mem-mother-m": ["svg", 640, 720], "mem-raising": ["svg", 640, 360], "mem-raising-m": ["svg", 640, 720], "mystic-b": ["svg", 640, 400], "mystic-b-m": ["svg", 640, 720], "mystic-c": ["svg", 640, 400], "mystic-c-m": ["svg", 640, 720], "mystic-f": ["svg", 640, 400], "mystic-f-m": ["svg", 640, 720], "resp": ["svg", 640, 360], "resp-m": ["svg", 640, 720], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "seal-b-m": ["svg", 640, 720], "seal-m": ["svg", 640, 720], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "silas-m": ["svg", 640, 720], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-b-m": ["svg", 640, 720], "sphere-d": ["svg", 640, 420], "sphere-d-m": ["svg", 640, 720], "sphere-e": ["svg", 640, 420], "sphere-e-m": ["svg", 640, 720], "sphere-f": ["svg", 640, 420], "sphere-f-m": ["svg", 640, 720], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tank-f-m": ["svg", 640, 720], "tank-m": ["svg", 640, 720], "tesseract": ["canvas", 640, 360], "tesseract-u": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-a-m": ["svg", 640, 720], "youth-b": ["svg", 640, 360], "youth-b-m": ["svg", 640, 720], "youth-c": ["svg", 640, 360], "youth-c-m": ["svg", 640, 720], "youth-d": ["svg", 640, 360], "youth-d-m": ["svg", 640, 720], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
+  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-c-m": ["svg", 640, 720], "autarch-e": ["svg", 640, 420], "autarch-e-m": ["svg", 640, 720], "autarch-m": ["svg", 640, 720], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "bats-c-m": ["svg", 640, 720], "bats-m": ["canvas", 640, 720], "blade": ["canvas", 640, 360], "blade-m": ["canvas", 640, 720], "boots": ["svg", 640, 360], "boots-m": ["svg", 640, 720], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "centipede-m": ["svg", 640, 720], "chimney-f": ["svg", 640, 360], "chimney-f-m": ["svg", 640, 720], "chimney-g": ["svg", 640, 360], "chimney-g-m": ["svg", 640, 720], "chimney-h": ["svg", 640, 360], "chimney-h-m": ["svg", 640, 720], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-a-m": ["svg", 640, 720], "cyl-c": ["svg", 640, 400], "cyl-c-m": ["svg", 640, 720], "cyl-o": ["svg", 640, 400], "cyl-o-m": ["svg", 640, 720], "cyl-v": ["svg", 640, 400], "cyl-v-m": ["svg", 640, 720], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "cylinders-b-m": ["svg", 640, 720], "cylinders-m": ["svg", 640, 720], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "epitaph-m": ["svg", 640, 720], "ext1c": ["svg", 640, 400], "ext1c-m": ["svg", 640, 720], "ext1e": ["svg", 640, 400], "ext1e-m": ["svg", 640, 720], "flask": ["svg", 640, 360], "flask-m": ["svg", 640, 720], "flood": ["svg", 640, 360], "flood-m": ["svg", 640, 720], "fungus": ["svg", 640, 360], "fungus-m": ["svg", 640, 720], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-b-m": ["canvas", 640, 720], "glowstone-c": ["canvas", 640, 300], "glowstone-c-m": ["canvas", 640, 720], "glowstone-m": ["canvas", 640, 720], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "guts-lash": ["svg", 640, 360], "hound": ["svg", 640, 360], "hound-m": ["svg", 640, 720], "jackal": ["svg", 640, 360], "jackal-m": ["svg", 640, 720], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-falcon-m": ["svg", 640, 720], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-jackal-m": ["svg", 640, 720], "jar-mantis": ["svg", 640, 300], "jar-mantis-m": ["svg", 640, 720], "manifest": ["svg", 640, 360], "manifest-m": ["svg", 640, 720], "mem-bath": ["svg", 640, 360], "mem-bath-m": ["svg", 640, 720], "mem-embalm": ["svg", 640, 360], "mem-embalm-m": ["svg", 640, 720], "mem-kestrel": ["svg", 640, 360], "mem-kestrel-m": ["svg", 640, 720], "mem-mother": ["svg", 640, 360], "mem-mother-m": ["svg", 640, 720], "mem-raising": ["svg", 640, 360], "mem-raising-m": ["svg", 640, 720], "mystic-b": ["svg", 640, 400], "mystic-b-m": ["svg", 640, 720], "mystic-c": ["svg", 640, 400], "mystic-c-m": ["svg", 640, 720], "mystic-f": ["svg", 640, 400], "mystic-f-m": ["svg", 640, 720], "resp": ["svg", 640, 360], "resp-m": ["svg", 640, 720], "road": ["svg", 640, 400], "road-m": ["svg", 640, 720], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "seal-b-m": ["svg", 640, 720], "seal-m": ["svg", 640, 720], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "silas-m": ["svg", 640, 720], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-b-m": ["svg", 640, 720], "sphere-d": ["svg", 640, 420], "sphere-d-m": ["svg", 640, 720], "sphere-e": ["svg", 640, 420], "sphere-e-m": ["svg", 640, 720], "sphere-f": ["svg", 640, 420], "sphere-f-m": ["svg", 640, 720], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tank-f-m": ["svg", 640, 720], "tank-m": ["svg", 640, 720], "tesseract": ["canvas", 640, 360], "tesseract-m": ["canvas", 640, 720], "tesseract-u": ["canvas", 640, 360], "tesseract-u-m": ["canvas", 640, 720], "ulfire": ["svg", 640, 360], "ulfire-u": ["svg", 640, 360], "wagon": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-a-m": ["svg", 640, 720], "youth-b": ["svg", 640, 360], "youth-b-m": ["svg", 640, 720], "youth-c": ["svg", 640, 360], "youth-c-m": ["svg", 640, 720], "youth-d": ["svg", 640, 360], "youth-d-m": ["svg", 640, 720], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
   const FIG = {
     _defs: {}, _uid: 0, _ticks: [], _timer: null, _target: null,
     MAX_LIVE: 3,
@@ -146,6 +146,44 @@
     });
   });
 
+  /* ---------------- 01-m: tesseract, gilt by depth (phone twin) ---------------- */
+  /* Phone twin of 01. The projection is carried over whole -- project4's
+     scene at 1.5x via the canvas transform, centered in the tall frame
+     (titleless, as the desktop card is) -- with the status lines re-set
+     big along the bottom. shadowBlur ignores the transform, so the glow
+     values are scaled by hand. */
+  FIG._define("tesseract-m", "canvas", function (cv) {
+    const ctx = cv.getContext("2d");
+    const GOLD = "#ffd76a";
+    const { verts, edges } = tess4();
+    clock(t => {
+      const a = (t % 96) * Math.PI / 48, b = (t % 144) * Math.PI / 72;
+      ctx.fillStyle = BG; ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.save();
+      ctx.translate(-160, 70); ctx.scale(1.5, 1.5);
+      const pts = project4(verts, a, b);
+      // the gilding lives on the w-axis: far cell phosphor, near cell gold
+      edges.slice().sort((e1, e2) =>
+        (pts[e1[0]].w + pts[e1[1]].w) - (pts[e2[0]].w + pts[e2[1]].w))
+        .forEach(([i, j]) => {
+          const k = ((pts[i].w + pts[j].w) / 2 + 1) / 2;
+          drawEdges(ctx, pts.map(q => q.p), [[i, j]],
+            lerpHex(PH_DIM, GOLD, Math.max(0, Math.min(1, k))), (3 + k * 8) * 1.5);
+        });
+      pts.forEach(q => { if (q.w > .55) {                  // gilt rivets, near corners
+        ctx.fillStyle = GOLD; ctx.shadowColor = GOLD; ctx.shadowBlur = 12;
+        ctx.beginPath(); ctx.arc(q.p[0], q.p[1], 2.2, 0, Math.PI * 2); ctx.fill();
+      } });
+      ctx.restore();
+      ctx.shadowBlur = 0; ctx.font = "18px ui-monospace, monospace";
+      ctx.fillStyle = PH_DIM;
+      ctx.fillText("GILT: HONEST. GEOMETRY: NOT.", 24, 688);
+      ctx.fillStyle = GOLD; ctx.textAlign = "right";
+      ctx.fillText("W-AXIS: " + ((a * 180 / Math.PI) % 360 | 0) + "°", 616, 688);
+      ctx.textAlign = "left";
+    });
+  });
+
   /* ---------------- 01-D: the ninth angle ---------------- */
   FIG._define("tesseract-u", "canvas", function (cv) {
     const ctx = cv.getContext("2d");
@@ -179,6 +217,51 @@
       }
       ctx.fillStyle = found ? "#dff2ff" : PH_DIM;
       ctx.fillText("W-AXIS: " + ((a * 180 / Math.PI) % 360 | 0) + "°", 520, 340);
+    });
+  });
+
+  /* ---------------- 01-D-m: the ninth angle (phone twin) ---------------- */
+  /* Phone twin of 01-D on 01-m's framing: the spectrum projection at
+     1.5x, the freeze on the ninth angle and the strobing compartment
+     verbatim, status lines re-set big along the bottom. */
+  FIG._define("tesseract-u-m", "canvas", function (cv) {
+    const ctx = cv.getContext("2d");
+    const HUES = ["#ff5a5a", "#ff9a3c", "#ffd76a", "#7fff9e", "#4db8ff",
+      "#7a7aff", "#c07aff", "#dff2ff"];
+    const { verts, edges } = tess4();
+    clock(t => {
+      const T = t % 192;
+      const found = T >= 150 && T < 174;                   // the ninth angle, briefly
+      const Tf = found ? 150 : T;
+      const a = Tf * Math.PI / 48, b = Tf * Math.PI / 72;
+      ctx.fillStyle = BG; ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.save();
+      ctx.translate(-160, 70); ctx.scale(1.5, 1.5);
+      const pts = project4(verts, a, b);
+      edges.slice().sort((e1, e2) =>
+        (pts[e1[0]].w + pts[e1[1]].w) - (pts[e2[0]].w + pts[e2[1]].w))
+        .forEach(([i, j]) => {
+          const k = ((pts[i].w + pts[j].w) / 2 + 1) / 2;
+          drawEdges(ctx, pts.map(q => q.p), [[i, j]],
+            HUES[Math.max(0, Math.min(7, Math.floor(k * 7.99)))], 9);
+        });
+      if (found) {                                         // the compartment, seen
+        const innerE = edges.filter(([i, j]) => pts[i].w + pts[j].w < 0);
+        drawEdges(ctx, pts.map(q => q.p), innerE,
+          (t % 2) ? "#ff5a5a" : "#c07aff", 27);
+      }
+      ctx.restore();
+      ctx.shadowBlur = 0; ctx.font = "18px ui-monospace, monospace";
+      if (found) {
+        ctx.fillStyle = (t % 2) ? "#c07aff" : "#ff5a5a";
+        ctx.fillText("THE ANGLE: FOUND. COMPARTMENT: VISIBLE.", 24, 688);
+      } else {
+        ctx.fillStyle = PH_DIM;
+        ctx.fillText("SEARCHING FOR THE ANGLE" + ".".repeat(1 + (t % 3)), 24, 688);
+      }
+      ctx.fillStyle = found ? "#dff2ff" : PH_DIM; ctx.textAlign = "right";
+      ctx.fillText("W-AXIS: " + ((a * 180 / Math.PI) % 360 | 0) + "°", 616, 688);
+      ctx.textAlign = "left";
     });
   });
 
@@ -9517,6 +9600,153 @@
     chimCard(svg, false, true, "THE FUNGAL CHIMNEY, BURNT",
       "THE CHIMNEY / CHARRED / BARE",
       "BLACK, BARE, AND BREATHABLE.");
+  });
+
+  /* ---- chimCardM: the fungal chimney, upright (phone twins of 20*) ----
+     The desktop drawing carried over whole and stood on end: every
+     coordinate inside SC is chimCard's scene space at .8x, rotated 90
+     degrees clockwise, so the shaft runs down the card -- rock walls
+     left and right, the prayers' glow at the bottom, tendrils swaying
+     crosswise, motes on the down-draught, and the centipede descending
+     head-first. Type is re-set outside: 26px title, class line under
+     the rule, VISIBILITY top-left beside the shaft, footer big below
+     the glow. ---- */
+  function chimCardM(svg, bug, burnt, hdrText, clsText, FOOTS) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 720, fill: BG });
+    el(svg, "line", { x1: 20, y1: 44, x2: 620, y2: 44, stroke: PH_DIM });
+    const hdr = label(svg, 20, 34, 26, PH_BRIGHT);
+    const cls = label(svg, 20, 70, 16, PH_DIM);
+    cls.textContent = clsText;
+    const SC = el(svg, "g", { transform: "translate(474 96) scale(.8) rotate(90)" });
+    [[52, -1], [326, 1]].forEach(([wy, dir]) => {              // the rock, either side
+      const pts = [];
+      for (let x = 0; x <= 640; x += 26)
+        pts.push(`${x},${wy + ((x / 26) % 3 - 1) * 5 * dir}`);
+      el(SC, "polyline", { points: pts.join(" "), fill: "none",
+        stroke: PH_DIM, "stroke-width": 1.5 });
+      for (let x = 40; x < 620; x += 74)
+        el(SC, "line", { x1: x, y1: wy + 4 * dir, x2: x + 8, y2: wy + 16 * dir,
+          stroke: PH_DIM, opacity: .5 });
+    });
+    el(SC, "ellipse", { cx: 652, cy: 190, rx: 40, ry: 150, fill: "#ffd76a",
+      "fill-opacity": .06 });                                  // the prayers, below
+    el(SC, "ellipse", { cx: 648, cy: 190, rx: 26, ry: 100, fill: "#ffd76a",
+      "fill-opacity": .07 });
+    const motes = Array.from({ length: burnt ? 5 : 12 }, (_, i) =>
+      ({ y: 68 + (i * 41) % 240, ph: i * 47,
+         q: el(SC, "circle", { r: i % 3 ? 1.2 : 1.8,
+           fill: burnt ? PH_DIM : FUNGUS, opacity: burnt ? .35 : .5 }) }));
+    const TCOL = burnt ? ["#5d4227", "#6f4e2c", "#6f4e2c", "#5d4227"]
+      : ["#b36b2a", FUNGUS, FUNGUS, "#b36b2a"];
+    const NODE = burnt ? "#41301f" : "#b36b2a";
+    const TEND = [[72, 12], [128, 15], [254, 13], [300, 10]].map(([ty, w], i) =>
+      ({ ty, ph: i * 1.7, q: el(SC, "polyline", { fill: "none", stroke: TCOL[i],
+        "stroke-width": w, "stroke-linecap": "round", opacity: .85 }) }));
+    TEND.forEach(td => [120, 330, 540].forEach(nx =>
+      el(SC, "circle", { cx: nx + td.ph * 12, cy: td.ty, r: 5, fill: NODE })));
+    const GLASS = "#cfefff";
+    const wave = x => 190 + Math.sin(x * .018) * 16;           // dead centre of the shaft
+    const DASH = [[20, 28], [44, 52], [68, 76], [92, 100], [116, 124], [140, 148]];
+    // it does not stop when it goes unseen (CCB): 4 px/frame in the light,
+    // 5 in the dark -- every reappearance is ahead of the vanishing point.
+    const seenIn = T => DASH.reduce((a, [s2, e2]) =>
+      a + Math.max(0, Math.min(T, e2 + 3) - s2), 0);
+    const pos = T => { const sf = seenIn(T); return -40 + sf * 4 + (T - sf) * 5; };
+    let segs = [], legs = [], feelers = [], glints = [], cells = [];
+    if (bug) {
+      segs = Array.from({ length: 16 }, () => el(SC, "ellipse",
+        { rx: 16, ry: 10, fill: "none", stroke: GLASS, "stroke-width": 1.5, opacity: 0 }));
+      legs = Array.from({ length: 32 }, () => el(SC, "line",
+        { stroke: "#9fd9f2", "stroke-width": 1.3, opacity: 0 }));
+      feelers = [0, 1].map(() => el(SC, "line",
+        { stroke: GLASS, "stroke-width": 1.4, opacity: 0 }));
+      glints = ["#ff5a5a", "#ffd76a", "#7fff9e", GLASS, GLASS,
+        "#9fd9f2", GLASS, "#ffd76a"].map(c =>
+        el(SC, "circle", { r: 3, fill: c, opacity: 0 }));
+      label(svg, 20, 116, 18, PH_DIM).textContent = "VISIBILITY";
+      cells = Array.from({ length: 6 }, (_, i) =>
+        el(svg, "rect", { x: 20 + i * 28, y: 130, width: 22, height: 18,
+          fill: GLASS, "fill-opacity": .08 }));
+    }
+    const foots = FOOTS.map(f => {
+      const n = label(svg, 320, f.y, 22, FUNGUS);
+      n.setAttribute("text-anchor", "middle"); return n;
+    });
+    const doWipe = wipe(svg, 640, 720, 2, 12);
+    clock(t => {
+      const T = t % 168;
+      doWipe(T);
+      typeOn(hdr, hdrText, T, 4, 1.4);
+      TEND.forEach(td => {
+        const pts = [];
+        for (let x = -10; x <= 650; x += 40)
+          pts.push(`${x},${td.ty + Math.sin(x * .012 + td.ph + t * (burnt ? .015 : .04)) * (burnt ? 4 : 9)}`);
+        td.q.setAttribute("points", pts.join(" "));            // burnt growth barely sways
+      });
+      motes.forEach(s => {                                     // drifting shaft-wise
+        const k = (t * (burnt ? .4 : .8) + s.ph) % 700;
+        s.q.setAttribute("cx", k - 30);
+        s.q.setAttribute("cy", s.y + Math.sin((t + s.ph) * .1) * 6);
+      });
+      if (bug) {
+        const hx = pos(T);
+        const seen = DASH.some(([s2, e2]) => T >= s2 && T < e2 + 3);
+        segs.forEach((n, i) => {                               // twice the animal (CCB)
+          const x = hx - i * 26, y = wave(x);
+          n.setAttribute("cx", x); n.setAttribute("cy", y);
+          n.setAttribute("opacity", seen && x > -40 && x < 680 ? .9 - i * .02 : 0);
+          [0, 1].forEach(k => {
+            const L2 = legs[i * 2 + k];
+            L2.setAttribute("x1", x - 6 + k * 12); L2.setAttribute("y1", y + 8);
+            L2.setAttribute("x2", x - 12 + k * 24); L2.setAttribute("y2", y + 26);
+            L2.setAttribute("opacity", seen && x > -40 && x < 680 ? .7 : 0);
+          });
+        });
+        feelers.forEach((n, k) => {
+          n.setAttribute("x1", hx + 12); n.setAttribute("y1", wave(hx) - 4);
+          n.setAttribute("x2", hx + 40); n.setAttribute("y2", wave(hx) - 20 + k * 24);
+          n.setAttribute("opacity", seen ? .9 : 0);
+        });
+        glints.forEach((n, j) => {                             // the sparkling wake
+          const gi = (Math.floor(t / 2) * 7 + j * 5) % 22;     // 16 body + 6 wake
+          const x = hx - gi * 26;
+          n.setAttribute("cx", x + ((t + j) % 3) - 1);
+          n.setAttribute("cy", wave(x) + ((t * j) % 5) - 2);
+          n.setAttribute("opacity", !seen && (t + j * 2) % 5 < 2 && x > 0 && x < 640 ? .9 : 0);
+        });
+        const on = seen ? 6 : (t % 7 === 0 ? 1 : 0);
+        cells.forEach((r, i) => r.setAttribute("fill-opacity", i < on ? .8 : .08));
+      }
+      foots.forEach((n, i) => typeOn(n, FOOTS[i].text, T, FOOTS[i].t0, 1.6));
+    });
+  }
+
+  /* ---------------- 20-m: the glass centipede (phone twin) ---------------- */
+  FIG._define("centipede-m", "svg", function (svg) {
+    chimCardM(svg, true, false, "THE GLASS CENTIPEDE", "HAZARD / SILICA / QUICK",
+      [{ y: 648, text: "FOUR FEET OF GLASS.", t0: 20 },
+       { y: 680, text: "FASTER THAN THE EYE WANTS TO ALLOW.", t0: 36 }]);
+  });
+
+  /* ---------------- 20-F-m: the chimney, vacated (phone twin) ---------------- */
+  FIG._define("chimney-f-m", "svg", function (svg) {
+    chimCardM(svg, false, false, "THE FUNGAL CHIMNEY", "THE CHIMNEY / TENANT: OUT",
+      [{ y: 648, text: "SOMETHING LIVED HERE.", t0: 20 },
+       { y: 680, text: "IT FOLLOWED YOU OUT.", t0: 36 }]);
+  });
+
+  /* ---------------- 20-G-m: the chimney, burnt and tenanted (phone twin) ---------------- */
+  FIG._define("chimney-g-m", "svg", function (svg) {
+    chimCardM(svg, true, true, "THE FUNGAL CHIMNEY, BURNT",
+      "THE CHIMNEY / CHARRED / TENANTED",
+      [{ y: 656, text: "THE GROWTH BURNED. THE GLASS DID NOT.", t0: 20 }]);
+  });
+
+  /* ---------------- 20-H-m: the chimney, burnt and bare (phone twin) ---------------- */
+  FIG._define("chimney-h-m", "svg", function (svg) {
+    chimCardM(svg, false, true, "THE FUNGAL CHIMNEY, BURNT",
+      "THE CHIMNEY / CHARRED / BARE",
+      [{ y: 656, text: "BLACK, BARE, AND BREATHABLE.", t0: 20 }]);
   });
 
   /* ---------------- 21: the epitaph ---------------- */
