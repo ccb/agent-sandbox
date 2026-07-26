@@ -883,8 +883,9 @@ Add the two word lists next to `_STOPWORDS`:
 # ponytail: naive gazetteer; the LLM judge is the backstop when it misses.
 _PLACE_NOUNS = frozenset(
     """annex arena bar boathouse bridge cafe center centre complex courtyard
-    dorm field garden gallery gym lab market museum park pool quad rink
-    restaurant shop stadium station store studio theater theatre track""".split()
+    creek dorm field garden gallery gym lab market museum park pool quad rink
+    restaurant river shop stadium station store studio theater theatre trail
+    track""".split()
 )
 
 # Phrases that turn naming a place into a checkable claim: having been there,

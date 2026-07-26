@@ -360,11 +360,20 @@ the existing frames, not an A/B re-run.
 - The place-noun gazetteer and the cue list are naive word lists. They exist to
   make the heuristic judge useful offline for free; the LLM judge is the
   fallback when they miss.
-- `_merge_growth_windows` merges on same-participants plus contiguity. It is a
-  local workaround for the `_conversations_in` overcount (§3.3a), not a fix; two
-  genuinely distinct back-to-back conversations between the same pair with no gap
-  would merge into one. Harmless for scoring (the same lines are examined either
-  way) and it disappears if `_conversations_in` is ever fixed properly.
+- `_merge_growth_windows` merges on same participants, contiguity, **and an
+  actual prefix relation between the two transcripts**. It is a local workaround
+  for the `_conversations_in` overcount (§3.3a), not a fix, and it disappears if
+  `_conversations_in` is ever fixed properly.
+
+  The prefix condition is load-bearing, and an earlier draft of this spec got it
+  wrong. That draft merged on participants plus contiguity alone and claimed the
+  collapse was "harmless for scoring, since the same lines are examined either
+  way." It is not: when two same-pair windows within one step carry transcripts
+  that are *not* in a prefix relation, the shorter one's lines were discarded
+  outright — never scored — so a confabulation inside them would surface as a
+  clean 10.0. Growth is always a prefix; anything else is a different
+  conversation and must stay a separate window. Caught in review during
+  implementation.
 - The block is dropped above 20 places rather than truncated or summarized.
 - `visited` accumulates only while conversation is enabled — the whole run in
   live mode, which is the only mode where it matters.
