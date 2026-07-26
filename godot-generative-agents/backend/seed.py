@@ -131,21 +131,24 @@ def seed_relationships(
     statements: list[str],
     turn: int = 0,
     importance: float = RELATIONSHIP_IMPORTANCE,
-) -> int:
+) -> list:
     """Seed an agent's *memory* with its relationship statements at ``turn``.
 
     Each statement becomes one observation -- the kind for "something the agent
     knows from experience" -- tagged ``seed``/``relationship`` for provenance.
-    Returns how many were added.
+    Returns the created records so the caller can lock their importance
+    (issue #794): score_new_memories otherwise re-scores these as a plain
+    OBSERVATION and overwrites the authored 3.0 with a model-guessed 6-8.
     """
-    for statement in statements:
+    return [
         memory.add_observation(
             statement,
             turn=turn,
             importance=importance,
             tags={"seed", "relationship"},
         )
-    return len(statements)
+        for statement in statements
+    ]
 
 
 def seed_spatial_knowledge(character, tree: dict) -> int:
