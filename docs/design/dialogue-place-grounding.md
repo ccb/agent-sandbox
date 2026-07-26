@@ -228,7 +228,9 @@ The two judges split by what each is actually good at:
 complex, annex, courtyard, …`) finds candidate place nouns. Capitalization is
 useless here: Dana's "boathouse", "the river", and "athletic complex" are all
 lowercase. Each hit is then checked as a case-insensitive substring against the
-real names, so "Kamin Gallery" and "Reception Hall" do not false-positive.
+real names, so "Kamin Gallery" and "Reception Hall" do not false-positive. It
+operates on merged conversation windows (§3.3a) and scores window-scoped
+(§3.3).
 
 **LLM judge.** `evidence_text` (`:783`) already ships conversation transcripts
 *and* the collapsed `act` timeline — and `act` embeds the address
@@ -244,10 +246,50 @@ off-world mention would measure something we allow and would score Dana's
 persona as a defect.
 
 So the heuristic scores only off-world places carrying a first-hand or
-invitation cue — `went`, `been there`, `come by`, `meet me`, `minute walk`,
-`check it out` — and reports bare mentions as unscored context in the evidence
+invitation cue, and reports bare mentions as unscored context in the evidence
 list. That targets the two actual #780 sentences and leaves the rower alone.
 `_scale` maps the clean-line fraction to 1–10 as the other dimensions do.
+
+**Cue matching is window-scoped, not line-scoped.** This is load-bearing, and it
+comes straight from the run. Casey's worst line —
+
+> Oh yeah, I totally went! The light was actually perfect down there — I got some
+> really sick shots of the water and the buildings reflecting and everything.
+
+— contains **no place noun at all** ("down there", "the water"). A gazetteer
+keyed on place nouns cannot flag it, so a line-scoped check would catch the
+inventor (Dana) and miss the corroborator (Casey), which #780 calls the worse
+half. But the off-world place *is* named elsewhere in the same window: Dana opens
+it with "Did you ever make it down to the boathouse for those photos". So an
+off-world place found anywhere in a window taints the cue-carrying lines in that
+window, each attributed to its own speaker. Both halves then fall out
+mechanically.
+
+Verified against `run-20260724-201036-e8c405`: a nine-word gazetteer flags 12 of
+the run's 23 unique utterances, including a second confabulation #780 never
+noticed — Marcus inventing a "quad" at frames 361 and 363.
+
+### 3.3a Growth windows must be merged first
+
+`_conversations_in` (`:203`) groups frames by *identical* `chat` payload, and its
+docstring already warns: *"A producer that instead accumulated lines per frame
+would key each growth as a new window and overcount — if that contract ever
+changes, this grouping must change with it."* That has happened. The live
+multi-tick producer (#371) appends one line per tick, so every growth hashes to a
+new key: the single Dana/Casey meeting registers as **23 separate
+"conversations"**, and window context is fragmented into prefixes.
+
+So the dimension merges growth windows before analyzing: walking windows in start
+order, a window with the same participants starting at or before the current
+window's `end + 1` is absorbed, keeping the longest transcript. This lives as a
+local helper (`_merge_growth_windows`) inside the new dimension.
+
+It is deliberately **not** a fix to `_conversations_in` itself. That function
+feeds the existing `social_grounding` dimension, which therefore also overcounts
+and reports "23 conversation(s) checked" for what was about three — a real defect,
+but a pre-existing one whose fix would move already-published scores. It is filed
+as its own issue and attached as a sub-issue of #760 per CLAUDE.md, not smuggled
+into this change.
 
 ### 3.4 Known limitation: scramble invariance
 
@@ -293,7 +335,10 @@ Source only; the test files are listed in §5.
 - `godot-generative-agents/tests/test_believability_eval.py` — `world_grounding`
   appears in `DIMENSIONS`, the tool schema, and the markdown; the heuristic
   flags a cue-carrying off-world mention and does *not* flag a bare one or a
-  real interior room; the rubric render is re-pinned (`:435`).
+  real interior room; a cue-carrying line with **no** place noun is flagged when
+  its window names one (the Casey case, §3.3); `_merge_growth_windows` collapses
+  an accumulating transcript into one window (§3.3a); the rubric render is
+  re-pinned (`:435`).
 
 ## 6. Verification
 
@@ -301,11 +346,25 @@ Run the audit against `run-20260724-201036-e8c405` and confirm it flags Dana at
 step 979 and Casey at step 1074. That score is then the regression test: it
 should move on the next live batch (#760) with the grounding block in place.
 
+Two practical notes. The run store is git-ignored and per-checkout: this run lives
+in the **main checkout** at
+`godot-generative-agents/runs/run-20260724-201036-e8c405`, so the audit is invoked
+with an absolute path rather than a worktree-relative one. And although that run
+ships a `cassette.jsonl` and is therefore normally re-runnable offline (#715), the
+grounding block changes the prompt and cassette keys hash the request — so a
+post-fix re-run of *this* run will `CassetteMiss`. Verification is an audit over
+the existing frames, not an A/B re-run.
+
 ## 7. Deliberate ceilings
 
 - The place-noun gazetteer and the cue list are naive word lists. They exist to
   make the heuristic judge useful offline for free; the LLM judge is the
   fallback when they miss.
+- `_merge_growth_windows` merges on same-participants plus contiguity. It is a
+  local workaround for the `_conversations_in` overcount (§3.3a), not a fix; two
+  genuinely distinct back-to-back conversations between the same pair with no gap
+  would merge into one. Harmless for scoring (the same lines are examined either
+  way) and it disappears if `_conversations_in` is ever fixed properly.
 - The block is dropped above 20 places rather than truncated or summarized.
 - `visited` accumulates only while conversation is enabled — the whole run in
   live mode, which is the only mode where it matters.
