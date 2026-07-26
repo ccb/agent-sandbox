@@ -1,6 +1,7 @@
 """Universal verbs (issue #614): `wait` offered with #581 pacing slots so a
 chosen idle settles like `perform`, and agent-initiated `talk_to` that enters
-the existing #582/#371 conversation loop.
+the existing #582/#371 conversation loop -- including (#793) what a `talk_to`
+request owes its initiator when maybe_converse cannot open it.
 
 Fully offline. Run from the repo root::
 
@@ -18,6 +19,7 @@ sys.path.insert(0, str(_SIM_DIR))
 from backend.actions import TalkTo, WaitPenn  # noqa: E402
 from backend.build_world import build_world  # noqa: E402
 from backend.cognition import (  # noqa: E402
+    DEAD_TALK_SETTLE_STEPS,
     ActiveConversation,
     action_tools_for,
     attach_agents,
@@ -418,6 +420,79 @@ def test_talk_to_memory_is_written_only_when_the_conversation_opens():
     maybe_converse(game, chars, state, frame, 0, {}, order, active={})
     texts = [r.text for r in ada.agent.memory.retrieve(query="Bo", turn=0)]
     assert "I went to talk to Bo about the demo." in texts
+
+
+# ------------------------------------- a dropped request is not silent (#793)
+
+
+def test_dropped_talk_request_is_remembered_and_bounded_793():
+    # TalkTo.apply_effects already returned `ok`, so nothing else can record
+    # this: without both halves the agent re-decides talk_to against an
+    # unchanged world every tick (#793 measured a 112-decision streak).
+    brain = _ScriptedConvoBrain(["Hi again!"])
+    game, chars, state, frame, order = _request_setup(brain)
+    cooldowns = {frozenset(("Ada", "Bo")): 0}  # just talked
+    assert game.parser.parse_command("talk_to Bo about the demo", actor=chars["Ada"])
+    completed = maybe_converse(
+        game, chars, state, frame, 1, cooldowns, order, active={}
+    )
+    assert completed == 0
+    # (a) the reason is in the memory, keyed to the command the agent issued --
+    # the topic included, so the record matches what it actually asked for.
+    texts = [r.text for r in chars["Ada"].agent.memory.retrieve(query="Bo", turn=1)]
+    assert (
+        'I tried to "talk_to Bo about the demo" but it didn\'t work: we had only '
+        "just finished talking." in texts
+    )
+    # (b) the retry is bounded: settled, off-plan, so the pre-pass un-latches
+    # without advancing the schedule pointer.
+    assert state["Ada"]["performing"] is True
+    assert state["Ada"]["on_plan"] is False
+    assert state["Ada"]["perform_until"] == 1 + DEAD_TALK_SETTLE_STEPS
+
+
+def test_dropped_talk_request_reason_names_the_walking_target_793():
+    # Each gate gets its own clause: a generic "it didn't work" gives the model
+    # nothing to steer around, which is the whole point of the fix.
+    brain = _ScriptedConvoBrain(["Hey!"])
+    game, chars, state, frame, order = _request_setup(brain, target_walking=True)
+    assert game.parser.parse_command("talk_to Bo", actor=chars["Ada"])
+    assert maybe_converse(game, chars, state, frame, 0, {}, order, active={}) == 0
+    texts = [r.text for r in chars["Ada"].agent.memory.retrieve(query="Bo", turn=0)]
+    assert (
+        'I tried to "talk_to Bo" but it didn\'t work: they were walking '
+        "somewhere else." in texts
+    )
+
+
+def test_talk_request_that_opens_with_nothing_still_settles_793():
+    # The sibling hole: the conversation opened, so no gate dropped it, but it
+    # produced no line -- and _finish_conversation records no cooldown when
+    # nothing was said, so the settle is the ONLY thing bounding this retry.
+    brain = _ScriptedConvoBrain([])  # first ask returns {} -> dies at once
+    game, chars, state, frame, order = _request_setup(brain)
+    cooldowns: dict = {}
+    assert game.parser.parse_command("talk_to Bo", actor=chars["Ada"])
+    completed = maybe_converse(
+        game, chars, state, frame, 0, cooldowns, order, active={}
+    )
+    assert completed == 0
+    assert frozenset(("Ada", "Bo")) not in cooldowns  # nothing said -> no cooldown
+    assert state["Ada"]["perform_until"] == 0 + DEAD_TALK_SETTLE_STEPS
+
+
+def test_opened_talk_request_is_neither_a_failure_nor_a_settle_793():
+    # Guards the happy path against the fix: a conversation that really opens
+    # writes the intent memory (asserted above), no failure record, and leaves
+    # the pair pinned by `conversing` rather than by a dead-talk settle.
+    brain = _ScriptedConvoBrain(["About that demo...", "Sure, let's sync."])
+    game, chars, state, frame, order = _request_setup(brain)
+    assert game.parser.parse_command("talk_to Bo", actor=chars["Ada"])
+    maybe_converse(game, chars, state, frame, 0, {}, order, active={})
+    texts = [r.text for r in chars["Ada"].agent.memory.retrieve(query="Bo", turn=0)]
+    assert not [t for t in texts if t.startswith("I tried to")]
+    assert state["Ada"].get("perform_until") is None  # never settled
+    assert state["Ada"]["conversing"] is True
 
 
 def test_talk_to_target_match_skips_the_verb_token():
