@@ -25,9 +25,26 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-# backend/ sits directly under the repository root in every checkout/worktree,
-# so the default .env location is derived from this file, not the cwd.
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+
+def _find_repo_root() -> Path:
+    """The checkout root: the nearest ancestor of this file with a pyproject.toml.
+
+    Anchored on that marker file rather than a fixed number of ``parents[...]``
+    levels, so moving this package (as #399 did -- see #776) cannot silently
+    point the default ``.env`` lookup at the wrong directory again. The walk
+    starts from this source file, not the cwd, so the loader finds the
+    checkout's own ``.env`` no matter where a CLI is launched from.
+    """
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        if (parent / "pyproject.toml").is_file():
+            return parent
+    # No marker anywhere above us (an unusual install layout): fall back to
+    # counting levels -- <repo>/godot-generative-agents/backend/env.py.
+    return here.parents[2]
+
+
+_REPO_ROOT = _find_repo_root()
 
 
 def load_dotenv(path: str | os.PathLike | None = None) -> bool:
