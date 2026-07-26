@@ -441,8 +441,8 @@ def test_dropped_talk_request_is_remembered_and_bounded_793():
     # the topic included, so the record matches what it actually asked for.
     texts = [r.text for r in chars["Ada"].agent.memory.retrieve(query="Bo", turn=1)]
     assert (
-        'I tried to "talk_to Bo about the demo" but it didn\'t work: we had only '
-        "just finished talking." in texts
+        'I tried to "talk_to Bo about the demo" but it didn\'t work: we have'
+        " talked recently, and it's too soon to talk again." in texts
     )
     # (b) the retry is bounded: settled, off-plan, so the pre-pass un-latches
     # without advancing the schedule pointer.

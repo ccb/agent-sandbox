@@ -35,7 +35,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .memory import render_memories
+from .memory import MemoryKind, render_memories
 
 # Total lines across both speakers before the loop stops on its own. A meeting is
 # a handful of exchanges, not an unbounded dialogue -- this caps cost and keeps one
@@ -246,6 +246,26 @@ def _remember(
     memory.add_chat(text, turn=turn, partner=partner, importance=importance)
 
 
+def _have_met(memory, partner: str) -> bool:
+    """Whether this agent has any record of talking with *partner* (issue #803).
+
+    Read straight off the dual write this module already performs: every line of
+    every conversation lands in BOTH streams as a CHAT memory whose ``actor`` is
+    the other party (see :func:`_deliver`). So an agent's own memory stream *is*
+    the record of who it has spoken with -- there is no second ledger to thread in
+    and keep in sync, it answers for every caller at once, and it survives a
+    resumed run (memory is persisted; a sim's pair-cooldown bookkeeping need not
+    be).
+
+    Only CHAT records carry a partner in ``actor``, so a seeded relationship
+    memory -- a plain observation -- can't make two strangers think they have met.
+    One list scan per conversation *opener*: free next to the LLM call it precedes.
+    """
+    if memory is None:
+        return False
+    return any(r.kind is MemoryKind.CHAT and r.actor == partner for r in memory.records)
+
+
 def _dialogue_observation(speaker, listener, convo: Conversation, turn: int) -> str:
     """Build the user-message observation for *speaker*'s next line.
 
@@ -254,6 +274,10 @@ def _dialogue_observation(speaker, listener, convo: Conversation, turn: int) -> 
     decision-time recency), and replays the dialogue so far. The persona and
     goals ride on the agent's own system message (see ``LLMAgent``), so they are
     not repeated here.
+
+    The closing line is the instruction, so it is the one the model weighs most:
+    continue the dialogue, or -- opening one -- greet a stranger or resume with
+    someone already known (:func:`_have_met`, issue #803).
     """
     lines = [f"You are talking with {listener.name}."]
     memory = getattr(getattr(speaker, "agent", None), "memory", None)
@@ -271,6 +295,19 @@ def _dialogue_observation(speaker, listener, convo: Conversation, turn: int) -> 
         lines.append("Conversation so far:")
         lines.extend(f"  {name}: {text}" for name, text in convo.lines)
         lines.append("Say your next line, or a brief goodbye to end the conversation.")
+    elif _have_met(memory, listener.name):
+        # #803: this line used to claim "You have just met X" unconditionally, so
+        # an agent greeted a familiar partner cold every time it got to talk to
+        # them again -- while the memory block right above it listed their last
+        # four conversations. Being the LAST line, it won that contradiction.
+        # It asks for something NEW rather than "pick up where you left off":
+        # #803's symptom is near-DUPLICATE meetings, so an opener told to resume
+        # the previous thread would fix the greeting and keep the repetition.
+        lines.append(
+            f"You have talked with {listener.name} before -- don't greet them as"
+            " a stranger, re-introduce yourself, or rehash what you already"
+            " settled. Say something new."
+        )
     else:
         lines.append(
             f"You have just met {listener.name}. Greet them or start a conversation."

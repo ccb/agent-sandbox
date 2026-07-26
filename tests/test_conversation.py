@@ -299,3 +299,58 @@ def test_exchange_wrap_up_flag_signals_stop():
 
     assert cont is False  # line was said, but the wrap-up flag ends it
     assert convo_obj.lines == [("alice", "One and done.")]
+
+
+# --- how the opener addresses the partner (issue #803) ----------------------
+
+# Pinned verbatim: these two lines close the observation, so they are the
+# instruction the model weighs most. A reword should have to come through here.
+_STRANGER = "You have just met bob. Greet them or start a conversation."
+_FAMILIAR = (
+    "You have talked with bob before -- don't greet them as a stranger,"
+    " re-introduce yourself, or rehash what you already settled. Say"
+    " something new."
+)
+
+
+def test_opener_greets_a_stranger_then_treats_them_as_familiar():
+    """#803: the opener claimed "You have just met X" on EVERY conversation, so an
+    agent re-greeted a familiar partner cold every time it got to talk to them
+    again -- even while the retrieved-memory block right above it replayed their
+    last meeting. The greeting is chosen from the CHAT dual write, so one real
+    conversation is enough to change it."""
+    a = _talker(["Hello, I'm alice.", "Good to see you again."], done_on_last=False)
+    game, alice, bob = _two_in_a_room(a, _talker([]))
+    seen: list[str] = []
+    rule = a.converse_rule
+
+    def watch(observation, partner_name):
+        seen.append(observation)
+        return rule(observation, partner_name)
+
+    a.converse_rule = watch
+
+    convo.converse(game, alice, bob, turn=0)  # they have never spoken
+    assert seen[0].endswith(_STRANGER)
+
+    convo.converse(game, alice, bob, turn=10)  # now alice remembers talking to bob
+    assert seen[-1].endswith(_FAMILIAR)
+    assert "You have just met" not in seen[-1]
+
+
+def test_only_a_chat_memory_counts_as_having_met_someone():
+    """Knowing *about* someone is not having talked with them: a seeded
+    relationship memory or a perception both land as observations -- even when they
+    name the resident in ``actor`` -- so priors can't make two strangers open as
+    old acquaintances."""
+    game, alice, bob = _two_in_a_room(_talker(["Hi."]), _talker([]))
+    memory = alice.agent.memory
+    memory.add_observation("I know bob: rivals. We know each other a little.", turn=0)
+    memory.add_observation("I saw bob crossing the plaza.", turn=0, actor="bob")
+
+    assert convo._have_met(memory, "bob") is False
+    fresh = convo.Conversation(participants=("alice", "bob"))
+    assert convo._dialogue_observation(alice, bob, fresh, 1).endswith(_STRANGER)
+
+    memory.add_chat('bob said to me: "Hello."', turn=1, partner="bob")
+    assert convo._have_met(memory, "bob") is True

@@ -99,9 +99,11 @@ class CognitionConfig:
     """
 
     vision_r: int = 8  # perception radius in tiles (cognition.DEFAULT_VISION_R)
-    conversation_cooldown_steps: int = (
-        90  # min steps between a given pair's conversations (CONVERSATION_COOLDOWN_STEPS)
-    )
+    # Min steps between a given pair's conversations. Each one they hold adds
+    # another window to their next wait, up to 3 (#803), so repeats space out
+    # instead of re-opening the moment the window lapses. 0 disables pair
+    # cooldowns entirely. (CONVERSATION_COOLDOWN_STEPS)
+    conversation_cooldown_steps: int = 90
     conversation_max_exchanges: int = (
         6  # max back-and-forth lines per conversation (CONVERSATION_MAX_EXCHANGES)
     )

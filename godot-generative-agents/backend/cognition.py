@@ -43,8 +43,15 @@ from text_adventure_games.usage import UsageLedger, record_call
 
 # Conversation pacing (issue #86). A settled pair talks at most once per this many
 # steps, so co-located residents don't re-converse every tick of a long stay; and
-# a single meeting is capped at this many lines.
+# a single meeting is capped at this many lines. Each conversation a pair holds
+# adds another window to their next wait -- 2nd after one, 3rd after two -- so a
+# pair can't re-open the same meeting on a clock (#803, see _on_pair_cooldown).
 CONVERSATION_COOLDOWN_STEPS = 90
+# How many windows that wait may grow to (#803). Nothing decays the count, and
+# `simulate()` and an `--endless` live run each keep ONE cooldowns dict for a
+# whole run, so an uncapped multiplier would eventually lock a chatty pair out
+# for good. Three windows already breaks a clockwork re-open.
+CONVERSATION_COOLDOWN_MAX_ESCALATION = 3
 CONVERSATION_MAX_EXCHANGES = 6
 # After its last line a conversation HOLDS both participants in place for the
 # viewer's playback window -- this many steps per transcript line (issue #673).
@@ -1821,14 +1828,60 @@ def _publish_chat(state, frame, a_name: str, b_name: str, convo_obj) -> None:
             frame[nm]["chat"] = lines
 
 
+def _pair_convos(cooldowns, key) -> tuple[int, int]:
+    """``(step this pair last finished talking, how many conversations they held)``.
+
+    Tolerates a bare ``int`` value -- what an entry written before #803 looks like,
+    and what tests still seed (``{frozenset(("Ada", "Bo")): 0}``). It reads as "one
+    conversation, ended at step 0": the plain window, exactly what it meant
+    before."""
+    value = cooldowns.get(key)
+    if value is None:
+        return -(10**9), 0  # never talked -- the sentinel clears any window
+    if isinstance(value, int):
+        return value, 1
+    return value
+
+
+def _on_pair_cooldown(cooldowns, key, step: int, cooldown_steps: int) -> bool:
+    """Whether this pair may not open a conversation yet (issue #803).
+
+    Every conversation a pair holds adds another ``cooldown_steps`` to their next
+    wait -- so their 2nd waits one window, their 3rd two, up to
+    ``CONVERSATION_COOLDOWN_MAX_ESCALATION`` -- and two residents who keep
+    re-meeting drift apart instead of re-opening the same conversation the instant
+    the window lapses. #803 measured four near-identical Omar/Tanaka meetings 95
+    steps apart -- the cooldown plus one open -- each greeting the other cold,
+    because a flat window is not a bound on *repetition*: it only sets its tempo.
+
+    A pair that has talked ONCE waits the plain window, unchanged, so this can
+    never suppress socializing that was already happening.
+
+    The count never decays, and that is what the cap is for. ``cooldowns`` is
+    rebuilt by ``serve_penn._build`` -- boot, ``POST /config``, ``reset()``,
+    resume -- which for an ordinary one-day run means once per day; but
+    ``run_simulation.simulate()`` and an ``--endless`` live run each hold ONE dict
+    for the whole run, so there the count only ever climbs. Capped, a chatty
+    pair's wait tops out; uncapped, they would eventually stop speaking for good.
+    """
+    last, held = _pair_convos(cooldowns, key)
+    windows = min(held, CONVERSATION_COOLDOWN_MAX_ESCALATION)
+    return step - last < windows * cooldown_steps
+
+
 def _finish_conversation(a, b, convo_obj, step, cooldowns, clock) -> int:
     """End-of-conversation bookkeeping: record the pair cooldown and run the
     #582 outcome pass for each participant. Returns 1 if the conversation
     produced any lines (a real meeting), else 0 -- so a mock/empty conversation
-    sets no cooldown and counts for nothing."""
+    sets no cooldown and counts for nothing.
+
+    The cooldown entry carries the running conversation count with it, which is
+    what escalates the pair's next window (:func:`_on_pair_cooldown`, #803)."""
     if not convo_obj.happened:
         return 0
-    cooldowns[frozenset((a.name, b.name))] = step
+    key = frozenset((a.name, b.name))
+    _, held = _pair_convos(cooldowns, key)
+    cooldowns[key] = (step, held + 1)
     transcript = convo_obj.transcript()
     apply_conversation_outcome(a, b.name, transcript, step, clock=clock)
     apply_conversation_outcome(b, a.name, transcript, step, clock=clock)
@@ -2069,8 +2122,12 @@ def maybe_converse(
             reason = "they were already talking with someone else."
         elif state[target_name]["path"]:
             reason = "they were walking somewhere else."
-        elif step - cooldowns.get(key, -(10**9)) < cooldown_steps:
-            reason = "we had only just finished talking."
+        elif _on_pair_cooldown(cooldowns, key, step, cooldown_steps):
+            # Not "we had only just finished talking" any more: with the #803
+            # escalation this can fire long after the last line, and the reason is
+            # the payload the brain steers on -- it shouldn't claim a recency the
+            # agent can see is false.
+            reason = "we have talked recently, and it's too soon to talk again."
         else:
             reason = None
         if reason is not None:
@@ -2145,7 +2202,7 @@ def maybe_converse(
         if a.name in spoken or b.name in spoken:
             continue
         key = frozenset((a.name, b.name))
-        if step - cooldowns.get(key, -(10**9)) < cooldown_steps:
+        if _on_pair_cooldown(cooldowns, key, step, cooldown_steps):
             continue
         ac = ActiveConversation(
             a=a.name,
@@ -2374,7 +2431,7 @@ def maybe_react(
         busy = {n for ac in active.values() for n in (ac.a, ac.b)}
         if reactor in busy or other in busy:
             continue
-        if step - cooldowns.get(key, -(10**9)) < cooldown_steps:
+        if _on_pair_cooldown(cooldowns, key, step, cooldown_steps):
             continue  # they talked recently; crossing paths again isn't news
         last = last_react.get(reactor)
         if last is not None and step - last < react_cooldown_steps:
