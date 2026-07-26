@@ -1,0 +1,43 @@
+---
+name: place_grounding
+description: >
+  Appended to the dialogue observation (text_adventure_games/conversation.py,
+  _dialogue_observation, issue #780) so a conversing agent knows which places
+  are real and reachable, where it is standing, and where it has actually
+  been. Off-map places stay sayable -- a varsity rower may talk about her
+  boathouse -- but the agent is told not to claim a just-completed visit and
+  not to invite anyone to meet there, which are the two moves that turned an
+  invention into shared "fact" in run-20260724-201036-e8c405.
+  Two rules the caller must honor: this block is appended BELOW the
+  observation's first line (ScheduleMockClient.call_tool routes on the first
+  line), and both lists arrive already sorted (the rendered text is part of
+  the LLM request and cassette keys hash it, so hash-ordered iteration would
+  break the #197/#715 byte-identical re-run guarantee).
+inputs:
+  places:
+    type: string
+    description: >
+      Comma-joined real location names, pre-sorted by the caller. The caller
+      omits the whole block when there are none.
+  here:
+    type: string
+    description: >
+      The speaker's current location name. The line is dropped when empty.
+  visited:
+    type: string
+    description: >
+      Comma-joined places the speaker has actually occupied, pre-sorted and
+      excluding the current one. The sentence is dropped when empty.
+sample:
+  places: College Hall, Houston Hall, Irvine Auditorium
+  here: Houston Hall
+  visited: College Hall, Houston Hall
+---
+Places in this world you can walk to: {{ places }}.
+{%- if here %}
+You are at {{ here }}.
+{%- endif %}
+{%- if visited %}
+You have been to: {{ visited }}.
+{%- endif %}
+Anywhere else you mention is somewhere from your life outside this world. You may talk about it, but do not claim to have just been there, and do not invite anyone to meet you there.
