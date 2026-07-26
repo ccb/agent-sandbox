@@ -42,6 +42,7 @@ from .cognition import (
     remember_decide_timeout,
     remember_outcome,
     score_new_memories,
+    settle_after_dead_talk,
 )
 from backend.drives import accrue_thirst
 from .sim_clock import SimClock
@@ -143,21 +144,6 @@ def _model_duration_steps(agent, clock, cog) -> int | None:
         return None
     minutes = max(cog.duration_min_minutes, min(cog.duration_max_minutes, minutes))
     return _minutes_to_steps(minutes, clock)
-
-
-def _settle_after_dead_talk(st: dict, step_idx: int, cog: "CognitionConfig") -> None:
-    """Brief settle after a decide-level talk that produced no real
-    conversation (issue #689): a talk is instantaneous (never sets
-    `performing`), so without this the agent is instantly `due` again every
-    tick until the #86 pair cooldown expires -- a fully paid decide+score
-    retry loop. `on_plan = False` is load-bearing: it routes this settle's
-    expiry (the top-of-tick pre-pass) through the "deviation completed"
-    branch, which un-latches without calling `schedule.advance()` -- a dead
-    talk never completed a real schedule stop.
-    """
-    st["performing"] = True
-    st["on_plan"] = False
-    st["perform_until"] = step_idx + cog.dead_talk_settle_steps
 
 
 def _settles_in_place(game, command: str) -> bool:
@@ -652,7 +638,7 @@ def step(
                     where = char.location.tile_address if char.location else "?"
                     st["desc"] = f"{activity} @ {where}"
                     if is_talk:
-                        _settle_after_dead_talk(st, step_idx, cog)
+                        settle_after_dead_talk(st, step_idx, cog.dead_talk_settle_steps)
             elif command:
                 # The agent chose a command but it failed the precondition gate.
                 reason = getattr(game.parser, "last_fail_message", "") or command
@@ -681,7 +667,7 @@ def step(
                 if is_talk:
                     # #689: a blocked talk (no co-located target this tick) is
                     # just as retry-prone as an empty one -- settle here too.
-                    _settle_after_dead_talk(st, step_idx, cog)
+                    settle_after_dead_talk(st, step_idx, cog.dead_talk_settle_steps)
 
         # Advance one tile along any active walk -- unless pinned mid-walk by
         # a react-started conversation (#370). Inert before #370: a
@@ -755,6 +741,7 @@ def step(
             cooldown_steps=cog.conversation_cooldown_steps,
             max_exchanges=cog.conversation_max_exchanges,
             line_playback_steps=cog.conversation_line_playback_steps,
+            dead_talk_settle_steps=cog.dead_talk_settle_steps,
             clock=clock,
             active=active_conversations,
         )
