@@ -768,10 +768,17 @@ class HeuristicJudge:
             ]
             scores.append(1.0 - len(claimed) / len(mine))
             for sp, tx in claimed[:3]:
+                # Name the cue phrase(s) that turned this line into a claim:
+                # it is real signal, and it makes two claims in one window read
+                # distinctly instead of emitting the same string twice. Cues
+                # are a fixed vocabulary with no place nouns in it, so quoting
+                # them cannot smuggle a raw place name back into the evidence
+                # and mask a place-classification assertion (see #780 I2).
+                cues = ", ".join(c for c in _EXPERIENCE_CUES if c in tx.lower())
                 evidence.append(
                     f"steps {conv.start}-{conv.end} ({ev.time_at(conv.start)}): "
-                    f"{sp} claims first-hand experience in a window that names "
-                    f"{', '.join(invented)} -- not in this world"
+                    f'{sp} claims first-hand experience ("{cues}") in a window '
+                    f"that names {', '.join(invented)} -- not in this world"
                 )
             if invented and not claimed:
                 evidence.append(
@@ -779,19 +786,20 @@ class HeuristicJudge:
                     f"(not in this world) without claiming to have been there -- "
                     f"allowed, not scored"
                 )
-            else:
-                # Nothing was flagged in this window -- but say what the
-                # classifier actually saw, so a gazetteer that silently missed
-                # everything doesn't read the same as a genuinely clean day.
-                if not seen:
-                    verdict = "no place words seen"
-                elif not invented:
-                    verdict = f"place words seen: {', '.join(seen)} -- all real"
-                else:
-                    verdict = (
-                        f"place words seen: {', '.join(seen)} -- "
-                        f"{', '.join(invented)} not in this world"
-                    )
+            elif not claimed:
+                # No claim was flagged here -- but say what the classifier
+                # actually saw, so a gazetteer that silently missed everything
+                # doesn't read the same as a genuinely clean day. (When a claim
+                # WAS flagged, the per-line findings above already name what was
+                # seen, so this summary would only repeat them.) Reaching this
+                # branch means `invented` is empty -- a non-empty `invented`
+                # with no claim took the branch above -- so the verdict is just
+                # "nothing" vs "all real".
+                verdict = (
+                    f"place words seen: {', '.join(seen)} -- all real"
+                    if seen
+                    else "no place words seen"
+                )
                 evidence.append(
                     f"steps {conv.start}-{conv.end} ({ev.time_at(conv.start)}): "
                     f"{verdict}; {len(mine)} line(s) of {ev.name} checked"

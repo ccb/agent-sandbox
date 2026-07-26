@@ -399,6 +399,34 @@ def test_world_grounding_catches_a_cue_with_no_place_noun_in_its_window():
     assert any("Ada" in e for e in score.evidence)
 
 
+def test_world_grounding_evidence_distinguishes_two_claims_in_one_window():
+    # Two first-hand claims about the same off-map place in one window used to
+    # emit byte-identical evidence lines (the cue phrase now distinguishes
+    # them), and a flagged window also got a redundant "place words seen"
+    # trailer on top of its per-line findings (now suppressed).
+    judge = HeuristicJudge()
+    ev = build_evidence(make_replay())["Ada"]
+    ev.conversations = [
+        _convo(
+            1,
+            1,
+            [
+                ["Ada", "I went to the boathouse yesterday, it was great."],
+                ["Ada", "Yeah, come by the boathouse sometime!"],
+            ],
+        )
+    ]
+    ev_lines = judge._world_grounding(ev).evidence
+    claims = [e for e in ev_lines if "claims first-hand experience" in e]
+    assert len(claims) == 2
+    assert len(set(claims)) == 2  # distinct, not duplicated
+    # The cue phrase is what distinguishes them, and it never leaks a place
+    # noun into the evidence: "boathouse" appears only via the classified list.
+    assert "i went" in claims[0] and "come by" in claims[1]
+    # A flagged window gets no redundant summary trailer.
+    assert not any("place words seen" in e for e in ev_lines)
+
+
 def test_world_grounding_is_none_without_conversations():
     judge = HeuristicJudge()
     ev = build_evidence(make_replay())["Ada"]
