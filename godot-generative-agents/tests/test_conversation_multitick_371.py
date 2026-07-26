@@ -705,7 +705,8 @@ def _open_at(step_idx, cooldowns, *, brain=None):
 
 
 def test_repeat_conversations_wait_an_escalated_cooldown():
-    """#803: the Nth conversation between a pair waits N x cooldown_steps.
+    """#803: each conversation a pair holds adds another cooldown_steps to their
+    next wait -- their 3rd owes two windows, their 4th three.
 
     A flat window set the *tempo* of repetition rather than bounding it: the
     reported run held four near-identical Omar/Tanaka meetings exactly 95 steps
@@ -733,3 +734,17 @@ def test_a_pair_that_talked_once_waits_only_the_plain_window():
     assert _open_at(9, cooldowns) == 0
     assert _open_at(10, cooldowns) == 1
     assert cooldowns == {_PAIR: (10, 2)}
+
+
+def test_the_escalated_cooldown_stops_growing_at_the_cap():
+    """The wait tops out at CONVERSATION_COOLDOWN_MAX_ESCALATION windows (#803).
+
+    Nothing decays the count, and both `simulate()` and an `--endless` live run
+    keep ONE cooldowns dict for the whole run -- so without a ceiling a pair that
+    talked ten times would owe ten windows and effectively never speak again."""
+    assert cognition.CONVERSATION_COOLDOWN_MAX_ESCALATION == 3
+    cooldowns = {_PAIR: (0, 9)}  # nine conversations held, the last ending at step 0
+
+    assert _open_at(29, cooldowns) == 0  # still owes the capped 3 x 10
+    assert _open_at(30, cooldowns) == 1  # not 9 x 10
+    assert cooldowns == {_PAIR: (30, 10)}

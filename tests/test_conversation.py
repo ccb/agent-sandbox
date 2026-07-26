@@ -307,8 +307,9 @@ def test_exchange_wrap_up_flag_signals_stop():
 # instruction the model weighs most. A reword should have to come through here.
 _STRANGER = "You have just met bob. Greet them or start a conversation."
 _FAMILIAR = (
-    "You have talked with bob before -- don't greet them as a stranger or"
-    " re-introduce yourself. Pick up where you left off."
+    "You have talked with bob before -- don't greet them as a stranger,"
+    " re-introduce yourself, or rehash what you already settled. Say"
+    " something new."
 )
 
 

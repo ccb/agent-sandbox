@@ -67,13 +67,14 @@ Rendered per dialogue line by `LLMAgent._converse_structured`, driven by
   (`penn_world._gate_conversations_by_perception`: conversation range ==
   sight range, `vision_r` 8 tiles), so agents can never talk across the map.
   Each pair then cools down for `conversation_cooldown_steps: 90` steps — and
-  their Nth conversation waits N× that, so a pair can't re-open the same meeting
-  on a clock (#803).
+  every conversation they hold adds another such window to their next wait (up to
+  3), so a pair can't re-open the same meeting on a clock (#803).
 - **System message** — `npc_decision.prompty` (persona + goals); the free-text
   fallback uses `npc_dialogue.prompty` instead.
 - **User message** — the conversation so far plus the partner's name. Opening a
-  conversation, the closing instruction greets a stranger or resumes with someone
-  the agent already remembers talking to (#803).
+  conversation, the closing instruction either greets a stranger or — for someone
+  the agent already remembers talking to — tells it not to re-introduce itself or
+  rehash what they settled (#803).
 - **Tool schema** (`build_speak_tool`):
 
   | field | type | meaning |

@@ -300,9 +300,13 @@ def _dialogue_observation(speaker, listener, convo: Conversation, turn: int) -> 
         # an agent greeted a familiar partner cold every time it got to talk to
         # them again -- while the memory block right above it listed their last
         # four conversations. Being the LAST line, it won that contradiction.
+        # It asks for something NEW rather than "pick up where you left off":
+        # #803's symptom is near-DUPLICATE meetings, so an opener told to resume
+        # the previous thread would fix the greeting and keep the repetition.
         lines.append(
             f"You have talked with {listener.name} before -- don't greet them as"
-            " a stranger or re-introduce yourself. Pick up where you left off."
+            " a stranger, re-introduce yourself, or rehash what you already"
+            " settled. Say something new."
         )
     else:
         lines.append(

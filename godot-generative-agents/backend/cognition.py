@@ -43,10 +43,15 @@ from text_adventure_games.usage import UsageLedger, record_call
 
 # Conversation pacing (issue #86). A settled pair talks at most once per this many
 # steps, so co-located residents don't re-converse every tick of a long stay; and
-# a single meeting is capped at this many lines. The window is the pair's FIRST
-# repeat gap: their Nth conversation waits N x this, so a pair can't re-open the
-# same meeting on a clock (#803 -- see _on_pair_cooldown).
+# a single meeting is capped at this many lines. Each conversation a pair holds
+# adds another window to their next wait -- 2nd after one, 3rd after two -- so a
+# pair can't re-open the same meeting on a clock (#803, see _on_pair_cooldown).
 CONVERSATION_COOLDOWN_STEPS = 90
+# How many windows that wait may grow to (#803). Nothing decays the count, and
+# `simulate()` and an `--endless` live run each keep ONE cooldowns dict for a
+# whole run, so an uncapped multiplier would eventually lock a chatty pair out
+# for good. Three windows already breaks a clockwork re-open.
+CONVERSATION_COOLDOWN_MAX_ESCALATION = 3
 CONVERSATION_MAX_EXCHANGES = 6
 # After its last line a conversation HOLDS both participants in place for the
 # viewer's playback window -- this many steps per transcript line (issue #673).
@@ -1841,23 +1846,27 @@ def _pair_convos(cooldowns, key) -> tuple[int, int]:
 def _on_pair_cooldown(cooldowns, key, step: int, cooldown_steps: int) -> bool:
     """Whether this pair may not open a conversation yet (issue #803).
 
-    The Nth conversation between a pair waits N x ``cooldown_steps``, so two
-    residents who keep re-meeting drift apart instead of re-opening the same
-    conversation the instant the window lapses. #803 measured four near-identical
-    Omar/Tanaka meetings 95 steps apart -- the cooldown plus one open -- each
-    greeting the other cold, because a flat window is not a bound on *repetition*:
-    it only sets the tempo of it.
+    Every conversation a pair holds adds another ``cooldown_steps`` to their next
+    wait -- so their 2nd waits one window, their 3rd two, up to
+    ``CONVERSATION_COOLDOWN_MAX_ESCALATION`` -- and two residents who keep
+    re-meeting drift apart instead of re-opening the same conversation the instant
+    the window lapses. #803 measured four near-identical Omar/Tanaka meetings 95
+    steps apart -- the cooldown plus one open -- each greeting the other cold,
+    because a flat window is not a bound on *repetition*: it only sets its tempo.
 
     A pair that has talked ONCE waits the plain window, unchanged, so this can
-    never suppress socializing that was already happening. The counter needs no
-    decay: ``cooldowns`` is rebuilt per day by ``serve_penn._build`` (which
-    ``reset()`` re-runs), so yesterday's meetings don't tax today's first one.
+    never suppress socializing that was already happening.
 
-    # ponytail: no ceiling on the multiplier -- add one if a long run shows a
-    # chatty pair locked out for the rest of the day.
+    The count never decays, and that is what the cap is for. ``cooldowns`` is
+    rebuilt by ``serve_penn._build`` -- boot, ``POST /config``, ``reset()``,
+    resume -- which for an ordinary one-day run means once per day; but
+    ``run_simulation.simulate()`` and an ``--endless`` live run each hold ONE dict
+    for the whole run, so there the count only ever climbs. Capped, a chatty
+    pair's wait tops out; uncapped, they would eventually stop speaking for good.
     """
     last, held = _pair_convos(cooldowns, key)
-    return step - last < held * cooldown_steps
+    windows = min(held, CONVERSATION_COOLDOWN_MAX_ESCALATION)
+    return step - last < windows * cooldown_steps
 
 
 def _finish_conversation(a, b, convo_obj, step, cooldowns, clock) -> int:
@@ -2114,7 +2123,11 @@ def maybe_converse(
         elif state[target_name]["path"]:
             reason = "they were walking somewhere else."
         elif _on_pair_cooldown(cooldowns, key, step, cooldown_steps):
-            reason = "we had only just finished talking."
+            # Not "we had only just finished talking" any more: with the #803
+            # escalation this can fire long after the last line, and the reason is
+            # the payload the brain steers on -- it shouldn't claim a recency the
+            # agent can see is false.
+            reason = "we have talked recently, and it's too soon to talk again."
         else:
             reason = None
         if reason is not None:
