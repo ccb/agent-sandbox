@@ -36,6 +36,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .memory import render_memories
+from .prompt_templates import render
 
 # Total lines across both speakers before the loop stops on its own. A meeting is
 # a handful of exchanges, not an unbounded dialogue -- this caps cost and keeps one
@@ -44,6 +45,11 @@ DEFAULT_MAX_EXCHANGES = 6
 # Dialogue is moderately memorable -- a little above a mundane observation, below a
 # momentous event -- so it surfaces in later retrieval without crowding it.
 DEFAULT_CHAT_IMPORTANCE = 4.0
+# At most this many place names go into a dialogue observation's grounding
+# block (issue #780). Mirrors the decide path's destination-enum cap
+# (backend/cognition.py DECIDE_MAX_ENUM) rather than inventing a second rule;
+# duplicated as a literal because the engine must not import the backend.
+MAX_GROUNDED_PLACES = 20
 
 
 @dataclass
@@ -156,6 +162,8 @@ def exchange(
     *,
     turn: int,
     importance: float = DEFAULT_CHAT_IMPORTANCE,
+    places=None,
+    visited=None,
 ) -> bool:
     """Generate and record ONE line of *convo* (issue #371).
 
@@ -163,6 +171,11 @@ def exchange(
     so far; on a real line, dual-write it to both memory streams and the
     listener's ``heard`` buffer (exactly as the whole-loop ``converse`` does) and
     append it to ``convo.lines``. Emit any cognition-tool trace the line used.
+
+    ``places``/``visited`` are the optional #780 grounding inputs threaded into
+    the observation; both ``None`` (the default) reproduces the previous
+    observation exactly. ``converse`` deliberately does not forward them --
+    the backend's multi-tick caller opts in at its own ``exchange`` call.
 
     Returns ``True`` if a line was said and the conversation may continue,
     ``False`` if the speaker bowed out (``None``/empty -- a decline or natural
@@ -173,7 +186,9 @@ def exchange(
     checked once by the caller (``converse`` / the backend's pair scan), not
     re-checked here -- a multi-tick caller keeps its participants pinned.
     """
-    observation = _dialogue_observation(speaker, listener, convo, turn)
+    observation = _dialogue_observation(
+        speaker, listener, convo, turn, places=places, visited=visited
+    )
     utterance = speaker.agent.converse(observation, listener.name)
     _trace_cognition(game, speaker)
     if not utterance or not utterance.strip():
@@ -246,26 +261,63 @@ def _remember(
     memory.add_chat(text, turn=turn, partner=partner, importance=importance)
 
 
-def _dialogue_observation(speaker, listener, convo: Conversation, turn: int) -> str:
+def _place_grounding_block(speaker, places, visited) -> str:
+    """Render the #780 real-vs-off-map place block, or ``""`` when there is
+    nothing useful to say.
+
+    Dropped entirely when *places* is empty or exceeds
+    :data:`MAX_GROUNDED_PLACES`: without the vocabulary the "anywhere else is
+    off-map" instruction is meaningless, so a half-block would mislead rather
+    than ground. The speaker's current location is named separately and left
+    out of the been-to list, which reads as redundant otherwise.
+
+    Both lists are sorted **here**, so callers cannot leak a hash-ordered
+    collection into the prompt: the rendered text is part of the LLM request
+    and cassette keys hash the request, so ordering instability would break
+    the byte-identical re-run guarantee (issues #197, #715).
+    """
+    names = sorted(places or ())
+    if not names or len(names) > MAX_GROUNDED_PLACES:
+        return ""
+    here = getattr(getattr(speaker, "location", None), "name", "") or ""
+    been = sorted({n for n in (visited or ()) if n and n != here})
+    return render(
+        "place_grounding",
+        places=", ".join(names),
+        here=here,
+        visited=", ".join(been),
+    )
+
+
+def _dialogue_observation(
+    speaker, listener, convo: Conversation, turn: int, places=None, visited=None
+) -> str:
     """Build the user-message observation for *speaker*'s next line.
 
     Names the partner, folds in what the speaker remembers about them (a
     read-only retrieval -- ``touch=False`` -- so conversing doesn't perturb
     decision-time recency), and replays the dialogue so far. The persona and
     goals ride on the agent's own system message (see ``LLMAgent``), so they are
-    not repeated here.
+    not repeated here. If the caller opts in with ``places``/``visited``, the
+    #780 place-grounding block is appended immediately below the first line
+    (never above it -- the schedule mock routes on the observation's first
+    line); it is absent entirely unless the caller supplies it.
     """
     lines = [f"You are talking with {listener.name}."]
+    grounding_block = _place_grounding_block(speaker, places, visited)
+    if grounding_block:
+        lines.append("")
+        lines.append(grounding_block)
     memory = getattr(getattr(speaker, "agent", None), "memory", None)
     if memory is not None:
         try:
             relevant = memory.retrieve(query=listener.name, turn=turn, touch=False)
         except Exception:
             relevant = []
-        block = render_memories(relevant)
-        if block:
+        memory_block = render_memories(relevant)
+        if memory_block:
             lines.append("")
-            lines.append(block)
+            lines.append(memory_block)
     if convo.lines:
         lines.append("")
         lines.append("Conversation so far:")

@@ -299,3 +299,102 @@ def test_exchange_wrap_up_flag_signals_stop():
 
     assert cont is False  # line was said, but the wrap-up flag ends it
     assert convo_obj.lines == [("alice", "One and done.")]
+
+
+# --- #780 place grounding ---------------------------------------------------
+
+
+def _capture_observation():
+    """A ScriptedAgent that records the observation it was handed and says one
+    line, so a test can assert on the exact prompt the dialogue seam built."""
+    seen = {}
+    agent = ScriptedAgent(lambda obs: None)
+
+    def rule(observation, partner_name):
+        seen["observation"] = observation
+        agent.last_dialogue_done = True
+        return "Hello."
+
+    agent.converse_rule = rule
+    return agent, seen
+
+
+def test_exchange_without_places_is_byte_identical():
+    # The opt-in default must not perturb any existing game's prompt.
+    agent, seen = _capture_observation()
+    game, alice, bob = _two_in_a_room(agent, _talker(["Hi."]))
+    convo.exchange(
+        game, convo.Conversation(participants=("alice", "bob")), alice, bob, turn=1
+    )
+    assert seen["observation"] == (
+        "You are talking with bob.\n"
+        "You have just met bob. Greet them or start a conversation."
+    )
+
+
+def test_exchange_appends_grounding_below_the_first_line():
+    # Placement is load-bearing: ScheduleMockClient.call_tool routes on the
+    # observation's FIRST line, so the block must never precede it.
+    agent, seen = _capture_observation()
+    game, alice, bob = _two_in_a_room(agent, _talker(["Hi."]))
+    convo.exchange(
+        game,
+        convo.Conversation(participants=("alice", "bob")),
+        alice,
+        bob,
+        turn=1,
+        places=["Plaza", "Field"],
+        visited=["Field", "Plaza"],
+    )
+    lines = seen["observation"].split("\n")
+    assert lines[0] == "You are talking with bob."
+    # Sorted, not insertion- or hash-ordered.
+    assert "Places in this world you can walk to: Field, Plaza." in lines
+    # The speaker stands in the Plaza, so it is named as "here", not repeated
+    # in the been-to list.
+    assert "You are at Plaza." in lines
+    assert "You have been to: Field." in lines
+
+
+def test_grounding_block_dropped_when_no_places_or_over_cap():
+    agent, seen = _capture_observation()
+    game, alice, bob = _two_in_a_room(agent, _talker(["Hi."]))
+    many = [f"Place {i:02d}" for i in range(convo.MAX_GROUNDED_PLACES + 1)]
+    for places in ([], many):
+        convo.exchange(
+            game,
+            convo.Conversation(participants=("alice", "bob")),
+            alice,
+            bob,
+            turn=1,
+            places=places,
+        )
+        assert "Places in this world" not in seen["observation"]
+
+
+def test_grounding_block_is_hashseed_independent():
+    # Determinism guard: the rendered block is part of the LLM request and
+    # cassette keys hash the request (#197/#715).
+    import os
+    import subprocess
+    import sys
+
+    code = (
+        "from text_adventure_games.conversation import _place_grounding_block as b;"
+        "print(b(None, ['Zoo', 'Attic', 'Mall'], ['Mall', 'Attic']))"
+    )
+    outs = set()
+    for seed in ("0", "1", "42"):
+        # Inherit the environment (so the venv interpreter resolves its
+        # imports) and override only the seed.
+        outs.add(
+            subprocess.run(
+                [sys.executable, "-c", code],
+                capture_output=True,
+                text=True,
+                check=True,
+                env={**os.environ, "PYTHONHASHSEED": seed},
+            ).stdout
+        )
+    assert len(outs) == 1
+    assert "Attic, Mall, Zoo" in outs.pop()  # sorted, not as passed in
