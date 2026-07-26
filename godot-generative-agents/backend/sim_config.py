@@ -125,11 +125,13 @@ class CognitionConfig:
     # Min steps between deviation-driven plan revisions for one agent, so a
     # wandering brain can't storm its planner (each revise is a real LLM call).
     deviation_cooldown_steps: int = 30
-    # Brief settle after a decide-level `talk` that produced no real
-    # conversation (issue #689): a talk is instantaneous, so without this the
-    # agent is instantly `due` again every tick until the #86 pair cooldown
-    # expires -- a fully paid decide+score retry loop. Same order of
-    # magnitude as deviation_cooldown_steps, same justification.
+    # Brief settle after a talk that produced no real conversation: a talk is
+    # instantaneous, so without this the agent is instantly `due` again every
+    # tick until the #86 pair cooldown expires -- a fully paid decide+score
+    # retry loop. Same order of magnitude as deviation_cooldown_steps, same
+    # justification. Covers both the engine's decide-level `talk` (#689) and a
+    # Penn `talk_to` request that maybe_converse could not open (#793).
+    # (cognition.DEAD_TALK_SETTLE_STEPS)
     dead_talk_settle_steps: int = 30
 
     # React-or-continue (issue #370): perception-driven interruption while

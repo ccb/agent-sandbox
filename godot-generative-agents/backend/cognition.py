@@ -53,6 +53,10 @@ CONVERSATION_MAX_EXCHANGES = 6
 # link would stretch between them across the map. Keep in sync with viewer.gd's
 # DIALOGUE_LINE_STEPS and penn_world.py's injector mirror of the same name.
 CONVERSATION_LINE_PLAYBACK_STEPS = 14
+# How long an agent settles after a talk that produced no conversation (#689,
+# #793). Mirrored by sim_config.CognitionConfig.dead_talk_settle_steps, which is
+# what the live path actually threads; this is the offline/test default.
+DEAD_TALK_SETTLE_STEPS = 30
 
 # React-or-continue (issue #370): guards on the perception-driven interruption
 # consult. Per-agent cooldown + a hard per-sim-hour cap, so a busy hallway is
@@ -1591,8 +1595,11 @@ def remember_outcome(
     # under the mock and the bundled replay stays byte-identical by vacuity.
     # ponytail: no write-time dedupe -- a real brain that re-picks the same
     # blocked non-talk action every tick accretes identical 3.0 records until
-    # retrieval steers it away (talk misses already settle, #689). Add a
-    # per-(actor, command) cooldown here if that noise shows up in live runs.
+    # retrieval steers it away. Talk misses do settle (#689 for the engine's
+    # `talk`, #793 for Penn's `talk_to`), which bounds their records to one per
+    # settle window rather than one per tick -- ~3 across a 90-step pair
+    # cooldown. Add a per-(actor, command) cooldown here if that noise shows up
+    # in live runs.
     if fail_reason is not None:
         text = render("reflection", failed=True, command=command, reason=fail_reason)
         agent.memory.add_observation(text, turn=step, importance=3.0)
@@ -1689,12 +1696,12 @@ def remember_outcome(
         text = render("reflection", verb=verb, command=command)
         importance = 2.0
     elif verb == "talk_to":
-        # #614: nothing at parse time. The intent memory ("I went to talk to
-        # X ...") is written by maybe_converse's phase 1.5 IFF the conversation
-        # actually opens -- a request that phase 1.5 drops (pair on cooldown,
-        # target busy/walking) would otherwise stamp a false dialogue-tier
-        # record, and the un-settled initiator can retry every tick for the
-        # whole cooldown window.
+        # #614: nothing at parse time -- the outcome is not known yet. Phase 1.5
+        # of maybe_converse owns both branches: the intent memory ("I went to
+        # talk to X ...") IFF the conversation actually opens, so a dropped
+        # request never stamps a false dialogue-tier record, and (#793) a call
+        # BACK into this function's failure branch when it cannot open, so the
+        # drop is not invisible either.
         return
     elif verb == "wait":
         # Spacer / one-tick idle (#300 mock spacers, or a brain that omitted
@@ -1741,6 +1748,29 @@ def remember_decide_timeout(char, step: int) -> None:
     place = char.location.name if char.location is not None else ""
     text = render("reflection", timed_out=True, place=place)
     char.agent.memory.add_observation(text, turn=step, importance=3.0)
+
+
+def settle_after_dead_talk(st: dict, step: int, steps: int) -> None:
+    """Brief settle after a talk that produced no real conversation (#689).
+
+    A talk is instantaneous (it never sets `performing`), so without this the
+    agent is instantly `due` again every tick until the #86 pair cooldown
+    expires -- a fully paid decide+score retry loop. `on_plan = False` is load
+    bearing: it routes this settle's expiry (the top-of-tick pre-pass) through
+    the "deviation completed" branch, which un-latches without calling
+    `schedule.advance()` -- a dead talk never completed a real schedule stop.
+
+    Both dead-talk shapes settle here (#793). The engine's `talk` verb resolves
+    empty or blocked inside :func:`run_simulation.step`, which calls this from
+    the resolve loop; Penn's own `talk_to` (#614) instead defers to
+    :func:`maybe_converse`'s phase 1.5, whose drop paths call this once they
+    know the request cannot open. ``steps`` is
+    ``CognitionConfig.dead_talk_settle_steps`` on the live path -- passed as a
+    plain int, not the config object, so both callers stay flat-kwarg.
+    """
+    st["performing"] = True
+    st["on_plan"] = False
+    st["perform_until"] = step + steps
 
 
 @dataclass
@@ -1921,6 +1951,7 @@ def maybe_converse(
     cooldown_steps: int = CONVERSATION_COOLDOWN_STEPS,
     max_exchanges: int = CONVERSATION_MAX_EXCHANGES,
     line_playback_steps: int = CONVERSATION_LINE_PLAYBACK_STEPS,
+    dead_talk_settle_steps: int = DEAD_TALK_SETTLE_STEPS,
     clock=None,
     active: dict | None = None,
 ) -> int:
@@ -2006,10 +2037,13 @@ def maybe_converse(
     # tick left a one-shot marker; open that conversation NOW, before the
     # proximity pair scan, so the explicit choice wins the tick and the first
     # line is spoken this same step (mirroring phase 2's start-and-advance).
-    # The marker is consumed unconditionally: a request that cannot start
-    # (target left / busy / mid-walk, pair on cooldown) is dropped and the
-    # initiator -- unpinned, un-settled -- simply re-decides next tick. Mock
-    # brains never emit talk_to, so this loop is inert offline.
+    # The marker is consumed unconditionally, but a request that cannot open
+    # (target left / busy / mid-walk, pair on cooldown) is no longer dropped
+    # silently (#793): TalkTo.apply_effects already returned `ok` and cannot
+    # know the outcome, so THIS is the only code that does -- it owes the
+    # initiator both halves of what every other failed action gets, a memory
+    # naming the reason and a settle bounding the retry. Mock brains never emit
+    # talk_to, so this loop is inert offline.
     for name in order:
         char = chars[name]
         target_name = char.get_property("talk_request")
@@ -2019,17 +2053,37 @@ def maybe_converse(
         topic = char.get_property("talk_topic") or ""
         char.set_property("talk_topic", False)
         target = chars.get(target_name)
-        if (
-            name in busy
-            or target is None
-            or target_name in busy
-            or target.location is not char.location
-            or state[target_name]["path"]
-            or state[target_name].get("conversing")
-        ):
-            continue
         key = frozenset((name, target_name))
-        if key in active or step - cooldowns.get(key, -(10**9)) < cooldown_steps:
+        # Why this request cannot open: one short first-person clause per gate,
+        # in the same shape as a parser fail message. The reason IS the payload
+        # -- a bare "it didn't work" gives the model nothing to steer around,
+        # which is how #793's 112-decision streak happened. Same gates as
+        # before, same outcome (every branch drops); only attribution is new.
+        # `target is None` must precede the branches that index
+        # state[target_name], exactly as the old or-chain short-circuited.
+        if name in busy or key in active:
+            reason = "I was already in a conversation."
+        elif target is None or target.location is not char.location:
+            reason = "they were not there."
+        elif target_name in busy or state[target_name].get("conversing"):
+            reason = "they were already talking with someone else."
+        elif state[target_name]["path"]:
+            reason = "they were walking somewhere else."
+        elif step - cooldowns.get(key, -(10**9)) < cooldown_steps:
+            reason = "we had only just finished talking."
+        else:
+            reason = None
+        if reason is not None:
+            # Renders through reflection.prompty's existing #636 `failed`
+            # branch: 'I tried to "talk_to Bo about the exam" but it didn't
+            # work: they were not there.' Importance 3.0 and unlocked, like
+            # every other failure memory, so retrieval surfaces it on the next
+            # decide and #583 re-scores it. The command is rebuilt from the
+            # marker (the canonical target name) rather than the brain's raw
+            # text, in the exact form TalkTo parses.
+            command = f"talk_to {target_name}" + (f" about {topic}" if topic else "")
+            remember_outcome(char, command, step, fail_reason=reason)
+            settle_after_dead_talk(state[name], step, dead_talk_settle_steps)
             continue
         # Record the intent only now that the conversation actually opens (a
         # dropped request must leave no false record -- the un-settled
@@ -2068,7 +2122,15 @@ def maybe_converse(
         if ended:
             del active[key]
             if not ac.convo.happened:
-                continue  # opened with nothing -> reserve no one
+                # Opened with nothing -> reserve no one. The same free retry as
+                # a dropped request (#793): _finish_conversation records no
+                # cooldown when nothing was said, so without a settle the
+                # initiator is `due` again next tick with an unchanged world.
+                # No failure memory here -- the topic-intent memory above is
+                # already written, and #689's empty-talk case likewise only
+                # settles.
+                settle_after_dead_talk(state[name], step, dead_talk_settle_steps)
+                continue
         busy.update((name, target_name))
 
     settled = [
