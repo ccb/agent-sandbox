@@ -687,7 +687,11 @@ def attach_agents(
         statements += seed.relationship_statements(
             char.name, spec.get("relationship_edges") or []
         )
-        seed.seed_relationships(agent.memory, statements)
+        # #794: lock the seeded importance, matching the note/commitment
+        # locks below -- score_new_memories would otherwise re-guess the
+        # authored 3.0 (a deliberately-background social prior) as 6-8.
+        for rec in seed.seed_relationships(agent.memory, statements):
+            rec.metadata[_IMPORTANCE_LOCKED] = True
         # -- Opt-in seeded memories (#595): author t=0 observations (e.g. an aversive
         # -- "the unboiled water made me sick" memory) so a live brain can retrieve
         # -- and reason from them. Importance 5.0 matches the plan-memory seed so it
