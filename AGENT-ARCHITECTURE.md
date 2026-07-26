@@ -277,7 +277,8 @@ maybe_converse()  cognition.py:1908
 ```
 
 Pacing: at most **6 exchanges** per meeting, **90 steps** minimum between a
-given pair's conversations.
+given pair's conversations — and their **Nth** conversation waits **N × 90**, so
+repeats space out instead of re-opening the instant the window lapses (#803).
 
 The **outcome pass** (`apply_conversation_outcome`, `cognition.py:1245`) asks
 each participant's brain whether the conversation changed their plans. It

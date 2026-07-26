@@ -133,7 +133,7 @@ reproduces today's behavior. A persona may still set its own `vision_r` per-entr
 | Field | Type | Default | Meaning | Status |
 |---|---|---|---|---|
 | `vision_r` | int | `8` | Perception radius in tiles: under a `TiledGame`, residents within this many tiles perceive each other and nearby objects (`SMALLVILLE_VISION_R`). | implemented |
-| `conversation_cooldown_steps` | int | `90` | Minimum steps between a given pair's conversations (`CONVERSATION_COOLDOWN_STEPS`). | implemented |
+| `conversation_cooldown_steps` | int | `90` | Minimum steps between a given pair's conversations; their Nth waits N× this, so repeats space out instead of re-opening the moment the window lapses (#803). `0` disables pair cooldowns (`CONVERSATION_COOLDOWN_STEPS`). | implemented |
 | `conversation_max_exchanges` | int | `6` | Max back-and-forth lines per conversation (`CONVERSATION_MAX_EXCHANGES`). | implemented |
 
 These only bite with a real brain — perception widens co-presence, and conversation is
