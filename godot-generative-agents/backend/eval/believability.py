@@ -212,9 +212,12 @@ def _conversations_in(frames: list[dict]) -> list[Conversation]:
     are the agents carrying it.
 
     This leans on the viewer contract that a window's transcript is repainted
-    *identically* frame to frame. A producer that instead accumulated lines
-    per frame would key each growth as a new window and overcount -- if that
-    contract ever changes, this grouping must change with it.
+    *identically* frame to frame. A producer that instead accumulates lines
+    per frame keys each growth as a new window here -- ``build_evidence``
+    merges those growth windows back together right after calling this
+    (:func:`_merge_growth_windows`, #799), so callers never see the
+    fragmentation even though this function's own grouping stays
+    identical-payload keying.
     """
     conversations: list[Conversation] = []
     open_convs: dict[str, Conversation] = {}  # transcript key -> in-progress window
@@ -263,9 +266,12 @@ def _merge_growth_windows(conversations: list[Conversation]) -> list[Conversatio
     must not be collapsed into one -- doing so would silently discard
     whichever transcript lost, along with any confabulation inside it.
 
-    Deliberately local to this dimension rather than a fix to
-    ``_conversations_in``, which also feeds ``social_grounding``: correcting it
-    there would move already-published scores. Filed separately as #799.
+    Called centrally from ``build_evidence``, right after ``_conversations_in``,
+    so every dimension -- ``social_grounding``, ``world_grounding``, and the LLM
+    judge's ``evidence_text`` -- reads the same merged ``AgentEvidence.conversations``
+    (#799). It started out local to ``_world_grounding`` alone, deferred because
+    fixing it centrally would move already-published ``social_grounding`` scores;
+    that review has since happened.
     """
     merged: list[Conversation] = []
     for conv in sorted(conversations, key=lambda c: (c.start, c.end)):
@@ -303,7 +309,7 @@ def build_evidence(replay: dict) -> dict[str, AgentEvidence]:
     start_dt = _parse_start(meta)
     sec_per_step = int(meta.get("sec_per_step", 10))
     vision_r = float(meta.get("vision_r", 8))
-    conversations = _conversations_in(frames)
+    conversations = _merge_growth_windows(_conversations_in(frames))
     world_places = sorted(meta.get("locations") or [])
 
     evidence: dict[str, AgentEvidence] = {}
@@ -739,7 +745,7 @@ class HeuristicJudge:
         real = " | ".join(ev.world_places).lower()
         scores: list[float] = []
         evidence: list[str] = []
-        for conv in _merge_growth_windows(ev.conversations):
+        for conv in ev.conversations:
             lines = [line for line in conv.transcript if len(line) == 2]
             # Every place-noun word this window names at all, and which of
             # those are off-map. Tracking *both* (not just the off-map ones)
