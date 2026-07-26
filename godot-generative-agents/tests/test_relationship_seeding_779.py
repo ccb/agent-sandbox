@@ -90,6 +90,18 @@ def test_the_seeded_text_is_pinned(rivals):
     )
 
 
+def test_seeded_importance_is_locked_against_rescoring(rivals):
+    # #794: attach_agents seeds this as a plain OBSERVATION, which
+    # score_new_memories (#583) would otherwise re-score -- turning the
+    # authored 3.0 (a deliberately-background social prior, see
+    # seed.RELATIONSHIP_IMPORTANCE) into a model-guessed 6-8.
+    from backend.cognition import _IMPORTANCE_LOCKED
+
+    for name in ("Omar Haddad", "Bethany Cole"):
+        rec = _seeded(rivals[name])[0]
+        assert rec.metadata.get(_IMPORTANCE_LOCKED) is True
+
+
 def test_closeness_reaches_the_agent_in_words(rivals):
     # #779's second half: closeness 2 predicted nothing live because it never
     # left the manifest. It is not a number in the text -- it is a sentence,
