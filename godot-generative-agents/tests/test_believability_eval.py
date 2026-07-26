@@ -349,7 +349,14 @@ def test_world_grounding_flags_an_invented_place_with_an_invitation():
     ]
     score = judge._world_grounding(ev)
     assert score.score is not None and score.score < 5
-    assert any("river" in e or "complex" in e for e in score.evidence)
+    # Two separate assertions, each pinned to one word: the evidence lines
+    # this dimension emits are built from the classified word lists
+    # (`invented`/`seen`), never from the raw transcript text, so each check
+    # only passes when the gazetteer actually recognized that word -- if
+    # `_PLACE_NOUNS` regresses and silently drops one of them, that half
+    # fails loudly instead of being masked by the other.
+    assert any("river" in e for e in score.evidence)
+    assert any("complex" in e for e in score.evidence)
 
 
 def test_world_grounding_allows_bare_off_map_backstory():
@@ -399,6 +406,18 @@ def test_world_grounding_is_none_without_conversations():
     assert judge._world_grounding(ev).score is None
 
 
+def test_world_grounding_is_none_on_a_replay_baked_before_780():
+    # Task 4's meta.locations is optional: a replay baked before it exists
+    # must still audit, just without this one dimension.
+    judge = HeuristicJudge()
+    replay = make_replay()
+    del replay["meta"]["locations"]
+    ev = build_evidence(replay)["Ada"]
+    score = judge._world_grounding(ev)
+    assert score.score is None
+    assert "meta.locations" in score.note
+
+
 def test_evidence_text_lists_the_worlds_places():
     evidence = build_evidence(make_replay())
     text = evidence_text(evidence["Ada"], evidence)
@@ -414,13 +433,7 @@ def test_heuristic_scores_the_coherent_fixture_high():
     for dim in DIMENSIONS:
         entry = ada["dimensions"][dim]
         assert entry["score"] >= 7, f"{dim} scored {entry['score']}"
-        if dim == "world_grounding":
-            # Unlike the other dimensions, a clean world_grounding window
-            # cites nothing (#780): the fixture's chat names no off-map
-            # place at all, so there's no defect -- or even an allowed
-            # bare mention -- to point at.
-            continue
-        # Every other dimension cites at least one concrete step example.
+        # Every dimension cites at least one concrete step example.
         assert entry["evidence"], f"{dim} cited no evidence"
         assert any("step" in line for line in entry["evidence"])
     assert report["agents"]["Ada"]["overall"] >= 7
@@ -476,6 +489,7 @@ GRADE = {
     },
     "temporal_sanity": {"score": 8, "evidence": ["steps 40-59: afternoon stop"]},
     "social_grounding": {"score": 7, "evidence": ["steps 12-20: cafe chat"]},
+    "world_grounding": {"score": 10, "evidence": ["no off-map places mentioned"]},
     "memory_use": {"score": 6, "evidence": ["step 10: plan memory retrieved"]},
 }
 

@@ -256,7 +256,12 @@ def _merge_growth_windows(conversations: list[Conversation]) -> list[Conversatio
     line many times over.
 
     Same participants and starting no later than one step after the current
-    window's end means the same meeting; the longest transcript wins.
+    window's end AND one transcript a prefix of the other means the same
+    meeting growing tick-by-tick; the longer transcript wins. The prefix
+    check matters: two windows that merely overlap in time but carry
+    unrelated transcripts are a different conversation, not a growth, and
+    must not be collapsed into one -- doing so would silently discard
+    whichever transcript lost, along with any confabulation inside it.
 
     Deliberately local to this dimension rather than a fix to
     ``_conversations_in``, which also feeds ``social_grounding``: correcting it
@@ -265,14 +270,18 @@ def _merge_growth_windows(conversations: list[Conversation]) -> list[Conversatio
     merged: list[Conversation] = []
     for conv in sorted(conversations, key=lambda c: (c.start, c.end)):
         prev = merged[-1] if merged else None
+        grows_prev = False
         if (
             prev is not None
             and prev.participants == conv.participants
             and conv.start <= prev.end + 1
         ):
+            short, long_ = sorted((conv.transcript, prev.transcript), key=len)
+            grows_prev = long_[: len(short)] == short
+        if grows_prev:
             prev.end = max(prev.end, conv.end)
             if len(conv.transcript) > len(prev.transcript):
-                prev.transcript = conv.transcript
+                prev.transcript = list(conv.transcript)
             continue
         merged.append(
             Conversation(
@@ -412,8 +421,9 @@ _STOPWORDS = {
 # ponytail: naive gazetteer; the LLM judge is the backstop when it misses.
 _PLACE_NOUNS = frozenset(
     """annex arena bar boathouse bridge cafe center centre complex courtyard
-    dorm field garden gallery gym lab market museum park pool quad rink
-    restaurant shop stadium station store studio theater theatre track""".split()
+    creek dorm field garden gallery gym lab market museum park pool quad rink
+    restaurant river shop stadium station store studio theater theatre trail
+    track""".split()
 )
 
 # Phrases that turn naming a place into a checkable claim: having been there,
@@ -731,15 +741,23 @@ class HeuristicJudge:
         evidence: list[str] = []
         for conv in _merge_growth_windows(ev.conversations):
             lines = [line for line in conv.transcript if len(line) == 2]
-            # Which off-map places does this window name at all?
-            invented = sorted(
+            # Every place-noun word this window names at all, and which of
+            # those are off-map. Tracking *both* (not just the off-map ones)
+            # is what lets the evidence say what the classifier saw: "cafe,
+            # gym -- all real" reads differently from "saw nothing", even
+            # though both currently score 10.0 -- and a real Penn world where
+            # "Franklin Field" kills "field" or "Pottruck Gym" kills "gym" (the
+            # substring check is deliberate, see module docstring) needs that
+            # distinction visible, or a blinded gazetteer is invisible too.
+            seen = sorted(
                 {
                     word
                     for _, text in lines
                     for word in re.findall(r"[a-z]+", text.lower())
-                    if word in _PLACE_NOUNS and word not in real
+                    if word in _PLACE_NOUNS
                 }
             )
+            invented = [word for word in seen if word not in real]
             mine = [(sp, tx) for sp, tx in lines if sp == ev.name]
             if not mine:
                 continue
@@ -752,14 +770,31 @@ class HeuristicJudge:
             for sp, tx in claimed[:3]:
                 evidence.append(
                     f"steps {conv.start}-{conv.end} ({ev.time_at(conv.start)}): "
-                    f"{sp} claims experience of {', '.join(invented)} -- not in "
-                    f"this world -- in '{tx[:80]}'"
+                    f"{sp} claims first-hand experience in a window that names "
+                    f"{', '.join(invented)} -- not in this world"
                 )
             if invented and not claimed:
                 evidence.append(
                     f"steps {conv.start}-{conv.end}: mentions {', '.join(invented)} "
                     f"(not in this world) without claiming to have been there -- "
                     f"allowed, not scored"
+                )
+            else:
+                # Nothing was flagged in this window -- but say what the
+                # classifier actually saw, so a gazetteer that silently missed
+                # everything doesn't read the same as a genuinely clean day.
+                if not seen:
+                    verdict = "no place words seen"
+                elif not invented:
+                    verdict = f"place words seen: {', '.join(seen)} -- all real"
+                else:
+                    verdict = (
+                        f"place words seen: {', '.join(seen)} -- "
+                        f"{', '.join(invented)} not in this world"
+                    )
+                evidence.append(
+                    f"steps {conv.start}-{conv.end} ({ev.time_at(conv.start)}): "
+                    f"{verdict}; {len(mine)} line(s) of {ev.name} checked"
                 )
         if not scores:
             return DimScore(None, note="this agent said nothing in any window")
