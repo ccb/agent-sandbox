@@ -287,6 +287,36 @@ def test_build_evidence_finds_the_shared_conversation():
     assert evidence["Bea"].conversations == ada.conversations
 
 
+def test_build_evidence_merges_a_growing_conversation_into_one_window():
+    # The live producer (#371) repaints the accumulated transcript onto `chat`
+    # every tick, so consecutive frames carry strictly-growing prefixes of the
+    # same conversation. build_evidence must not let that read as N windows (#799).
+    lines = [["Ada", "Hi."], ["Bea", "Hello."], ["Ada", "Bye."]]
+    frames = [
+        {
+            "Ada": {"x": 0, "y": 0, "act": "chatting", "chat": lines[: i + 1]},
+            "Bea": {"x": 0, "y": 0, "act": "chatting", "chat": lines[: i + 1]},
+        }
+        for i in range(len(lines))
+    ]
+    replay = {
+        "meta": {"personas": [{"name": "Ada"}, {"name": "Bea"}]},
+        "frames": frames,
+        "memory_streams": {},
+    }
+    evidence = build_evidence(replay)
+    assert len(evidence["Ada"].conversations) == 1
+    conv = evidence["Ada"].conversations[0]
+    assert conv.transcript == lines
+    assert (conv.start, conv.end) == (0, 2)
+
+    # And the user-visible symptom from the issue: social_grounding's count
+    # reflects one conversation, not one per tick.
+    judge = HeuristicJudge()
+    note = judge._social_grounding(evidence["Ada"], evidence).note
+    assert note == "1 conversation(s) checked"
+
+
 def test_build_evidence_collects_decision_frames_with_retrieved_memories():
     evidence = build_evidence(make_replay())
     ada = evidence["Ada"]
