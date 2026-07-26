@@ -265,7 +265,7 @@ def _merge_growth_windows(conversations: list[Conversation]) -> list[Conversatio
 
     Deliberately local to this dimension rather than a fix to
     ``_conversations_in``, which also feeds ``social_grounding``: correcting it
-    there would move already-published scores. Filed separately.
+    there would move already-published scores. Filed separately as #799.
     """
     merged: list[Conversation] = []
     for conv in sorted(conversations, key=lambda c: (c.start, c.end)):
