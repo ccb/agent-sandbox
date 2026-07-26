@@ -32,7 +32,10 @@ step ranges from the timeline as evidence:
   timing.
 - social_grounding: conversation lines reference real shared context
   from both participants' memory streams, not confabulation.
+- world_grounding: places the agent discusses exist in this world, and it
+  never claims first-hand experience of a place its timeline shows it
+  never visited.
 - memory_use: the memories retrieved for each decision were relevant
   to the decision made.
 
-Call grade_believability once, with all four dimensions.
+Call grade_believability once, with all five dimensions.
