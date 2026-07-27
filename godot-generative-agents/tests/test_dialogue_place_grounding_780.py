@@ -9,12 +9,20 @@ Run from the repo root::
     uv run pytest godot-generative-agents/tests/test_dialogue_place_grounding_780.py -v
 """
 
+import pytest
+
 from text_adventure_games import conversation as convo
 from text_adventure_games.games import Game
 from text_adventure_games.npc import ScriptedAgent
 from text_adventure_games.things import Character, Location
 
 from backend import cognition
+from backend.penn.penn_world import (
+    WORLD_DATA,
+    WORLD_DATA_BOIL,
+    WORLD_DATA_BOIL_HARD,
+    build_penn_world,
+)
 
 
 def _world():
@@ -89,3 +97,24 @@ def test_visited_accumulates_across_steps_without_duplicates():
     cognition.maybe_converse(game, chars, state, frame, 2, {}, order, active={})
 
     assert state["alice"]["visited"] == ["Plaza", "Field"]  # first-visit order
+
+
+@pytest.mark.parametrize(
+    "world_data", [WORLD_DATA, WORLD_DATA_BOIL, WORLD_DATA_BOIL_HARD]
+)
+def test_shipped_worlds_fit_under_the_grounding_cap(world_data):
+    """Every world we ship must stay small enough to ground its dialogue.
+
+    Over ``MAX_GROUNDED_PLACES`` the block is dropped whole -- a truncated list
+    plus "anywhere else is off-map" would mislabel real places as invented -- so
+    the entire prevention half no-ops. upenn ships 18 of 20: three more locations
+    and this fails here instead of quietly in the next live run, while detection
+    keeps right on reporting. Whoever adds the 21st decides consciously whether
+    to raise the cap.
+
+    Asserts on ``game.locations``, not ``PennWorld.locations``, because
+    ``cognition._advance_conversation`` passes ``sorted(game.locations)``.
+    """
+    pw = build_penn_world(world_data=world_data)
+    game, _chars = pw.build_world_fn(pw.world_map)
+    assert len(game.locations) <= convo.MAX_GROUNDED_PLACES

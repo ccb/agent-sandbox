@@ -31,7 +31,7 @@ inputs:
 sample:
   places: College Hall, Houston Hall, Irvine Auditorium
   here: Houston Hall
-  visited: College Hall, Houston Hall
+  visited: College Hall
 ---
 Places in this world you can walk to: {{ places }}.
 {%- if here %}

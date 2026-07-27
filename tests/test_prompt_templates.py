@@ -144,17 +144,20 @@ _OFF_MAP = (
 
 
 def test_place_grounding_full():
+    # `visited` excludes wherever the speaker is standing -- that is named on its
+    # own line, and _place_grounding_block filters it out of the been-to list. The
+    # inputs here mirror the template's documented sample for that reason.
     out = prompt_templates.render(
         "place_grounding",
         places="College Hall, Houston Hall, Irvine Auditorium",
         here="Houston Hall",
-        visited="College Hall, Houston Hall",
+        visited="College Hall",
     )
     assert out == (
         "Places in this world you can walk to: "
         "College Hall, Houston Hall, Irvine Auditorium.\n"
         "You are at Houston Hall.\n"
-        "You have been to: College Hall, Houston Hall.\n"
+        "You have been to: College Hall.\n"
         f"{_OFF_MAP}"
     )
 

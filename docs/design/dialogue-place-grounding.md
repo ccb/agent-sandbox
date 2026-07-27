@@ -279,17 +279,28 @@ multi-tick producer (#371) appends one line per tick, so every growth hashes to 
 new key: the single Dana/Casey meeting registers as **23 separate
 "conversations"**, and window context is fragmented into prefixes.
 
-So the dimension merges growth windows before analyzing: walking windows in start
-order, a window with the same participants starting at or before the current
-window's `end + 1` is absorbed, keeping the longest transcript. This lives as a
-local helper (`_merge_growth_windows`) inside the new dimension.
+So growth windows are merged before anything analyzes them: walking windows in
+start order, a window starting at or before the open window's `end + 1` whose
+transcript is in a prefix relation with it is absorbed, keeping the longest
+transcript.
 
-It is deliberately **not** a fix to `_conversations_in` itself. That function
-feeds the existing `social_grounding` dimension, which therefore also overcounts
-and reports "23 conversation(s) checked" for what was about three — a real defect,
-but a pre-existing one whose fix would move already-published scores. It is filed
-as its own issue and attached as a sub-issue of #760 per CLAUDE.md, not smuggled
-into this change.
+The merge started life as a local helper inside this dimension, deliberately
+*not* a fix to `_conversations_in`, because that function also feeds
+`social_grounding` and fixing it centrally would move already-published scores.
+That review has since happened (#799): `build_evidence` now calls
+`_merge_growth_windows` once, so `social_grounding`, `world_grounding`, and the
+LLM judge's `evidence_text` all read the same merged windows. On the motivating
+run this moves `social_grounding` from 9.80 to 8.67 — the same conversations,
+counted once each instead of once per tick.
+
+The open window is tracked **per participant set**, not as the last window
+appended. The producer keys its `active` map by pair frozenset, so two pairs can
+talk at once; their growth fragments then interleave in `(start, end)` order, and
+comparing each against the previous window overall would hand every A–B fragment
+a C–D window to fail against — restoring the whole overcount exactly when
+conversations overlap, which on a campus of fifteen is common. Caught in review
+(0frankie on #798). The adjacency and prefix guards still keep a pair's genuinely
+separate later meeting apart, since it starts long after the earlier window's end.
 
 ### 3.4 Known limitation: scramble invariance
 
@@ -360,10 +371,18 @@ the existing frames, not an A/B re-run.
 - The place-noun gazetteer and the cue list are naive word lists. They exist to
   make the heuristic judge useful offline for free; the LLM judge is the
   fallback when they miss.
+- Cue matching is window-scoped, which is the only reason a corroborator whose
+  own line names no place is catchable at all (§3.3) — and also the source of a
+  known false positive: a real-place invitation of mine gets flagged when my
+  partner's allowed off-map backstory is anywhere in the same window. Filed as
+  **#807** with the fix (exempt a cue-line naming a real place noun and no
+  invented one), deliberately left out of this change so the 7.93 baseline moves
+  once rather than twice.
 - `_merge_growth_windows` merges on same participants, contiguity, **and an
-  actual prefix relation between the two transcripts**. It is a local workaround
-  for the `_conversations_in` overcount (§3.3a), not a fix, and it disappears if
-  `_conversations_in` is ever fixed properly.
+  actual prefix relation between the two transcripts**. It compensates for the
+  `_conversations_in` overcount (§3.3a) rather than fixing that function's
+  identical-payload keying, and it disappears if `_conversations_in` is ever
+  fixed properly.
 
   The prefix condition is load-bearing, and an earlier draft of this spec got it
   wrong. That draft merged on participants plus contiguity alone and claimed the
@@ -374,6 +393,10 @@ the existing frames, not an A/B re-run.
   clean 10.0. Growth is always a prefix; anything else is a different
   conversation and must stay a separate window. Caught in review during
   implementation.
-- The block is dropped above 20 places rather than truncated or summarized.
+- The block is dropped above 20 places rather than truncated or summarized — a
+  truncated list under "anywhere else is off-map" would mislabel real places as
+  invented. upenn ships 18 of 20, so the drop is three locations away: a test
+  pins every shipped world under the cap, and `_place_grounding_block` warns
+  rather than dropping silently (0frankie on #798).
 - `visited` accumulates only while conversation is enabled — the whole run in
   live mode, which is the only mode where it matters.

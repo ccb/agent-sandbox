@@ -258,13 +258,24 @@ def _merge_growth_windows(conversations: list[Conversation]) -> list[Conversatio
     windows -- which both fragments window context and would score the same
     line many times over.
 
-    Same participants and starting no later than one step after the current
-    window's end AND one transcript a prefix of the other means the same
-    meeting growing tick-by-tick; the longer transcript wins. The prefix
-    check matters: two windows that merely overlap in time but carry
-    unrelated transcripts are a different conversation, not a growth, and
-    must not be collapsed into one -- doing so would silently discard
-    whichever transcript lost, along with any confabulation inside it.
+    Starting no later than one step after the open window's end AND one
+    transcript a prefix of the other means the same meeting growing
+    tick-by-tick; the longer transcript wins. The prefix check matters: two
+    windows that merely overlap in time but carry unrelated transcripts are a
+    different conversation, not a growth, and must not be collapsed into one --
+    doing so would silently discard whichever transcript lost, along with any
+    confabulation inside it.
+
+    "The open window" is tracked **per participant set**, not as the single last
+    window appended. The producer keys its ``active`` map by pair frozenset, so
+    two pairs can be talking at the same time; their growth fragments then
+    interleave in ``(start, end)`` order, and comparing each one against the
+    previous window overall would hand every A--B fragment a C--D window to fail
+    the participants check against -- restoring the whole #799 overcount exactly
+    when conversations overlap, which on a campus of fifteen is often. Keying by
+    participants makes the old equality check redundant; the adjacency and prefix
+    guards still keep a pair's genuinely *separate* later meeting apart, since it
+    starts long after the earlier window's end.
 
     Called centrally from ``build_evidence``, right after ``_conversations_in``,
     so every dimension -- ``social_grounding``, ``world_grounding``, and the LLM
@@ -274,29 +285,25 @@ def _merge_growth_windows(conversations: list[Conversation]) -> list[Conversatio
     that review has since happened.
     """
     merged: list[Conversation] = []
+    open_window: dict[frozenset[str], Conversation] = {}
     for conv in sorted(conversations, key=lambda c: (c.start, c.end)):
-        prev = merged[-1] if merged else None
-        grows_prev = False
-        if (
-            prev is not None
-            and prev.participants == conv.participants
-            and conv.start <= prev.end + 1
-        ):
+        key = frozenset(conv.participants)
+        prev = open_window.get(key)
+        if prev is not None and conv.start <= prev.end + 1:
             short, long_ = sorted((conv.transcript, prev.transcript), key=len)
-            grows_prev = long_[: len(short)] == short
-        if grows_prev:
-            prev.end = max(prev.end, conv.end)
-            if len(conv.transcript) > len(prev.transcript):
-                prev.transcript = list(conv.transcript)
-            continue
-        merged.append(
-            Conversation(
-                start=conv.start,
-                end=conv.end,
-                participants=list(conv.participants),
-                transcript=list(conv.transcript),
-            )
+            if long_[: len(short)] == short:  # a growth of the open window
+                prev.end = max(prev.end, conv.end)
+                if len(conv.transcript) > len(prev.transcript):
+                    prev.transcript = list(conv.transcript)
+                continue
+        window = Conversation(
+            start=conv.start,
+            end=conv.end,
+            participants=list(conv.participants),
+            transcript=list(conv.transcript),
         )
+        merged.append(window)
+        open_window[key] = window
     return merged
 
 

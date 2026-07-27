@@ -179,7 +179,7 @@ git commit -m "feat(#780): add the place_grounding dialogue prompt template"
   - `conversation.exchange(game, convo, speaker, listener, *, turn, importance=DEFAULT_CHAT_IMPORTANCE, places=None, visited=None) -> bool`
   - `conversation._dialogue_observation(speaker, listener, convo, turn, places=None, visited=None) -> str`
 
-  `places` and `visited` are `Sequence[str] | None`. `_dialogue_observation` deliberately gains **no** `game` parameter, so it stays a pure function of its arguments. `converse()` is deliberately **not** threaded — the backend's `_advance_conversation` calls `exchange` directly, and that single call site is the opt-in.
+  `places` and `visited` are `Iterable[str] | None`. `_dialogue_observation` deliberately gains **no** `game` parameter, so it stays a pure function of its arguments. `converse()` is deliberately **not** threaded — the backend's `_advance_conversation` calls `exchange` directly, and that single call site is the opt-in.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1182,6 +1182,6 @@ gh pr ready 798 --repo ccb/agent-sandbox
 
 **Spec coverage.** §2.1 → Task 1. §2.2 → Task 2 (Steps 3-4). §2.3 (placement) → Task 2, `test_exchange_appends_grounding_below_the_first_line`. §2.4 (visited source, no sets) → Task 3 Step 3 plus Task 2's hash-seed test. §2.5 (scope, cap) → Task 2 Step 3 and `test_grounding_block_dropped_when_no_places_or_over_cap`; Task 3 Step 4 is the opt-in. §2.6 (bake unaffected) → Task 3 Step 6. §3.1 → Task 4. §3.2 → Task 5 Steps 3-5. §3.3 (cue scoring, window-scoped) → Task 5, `test_world_grounding_allows_bare_off_map_backstory` and `test_world_grounding_catches_a_cue_with_no_place_noun_in_its_window`. §3.3a (growth windows) → Task 5, `test_merge_growth_windows_collapses_an_accumulating_transcript`. §3.4 (scramble invariance) → documented in the docstring; Task 5 Step 6 confirms the existing control test still passes. §4 files → all covered. §5 tests → all present. §6 verification → Task 6.
 
-**Type consistency.** `places`/`visited` are `Sequence[str] | None` everywhere and sorted only inside `_place_grounding_block`. `MAX_GROUNDED_PLACES` is used in Task 2's helper and its test. `state[nm]["visited"]` is written in Task 3 Step 3 and read in Step 4 via `.get("visited", ())`. `meta["locations"]` is written in Task 4 and read in Task 5 via `meta.get("locations")` → `AgentEvidence.world_places`. `_merge_growth_windows` returns `list[Conversation]`, the same dataclass `_conversations_in` produces.
+**Type consistency.** `places`/`visited` are `Iterable[str] | None` everywhere and sorted only inside `_place_grounding_block`. `MAX_GROUNDED_PLACES` is used in Task 2's helper and its test. `state[nm]["visited"]` is written in Task 3 Step 3 and read in Step 4 via `.get("visited", ())`. `meta["locations"]` is written in Task 4 and read in Task 5 via `meta.get("locations")` → `AgentEvidence.world_places`. `_merge_growth_windows` returns `list[Conversation]`, the same dataclass `_conversations_in` produces.
 
 **One known gap, deliberate.** The heuristic's `invented` set only detects off-map places whose head noun is in `_PLACE_NOUNS`; a proper-noun invention ("the Ferguson Annex" is caught via "annex", but "Ferguson Hall" is not, since "hall" is not in the gazetteer — it appears in real names). The LLM judge covers that case, and the spec's §7 records the ceiling.

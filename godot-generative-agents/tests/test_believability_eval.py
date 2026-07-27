@@ -361,6 +361,44 @@ def test_merge_growth_windows_collapses_an_accumulating_transcript():
     assert (merged[0].start, merged[0].end) == (1, 3)
 
 
+def test_merge_growth_windows_collapses_two_conversations_running_at_once():
+    # The producer keys `active` by pair frozenset, so two pairs can talk at the
+    # same time -- fifteen personas on a campus makes that common. Their growth
+    # windows then interleave in (start, end) order, so a merge that only looks
+    # at the PREVIOUS window sees the other pair's fragment every time, fails
+    # the participants check, and appends everything unmerged: the #799
+    # overcount, back again exactly when conversations overlap.
+    from backend.eval.believability import _merge_growth_windows
+
+    ab = [["Ada", "Hi."]], [["Ada", "Hi."], ["Bea", "Hello."]]
+    cd = [["Cy", "Yo."]], [["Cy", "Yo."], ["Di", "Hey."]]
+    merged = _merge_growth_windows(
+        [
+            _convo(1, 1, ab[0], ("Ada", "Bea")),
+            _convo(1, 1, cd[0], ("Cy", "Di")),
+            _convo(2, 2, ab[1], ("Ada", "Bea")),
+            _convo(2, 2, cd[1], ("Cy", "Di")),
+        ]
+    )
+    assert len(merged) == 2
+    by_pair = {frozenset(c.participants): c for c in merged}
+    assert by_pair[frozenset(("Ada", "Bea"))].transcript == ab[1]
+    assert by_pair[frozenset(("Cy", "Di"))].transcript == cd[1]
+    assert all((c.start, c.end) == (1, 2) for c in merged)
+
+
+def test_merge_growth_windows_keeps_a_pairs_second_meeting_separate():
+    # The guard the per-pair keying must not lose: the same pair meeting AGAIN
+    # later is two windows, not one grown window -- even though the key matches.
+    from backend.eval.believability import _merge_growth_windows
+
+    morning = [["Ada", "Morning."]]
+    evening = [["Ada", "Evening."]]
+    merged = _merge_growth_windows([_convo(1, 3, morning), _convo(400, 402, evening)])
+    assert len(merged) == 2
+    assert [c.transcript for c in merged] == [morning, evening]
+
+
 def test_world_grounding_flags_an_invented_place_with_an_invitation():
     judge = HeuristicJudge()
     ev = build_evidence(make_replay())["Ada"]
@@ -635,9 +673,14 @@ def test_rubric_prompt_renders_exactly():
         "  timing.\n"
         "- social_grounding: conversation lines reference real shared context\n"
         "  from both participants' memory streams, not confabulation.\n"
-        "- world_grounding: places the agent discusses exist in this world, and it\n"
-        "  never claims first-hand experience of a place its timeline shows it\n"
-        "  never visited.\n"
+        # Deliberately the SAME rule the heuristic and the place_grounding
+        # prompt enforce -- off-map is sayable, just not visitable. A stricter
+        # judge bullet (an earlier draft also policed real-but-never-visited
+        # places) would make every judge-vs-heuristic delta on this dimension
+        # partly a measure of rule mismatch rather than of the run.
+        "- world_grounding: the agent may mention places outside this world, but\n"
+        "  never claims to have just been to one, and never invites anyone to\n"
+        "  meet there.\n"
         "- memory_use: the memories retrieved for each decision were relevant\n"
         "  to the decision made.\n"
         "\n"
