@@ -262,8 +262,8 @@ inventor (Dana) and miss the corroborator (Casey), which #780 calls the worse
 half. But the off-world place *is* named elsewhere in the same window: Dana opens
 it with "Did you ever make it down to the boathouse for those photos". So an
 off-world place found anywhere in a window taints the cue-carrying lines in that
-window, each attributed to its own speaker. Both halves then fall out
-mechanically.
+window, each attributed to its own speaker — except a line that grounds itself
+(§7, #807). Both halves then fall out mechanically.
 
 Verified against `run-20260724-201036-e8c405`: a nine-word gazetteer flags 12 of
 the run's 23 unique utterances, including a second confabulation #780 never
@@ -380,10 +380,29 @@ the existing frames, not an A/B re-run.
   stays, because it is what catches the corroborator. It also matches a
   `meta.locations` name verbatim, not just a gazetteer noun: Penn's 18 place
   names are proper nouns and the gazetteer carries exactly one of them
-  ("gallery"), so a noun-only exemption would have been a no-op here.
+  ("gallery"), so a noun-only exemption would exempt almost nothing there.
   It moved no score on `run-20260724-201036-e8c405` — every line flagged there
   either names the invented place itself or names no place at all — so the 7.93
   baseline stands.
+
+  The exemption has a recall ceiling, accepted rather than hidden: a
+  self-grounded line is exempt even when its cue is corroborating something
+  off-map named elsewhere in the window — the LLM judge is the backstop for
+  what that lets through. Verified against the shipped Penn place list: "Did
+  you ever make it down to the boathouse?" / "Oh yeah, I totally went — way
+  nicer than Van Pelt Library." now scores 10.0 (1.0 pre-#807), and the
+  evidence line reads "mentions boathouse (not in this world) without
+  claiming to have been there — allowed, not scored" even though Ada did
+  claim it, one line up. The obvious alternative — splitting the cue list
+  into invite-cues and visited-cues and exempting only invitations — was
+  rejected: it re-flags the innocent "I went to the Library" whenever a
+  partner mentions a boathouse, the same false positive #807 exists to fix.
+
+  Two further false positives are known and unfixed, both the same
+  gazetteer/verbatim ceiling: "meet me at Van Pelt at 3?" (the short form of
+  a real name) and "meet me at the cafes" (the plural of a gazetteer noun)
+  still score 1.0. Chasing them means fuzzy place matching, which the naive
+  word-list ceiling above already hands to the LLM judge.
 - `_merge_growth_windows` merges on same participants, contiguity, **and an
   actual prefix relation between the two transcripts**. It compensates for the
   `_conversations_in` overcount (§3.3a) rather than fixing that function's
