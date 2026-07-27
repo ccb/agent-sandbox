@@ -373,6 +373,13 @@ DIMENSIONS = (
 # social grounding stays n/a -- solitude is not a social failure (#781).
 SILENT_COLOCATION_FLOOR = 0.10
 
+# A pair that met this often and said this little that was new was re-running one
+# conversation, not having several (#778, flagged for #781). On the #760 batch-1
+# runs these catch both loop pairs (0.44, 0.54) and neither healthy pair
+# (0.72, 0.84). A false positive costs a line of report text, not a score.
+REPEAT_LOOP_MIN_CONVERSATIONS = 3
+REPEAT_LOOP_MAX_NOVELTY = 0.60
+
 
 @dataclass
 class DimScore:
@@ -548,6 +555,52 @@ def _decisions_in(retrievals: list[dict]) -> list[dict]:
             decisions.append(r)
             previous = key
     return decisions
+
+
+def _repeat_loops(evidence: dict[str, AgentEvidence]) -> list[dict]:
+    """Participant pairs that kept re-running the same conversation.
+
+    The run mean cannot express "two of these five agents were stuck in a
+    groundhog-day loop" -- it averages them in with the healthy majority. So
+    name the pathology instead of trying to compress it into a score (#781).
+
+    Novelty per window is the fraction of its content words the pair had not
+    already used; a pair whose mean falls below
+    :data:`REPEAT_LOOP_MAX_NOVELTY` over at least
+    :data:`REPEAT_LOOP_MIN_CONVERSATIONS` windows is flagged.
+    """
+    windows: dict[frozenset[str], dict[tuple[int, int], Conversation]] = {}
+    for ev in evidence.values():
+        for conv in ev.conversations:
+            # Every window appears in each participant's evidence -- key by span
+            # so a pair's shared conversation is counted once.
+            pair = frozenset(conv.participants)
+            windows.setdefault(pair, {})[(conv.start, conv.end)] = conv
+
+    loops: list[dict] = []
+    for pair, spans in windows.items():
+        ordered = [spans[k] for k in sorted(spans)]
+        if len(ordered) < REPEAT_LOOP_MIN_CONVERSATIONS:
+            continue
+        said_before: set[str] = set()
+        novelties = []
+        for conv in ordered:
+            words = _content_words(
+                " ".join(line[1] for line in conv.transcript if len(line) == 2)
+            )
+            novelties.append(len(words - said_before) / len(words) if words else 1.0)
+            said_before |= words
+        mean_novelty = sum(novelties) / len(novelties)
+        if mean_novelty < REPEAT_LOOP_MAX_NOVELTY:
+            loops.append(
+                {
+                    "participants": sorted(pair),
+                    "conversations": len(ordered),
+                    "mean_novelty": round(mean_novelty, 2),
+                }
+            )
+    loops.sort(key=lambda loop: (loop["mean_novelty"], loop["participants"]))
+    return loops
 
 
 # ---------------------------------------------------------------------------
@@ -1086,6 +1139,7 @@ def audit(
         "summary": {
             "overall": overall,
             "weakest": weakest,
+            "loops": _repeat_loops(evidence),
             "by_dimension": by_dimension,
         },
     }
@@ -1381,6 +1435,14 @@ def render_markdown(report: dict) -> str:
         lines.append(
             f"| Weakest agent | {weakest['name']} ({_fmt_score(weakest['score'])}) |"
         )
+    for loop in report["summary"].get("loops") or []:
+        lines += [
+            "",
+            f"> **Repeat-conversation loop** -- "
+            f"{' <-> '.join(loop['participants'])}: "
+            f"{loop['conversations']} conversations, mean novelty "
+            f"{loop['mean_novelty']:.2f}",
+        ]
     for name, agent in report["agents"].items():
         lines += ["", f"## {name}", "", f"Overall: **{_fmt_score(agent['overall'])}**"]
         for dim in DIMENSIONS:

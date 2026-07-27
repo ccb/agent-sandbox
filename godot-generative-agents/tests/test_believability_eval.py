@@ -19,6 +19,7 @@ from backend.eval.believability import (
     audit,
     build_evidence,
     evidence_text,
+    _repeat_loops,
     load_replay,
     main,
     render_markdown,
@@ -844,6 +845,38 @@ def test_summary_names_the_weakest_agent():
     assert weakest["name"] in scores
     assert weakest["score"] == min(scores.values())
     assert f"Weakest agent | {weakest['name']}" in render_markdown(report)
+
+
+def test_summary_flags_a_repeat_conversation_loop():
+    """#781: the #778 loop is the pathology a single score cannot express --
+    three re-runs of one conversation between the same pair."""
+    replay = make_replay()
+    report = audit(replay, judge=HeuristicJudge(), source="fixture")
+    assert report["summary"]["loops"] == []  # one conversation is not a loop
+
+    evidence = build_evidence(replay)
+    windows = [_convo(1, 2, CHAT), _convo(3, 4, CHAT), _convo(5, 6, CHAT)]
+    for ev in evidence.values():
+        ev.conversations = list(windows)
+    loops = _repeat_loops(evidence)
+
+    assert len(loops) == 1
+    assert loops[0]["participants"] == ["Ada", "Bea"]
+    assert loops[0]["conversations"] == 3
+    # First window is all-new, the two re-runs add nothing: (1 + 0 + 0) / 3.
+    assert loops[0]["mean_novelty"] == 0.33
+
+
+def test_render_markdown_names_a_flagged_loop():
+    report = audit(make_replay(), judge=HeuristicJudge(), source="fixture")
+    report["summary"]["loops"] = [
+        {"participants": ["Ada", "Bea"], "conversations": 8, "mean_novelty": 0.44}
+    ]
+    rendered = render_markdown(report)
+
+    assert "Repeat-conversation loop" in rendered
+    assert "Ada <-> Bea" in rendered
+    assert "8 conversations, mean novelty 0.44" in rendered
 
 
 def test_scrambled_frames_score_measurably_worse():
