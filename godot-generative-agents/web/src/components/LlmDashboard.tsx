@@ -5,6 +5,7 @@ import { ConversationFeed } from "./ConversationFeed";
 import { EventFeed } from "./EventFeed";
 import { LlmCallLog } from "./LlmCallLog";
 import { MostTakenActions } from "./MostTakenActions";
+import { RunSocialCard } from "./RunSocialCard";
 import { SpritePreview } from "./SpritePreview";
 import "./AgentPanel.css"; // the llm-log row/pill styles LlmCallLog renders with
 import "./LlmDashboard.css";
@@ -259,6 +260,16 @@ export function LlmDashboard({
                 {budget.toFixed(2)} budget left
               </span>
             )}
+            {live.usage?.social && (
+              <span
+                className="llm-strip-stat"
+                title="co-settled pair-steps · completed conversations (#795)"
+              >
+                <strong>{live.usage.social.co_settled_pair_steps}</strong> pair-steps ·{" "}
+                <strong>{live.usage.social.conversations}</strong> conversation
+                {live.usage.social.conversations === 1 ? "" : "s"}
+              </span>
+            )}
             {live.meta?.llm && <span className="llm-strip-model">{live.meta.llm.model}</span>}
           </>
         ) : (
@@ -277,6 +288,11 @@ export function LlmDashboard({
           baked replay's events through the cursor, or the live feed's
           game_event rows — so it renders in replay mode too, unlike EventFeed. */}
       <MostTakenActions replay={replay} live={live} replayStep={replayStep} />
+
+      {/* The run's social opportunity (#795/#819): live-only — replays carry
+          no /usage, and RunSocialCard hides itself when an older backend
+          serves no social block. */}
+      {live.enabled && <RunSocialCard social={live.usage?.social} step={live.step} />}
 
       {/* Run events (#644): the game_event/wish rows off the live feed — the
           same records the Godot HUD logs. Live-only: a baked replay has no
