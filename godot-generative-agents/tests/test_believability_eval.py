@@ -880,14 +880,18 @@ def test_render_markdown_names_a_flagged_loop():
 
 
 def test_scrambled_frames_score_measurably_worse():
-    """The issue's acceptance control: a shuffled run must lose points."""
+    """The issue's acceptance control: a shuffled run must lose points.
+
+    Pinned tight (#781): the margin was >= 1.0 while `plan_coherence` coverage
+    read 100% for everything. Re-saturating a dimension has to fail here.
+    """
     replay = make_replay()
     judge = HeuristicJudge()  # deterministic, so the comparison is exact
     intact = audit(replay, judge=judge, source="fixture")
     control = audit(
         scramble_replay(replay, "frames", seed=7), judge=judge, source="control"
     )
-    assert intact["summary"]["overall"] - control["summary"]["overall"] >= 1.0
+    assert intact["summary"]["overall"] - control["summary"]["overall"] >= 2.0
 
 
 def test_swapped_plans_score_worse_on_plan_coherence():
@@ -901,7 +905,7 @@ def test_swapped_plans_score_worse_on_plan_coherence():
         intact["summary"]["by_dimension"]["plan_coherence"]
         - control["summary"]["by_dimension"]["plan_coherence"]
     )
-    assert drop >= 1.0
+    assert drop >= 4.0  # #781: was >= 1.0 against the saturated coverage term
     assert intact["summary"]["overall"] > control["summary"]["overall"]
 
 
