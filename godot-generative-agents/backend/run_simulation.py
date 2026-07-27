@@ -167,6 +167,35 @@ def _decision_trace(agent, command: str, ok: bool) -> list:
     return consults + [{"kind": "action", "tool": verb, "ok": ok}]
 
 
+def count_co_settled(chars, state, order) -> list[tuple[str, str]]:
+    """Pairs that are both settled in the same room this step (#795).
+
+    Settled is ``performing and not path`` -- the same test
+    :func:`cognition.maybe_converse` gates conversation on. Deliberately
+    ignores cooldowns, the conversing pin, and busy-ness: this measures the
+    *opportunity* to talk, not eligibility to start a new conversation right
+    now, so a pair mid-conversation or on cooldown still counts. That is what
+    makes the count comparable across runs (#795's 399-vs-0 table).
+
+    A ``None`` location never pairs: two agents who are nowhere are not
+    together. O(n^2) over ``order``, the same budget :func:`maybe_react`'s
+    proximity scan already pays.
+    """
+    settled = [
+        name
+        for name in order
+        if state[name]["performing"]
+        and not state[name]["path"]
+        and chars[name].location is not None
+    ]
+    return [
+        (a, b)
+        for i, a in enumerate(settled)
+        for b in settled[i + 1 :]
+        if chars[a].location is chars[b].location
+    ]
+
+
 def step(
     game,
     chars: dict,
@@ -188,6 +217,7 @@ def step(
     decide_pending: dict | None = None,
     decide_info: dict | None = None,
     deciding_sink=None,
+    social_info: dict | None = None,
 ) -> tuple[dict, int]:
     """Run exactly one 10-second tick and return ``(frame, chats_this_step)``.
 
@@ -713,6 +743,11 @@ def step(
     # brain, so the default replay is unchanged.
     chats_this_step = 0
     if conversation_enabled:
+        # #795: count the opportunity to talk BEFORE any conversation machinery
+        # runs this tick, so the metric is independent of cooldowns and pins.
+        if social_info is not None:
+            pairs = count_co_settled(chars, state, order)
+            social_info.update(co_settled=len(pairs), pairs=pairs)
         # React-or-continue (#370): BEFORE the conversation pass, so a greet's
         # first line is spoken this same tick by maybe_converse's advance
         # phase. Off by default (cog.react_enabled) -> byte-identical.
