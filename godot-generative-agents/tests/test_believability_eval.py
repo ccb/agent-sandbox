@@ -327,6 +327,30 @@ def test_build_evidence_collects_decision_frames_with_retrieved_memories():
     assert r["memories"][0]["text"].startswith("Plan: go to Cafe")
 
 
+# ------------------------------------------------------------ plan coherence
+
+
+def _stalled_replay():
+    """Ada never leaves the Cafe: one act for the whole run, so she reaches
+    stop 1 of her 2-stop schedule instead of both."""
+    replay = copy.deepcopy(make_replay())
+    for frame in replay["frames"]:
+        frame["Ada"] = _at_entry(CAFE, "eating breakfast", "T:Cafe:counter")
+    return replay
+
+
+def test_plan_coherence_penalises_a_day_that_never_advances():
+    """#781: standing on one stop all day used to score a perfect 10 --
+    coverage asked 'matches some stop', not 'advanced through the stops'."""
+    judge = HeuristicJudge()
+    intact = judge._plan_coherence(build_evidence(make_replay())["Ada"])
+    stalled = judge._plan_coherence(build_evidence(_stalled_replay())["Ada"])
+
+    assert intact.score == 10.0
+    assert stalled.score == 5.5
+    assert "reached 1 of 2 planned stops" in stalled.note
+
+
 # ------------------------------------------------------------ world grounding
 
 

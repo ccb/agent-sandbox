@@ -574,28 +574,39 @@ class HeuristicJudge:
     # -- dimension 1: plan coherence -----------------------------------------
 
     def _plan_coherence(self, ev: AgentEvidence) -> DimScore:
-        """Did the agent do what its plan says, in the plan's order?
+        """Did the agent get through its plan, in the plan's order?
 
-        *coverage*: the fraction of the day (step-weighted) spent in segments
-        that match some schedule stop. *order*: of the matched segments, the
-        fraction that appear in schedule order (longest non-decreasing run of
-        stop indices). A shuffled day keeps coverage but destroys order; a
-        swapped plan destroys coverage.
+        *progress*: how far through the schedule the day actually got -- the
+        longest in-order run of DISTINCT matched stops, over the number of
+        stops. *order*: of every matched segment, the fraction that appears in
+        schedule order (longest non-decreasing run of stop indices).
+
+        The two multiply, so a day has to both advance and stay in sequence.
+        Progress alone would miss a shuffled day -- a scrambled run reaches the
+        same stops, just not in that sequence, which only *order* sees.
+
+        Progress replaces the old *coverage* term, which asked whether a segment
+        matched **some** stop. That read 100% for every one of the 23 agents in
+        the #760 batch-1 runs: the act text carries its "@ Building:Room"
+        address, and the address always shares a word with the stop it belongs
+        to, so coverage discriminated nothing and an agent parked on the
+        "spending time" placeholder for 977 steps scored a perfect 10 (#781).
         """
         if not ev.segments or not ev.schedule:
             return DimScore(None, note="no schedule or no frames to compare")
         matches = self._match_segments(ev)
-        total = sum(seg.steps for seg in ev.segments)
-        on_plan = sum(
-            seg.steps for seg, m in zip(ev.segments, matches) if m is not None
-        )
-        coverage = on_plan / total if total else 0.0
         matched_order = [m for m in matches if m is not None]
-        order = (
-            _longest_nondecreasing(matched_order) / len(matched_order)
-            if matched_order
-            else 0.0
-        )
+        if not matched_order:
+            return DimScore(
+                _scale(0.0), [], "the day never reached a single planned stop"
+            )
+        reached: list[int] = []
+        for m in matched_order:
+            if m not in reached:
+                reached.append(m)
+        stops_reached = _longest_nondecreasing(reached)
+        progress = min(1.0, stops_reached / len(ev.schedule))
+        order = _longest_nondecreasing(matched_order) / len(matched_order)
         evidence = []
         for seg, m in zip(ev.segments, matches):
             if m is not None and len(evidence) < 2:
@@ -613,10 +624,10 @@ class HeuristicJudge:
                 )
                 break
         return DimScore(
-            _scale(0.5 * coverage + 0.5 * order),
+            _scale(progress * order),
             evidence,
-            f"{coverage:.0%} of the day on a planned stop; "
-            f"{order:.0%} of matched segments in plan order",
+            f"reached {stops_reached} of {len(ev.schedule)} planned stops "
+            f"in order; {order:.0%} of matched segments in plan order",
         )
 
     # -- dimension 2: temporal sanity ----------------------------------------
