@@ -1209,12 +1209,12 @@ PR closes.
 
 ## Follow-ups (do not fold into this PR)
 
-Two spin-off issues the spec calls for, to file separately:
+Both filed 2026-07-27; neither belongs in this PR:
 
-1. **`world_grounding` reads `n/a` on every pre-#780 bake** — the dimension cannot
-   fire on the runs that motivated it. `meta.locations` is derivable from the Penn
-   world YAML (`penn_world.py:634`). Per CLAUDE.md, file it and attach it as a
-   sub-issue of #760.
-2. **Memory *carry* as a scored signal** — "does a conversation reference a
-   concrete detail first introduced in an earlier one". The novelty term is the
-   cheap proxy; true carry detection is its own piece of work.
+- **#813** — `world_grounding` reads `n/a` on every pre-#780 bake, so the dimension
+  cannot fire on the runs that motivated it. Attached as a sub-issue of #760.
+  Task 8's `meta.locations` injection is the workaround this issue would retire.
+- **#814** — score memory *carry*: a later conversation reusing a fact from an
+  earlier one. The novelty term in Task 3 is the cheap proxy; true carry detection
+  is its own piece of work. Records the measured dead ends (retrieval reach is
+  backwards) so they aren't re-derived.
