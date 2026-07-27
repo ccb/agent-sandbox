@@ -295,7 +295,7 @@ class _ScriptedBrain:
                         "place": "Houston Hall",
                         "activity": "eating lunch",
                         "emoji": "\U0001f37d️",
-                        "steps": 10,
+                        "minutes": 10,
                     }
                 ]
             }

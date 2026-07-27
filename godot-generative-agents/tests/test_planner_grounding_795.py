@@ -7,12 +7,14 @@ LLMPlanner.generate passed the retrieved block only to _day_outline, so
 every place and duration was chosen two summarisation hops downstream.
 """
 
+import datetime
 import sys
 import pathlib
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from backend.planner import LLMPlanner  # noqa: E402
+from backend.sim_clock import SimClock  # noqa: E402
 
 
 class RecordingClient:
@@ -66,3 +68,70 @@ def test_no_memory_leaves_every_level_clean():
     LLMPlanner(client).generate(persona={"persona": "I am Diego."}, memory=None)
     for _name, body in client.sent:
         assert "You remember:" not in body
+
+
+class MinutesClient(RecordingClient):
+    """Emits a minute plan using the `minutes` field."""
+
+    def call_tool(self, messages, tool, max_tokens=256, temperature=0.0):
+        self.sent.append((tool["name"], messages[-1]["content"]))
+        if tool["name"] == "day_outline":
+            return {"blocks": [{"label": "midday", "summary": "study"}]}
+        if tool["name"] == "hourly_plan":
+            return {"hours": [{"start_hour": 12, "summary": "study"}]}
+        return {
+            "stops": [
+                {"place": "Houston Hall", "activity": "eating lunch", "minutes": 10}
+            ]
+        }
+
+
+def _clock():
+    return SimClock(datetime.datetime(2026, 7, 26, 8, 0), sec_per_step=10)
+
+
+def test_minute_prompt_states_the_run_window():
+    client = MinutesClient()
+    LLMPlanner(client, clock=_clock(), num_steps=1200).generate(
+        persona={"persona": "I am Diego."}
+    )
+    body = client.user_message_for("minute_plan")
+    assert "08:00" in body and "11:20" in body
+
+
+def test_minutes_convert_to_steps_against_the_clock():
+    client = MinutesClient()
+    plan = LLMPlanner(client, clock=_clock(), num_steps=1200).generate(
+        persona={"persona": "I am Diego."}
+    )
+    # SEC_PER_STEP is 10, so 10 minutes == 600 seconds == 60 steps.
+    assert [s.steps for s in plan.stops] == [60]
+
+
+def test_without_a_clock_minutes_are_read_as_steps():
+    """Tests that omit a clock keep today's behaviour exactly."""
+    client = MinutesClient()
+    plan = LLMPlanner(client).generate(persona={"persona": "I am Diego."})
+    assert [s.steps for s in plan.stops] == [10]
+
+
+def test_a_non_positive_duration_still_means_stay_put():
+    class ZeroClient(MinutesClient):
+        def call_tool(self, messages, tool, max_tokens=256, temperature=0.0):
+            if tool["name"] == "minute_plan":
+                self.sent.append((tool["name"], messages[-1]["content"]))
+                return {
+                    "stops": [{"place": "Houston Hall", "activity": "x", "minutes": 0}]
+                }
+            return super().call_tool(messages, tool, max_tokens, temperature)
+
+    plan = LLMPlanner(ZeroClient(), clock=_clock(), num_steps=1200).generate(
+        persona={"persona": "I am Diego."}
+    )
+    assert plan.stops[0].steps is None
+
+
+def test_plan_system_prompt_is_not_smallville():
+    from backend.prompt_templates import render
+
+    assert "Smallville" not in render("plan_system")

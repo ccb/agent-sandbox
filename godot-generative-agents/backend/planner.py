@@ -133,8 +133,8 @@ MINUTE_TOOL = {
     "name": "minute_plan",
     "description": (
         "Turn the plan into concrete stops: where to go, what to do there, and "
-        "for how many sim steps before moving on (omit steps on the last stop to "
-        "stay put). Use only known places."
+        "for how many minutes to stay before moving on (omit minutes on the last "
+        "stop to stay put). Use only known places."
     ),
     "parameters": {
         "type": "object",
@@ -148,9 +148,15 @@ MINUTE_TOOL = {
                         "place": {"type": "string"},
                         "activity": {"type": "string"},
                         "emoji": {"type": "string"},
-                        "steps": {"type": "integer"},
+                        "minutes": {
+                            "type": "integer",
+                            "description": (
+                                "In-game minutes spent AT this place. Travel time "
+                                "to get here is charged separately, on top of this."
+                            ),
+                        },
                     },
-                    # emoji/steps stay genuinely optional (a missing steps means
+                    # emoji/minutes stay genuinely optional (missing minutes means
                     # "stay put"), so this tool is best-effort, not OpenAI strict
                     # (#357) -- forcing every field required would change that
                     # meaning. additionalProperties:false still tightens
@@ -296,7 +302,7 @@ class LLMPlanner:
             "; ".join(f"{h.start_hour:02d}:00 {h.summary}" for h in hours) or "(none)"
         )
         user = (
-            f"{persona_text}\n{self._memory_line(mem)}"
+            f"{persona_text}\n{self._window_line()}{self._memory_line(mem)}"
             f"Your hourly plan: {plan}.\n{self._places_line()}"
             "Turn it into concrete stops."
         )
@@ -306,18 +312,29 @@ class LLMPlanner:
         result = self._call(user, MINUTE_TOOL)
         stops = []
         # Validated upstream (#357): place/activity are strings, emoji is a
-        # string-or-null, steps an int-or-null. The one remaining check is the
-        # *semantic* one -- a non-positive or null step count means "stay put"
+        # string-or-null, minutes an int-or-null. The one remaining check is the
+        # *semantic* one -- a non-positive or null duration means "stay put"
         # -- which the schema can't express (OpenAI strict mode drops `minimum`).
         for s in result.get("stops") or []:
             place, activity = s.get("place"), s.get("activity")
             if not (place and activity):
                 continue
-            steps = s.get("steps")
+            minutes = s.get("minutes")
             if not (
-                isinstance(steps, int) and not isinstance(steps, bool) and steps > 0
+                isinstance(minutes, int)
+                and not isinstance(minutes, bool)
+                and minutes > 0
             ):
                 steps = None
+            elif self.clock is not None:
+                # #795: the model answers in minutes -- a unit it has intuition
+                # for -- and we convert once, here. Stop.steps stays the internal
+                # unit, so nothing downstream changes.
+                steps = self.clock.steps_for_seconds(minutes * 60) or None
+            else:
+                # No clock (tests that omit one): read the value as steps, which
+                # is exactly what this field meant before #795.
+                steps = minutes
             stops.append(
                 Stop(
                     place=place,
