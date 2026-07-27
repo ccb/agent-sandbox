@@ -731,14 +731,18 @@ class HeuristicJudge:
 
         Per conversation: were the participants actually standing together
         (within vision_r) while it played; does each speaker actually belong
-        to it; and do its lines reference context found in BOTH participants'
-        memory streams (not confabulation)?
+        to it; do its lines reference context found in BOTH participants'
+        memory streams (not confabulation); and does it say anything the pair
+        has not already said (#781)?
         """
         if not ev.conversations:
             return DimScore(None, note="no conversations observed for this agent")
         scores = []
         evidence = []
-        for conv in ev.conversations:
+        # Per-pair vocabulary so far, for the novelty term below. Windows are
+        # already start-ordered; sorting says so rather than relying on it.
+        spoken: dict[frozenset[str], set[str]] = {}
+        for conv in sorted(ev.conversations, key=lambda c: (c.start, c.end)):
             others = [p for p in conv.participants if p in evidence_by_name]
             # Co-location: every pair within vision_r on each window step.
             together = 0
@@ -788,13 +792,29 @@ class HeuristicJudge:
                     )
             grounding = grounded / substantive if substantive else 1.0
 
-            scores.append(0.4 * coloc + 0.4 * grounding + 0.2 * valid)
+            # Novelty: how much of this window is new to this pair. A pair
+            # re-running the same conversation scored a perfect 10 before --
+            # every re-run is co-located, valid, and grounded in streams that by
+            # then contain everything they have already said (#781). It decays
+            # monotonically across the #778 loops (1.00 -> 0.04) and stays high
+            # for pairs whose conversations actually go somewhere.
+            pair = frozenset(conv.participants)
+            said_before = spoken.get(pair, set())
+            window_words = _content_words(" ".join(text for _, text in lines))
+            novelty = (
+                len(window_words - said_before) / len(window_words)
+                if window_words
+                else 1.0
+            )
+            spoken[pair] = said_before | window_words
+
+            scores.append(0.3 * coloc + 0.3 * grounding + 0.1 * valid + 0.3 * novelty)
             evidence.append(
                 f"steps {conv.start}-{conv.end} ({ev.time_at(conv.start)}): "
                 f"conversation between {', '.join(conv.participants)} -- "
                 f"co-located {coloc:.0%} of the window, "
                 f"{grounded}/{substantive} substantive lines grounded in both "
-                f"streams"
+                f"streams, {novelty:.0%} of its words new to this pair"
             )
         return DimScore(
             _scale(sum(scores) / len(scores)),

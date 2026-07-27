@@ -404,6 +404,41 @@ def test_memory_use_counts_decisions_not_repainted_frames():
     assert score.note == "2/3 decisions used a relevant memory"
 
 
+# ------------------------------------------------------------ social grounding
+
+
+FIRST_CHAT = [
+    ["Ada", "The pancakes here are excellent."],
+    ["Bea", "The pancakes really are excellent."],
+]
+SECOND_CHAT = [
+    ["Ada", "My shelving rota starts at noon."],
+    ["Bea", "My weights session starts at noon."],
+]
+
+
+def _social_score(second_transcript):
+    """Ada's social grounding when her pair's second conversation carries
+    *second_transcript*. Both windows fall while Ada and Bea walk together, so
+    co-location, grounding and speaker validity are identical either way and
+    only novelty moves."""
+    judge = HeuristicJudge()
+    evidence = build_evidence(make_replay())
+    windows = [_convo(1, 2, FIRST_CHAT), _convo(3, 4, second_transcript)]
+    for ev in evidence.values():
+        ev.conversations = list(windows)
+    return judge._social_grounding(evidence["Ada"], evidence)
+
+
+def test_social_grounding_penalises_a_rerun_conversation():
+    """#781: the #778 loop pairs re-ran one conversation and scored 10/10."""
+    fresh = _social_score(SECOND_CHAT)
+    rerun = _social_score(FIRST_CHAT)
+
+    assert fresh.score - rerun.score >= 1.0
+    assert any("new to this pair" in line for line in rerun.evidence)
+
+
 # ------------------------------------------------------------ world grounding
 
 
