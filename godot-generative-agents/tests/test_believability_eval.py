@@ -351,6 +351,59 @@ def test_plan_coherence_penalises_a_day_that_never_advances():
     assert "reached 1 of 2 planned stops" in stalled.note
 
 
+# ------------------------------------------------------------ memory use
+
+
+def test_memory_use_counts_decisions_not_repainted_frames():
+    """#781: the producer repaints (act, memories) every step, so scoring each
+    repaint counted one match hundreds of times."""
+    judge = HeuristicJudge()
+    ev = build_evidence(make_replay())["Ada"]
+    plan = [
+        {
+            "kind": "plan",
+            "importance": 5.0,
+            "text": "Plan: go to Cafe and eating breakfast.",
+            "created_turn": 0,
+        }
+    ]
+    shelving = [
+        {
+            "kind": "observation",
+            "importance": 2.0,
+            "text": "I am shelving books.",
+            "created_turn": 40,
+        }
+    ]
+    # 40 repaints of one decision, then two more decisions -- the second of
+    # which retrieves a memory unrelated to what it is doing.
+    ev.retrievals = [
+        {
+            "step": s,
+            "act": "eating breakfast @ T:Cafe:counter",
+            "reasoning": None,
+            "memories": plan,
+        }
+        for s in range(40)
+    ] + [
+        {
+            "step": 40,
+            "act": "shelving books @ T:Library:spot",
+            "reasoning": None,
+            "memories": shelving,
+        },
+        {
+            "step": 41,
+            "act": "shelving books @ T:Library:spot",
+            "reasoning": None,
+            "memories": plan,
+        },
+    ]
+
+    score = judge._memory_use(ev)
+    assert score.note == "2/3 decisions used a relevant memory"
+
+
 # ------------------------------------------------------------ world grounding
 
 

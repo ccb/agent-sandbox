@@ -524,6 +524,28 @@ def _longest_nondecreasing(values: list[int]) -> int:
     return max(best)
 
 
+def _decisions_in(retrievals: list[dict]) -> list[dict]:
+    """Collapse repainted retrieval frames into one entry per decision.
+
+    A frame carries the act and the memories retrieval surfaced for it, and the
+    producer repaints both unchanged for every step the activity runs. Scoring
+    each repaint counted one match once per step -- 1200 frames of Diego's #760
+    batch-1 run are 14 decisions -- which handed a monotonous day a perfect
+    memory-use score (#781).
+
+    Same collapse ``_segments_for`` does for acts and ``_merge_growth_windows``
+    (#799) does for conversations.
+    """
+    decisions: list[dict] = []
+    previous = None
+    for r in retrievals:
+        key = (r["act"], json.dumps(r["memories"], sort_keys=True))
+        if key != previous:
+            decisions.append(r)
+            previous = key
+    return decisions
+
+
 # ---------------------------------------------------------------------------
 # The deterministic heuristic judge
 # ---------------------------------------------------------------------------
@@ -913,13 +935,15 @@ class HeuristicJudge:
 
         A decision frame carries the memories retrieval surfaced for it; a
         relevant retrieval shares a content word with the action taken (or
-        the reasoning given for it).
+        the reasoning given for it). Counted once per *decision*, not once per
+        frame -- see :func:`_decisions_in` (#781).
         """
-        if not ev.retrievals:
+        decisions = _decisions_in(ev.retrievals)
+        if not decisions:
             return DimScore(None, note="no decision frames carry retrieved memories")
         relevant = 0
         evidence = []
-        for r in ev.retrievals:
+        for r in decisions:
             decision_words = _content_words(f"{r['act']} {r.get('reasoning') or ''}")
             hit = None
             for mem in r["memories"]:
@@ -939,11 +963,11 @@ class HeuristicJudge:
                     f"{len(r['memories'])} retrieved memories relate to "
                     f"'{r['act']}'"
                 )
-        fraction = relevant / len(ev.retrievals)
+        fraction = relevant / len(decisions)
         return DimScore(
             _scale(fraction),
             evidence,
-            f"{relevant}/{len(ev.retrievals)} decisions used a relevant memory",
+            f"{relevant}/{len(decisions)} decisions used a relevant memory",
         )
 
 
