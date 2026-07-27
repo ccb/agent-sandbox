@@ -13,7 +13,9 @@ It is deliberately **distinct from the Reflect step in ``npc.py``** (issue #4):
 that one reflects on a single command *failure* to pick a better next action.
 This is *periodic memory synthesis* -- it fires on a cadence (when accumulated
 importance crosses a threshold; see :func:`should_reflect`) and reasons over the
-whole recent stream, not one failed command.
+recent stream of *lived* records -- ``"plan"`` records are excluded, because
+reflecting over intentions as if they had happened lets an agent "remember"
+its own future (#777) -- not one failed command.
 
 Following the same restraint as ``memory.py`` and ``planning.py``, this module is
 **pure orchestration with no engine imports**: it reads and writes an
@@ -124,6 +126,22 @@ def should_reflect(memory, threshold: float = DEFAULT_REFLECTION_THRESHOLD) -> b
     return getattr(memory, "importance_since_reflection", 0.0) >= threshold
 
 
+# Plan records are *intentions*, not lived experience: the day's authored plan
+# and conversation commitments (#778) both land in the stream as kind "plan",
+# and a reflector shown them will happily draw past-tense conclusions about
+# stops the agent has not reached (#777: Sofia "remembered" her scheduled
+# dinner queasiness at 08:27, four hours early). The reflection pass therefore
+# reasons only over what happened. Compared by value ("plan") because
+# ``MemoryKind`` is a str Enum and this module deliberately imports nothing
+# from the rest of the engine (see module docstring).
+_PLAN_KIND = "plan"
+
+
+def _lived(records) -> list:
+    """Only the records that describe experience, not intention."""
+    return [r for r in records if getattr(r, "kind", None) != _PLAN_KIND]
+
+
 def reflect(
     memory,
     reflector: Reflector,
@@ -137,12 +155,13 @@ def reflect(
 
     The paper's flow (docs/design/agent-memory.md §7):
 
-    1. Take the ``recent_window`` most recent records as the seed.
+    1. Take the ``recent_window`` most recent records as the seed -- minus
+       ``"plan"`` records, which are intentions rather than experience (#777).
     2. Ask the ``reflector`` for the salient questions they raise (capped at
        ``max_questions``).
     3. For each question, *retrieve* the memories that best support it (a
        read-only retrieval -- ``touch=False`` -- so reflecting never disturbs the
-       recency the decision loop depends on).
+       recency the decision loop depends on), again dropping ``"plan"`` records.
     4. Ask the ``reflector`` for one grounded inference per question.
     5. Store each inference as a ``MemoryKind.REFLECTION`` record citing its
        supporting memory ids.
@@ -155,7 +174,7 @@ def reflect(
     won't be re-hit every turn; reflection just waits for importance to build
     again.
     """
-    recent = memory.records[-recent_window:]
+    recent = _lived(memory.records[-recent_window:])
     if not recent:
         memory.importance_since_reflection = 0.0
         return []
@@ -165,7 +184,7 @@ def reflect(
     for question in questions:
         # Read-only: gathering grounds for a thought must not bump recency, or a
         # reflection pass would quietly reshuffle what the next decision retrieves.
-        supporting = memory.retrieve(query=question, turn=turn, touch=False)
+        supporting = _lived(memory.retrieve(query=question, turn=turn, touch=False))
         if not supporting:
             continue
         result = reflector.infer(question, supporting)

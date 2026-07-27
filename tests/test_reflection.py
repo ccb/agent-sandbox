@@ -165,6 +165,48 @@ def test_reflect_drops_empty_inference():
     assert created == []
 
 
+# --- plan memories are intentions, not experience (issue #777) ---------------
+
+
+def test_reflection_input_excludes_plan_memories():
+    # Regression for #777: the t0 day-plan (and #778's conversation commitments)
+    # land in the stream as PLAN records -- *intentions*, not lived experience.
+    # Shown to the reflector, they let an agent "conclude" things about stops it
+    # has not reached (Sofia reflected on her scheduled dinner queasiness at
+    # 08:27, mid-stop-0). Neither the question seed nor the per-question
+    # supporting retrieval may put a plan record in front of the reflector.
+    mem = _stream()
+    mem.add_plan(
+        "Plan: settle in for dinner with Maria at the hall, then head home",
+        turn=8,
+        importance=8.0,
+    )
+    reflector = _FakeReflector(["What should I make of Maria?"])
+    reflect(mem, reflector, turn=9)
+
+    shown = [r for call in reflector.questions_calls for r in call] + [
+        r for _, records in reflector.infer_calls for r in records
+    ]
+    assert shown  # the pass really ran over records
+    assert all(r.kind is not MemoryKind.PLAN for r in shown)
+
+
+def test_reflection_never_cites_an_unlived_plan_stop():
+    # The live-run shape from #777: the ONLY mention of the day's distinctive
+    # final stop is the plan record itself. MockReflector.infer summarizes the
+    # records it is shown, so if the plan leaks into the supporting set, its
+    # text leaks straight into the written reflection.
+    mem = _stream()
+    mem.add_plan(
+        "Today's stops end with feeling queasy at dinner with Maria",
+        turn=8,
+        importance=8.0,
+    )
+    created = reflect(mem, MockReflector(), turn=9)
+    assert created  # observations alone still yield a reflection
+    assert all("queasy" not in r.text for r in created)
+
+
 # --- MockReflector ----------------------------------------------------------
 
 
