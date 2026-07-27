@@ -34,7 +34,7 @@ schedule:
   # Diego froze at this stop. Keep activities clear of verb substrings
   # ("ate ", "eat ", "get ", "take ", "drink", ...) until the parser gives
   # `perform` precedence.
-  activity: refining the model into the evening
+  activity: refining the model
   emoji: ✏️
 
 relationships:
