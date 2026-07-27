@@ -1,0 +1,14 @@
+game: penn
+seed: 42
+cassette:
+  path: cassette.jsonl
+  sha256: b0c55ccd21aa7867f2306ccd04015724f79fd39264a6f16cc0e1db4c79d79367
+engine_version: 3a7ef818
+result:
+  steps: 1200
+  cost_usd: 0.783322
+  co_settled_pair_steps: 364
+  by_pair:
+    Diego Torres + Sofia Ramirez: 364
+  conversations: 3
+steps: []

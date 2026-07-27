@@ -60,11 +60,21 @@ PYTHONPATH=.:godot-generative-agents uv run --no-sync python \
 SERVER_PID=$!
 trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
 
-for _ in $(seq 1 60); do
+# Under a paid brain the server does its --plan llm boot planning BEFORE it
+# serves /live, so readiness scales with the cast size and the length of the
+# day being planned. Batch 4 learned this the expensive way: a 12-hour window
+# makes each planning call roughly twice the tokens and twice the latency, so
+# a 5-agent boot blew straight through the old fixed 60s and the trap killed a
+# server that was working fine. Budget generously; it costs nothing to wait.
+READY_TIMEOUT="${READY_TIMEOUT:-600}"
+for _ in $(seq 1 "$READY_TIMEOUT"); do
   curl -sf "$BASE/live" >/dev/null 2>&1 && break
   sleep 1
 done
-curl -sf "$BASE/live" >/dev/null || { echo "server never came up"; tail -20 "$OUT/server.log"; exit 1; }
+curl -sf "$BASE/live" >/dev/null || {
+  echo "server never came up within ${READY_TIMEOUT}s (raise READY_TIMEOUT)"
+  tail -20 "$OUT/server.log"; exit 1
+}
 
 # The cast is chosen here, while the loop is paused at tick 0; POST /config
 # rebuilds the world and hands back a new run id.
