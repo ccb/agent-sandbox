@@ -33,9 +33,11 @@ conversational brain is present.
 
 from __future__ import annotations
 
+import warnings
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 
-from .memory import render_memories
+from .memory import MemoryKind, render_memories
 from .prompt_templates import render
 
 # Total lines across both speakers before the loop stops on its own. A meeting is
@@ -162,8 +164,8 @@ def exchange(
     *,
     turn: int,
     importance: float = DEFAULT_CHAT_IMPORTANCE,
-    places=None,
-    visited=None,
+    places: Iterable[str] | None = None,
+    visited: Iterable[str] | None = None,
 ) -> bool:
     """Generate and record ONE line of *convo* (issue #371).
 
@@ -261,7 +263,9 @@ def _remember(
     memory.add_chat(text, turn=turn, partner=partner, importance=importance)
 
 
-def _place_grounding_block(speaker, places, visited) -> str:
+def _place_grounding_block(
+    speaker, places: Iterable[str] | None, visited: Iterable[str] | None
+) -> str:
     """Render the #780 real-vs-off-map place block, or ``""`` when there is
     nothing useful to say.
 
@@ -277,7 +281,20 @@ def _place_grounding_block(speaker, places, visited) -> str:
     the byte-identical re-run guarantee (issues #197, #715).
     """
     names = sorted(places or ())
-    if not names or len(names) > MAX_GROUNDED_PLACES:
+    if len(names) > MAX_GROUNDED_PLACES:
+        # Not silent: this drops the whole prevention half, and the only signal
+        # otherwise is a grounding block that stops appearing. Our own worlds are
+        # pinned under the cap by a test, but this is engine code -- a game with
+        # 25 locations gets told, once (the default warning filter dedupes by
+        # message and line).
+        warnings.warn(
+            f"place grounding dropped: {len(names)} places exceeds "
+            f"MAX_GROUNDED_PLACES={MAX_GROUNDED_PLACES}; dialogue in this game "
+            "is ungrounded (raise the cap or shrink the world)",
+            stacklevel=2,
+        )
+        return ""
+    if not names:
         return ""
     here = getattr(getattr(speaker, "location", None), "name", "") or ""
     been = sorted({n for n in (visited or ()) if n and n != here})
@@ -289,8 +306,33 @@ def _place_grounding_block(speaker, places, visited) -> str:
     )
 
 
+def _have_met(memory, partner: str) -> bool:
+    """Whether this agent has any record of talking with *partner* (issue #803).
+
+    Read straight off the dual write this module already performs: every line of
+    every conversation lands in BOTH streams as a CHAT memory whose ``actor`` is
+    the other party (see :func:`_deliver`). So an agent's own memory stream *is*
+    the record of who it has spoken with -- there is no second ledger to thread in
+    and keep in sync, it answers for every caller at once, and it survives a
+    resumed run (memory is persisted; a sim's pair-cooldown bookkeeping need not
+    be).
+
+    Only CHAT records carry a partner in ``actor``, so a seeded relationship
+    memory -- a plain observation -- can't make two strangers think they have met.
+    One list scan per conversation *opener*: free next to the LLM call it precedes.
+    """
+    if memory is None:
+        return False
+    return any(r.kind is MemoryKind.CHAT and r.actor == partner for r in memory.records)
+
+
 def _dialogue_observation(
-    speaker, listener, convo: Conversation, turn: int, places=None, visited=None
+    speaker,
+    listener,
+    convo: Conversation,
+    turn: int,
+    places: Iterable[str] | None = None,
+    visited: Iterable[str] | None = None,
 ) -> str:
     """Build the user-message observation for *speaker*'s next line.
 
@@ -302,6 +344,10 @@ def _dialogue_observation(
     #780 place-grounding block is appended immediately below the first line
     (never above it -- the schedule mock routes on the observation's first
     line); it is absent entirely unless the caller supplies it.
+
+    The closing line is the instruction, so it is the one the model weighs most:
+    continue the dialogue, or -- opening one -- greet a stranger or resume with
+    someone already known (:func:`_have_met`, issue #803).
     """
     lines = [f"You are talking with {listener.name}."]
     grounding_block = _place_grounding_block(speaker, places, visited)
@@ -323,6 +369,19 @@ def _dialogue_observation(
         lines.append("Conversation so far:")
         lines.extend(f"  {name}: {text}" for name, text in convo.lines)
         lines.append("Say your next line, or a brief goodbye to end the conversation.")
+    elif _have_met(memory, listener.name):
+        # #803: this line used to claim "You have just met X" unconditionally, so
+        # an agent greeted a familiar partner cold every time it got to talk to
+        # them again -- while the memory block right above it listed their last
+        # four conversations. Being the LAST line, it won that contradiction.
+        # It asks for something NEW rather than "pick up where you left off":
+        # #803's symptom is near-DUPLICATE meetings, so an opener told to resume
+        # the previous thread would fix the greeting and keep the repetition.
+        lines.append(
+            f"You have talked with {listener.name} before -- don't greet them as"
+            " a stranger, re-introduce yourself, or rehash what you already"
+            " settled. Say something new."
+        )
     else:
         lines.append(
             f"You have just met {listener.name}. Greet them or start a conversation."
