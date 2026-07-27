@@ -390,10 +390,19 @@ the existing frames, not an A/B re-run.
   off-map named elsewhere in the window — the LLM judge is the backstop for
   what that lets through. Verified against the shipped Penn place list: "Did
   you ever make it down to the boathouse?" / "Oh yeah, I totally went — way
-  nicer than Van Pelt Library." now scores 10.0 (1.0 pre-#807), and the
-  evidence line reads "mentions boathouse (not in this world) without
-  claiming to have been there — allowed, not scored" even though Ada did
-  claim it, one line up. The obvious alternative — splitting the cue list
+  nicer than Van Pelt Library." now scores 10.0 (1.0 pre-#807). The score is
+  the ceiling; the *report* no longer misdescribes it. An exempted line leaves
+  `claimed` empty, so it used to fall through to the "mentions boathouse (not
+  in this world) without claiming to have been there — allowed, not scored"
+  summary — a line that states the opposite of what happened, and one a reader
+  of a `--no-llm` run has nothing to check against. **Fixed in #809**: an
+  exempted line gets its own evidence branch, naming the cue, the off-map place
+  the window scoping attached it to, and that it was not scored because the
+  line named a real place and no off-map one. The "allowed, not scored" string
+  is unchanged and still fires for windows that genuinely carry no claim — it
+  is part of the byte-identity of the published `run-20260724-201036-e8c405`
+  report, where the exemption fires zero times. The obvious alternative —
+  splitting the cue list
   into invite-cues and visited-cues and exempting only invitations — was
   rejected: it re-flags the innocent "I went to the Library" whenever a
   partner mentions a boathouse, the same false positive #807 exists to fix.

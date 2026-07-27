@@ -818,13 +818,22 @@ class HeuristicJudge:
             mine = [(sp, tx) for sp, tx in lines if sp == ev.name]
             if not mine:
                 continue
-            claimed = [
-                (sp, tx)
-                for sp, tx in mine
-                if invented
-                and any(cue in tx.lower() for cue in _EXPERIENCE_CUES)
-                and not _names_only_real_places(tx, real, ev.world_places)
-            ]
+            # A partition, not a filter: a line the #807 exemption dropped is a
+            # *third* outcome, and the summary below asserts something false
+            # about the window unless it can see them (#809).
+            claimed: list[tuple[str, str]] = []
+            exempted: list[tuple[str, str]] = []
+            for sp, tx in mine:
+                if not invented or not any(
+                    cue in tx.lower() for cue in _EXPERIENCE_CUES
+                ):
+                    continue
+                bucket = (
+                    exempted
+                    if _names_only_real_places(tx, real, ev.world_places)
+                    else claimed
+                )
+                bucket.append((sp, tx))
             scores.append(1.0 - len(claimed) / len(mine))
             for sp, tx in claimed[:3]:
                 # Name the cue phrase(s) that turned this line into a claim:
@@ -839,7 +848,21 @@ class HeuristicJudge:
                     f'{sp} claims first-hand experience ("{cues}") in a window '
                     f"that names {', '.join(invented)} -- not in this world"
                 )
-            if invented and not claimed:
+            if exempted:
+                # An exempted line is not "nobody claimed anything", so it must
+                # not fall through to the branch below, which says exactly that
+                # (#809). Report what happened instead: the cue, the off-map
+                # place the window scoping attached it to, and why it wasn't
+                # scored. Cues and `invented` only, same #780 I2 rule as above.
+                for sp, tx in exempted[:3]:
+                    cues = ", ".join(c for c in _EXPERIENCE_CUES if c in tx.lower())
+                    evidence.append(
+                        f"steps {conv.start}-{conv.end} ({ev.time_at(conv.start)}): "
+                        f'{sp} uses a first-hand cue ("{cues}") in a window that '
+                        f"names {', '.join(invented)} -- not scored: the line "
+                        f"names a real place and no off-map one"
+                    )
+            elif invented and not claimed:
                 evidence.append(
                     f"steps {conv.start}-{conv.end}: mentions {', '.join(invented)} "
                     f"(not in this world) without claiming to have been there -- "
@@ -852,8 +875,8 @@ class HeuristicJudge:
                 # WAS flagged, the per-line findings above already name what was
                 # seen, so this summary would only repeat them.) Reaching this
                 # branch means `invented` is empty -- a non-empty `invented`
-                # with no claim took the branch above -- so the verdict is just
-                # "nothing" vs "all real".
+                # with no claim took one of the branches above -- so the verdict
+                # is just "nothing" vs "all real".
                 verdict = (
                     f"place words seen: {', '.join(seen)} -- all real"
                     if seen

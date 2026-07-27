@@ -533,6 +533,62 @@ def test_world_grounding_exempts_a_real_place_invitation_beside_off_map_backstor
     assert judge._world_grounding(ev).score == 10.0
 
 
+def test_world_grounding_evidence_reports_an_exempted_line_truthfully():
+    # Issue #809. An exempted line (#807) leaves `claimed` empty, which used to
+    # take the "without claiming to have been there" summary branch -- in a
+    # window where the agent said "I totally went". The score is the accepted
+    # #807 ceiling and must not move; the evidence has to stop asserting the
+    # opposite of what happened.
+    judge = HeuristicJudge()
+    ev = build_evidence(make_replay())["Ada"]
+    ev.conversations = [
+        _convo(
+            1,
+            2,
+            [
+                ["Bea", "Did you ever make it down to the boathouse?"],
+                ["Ada", "Oh yeah, I totally went -- way nicer than the Library."],
+            ],
+        )
+    ]
+    score = judge._world_grounding(ev)
+    assert score.score == 10.0  # the #807 ceiling, unchanged
+    assert not any("without claiming to have been there" in e for e in score.evidence)
+    assert len(score.evidence) == 1
+    exempt = score.evidence[0]
+    # The cue, the off-map place the window scoping attached it to, and why the
+    # line was not scored. "boathouse" comes from the classified `invented`
+    # list, never the raw transcript (#780 I2), so this fails loudly if the
+    # gazetteer stops recognizing it.
+    assert "totally went" in exempt
+    assert "boathouse" in exempt
+    assert "not scored: the line names a real place and no off-map one" in exempt
+
+
+def test_world_grounding_evidence_for_a_scored_claim_is_unchanged_by_809():
+    # The other half of #809's acceptance: the same window with no real place in
+    # Ada's line does not trip the exemption, so it stays on the path this
+    # dimension exists for -- one per-line finding, no summary trailer.
+    judge = HeuristicJudge()
+    ev = build_evidence(make_replay())["Ada"]
+    ev.conversations = [
+        _convo(
+            1,
+            2,
+            [
+                ["Bea", "Did you ever make it down to the boathouse?"],
+                ["Ada", "Oh yeah, I totally went! The light was perfect down there."],
+            ],
+        )
+    ]
+    score = judge._world_grounding(ev)
+    assert score.score == 1.0
+    assert score.evidence == [
+        'steps 1-2 (08:01): Ada claims first-hand experience ("down there, '
+        'totally went") in a window that names boathouse -- not in this world'
+    ]
+
+
 def test_world_grounding_exempts_a_real_place_the_verbatim_check_cannot_cover():
     # Issue #807 mutation gap: "meet me at the Cafe" (the test above) satisfies
     # BOTH halves of `_names_only_real_places` at once -- the gazetteer noun
