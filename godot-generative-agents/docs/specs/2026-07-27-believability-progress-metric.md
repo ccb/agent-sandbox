@@ -271,3 +271,42 @@ body and as a #760 comment.
 
 And on #781 itself: strike the "collapse cumulative chat states before
 counting" bullet, already delivered by #799.
+
+## Measured result (implementation)
+
+Implemented on `fix/believability-progress-781`. Audited against the five #760
+batch-1 runs with Penn's `meta.locations` injected (the bakes predate #780 — see
+[#813](https://github.com/ccb/agent-sandbox/issues/813)).
+
+| run | before | after | rank |
+|---|---|---|---|
+| R2 `…78858a` *(the loop)* | 9.17 | **8.89** | 2nd → 1st |
+| R1 `…d528ec` *(the best run)* | **8.05** | **8.52** | **5th → 2nd** |
+| R4 `…e8c405` | 9.19 | 8.39 | 1st → 3rd |
+| R5 `…e51349` *(zero conversations)* | 8.60 | 7.90 | 4th → 4th |
+| R3 `…584ead` | 8.67 | 7.75 | 3rd → 5th |
+
+All five acceptance conditions hold:
+
+1. **R2's loop pair are the two lowest agents in their own run** — Aiden Park
+   **8.04** and Chris Donnelly **8.20**, against Nina 9.12, Jamal 9.52, Grace 9.58.
+   They were 4th and 2nd of five (9.15, 9.25).
+2. **The silent free-rider stops topping the batch** — Wesley Okafor **9.67 →
+   7.50**, now the lowest agent in R4 rather than the highest in all 23.
+3. **R1 leaves last place** — 8.05 (5th) → 8.52 (2nd).
+4. **`loops` is non-empty for R2 and R3, empty for R1, R4 and R5.**
+5. **The flagged pairs are the right ones** — R2 `Aiden Park <-> Chris Donnelly`
+   (8 conversations, mean novelty 0.44); R3 `Hannah Whitfield <-> Ravi Deshmukh`
+   (7 conversations, 0.54).
+
+R3 falls to last because two of its agents (Tessa Byrne 5.45, Professor Ellis
+6.28) were silent while co-located 16% of the run — previously `n/a`, now scored.
+
+The synthetic fixture's scrambled controls tightened as predicted: intact 9.50,
+scrambled frames 7.34 (**−2.16**, was pinned at ≥1.0), swapped plans
+`plan_coherence` 10.0 → 5.5 (**−4.5**, was pinned at ≥1.0).
+
+**R2 still tops the run mean**, as the *Acceptance* section above anticipated —
+three of its five agents genuinely were healthy and a mean averages them in. The
+`loops` flag is what makes that legible, and it is why the run-mean ordering was
+never the bar.
