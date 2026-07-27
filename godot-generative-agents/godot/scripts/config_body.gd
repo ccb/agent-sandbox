@@ -20,6 +20,8 @@ extends RefCounted
 #   tick           float          tick-seconds spinbox value
 #   initial_tick   float          run.tick_seconds
 #   max_cost       float          cost spinbox value (0.0 = unset)
+#   plan           String         selected planner ("" = no planner row on this backend)
+#   initial_plan   String         run.plan_request from GET /config ("" = no planner row)
 #   knobs_current  Dictionary     GET /config's knobs.current
 #   knob_edits     Dictionary     nested dict keyed by path segments, for CHANGED knobs only
 static func build_post_body(state: Dictionary) -> Dictionary:

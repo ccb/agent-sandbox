@@ -291,6 +291,10 @@ def test_plan_follows_the_configured_brain_and_is_overridable():
     stepper = _mock_stepper()
     assert stepper.plan_mode == "schedule"  # free brain: the authored day
     assert stepper.apply_config(brain="scripted")["plan"] == "schedule"
+    # A brain-only apply carries no `plan`, so the request flag itself must
+    # stay untouched (still "auto") -- only the resolved value re-follows the
+    # new brain.
+    assert stepper._plan_mode_flag == "auto"
     # An explicit planner on a brain with no client to plan with is refused
     # (a 400 upstream), the same rule --plan llm applies at launch.
     with pytest.raises(ValueError, match="needs the llm brain"):

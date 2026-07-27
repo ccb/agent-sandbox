@@ -487,6 +487,13 @@ func _apply_seed(seed: Dictionary) -> void:
 		if _plan_opt != null and pidx >= 0:
 			_plan_opt.select(pidx)
 			_update_plan_row()
+			if _selected_plan() != plan:
+				# _update_plan_row can snap a stranded llm selection back to
+				# auto (llm needs the llm brain) -- warn instead of silently
+				# keeping something other than what the seed asked for.
+				unmet.append(
+					"planner '%s' needs the llm brain here -- kept '%s'" % [plan, _selected_plan()]
+				)
 		else:
 			# This backend has no planner row (pre-#790) or doesn't offer the
 			# saved value -- warn like a missing brain, don't silently drop.
@@ -500,6 +507,12 @@ func _apply_seed(seed: Dictionary) -> void:
 			_seed_spin(_tick_spin, float(r["tick_seconds"]), "tick seconds", unmet)
 		if r.get("max_cost") != null and _cost_spin != null:
 			_seed_spin(_cost_spin, float(r["max_cost"]), "cost budget", unmet)
+	# select() emits no item_selected signal, so a brain-seeded selection above
+	# (or a config block saved between #734 and #787 that carries a brain but
+	# no plan/plan_request, skipping the plan branch entirely) would otherwise
+	# leave the row and hint stale against the brain that actually got picked.
+	# A safe no-op when _plan_opt is null (no planner row on this backend).
+	_update_plan_row()
 	if unmet.is_empty():
 		_set_status("Pre-filled from a saved run. Adjust anything, then Start.", false)
 	else:
@@ -598,7 +611,7 @@ func _on_start_pressed() -> void:
 	if cast.is_empty():
 		_set_status("Pick at least one persona for the cast.", true)
 		return
-	var brain := str(_brains[_brain_opt.selected]) if _brain_opt.selected >= 0 else str(_initial.brain)
+	var brain := _selected_brain()
 	var body: Dictionary = ConfigBody.build_post_body({
 		"cast": cast,
 		"brain": brain,
