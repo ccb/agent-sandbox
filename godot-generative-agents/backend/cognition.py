@@ -1965,7 +1965,18 @@ def _advance_conversation(
     speaker = chars[ac.next_speaker]
     listener = chars[ac.b if ac.next_speaker == ac.a else ac.a]
     _stamp_convo_ctx(speaker, step)
-    cont = convo.exchange(game, ac.convo, speaker, listener, turn=step)
+    cont = convo.exchange(
+        game,
+        ac.convo,
+        speaker,
+        listener,
+        turn=step,
+        # #780: the opt-in. Only the generative-agents path grounds its
+        # dialogue in the world's real geography; Action Castle / hw1_llm keep
+        # the unchanged prompt because they never pass these.
+        places=sorted(game.locations),
+        visited=state[ac.next_speaker].get("visited", ()),
+    )
     _publish_chat(state, frame, ac.a, ac.b, ac.convo)
     if cont and len(ac.convo.lines) < max_exchanges:
         ac.next_speaker = ac.b if ac.next_speaker == ac.a else ac.a
@@ -2015,6 +2026,11 @@ def maybe_converse(
     pair frozenset, persisted across ticks) holds each in-progress
     :class:`ActiveConversation`. Every step this function
 
+    0. **accumulates** each resident's real visit history into
+       ``state[name]["visited"]`` (issue #780) -- a list in first-visit order,
+       grown for every resident in ``order`` whether or not it converses this
+       step, so a later conversation can ground its dialogue in where the
+       speaker has actually been;
     1. **advances** each in-progress conversation by exactly one
        :func:`conversation.exchange` line -- publishing the transcript-so-far on
        both cards. When an end condition fires (empty utterance, wrap-up flag, or
@@ -2042,6 +2058,19 @@ def maybe_converse(
     """
     active = active if active is not None else {}
     completed = 0
+
+    # (0) #780: remember every place each resident has actually stood in, so
+    # the dialogue seam can tell a conversing agent where it has really been.
+    # Nothing in the engine tracks this: Location.has_been_visited is global
+    # AND player-only, and Travel marks nothing. A list in first-visit order,
+    # never a set -- this reaches the LLM request and cassette keys hash it.
+    for nm in order:
+        here = getattr(getattr(chars.get(nm), "location", None), "name", None)
+        if not here:
+            continue
+        been = state[nm].setdefault("visited", [])
+        if here not in been:
+            been.append(here)
 
     # (1) Advance every in-progress conversation by one line, and release any
     # held pair whose playback window has elapsed (#673).

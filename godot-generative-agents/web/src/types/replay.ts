@@ -67,6 +67,8 @@ export interface ReplayMeta {
   relationships?: RelationshipEdge[];
   /** LIVE meta only: the model driving the cast (never in a baked file). */
   llm?: LlmInfo | null;
+  /** The world's real place names, sorted. Absent in replays baked before #780. */
+  locations?: string[];
 }
 
 /** One persona's state at a single step. Key order is pinned by

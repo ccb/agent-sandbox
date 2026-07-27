@@ -163,6 +163,25 @@ def test_meta_defaults_cover_both_surfaces():
     assert meta.steps is None and meta.llm is None
 
 
+def test_meta_locations_optional_for_older_replays():
+    # Additive field: a replay baked before #780 has no "locations" and must
+    # still validate (no SCHEMA_VERSION bump).
+    meta = Meta.model_validate(
+        {
+            "schema_version": SCHEMA_VERSION,
+            "tile_px": 16,
+            "width": 245,
+            "height": 279,
+            "sec_per_step": 10,
+            "start": "2023-02-13 08:00:00",
+            "vision_r": 8,
+            "personas": [],
+            "relationships": [],
+        }
+    )
+    assert meta.locations is None
+
+
 def test_replay_shape_validates():
     frame = replay_frame_entry(_SAMPLE_RAW)
     Replay.model_validate(
@@ -227,6 +246,17 @@ def test_baked_replay_validates_against_contract(tmp_path):
     assert next(iter(json.loads(out.read_text())["meta"])) == "schema_version"
 
 
+def test_baked_meta_carries_sorted_locations(tmp_path):
+    out = _bake_small_replay(tmp_path)
+    meta = json.loads(out.read_text())["meta"]
+    assert meta["locations"] == sorted(meta["locations"])
+    # The six buildings, the outdoor hub, and the named interiors (#780 found
+    # the world is 18 locations, not the six the issue counted).
+    assert "College Hall" in meta["locations"]
+    assert "Penn campus" in meta["locations"]
+    assert len(meta["locations"]) >= 18
+
+
 def test_baked_replay_frames_carry_trace(tmp_path):
     # Reuse the same bake helper as test_baked_replay_validates_against_contract.
     out = _bake_small_replay(tmp_path)
@@ -271,6 +301,13 @@ def test_live_meta_validates_against_contract():
     assert validated.schema_version == SCHEMA_VERSION
     assert validated.steps is None  # a live run doesn't know its length
     assert validated.llm is None  # default stepper runs the mock brain
+
+
+def test_live_meta_locations_match_the_bake():
+    # Baked and live meta must not drift (#297).
+    live = PennStepper(num_steps=2, world=build_penn_world()).meta()
+    assert live["locations"] == sorted(live["locations"])
+    assert Meta.model_validate(live).locations == live["locations"]
 
 
 _REPLAY_TS = _REPO / "godot-generative-agents" / "web" / "src" / "types" / "replay.ts"

@@ -137,6 +137,7 @@ class Meta(_ContractModel):
     relationships: list[RelationshipEdge]
     steps: int | None = None  # bake-only (a live run doesn't know it up front)
     llm: LlmInfo | None = None  # live-only (None in a baked file / under mock)
+    locations: list[str] | None = None  # #780: world place names; absent pre-#780
 
 
 class Replay(_ContractModel):
