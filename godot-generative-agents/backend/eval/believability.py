@@ -488,12 +488,13 @@ def _names_only_real_places(text: str, real: str, world_places: list[str]) -> bo
     if any(word not in real for word in words):
         return False
     # A boundary check, not a bare substring: a one-word world place ("Bar")
-    # would otherwise match inside "barely". Lookaround, not `\b`: `\b` requires
-    # a word character on both sides of the match, so a place name ending in
-    # punctuation ("Reading Room (2F)") would fail to match even before a real
-    # word boundary like a trailing space. The place-noun check above can stay a
-    # plain `in real` test because it compares whole words against the joined
-    # name list.
+    # would otherwise match inside "barely". Lookaround, not `\b`: `\b` matches a
+    # transition, so it needs a word character on exactly one side -- after a name
+    # ending in punctuation ("Reading Room (2F)") it demands that the *next*
+    # character be one, and a trailing space fails it. `(?!\w)` asks only that no
+    # word character follows, which is what we actually mean. The place-noun check
+    # above can stay a plain `in real` test because it compares whole words
+    # against the joined name list.
     return bool(words) or any(
         re.search(rf"(?<!\w){re.escape(place.lower())}(?!\w)", low)
         for place in world_places
