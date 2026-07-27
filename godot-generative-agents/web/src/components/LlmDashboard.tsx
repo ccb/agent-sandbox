@@ -265,7 +265,8 @@ export function LlmDashboard({
                 className="llm-strip-stat"
                 title="co-settled pair-steps · completed conversations (#795)"
               >
-                <strong>{live.usage.social.co_settled_pair_steps}</strong> pair-steps ·{" "}
+                <strong>{live.usage.social.co_settled_pair_steps}</strong> pair-step
+                {live.usage.social.co_settled_pair_steps === 1 ? "" : "s"} ·{" "}
                 <strong>{live.usage.social.conversations}</strong> conversation
                 {live.usage.social.conversations === 1 ? "" : "s"}
               </span>
