@@ -15,7 +15,7 @@ Run with::
     uv run pytest tests/test_reflection.py -v
 """
 
-from text_adventure_games.memory import AgentMemory, MemoryKind
+from text_adventure_games.memory import DEFAULT_MAX_RECORDS, AgentMemory, MemoryKind
 from text_adventure_games.npc import maybe_reflect
 from text_adventure_games.reflection import (
     DEFAULT_REFLECTION_THRESHOLD,
@@ -163,6 +163,81 @@ def test_reflect_drops_empty_inference():
 
     created = reflect(mem, _BlankReflector(["Q?"]), turn=8)
     assert created == []
+
+
+# --- plan memories are intentions, not experience (issue #777) ---------------
+
+
+def test_reflection_input_excludes_plan_memories():
+    # Regression for #777: the t0 day-plan (and #778's conversation commitments)
+    # land in the stream as PLAN records -- *intentions*, not lived experience.
+    # Shown to the reflector, they let an agent "conclude" things about stops it
+    # has not reached (Sofia reflected on her scheduled dinner queasiness at
+    # 08:27, mid-stop-0). Neither the question seed nor the per-question
+    # supporting retrieval may put a plan record in front of the reflector.
+    mem = _stream()
+    mem.add_plan(
+        "Plan: settle in for dinner with Maria at the hall, then head home",
+        turn=8,
+        importance=8.0,
+    )
+    reflector = _FakeReflector(["What should I make of Maria?"])
+    reflect(mem, reflector, turn=9)
+
+    shown = [r for call in reflector.questions_calls for r in call] + [
+        r for _, records in reflector.infer_calls for r in records
+    ]
+    assert shown  # the pass really ran over records
+    assert all(r.kind is not MemoryKind.PLAN for r in shown)
+
+
+def test_plan_records_do_not_shrink_the_supporting_set():
+    # #805 review: plans must be excluded *inside* retrieval (slots backfilled),
+    # not stripped from its top-k output. Eight importance-8.0 commitments (the
+    # #778 stream shape) out-rank every observation, so a post-filter hands the
+    # reflector an empty supporting set and the pass silently goes dark; with
+    # the ranking-side filter the observations fill all max_records slots.
+    mem = _stream()
+    for i in range(8):
+        mem.add_plan(f"Plan: stop {i} with Maria", turn=8, importance=8.0)
+    reflector = _FakeReflector(["What should I make of Maria?"])
+    created = reflect(mem, reflector, turn=9)
+
+    assert created  # the pass still produces a reflection
+    (_, supporting), *_ = reflector.infer_calls
+    assert len(supporting) == DEFAULT_MAX_RECORDS  # full width, no lost slots
+    assert all(r.kind is not MemoryKind.PLAN for r in supporting)
+
+
+def test_plan_records_do_not_shrink_the_seed_window():
+    # Same shape for the question seed: filter, then slice. Plans clustered at
+    # the stream's tail must not eat the window -- older lived records backfill
+    # it, so the reflector still sees recent_window records.
+    mem = _stream(n=3)
+    for i in range(4):
+        mem.add_plan(f"Plan: stop {i}", turn=3, importance=8.0)
+    reflector = _FakeReflector(["What should I make of Maria?"])
+    created = reflect(mem, reflector, turn=4, recent_window=4)
+
+    assert created  # slice-then-filter left an empty seed and no reflection
+    (seed,) = reflector.questions_calls
+    assert [r.kind for r in seed] == [MemoryKind.OBSERVATION] * 3
+
+
+def test_reflection_never_cites_an_unlived_plan_stop():
+    # The live-run shape from #777: the ONLY mention of the day's distinctive
+    # final stop is the plan record itself. MockReflector.infer summarizes the
+    # records it is shown, so if the plan leaks into the supporting set, its
+    # text leaks straight into the written reflection.
+    mem = _stream()
+    mem.add_plan(
+        "Today's stops end with feeling queasy at dinner with Maria",
+        turn=8,
+        importance=8.0,
+    )
+    created = reflect(mem, MockReflector(), turn=9)
+    assert created  # observations alone still yield a reflection
+    assert all("queasy" not in r.text for r in created)
 
 
 # --- MockReflector ----------------------------------------------------------

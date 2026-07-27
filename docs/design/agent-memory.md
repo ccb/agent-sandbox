@@ -369,15 +369,29 @@ if should_reflect(agent.memory, threshold):   # threshold = AgentConfig.reflecti
 
 Reflection flow (`reflection.reflect`), the paper's loop:
 
-1. Take the `recent_window` (default 50) most recent memory records.
+1. Take the `recent_window` (default 50) most recent **lived** memory records.
+   `PLAN` records are intentions, not experience — shown to a reflector they let
+   an agent "remember" its own future (#777) — and they are filtered out *before*
+   the window is sliced, so the seed stays `recent_window` wide.
 2. Ask the `Reflector` for the salient questions they raise (capped at 3).
 3. For each question, *retrieve* supporting memories — read-only (`touch=False`),
-   so reflecting never disturbs decision-time recency.
+   so reflecting never disturbs decision-time recency, and with
+   `exclude_kinds=("plan",)` so plans are dropped inside the retrieval ranking:
+   each one's slot backfills with the next-best lived record instead of thinning
+   the evidence set (#777).
 4. Ask the `Reflector` for one short inference grounded in those memories.
 5. Store each inference as `MemoryKind.REFLECTION` via `add_reflection`, with the
    supporting record ids as `source_event_ids`.
 6. Reset `importance_since_reflection` (after adding, so the reflections' own
    importance doesn't immediately re-trigger).
+
+The trigger matches what the pass can see: `AgentMemory._add` skips `PLAN`
+records when accruing `importance_since_reflection`, so a plan-dense stretch
+(#778 writes one commitment plan per conversation) can't fire a paid reflection
+pass over evidence that hasn't moved. The plan guard is by *kind*, not tense: a
+future commitment restated in a `CHAT` relationship note (#785 stores those as
+chat precisely so reflection sees them) still reaches the reflector — tagging
+inputs by tense (#777's option (b)) is the follow-up that would close that gap.
 
 The cognition sits behind a `Reflector` protocol (mirroring `planning.py`'s
 `Planner`): a deterministic `MockReflector` for offline/CI runs and an
