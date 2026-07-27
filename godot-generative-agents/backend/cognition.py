@@ -539,6 +539,16 @@ def attach_agents(
     siblings, and TAs behaved like strangers who happened to be standing nearby.
     No key -> nothing seeded, so a world without a social graph is unchanged.
 
+    Pass ``events`` (a world YAML's validated ``events:`` list, issue #795) to
+    seed each announced happening as a t=0 observation into every agent's
+    memory *except* its host's -- the host already carries it as their own
+    commitment, at higher importance, from their schedule. Seeded only when
+    ``planner_client`` is also given: :class:`~backend.planner.MockPlanner`
+    ignores memory entirely, so seeding under the mock would shift the
+    top-6 retrieval and move the replay while informing nothing. With
+    ``events=None`` -- the default -- nothing is seeded and the replay is
+    unchanged.
+
     Pass a ``planner_client`` (an engine ``LlmClient``) to plan each day with a
     real model (:class:`~backend.planner.LLMPlanner`, issue #83). With none -- the
     offline default -- each agent gets a :class:`~backend.planner.MockPlanner` that

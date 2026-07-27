@@ -383,14 +383,25 @@ def _llm_stepper(
 
 
 def test_public_events_are_seeded_to_everyone_but_the_host(monkeypatch):
+    from backend.cognition import EVENT_IMPORTANCE, _IMPORTANCE_LOCKED
+
     stepper = _llm_stepper(monkeypatch, plan="llm")
     announcement = "There's a guest lecture on gravitational waves"
     seeded = {}
+    seeded_record = None
     for name in stepper.order:
-        texts = [r.text for r in stepper.chars[name].agent.memory.records]
-        seeded[name] = any(announcement in t for t in texts)
+        records = stepper.chars[name].agent.memory.records
+        seeded[name] = any(announcement in r.text for r in records)
+        if seeded_record is None:
+            seeded_record = next((r for r in records if announcement in r.text), None)
     assert seeded["Professor Tanaka"] is False  # she has her own commitment
     assert all(v for n, v in seeded.items() if n != "Professor Tanaka")
+    # #794-style lock: without it, #583's scorer would re-guess the authored
+    # 4.0 as 6-8 the moment a real brain drives the run -- silently, since no
+    # test exercised the metadata/tags the interface promises.
+    assert seeded_record.importance == EVENT_IMPORTANCE
+    assert seeded_record.metadata.get(_IMPORTANCE_LOCKED) is True
+    assert seeded_record.tags == {"seed", "event"}
 
 
 def test_public_events_are_not_seeded_without_an_llm_planner(monkeypatch):
