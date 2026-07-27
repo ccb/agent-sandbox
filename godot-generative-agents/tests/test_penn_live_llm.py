@@ -382,6 +382,26 @@ def _llm_stepper(
     )
 
 
+def test_public_events_are_seeded_to_everyone_but_the_host(monkeypatch):
+    stepper = _llm_stepper(monkeypatch, plan="llm")
+    announcement = "There's a guest lecture on gravitational waves"
+    seeded = {}
+    for name in stepper.order:
+        texts = [r.text for r in stepper.chars[name].agent.memory.records]
+        seeded[name] = any(announcement in t for t in texts)
+    assert seeded["Professor Tanaka"] is False  # she has her own commitment
+    assert all(v for n, v in seeded.items() if n != "Professor Tanaka")
+
+
+def test_public_events_are_not_seeded_without_an_llm_planner(monkeypatch):
+    """MockPlanner ignores memory entirely -- seeding there would only
+    perturb the bake. This is the guard for byte-identity."""
+    stepper = _llm_stepper(monkeypatch)  # default plan="schedule"
+    for name in stepper.order:
+        texts = [r.text for r in stepper.chars[name].agent.memory.records]
+        assert not any("open to anyone" in t for t in texts)
+
+
 def test_tiering_map_reaches_every_client_and_stamps_fixed_roles(monkeypatch):
     created = []
 

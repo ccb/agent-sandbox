@@ -1118,6 +1118,10 @@ class PennStepper:
                 [loc.get("address") for loc in self.world.locations],
                 self.clock,
             ),
+            # #795: the world's announced happenings, seeded to every agent
+            # but the host -- only reaches memory under a real planner (see
+            # cognition.attach_agents), so this is inert under the mock brain.
+            events=self.world.events,
             out_planner_sources=planner_sources,
             extra_action_names=PENN_ACTION_VERBS,
         )

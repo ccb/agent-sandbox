@@ -47,6 +47,18 @@
 # is the replay's persona order, so reordering changes the baked bytes (#640).
 cast: [diego, tanaka, sofia]
 
+# Public events (#795): announced happenings every resident could know about,
+# seeded into memory at t=0 under a real planner. This is the honest shared
+# anchor a model-authored day can converge on -- Tanaka is obliged to be here,
+# Diego's seeded relationship edge already says he sits in on her lectures, and
+# Sofia is curious about everything. Exactly one, deliberately: if the live A/B
+# run shows one anchor is not enough, a second is four more lines.
+events:
+- label: a guest lecture on gravitational waves
+  at: Irvine Auditorium
+  when: this afternoon
+  host: Professor Tanaka
+
 locations:
 - name: Penn campus
   description: The streets and walks of Penn's campus, tying every corner together.

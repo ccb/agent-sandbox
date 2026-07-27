@@ -13,6 +13,7 @@ import yaml
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from backend.build_world import load_world_yaml  # noqa: E402
+from backend.prompt_templates import render  # noqa: E402
 
 
 def _world(tmp_path, events, cast_names=("Ana",)):
@@ -79,3 +80,29 @@ def test_a_host_who_is_no_persona_at_all_raises(tmp_path):
 def test_a_world_with_no_events_key_gets_an_empty_list(tmp_path):
     path = _world(tmp_path, [])
     assert load_world_yaml(path)["events"] == []
+
+
+def test_public_event_prompty_renders_exactly():
+    assert render(
+        "public_event",
+        label="a guest lecture on gravitational waves",
+        at="Irvine Auditorium",
+        when="this afternoon",
+        host="Professor Tanaka",
+    ) == (
+        "There's a guest lecture on gravitational waves at Irvine Auditorium "
+        "this afternoon, hosted by Professor Tanaka. It's open to anyone."
+    )
+
+
+def test_public_event_prompty_without_a_host():
+    assert (
+        render(
+            "public_event",
+            label="a farmers market",
+            at="College Green",
+            when="all morning",
+            host="",
+        )
+        == "There's a farmers market at College Green all morning. It's open to anyone."
+    )

@@ -327,8 +327,11 @@ class PennWorld:
     perception gating, ``meetings`` is the authored dialogue script both
     conversation injectors consume, ``llm`` is the world's declared LLM
     settings (the YAML ``llm:`` block; only ``serve_penn --brain llm`` acts
-    on it), and ``relationships`` is the validated t=0 seed social graph the
-    viewer's social-graph pop-up draws (#252)."""
+    on it), ``relationships`` is the validated t=0 seed social graph the
+    viewer's social-graph pop-up draws (#252), and ``events`` is the
+    validated world-level ``events:`` noticeboard (#795) that
+    ``cognition.attach_agents`` seeds into every agent but the host's
+    memory, gated on a real planner client."""
 
     world_map: WorldMap
     personas: list
@@ -337,6 +340,7 @@ class PennWorld:
     build_world_fn: Callable
     llm: dict | None = None
     relationships: list = field(default_factory=list)
+    events: list = field(default_factory=list)
     # The world YAML this world was built from (#732): lets the live config
     # surface enumerate the adjacent personas/ library. None for a PennWorld
     # assembled by hand in tests.
@@ -633,6 +637,7 @@ def build_penn_world(
     personas = _normalize_personas(data["personas"])
     locations = data["locations"]
     meetings = data.get("meetings") or []
+    events = data.get("events") or []
 
     world_map = _pin_building_meeting_points(WorldMap(upenn_dir))
     # Route each meeting's participants to a tight rendezvous cluster inside its
@@ -683,6 +688,7 @@ def build_penn_world(
         build_world_fn=_build,
         llm=data.get("llm") or None,
         relationships=relationships,
+        events=events,
         world_data=world_data,
     )
 

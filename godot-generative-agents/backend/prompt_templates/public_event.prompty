@@ -1,0 +1,32 @@
+---
+name: public_event
+description: >
+  One announced, public happening a resident could know about without anyone
+  telling them privately (backend/cognition.py, attach_agents; issue #795).
+  Built from a world YAML's validated `events:` entry and seeded as a t=0
+  observation into every agent's memory EXCEPT the host's -- the host already
+  carries it as their own commitment, at higher importance, from their
+  schedule. This is what gives a model-authored day a shared anchor it can
+  honestly plan around: #795 measured zero co-settled pair-steps under
+  --plan llm precisely because nothing about the world was publicly knowable.
+  Memory text, not a live model prompt.
+inputs:
+  label:
+    type: string
+    description: The happening, lowercase and article-led, e.g. "a guest lecture on gravitational waves".
+  at:
+    type: string
+    description: The world location it happens at, e.g. "Irvine Auditorium".
+  when:
+    type: string
+    description: Free prose timing, e.g. "this afternoon". Deliberately not clock-coupled.
+  host:
+    type: string
+    description: The cast member holding it. Optional -- empty drops the clause.
+sample:
+  label: a guest lecture on gravitational waves
+  at: Irvine Auditorium
+  when: this afternoon
+  host: Professor Tanaka
+---
+There's {{ label }} at {{ at }} {{ when }}{% if host %}, hosted by {{ host }}{% endif %}. It's open to anyone.
