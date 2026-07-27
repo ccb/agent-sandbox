@@ -369,6 +369,17 @@ DIMENSIONS = (
     "memory_use",
 )
 
+# A silent agent this co-located had someone to talk to and did not. Below it,
+# social grounding stays n/a -- solitude is not a social failure (#781).
+SILENT_COLOCATION_FLOOR = 0.10
+
+# A pair that met this often and said this little that was new was re-running one
+# conversation, not having several (#778, flagged for #781). On the #760 batch-1
+# runs these catch both loop pairs (0.44, 0.54) and neither healthy pair
+# (0.72, 0.84). A false positive costs a line of report text, not a score.
+REPEAT_LOOP_MIN_CONVERSATIONS = 3
+REPEAT_LOOP_MAX_NOVELTY = 0.60
+
 
 @dataclass
 class DimScore:
@@ -524,6 +535,74 @@ def _longest_nondecreasing(values: list[int]) -> int:
     return max(best)
 
 
+def _decisions_in(retrievals: list[dict]) -> list[dict]:
+    """Collapse repainted retrieval frames into one entry per decision.
+
+    A frame carries the act and the memories retrieval surfaced for it, and the
+    producer repaints both unchanged for every step the activity runs. Scoring
+    each repaint counted one match once per step -- 1200 frames of Diego's #760
+    batch-1 run are 14 decisions -- which handed a monotonous day a perfect
+    memory-use score (#781).
+
+    Same collapse ``_segments_for`` does for acts and ``_merge_growth_windows``
+    (#799) does for conversations.
+    """
+    decisions: list[dict] = []
+    previous = None
+    for r in retrievals:
+        key = (r["act"], json.dumps(r["memories"], sort_keys=True))
+        if key != previous:
+            decisions.append(r)
+            previous = key
+    return decisions
+
+
+def _repeat_loops(evidence: dict[str, AgentEvidence]) -> list[dict]:
+    """Participant pairs that kept re-running the same conversation.
+
+    The run mean cannot express "two of these five agents were stuck in a
+    groundhog-day loop" -- it averages them in with the healthy majority. So
+    name the pathology instead of trying to compress it into a score (#781).
+
+    Novelty per window is the fraction of its content words the pair had not
+    already used; a pair whose mean falls below
+    :data:`REPEAT_LOOP_MAX_NOVELTY` over at least
+    :data:`REPEAT_LOOP_MIN_CONVERSATIONS` windows is flagged.
+    """
+    windows: dict[frozenset[str], dict[tuple[int, int], Conversation]] = {}
+    for ev in evidence.values():
+        for conv in ev.conversations:
+            # Every window appears in each participant's evidence -- key by span
+            # so a pair's shared conversation is counted once.
+            pair = frozenset(conv.participants)
+            windows.setdefault(pair, {})[(conv.start, conv.end)] = conv
+
+    loops: list[dict] = []
+    for pair, spans in windows.items():
+        ordered = [spans[k] for k in sorted(spans)]
+        if len(ordered) < REPEAT_LOOP_MIN_CONVERSATIONS:
+            continue
+        said_before: set[str] = set()
+        novelties = []
+        for conv in ordered:
+            words = _content_words(
+                " ".join(line[1] for line in conv.transcript if len(line) == 2)
+            )
+            novelties.append(len(words - said_before) / len(words) if words else 1.0)
+            said_before |= words
+        mean_novelty = sum(novelties) / len(novelties)
+        if mean_novelty < REPEAT_LOOP_MAX_NOVELTY:
+            loops.append(
+                {
+                    "participants": sorted(pair),
+                    "conversations": len(ordered),
+                    "mean_novelty": round(mean_novelty, 2),
+                }
+            )
+    loops.sort(key=lambda loop: (loop["mean_novelty"], loop["participants"]))
+    return loops
+
+
 # ---------------------------------------------------------------------------
 # The deterministic heuristic judge
 # ---------------------------------------------------------------------------
@@ -574,28 +653,39 @@ class HeuristicJudge:
     # -- dimension 1: plan coherence -----------------------------------------
 
     def _plan_coherence(self, ev: AgentEvidence) -> DimScore:
-        """Did the agent do what its plan says, in the plan's order?
+        """Did the agent get through its plan, in the plan's order?
 
-        *coverage*: the fraction of the day (step-weighted) spent in segments
-        that match some schedule stop. *order*: of the matched segments, the
-        fraction that appear in schedule order (longest non-decreasing run of
-        stop indices). A shuffled day keeps coverage but destroys order; a
-        swapped plan destroys coverage.
+        *progress*: how far through the schedule the day actually got -- the
+        longest in-order run of DISTINCT matched stops, over the number of
+        stops. *order*: of every matched segment, the fraction that appears in
+        schedule order (longest non-decreasing run of stop indices).
+
+        The two multiply, so a day has to both advance and stay in sequence.
+        Progress alone would miss a shuffled day -- a scrambled run reaches the
+        same stops, just not in that sequence, which only *order* sees.
+
+        Progress replaces the old *coverage* term, which asked whether a segment
+        matched **some** stop. That read 100% for every one of the 23 agents in
+        the #760 batch-1 runs: the act text carries its "@ Building:Room"
+        address, and the address always shares a word with the stop it belongs
+        to, so coverage discriminated nothing and an agent parked on the
+        "spending time" placeholder for 977 steps scored a perfect 10 (#781).
         """
         if not ev.segments or not ev.schedule:
             return DimScore(None, note="no schedule or no frames to compare")
         matches = self._match_segments(ev)
-        total = sum(seg.steps for seg in ev.segments)
-        on_plan = sum(
-            seg.steps for seg, m in zip(ev.segments, matches) if m is not None
-        )
-        coverage = on_plan / total if total else 0.0
         matched_order = [m for m in matches if m is not None]
-        order = (
-            _longest_nondecreasing(matched_order) / len(matched_order)
-            if matched_order
-            else 0.0
-        )
+        if not matched_order:
+            return DimScore(
+                _scale(0.0), [], "the day never reached a single planned stop"
+            )
+        reached: list[int] = []
+        for m in matched_order:
+            if m not in reached:
+                reached.append(m)
+        stops_reached = _longest_nondecreasing(reached)
+        progress = min(1.0, stops_reached / len(ev.schedule))
+        order = _longest_nondecreasing(matched_order) / len(matched_order)
         evidence = []
         for seg, m in zip(ev.segments, matches):
             if m is not None and len(evidence) < 2:
@@ -613,10 +703,10 @@ class HeuristicJudge:
                 )
                 break
         return DimScore(
-            _scale(0.5 * coverage + 0.5 * order),
+            _scale(progress * order),
             evidence,
-            f"{coverage:.0%} of the day on a planned stop; "
-            f"{order:.0%} of matched segments in plan order",
+            f"reached {stops_reached} of {len(ev.schedule)} planned stops "
+            f"in order; {order:.0%} of matched segments in plan order",
         )
 
     # -- dimension 2: temporal sanity ----------------------------------------
@@ -698,14 +788,45 @@ class HeuristicJudge:
 
         Per conversation: were the participants actually standing together
         (within vision_r) while it played; does each speaker actually belong
-        to it; and do its lines reference context found in BOTH participants'
-        memory streams (not confabulation)?
+        to it; do its lines reference context found in BOTH participants'
+        memory streams (not confabulation); and does it say anything the pair
+        has not already said (#781)?
         """
         if not ev.conversations:
-            return DimScore(None, note="no conversations observed for this agent")
+            near = sum(
+                1
+                for step in range(ev.n_steps)
+                if any(
+                    step < len(other.positions)
+                    and (ev.positions[step][0] - other.positions[step][0]) ** 2
+                    + (ev.positions[step][1] - other.positions[step][1]) ** 2
+                    <= ev.vision_r**2
+                    for name, other in evidence_by_name.items()
+                    if name != ev.name
+                )
+            )
+            fraction = near / ev.n_steps if ev.n_steps else 0.0
+            if fraction < SILENT_COLOCATION_FLOOR:
+                return DimScore(None, note="no conversations observed for this agent")
+            # Scored, not skipped: an n/a drops out of every mean, so never
+            # speaking used to be free -- R4's silent Wesley Okafor was the
+            # top-scoring agent in the whole #760 batch-1 (#781). Flat, because
+            # the dimension has nothing to grade; the note carries what happened.
+            return DimScore(
+                _scale(0.0),
+                [
+                    f"within sight of another agent for {near} of "
+                    f"{ev.n_steps} steps without ever speaking"
+                ],
+                f"never spoke, though within sight of another agent for "
+                f"{fraction:.0%} of the run",
+            )
         scores = []
         evidence = []
-        for conv in ev.conversations:
+        # Per-pair vocabulary so far, for the novelty term below. Windows are
+        # already start-ordered; sorting says so rather than relying on it.
+        spoken: dict[frozenset[str], set[str]] = {}
+        for conv in sorted(ev.conversations, key=lambda c: (c.start, c.end)):
             others = [p for p in conv.participants if p in evidence_by_name]
             # Co-location: every pair within vision_r on each window step.
             together = 0
@@ -755,13 +876,29 @@ class HeuristicJudge:
                     )
             grounding = grounded / substantive if substantive else 1.0
 
-            scores.append(0.4 * coloc + 0.4 * grounding + 0.2 * valid)
+            # Novelty: how much of this window is new to this pair. A pair
+            # re-running the same conversation scored a perfect 10 before --
+            # every re-run is co-located, valid, and grounded in streams that by
+            # then contain everything they have already said (#781). It decays
+            # monotonically across the #778 loops (1.00 -> 0.04) and stays high
+            # for pairs whose conversations actually go somewhere.
+            pair = frozenset(conv.participants)
+            said_before = spoken.get(pair, set())
+            window_words = _content_words(" ".join(text for _, text in lines))
+            novelty = (
+                len(window_words - said_before) / len(window_words)
+                if window_words
+                else 1.0
+            )
+            spoken[pair] = said_before | window_words
+
+            scores.append(0.3 * coloc + 0.3 * grounding + 0.1 * valid + 0.3 * novelty)
             evidence.append(
                 f"steps {conv.start}-{conv.end} ({ev.time_at(conv.start)}): "
                 f"conversation between {', '.join(conv.participants)} -- "
                 f"co-located {coloc:.0%} of the window, "
                 f"{grounded}/{substantive} substantive lines grounded in both "
-                f"streams"
+                f"streams, {novelty:.0%} of its words new to this pair"
             )
         return DimScore(
             _scale(sum(scores) / len(scores)),
@@ -902,13 +1039,15 @@ class HeuristicJudge:
 
         A decision frame carries the memories retrieval surfaced for it; a
         relevant retrieval shares a content word with the action taken (or
-        the reasoning given for it).
+        the reasoning given for it). Counted once per *decision*, not once per
+        frame -- see :func:`_decisions_in` (#781).
         """
-        if not ev.retrievals:
+        decisions = _decisions_in(ev.retrievals)
+        if not decisions:
             return DimScore(None, note="no decision frames carry retrieved memories")
         relevant = 0
         evidence = []
-        for r in ev.retrievals:
+        for r in decisions:
             decision_words = _content_words(f"{r['act']} {r.get('reasoning') or ''}")
             hit = None
             for mem in r["memories"]:
@@ -928,11 +1067,11 @@ class HeuristicJudge:
                     f"{len(r['memories'])} retrieved memories relate to "
                     f"'{r['act']}'"
                 )
-        fraction = relevant / len(ev.retrievals)
+        fraction = relevant / len(decisions)
         return DimScore(
             _scale(fraction),
             evidence,
-            f"{relevant}/{len(ev.retrievals)} decisions used a relevant memory",
+            f"{relevant}/{len(decisions)} decisions used a relevant memory",
         )
 
 
@@ -976,7 +1115,18 @@ def audit(
         )
         for dim in DIMENSIONS
     }
-    overall = _mean([a["overall"] for a in agents.values() if a["overall"] is not None])
+    scored = {
+        name: a["overall"] for name, a in agents.items() if a["overall"] is not None
+    }
+    overall = _mean(list(scored.values()))
+    # The floor beside the mean: a run mean over agents lets a broken pair hide
+    # behind a healthy majority, which is how #760's groundhog-day run outscored
+    # the healthiest one (#781).
+    weakest = (
+        {"name": min(scored, key=lambda n: scored[n]), "score": min(scored.values())}
+        if scored
+        else None
+    )
     return {
         "run": {
             "source": source,
@@ -986,7 +1136,12 @@ def audit(
         },
         "judge": judge_info(judge),
         "agents": agents,
-        "summary": {"overall": overall, "by_dimension": by_dimension},
+        "summary": {
+            "overall": overall,
+            "weakest": weakest,
+            "loops": _repeat_loops(evidence),
+            "by_dimension": by_dimension,
+        },
     }
 
 
@@ -1275,6 +1430,19 @@ def render_markdown(report: dict) -> str:
             f"| {_label(dim)} | {_fmt_score(report['summary']['by_dimension'][dim])} |"
         )
     lines.append(f"| **Overall** | **{_fmt_score(report['summary']['overall'])}** |")
+    weakest = report["summary"].get("weakest")
+    if weakest:
+        lines.append(
+            f"| Weakest agent | {weakest['name']} ({_fmt_score(weakest['score'])}) |"
+        )
+    for loop in report["summary"].get("loops") or []:
+        lines += [
+            "",
+            f"> **Repeat-conversation loop** -- "
+            f"{' <-> '.join(loop['participants'])}: "
+            f"{loop['conversations']} conversations, mean novelty "
+            f"{loop['mean_novelty']:.2f}",
+        ]
     for name, agent in report["agents"].items():
         lines += ["", f"## {name}", "", f"Overall: **{_fmt_score(agent['overall'])}**"]
         for dim in DIMENSIONS:

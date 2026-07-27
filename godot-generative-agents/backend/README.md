@@ -1385,6 +1385,12 @@ provider, which declines every tool call — falls back to the heuristic, so a
 report always completes. `--format json` emits the raw report dict instead of
 markdown.
 
+The run summary also carries `weakest` (the lowest-scoring agent, name and
+score) and `loops` (participant pairs that kept re-running one conversation:
+their conversation count and mean novelty). Both render in the markdown report.
+A run mean over agents hides a broken pair behind a healthy majority, so read
+the floor and the flags, not just the mean (#781).
+
 ## Penn world matrix artifacts
 
 The generative-agents backend reads the UPenn campus world via `WorldMap`

@@ -19,8 +19,10 @@ from backend.eval.believability import (
     audit,
     build_evidence,
     evidence_text,
+    _repeat_loops,
     load_replay,
     main,
+    render_markdown,
     scramble_replay,
 )
 from backend.run_store import RunStore
@@ -325,6 +327,143 @@ def test_build_evidence_collects_decision_frames_with_retrieved_memories():
     assert r["step"] == 10
     assert r["act"].startswith("eating breakfast")
     assert r["memories"][0]["text"].startswith("Plan: go to Cafe")
+
+
+# ------------------------------------------------------------ plan coherence
+
+
+def _stalled_replay():
+    """Ada never leaves the Cafe: one act for the whole run, so she reaches
+    stop 1 of her 2-stop schedule instead of both."""
+    replay = copy.deepcopy(make_replay())
+    for frame in replay["frames"]:
+        frame["Ada"] = _at_entry(CAFE, "eating breakfast", "T:Cafe:counter")
+    return replay
+
+
+def test_plan_coherence_penalises_a_day_that_never_advances():
+    """#781: standing on one stop all day used to score a perfect 10 --
+    coverage asked 'matches some stop', not 'advanced through the stops'."""
+    judge = HeuristicJudge()
+    intact = judge._plan_coherence(build_evidence(make_replay())["Ada"])
+    stalled = judge._plan_coherence(build_evidence(_stalled_replay())["Ada"])
+
+    assert intact.score == 10.0
+    assert stalled.score == 5.5
+    assert "reached 1 of 2 planned stops" in stalled.note
+
+
+# ------------------------------------------------------------ memory use
+
+
+def test_memory_use_counts_decisions_not_repainted_frames():
+    """#781: the producer repaints (act, memories) every step, so scoring each
+    repaint counted one match hundreds of times."""
+    judge = HeuristicJudge()
+    ev = build_evidence(make_replay())["Ada"]
+    plan = [
+        {
+            "kind": "plan",
+            "importance": 5.0,
+            "text": "Plan: go to Cafe and eating breakfast.",
+            "created_turn": 0,
+        }
+    ]
+    shelving = [
+        {
+            "kind": "observation",
+            "importance": 2.0,
+            "text": "I am shelving books.",
+            "created_turn": 40,
+        }
+    ]
+    # 40 repaints of one decision, then two more decisions -- the second of
+    # which retrieves a memory unrelated to what it is doing.
+    ev.retrievals = [
+        {
+            "step": s,
+            "act": "eating breakfast @ T:Cafe:counter",
+            "reasoning": None,
+            "memories": plan,
+        }
+        for s in range(40)
+    ] + [
+        {
+            "step": 40,
+            "act": "shelving books @ T:Library:spot",
+            "reasoning": None,
+            "memories": shelving,
+        },
+        {
+            "step": 41,
+            "act": "shelving books @ T:Library:spot",
+            "reasoning": None,
+            "memories": plan,
+        },
+    ]
+
+    score = judge._memory_use(ev)
+    assert score.note == "2/3 decisions used a relevant memory"
+
+
+# ------------------------------------------------------------ social grounding
+
+
+FIRST_CHAT = [
+    ["Ada", "The pancakes here are excellent."],
+    ["Bea", "The pancakes really are excellent."],
+]
+SECOND_CHAT = [
+    ["Ada", "My shelving rota starts at noon."],
+    ["Bea", "My weights session starts at noon."],
+]
+
+
+def _social_score(second_transcript):
+    """Ada's social grounding when her pair's second conversation carries
+    *second_transcript*. Both windows fall while Ada and Bea walk together, so
+    co-location, grounding and speaker validity are identical either way and
+    only novelty moves."""
+    judge = HeuristicJudge()
+    evidence = build_evidence(make_replay())
+    windows = [_convo(1, 2, FIRST_CHAT), _convo(3, 4, second_transcript)]
+    for ev in evidence.values():
+        ev.conversations = list(windows)
+    return judge._social_grounding(evidence["Ada"], evidence)
+
+
+def test_social_grounding_penalises_a_rerun_conversation():
+    """#781: the #778 loop pairs re-ran one conversation and scored 10/10."""
+    fresh = _social_score(SECOND_CHAT)
+    rerun = _social_score(FIRST_CHAT)
+
+    assert fresh.score - rerun.score >= 1.0
+    assert any("new to this pair" in line for line in rerun.evidence)
+
+
+def test_social_grounding_scores_a_silent_agent_who_had_the_chance():
+    """#781: never speaking used to mean n/a, which drops out of the mean --
+    R4's silent Wesley Okafor was the top-scoring agent in the batch."""
+    judge = HeuristicJudge()
+    evidence = build_evidence(make_replay())
+    for ev in evidence.values():
+        ev.conversations = []
+
+    score = judge._social_grounding(evidence["Ada"], evidence)
+    assert score.score == 1.0
+    assert "never spoke" in score.note
+    assert "55%" in score.note  # Ada is within sight of Bea for 33 of 60 steps
+
+
+def test_social_grounding_stays_na_for_an_agent_who_was_never_near_anyone():
+    """The floor only penalises a missed opportunity, not solitude."""
+    judge = HeuristicJudge()
+    evidence = build_evidence(make_replay())
+    for ev in evidence.values():
+        ev.conversations = []
+    evidence["Ada"].positions = [(500, 500)] * evidence["Ada"].n_steps
+
+    assert judge._social_grounding(evidence["Ada"], evidence).score is None
 
 
 # ------------------------------------------------------------ world grounding
@@ -683,6 +822,9 @@ def test_heuristic_social_grounding_is_na_without_conversations():
     for frame in replay["frames"]:
         for entry in frame.values():
             entry["chat"] = None
+        # Out of everyone's sight, too: since #781 a silent agent who stood
+        # within vision of someone is scored rather than skipped.
+        frame["Ada"]["x"], frame["Ada"]["y"] = 500, 500
     report = audit(replay, judge=HeuristicJudge(), source="fixture")
     entry = report["agents"]["Ada"]["dimensions"]["social_grounding"]
     assert entry["score"] is None
@@ -691,15 +833,65 @@ def test_heuristic_social_grounding_is_na_without_conversations():
     assert report["agents"]["Ada"]["overall"] >= 7
 
 
+# ------------------------------------------------------------ run roll-up
+
+
+def test_summary_names_the_weakest_agent():
+    """#781: a run mean lets a broken pair hide behind a healthy majority."""
+    report = audit(make_replay(), judge=HeuristicJudge(), source="fixture")
+    weakest = report["summary"]["weakest"]
+    scores = {n: a["overall"] for n, a in report["agents"].items()}
+
+    assert weakest["name"] in scores
+    assert weakest["score"] == min(scores.values())
+    assert f"Weakest agent | {weakest['name']}" in render_markdown(report)
+
+
+def test_summary_flags_a_repeat_conversation_loop():
+    """#781: the #778 loop is the pathology a single score cannot express --
+    three re-runs of one conversation between the same pair."""
+    replay = make_replay()
+    report = audit(replay, judge=HeuristicJudge(), source="fixture")
+    assert report["summary"]["loops"] == []  # one conversation is not a loop
+
+    evidence = build_evidence(replay)
+    windows = [_convo(1, 2, CHAT), _convo(3, 4, CHAT), _convo(5, 6, CHAT)]
+    for ev in evidence.values():
+        ev.conversations = list(windows)
+    loops = _repeat_loops(evidence)
+
+    assert len(loops) == 1
+    assert loops[0]["participants"] == ["Ada", "Bea"]
+    assert loops[0]["conversations"] == 3
+    # First window is all-new, the two re-runs add nothing: (1 + 0 + 0) / 3.
+    assert loops[0]["mean_novelty"] == 0.33
+
+
+def test_render_markdown_names_a_flagged_loop():
+    report = audit(make_replay(), judge=HeuristicJudge(), source="fixture")
+    report["summary"]["loops"] = [
+        {"participants": ["Ada", "Bea"], "conversations": 8, "mean_novelty": 0.44}
+    ]
+    rendered = render_markdown(report)
+
+    assert "Repeat-conversation loop" in rendered
+    assert "Ada <-> Bea" in rendered
+    assert "8 conversations, mean novelty 0.44" in rendered
+
+
 def test_scrambled_frames_score_measurably_worse():
-    """The issue's acceptance control: a shuffled run must lose points."""
+    """The issue's acceptance control: a shuffled run must lose points.
+
+    Pinned tight (#781): the margin was >= 1.0 while `plan_coherence` coverage
+    read 100% for everything. Re-saturating a dimension has to fail here.
+    """
     replay = make_replay()
     judge = HeuristicJudge()  # deterministic, so the comparison is exact
     intact = audit(replay, judge=judge, source="fixture")
     control = audit(
         scramble_replay(replay, "frames", seed=7), judge=judge, source="control"
     )
-    assert intact["summary"]["overall"] - control["summary"]["overall"] >= 1.0
+    assert intact["summary"]["overall"] - control["summary"]["overall"] >= 2.0
 
 
 def test_swapped_plans_score_worse_on_plan_coherence():
@@ -713,7 +905,7 @@ def test_swapped_plans_score_worse_on_plan_coherence():
         intact["summary"]["by_dimension"]["plan_coherence"]
         - control["summary"]["by_dimension"]["plan_coherence"]
     )
-    assert drop >= 1.0
+    assert drop >= 4.0  # #781: was >= 1.0 against the saturated coverage term
     assert intact["summary"]["overall"] > control["summary"]["overall"]
 
 
