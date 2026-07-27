@@ -13,11 +13,25 @@ Five runs, `claude-haiku-4-5`, seed 42, **$3.10 total**. Seven issues came out o
 
 | | run id | cast | steps | convos | verbs | calls | cost | believability |
 |---|---|---|---|---|---|---|---|---|
-| **R1** baseline | `run-20260724-193817-d528ec` | diego, tanaka, sofia | 1200 ✅ | 3 | 6 | 172 | $0.3465 | 8.40 |
-| **R2** warm/cold | `run-20260724-194343-78858a` | nina, jamal, grace, aiden, chris | 977 ⛔ cap | 10 | 5 | 499 | $1.0035 | 9.54 |
-| **R3** adversarial | `run-20260724-195642-584ead` | omar, bethany, tessa, ellis, ravi, hannah, tanaka | 862 ⛔ cap | 9 | 4 | 506 | $1.0106 | 8.90 |
-| **R4** from zero | `run-20260724-201036-e8c405` | wesley, dana, leon, casey, marcus | 1200 ✅ | 4 | **11** | 331 | $0.6192 | 9.36 |
-| **R5** knobs A/B | `run-20260724-202121-e51349` | diego, tanaka, sofia + `--plan llm --cognition-tools --react` | 1200 ✅ | **0** | 4 | 65 | $0.1224 | 8.60 |
+| **R1** baseline | `run-20260724-193817-d528ec` | diego, tanaka, sofia | 1200 ✅ | 3 | 6 | 172 | $0.3465 | 8.52 |
+| **R2** warm/cold | `run-20260724-194343-78858a` | nina, jamal, grace, aiden, chris | 977 ⛔ cap | 10 | 5 | 499 | $1.0035 | 8.89 ⚠ |
+| **R3** adversarial | `run-20260724-195642-584ead` | omar, bethany, tessa, ellis, ravi, hannah, tanaka | 862 ⛔ cap | 9 | 4 | 506 | $1.0106 | 7.75 ⚠ |
+| **R4** from zero | `run-20260724-201036-e8c405` | wesley, dana, leon, casey, marcus | 1200 ✅ | 4 | **11** | 331 | $0.6192 | 8.39 |
+| **R5** knobs A/B | `run-20260724-202121-e51349` | diego, tanaka, sofia + `--plan llm --cognition-tools --react` | 1200 ✅ | **0** | 4 | 65 | $0.1224 | 7.90 |
+
+> **The believability column was rescored on 2026-07-27** by [PR #817](https://github.com/ccb/agent-sandbox/pull/817),
+> which closed [#781](https://github.com/ccb/agent-sandbox/issues/781). As first published it read
+> R1 8.40, R2 **9.54**, R3 8.90, R4 9.36, R5 8.60 — an ordering that put the groundhog-day
+> run first and the healthiest run last. Three changes moved it since: #799 (the conversation
+> double-count), #780 (`world_grounding`), and #817 (progress over repetition). `⚠` marks a run
+> carrying a **repeat-conversation loop** flag: R2 `Aiden Park <-> Chris Donnelly` (8 conversations,
+> mean novelty 0.44) and R3 `Hannah Whitfield <-> Ravi Deshmukh` (7, 0.54) — both the #778 pathology.
+> Scored with Penn's `meta.locations` injected, because these bakes predate #780; that gap is
+> [#813](https://github.com/ccb/agent-sandbox/issues/813).
+>
+> Read the mean beside each run's **weakest agent**, which the audit now reports: R2's mean stays
+> highest (8.89) because three of its five agents were healthy, but its loop pair are the two
+> lowest agents in the run (8.04, 8.20) and R1's day is the better one.
 
 All five: `--scenario penn --steps 1200 --tick-seconds 0.05 --seed 42 --max-cost 1.00`,
 cast applied through `POST /config` while paused at tick 0. R2 and R3 tripped the
@@ -41,7 +55,7 @@ Write-ups, one comment per run plus a cross-run summary:
 | [#778](https://github.com/ccb/agent-sandbox/issues/778) | Co-located pair locks into a groundhog-day loop; `talk_to` starves `perform`, schedule never advances, 63% of budget burned | R2 — aiden/chris, corroborated by R3's ravi/hannah |
 | [**#779**](https://github.com/ccb/agent-sandbox/issues/779) | **Persona relationships never reach agent memory** — seeded `rivals` behave as allies, `closeness` has no effect. The priority. | R3 primarily; zero relationship memories in all five |
 | [#780](https://github.com/ccb/agent-sandbox/issues/780) | Agents invent world geography in dialogue and then claim to have visited it | R4 — casey/dana and a boathouse that doesn't exist |
-| [#781](https://github.com/ccb/agent-sandbox/issues/781) | `believability --no-llm` ranks the loop run highest (9.54) and the healthiest lowest (8.40) — rewards memory volume, not progress | the believability column above |
+| [#781](https://github.com/ccb/agent-sandbox/issues/781) ✅ | `believability --no-llm` ranked the loop run highest (9.54) and the healthiest lowest (8.40). Cause was **not** memory volume: `plan_coherence` coverage was saturated at 100% for all 23 agents, `memory_use` counted repainted frames, and a re-run conversation scored 10/10. Fixed in #817 | the believability column above |
 | [#782](https://github.com/ccb/agent-sandbox/issues/782) | `--plan llm` spend charged to no run (`runs.cost` under-reports 29%), plus an orphan run dir per configured run | R5; the orphans listed below |
 
 ## Reading these runs
@@ -68,7 +82,7 @@ jq -r 'to_entries[] | select(.value.chat) | .value.chat | map(.[0]+": "+.[1]) | 
 sqlite3 -header $R/sim.db "select agent,kind,created_turn,text from memories where run_id='$ID';"
 sqlite3 -header $R/sim.db "select id,status,model,cost,steps from runs order by created desc;"
 
-# scored audit (but read #781 before trusting it to compare runs)
+# scored audit (#781 fixed in #817 — the report now names the weakest agent and any loop)
 uv run python -m backend.eval.believability $R/$ID --no-llm
 ```
 
