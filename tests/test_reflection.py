@@ -15,7 +15,7 @@ Run with::
     uv run pytest tests/test_reflection.py -v
 """
 
-from text_adventure_games.memory import AgentMemory, MemoryKind
+from text_adventure_games.memory import DEFAULT_MAX_RECORDS, AgentMemory, MemoryKind
 from text_adventure_games.npc import maybe_reflect
 from text_adventure_games.reflection import (
     DEFAULT_REFLECTION_THRESHOLD,
@@ -189,6 +189,39 @@ def test_reflection_input_excludes_plan_memories():
     ]
     assert shown  # the pass really ran over records
     assert all(r.kind is not MemoryKind.PLAN for r in shown)
+
+
+def test_plan_records_do_not_shrink_the_supporting_set():
+    # #805 review: plans must be excluded *inside* retrieval (slots backfilled),
+    # not stripped from its top-k output. Eight importance-8.0 commitments (the
+    # #778 stream shape) out-rank every observation, so a post-filter hands the
+    # reflector an empty supporting set and the pass silently goes dark; with
+    # the ranking-side filter the observations fill all max_records slots.
+    mem = _stream()
+    for i in range(8):
+        mem.add_plan(f"Plan: stop {i} with Maria", turn=8, importance=8.0)
+    reflector = _FakeReflector(["What should I make of Maria?"])
+    created = reflect(mem, reflector, turn=9)
+
+    assert created  # the pass still produces a reflection
+    (_, supporting), *_ = reflector.infer_calls
+    assert len(supporting) == DEFAULT_MAX_RECORDS  # full width, no lost slots
+    assert all(r.kind is not MemoryKind.PLAN for r in supporting)
+
+
+def test_plan_records_do_not_shrink_the_seed_window():
+    # Same shape for the question seed: filter, then slice. Plans clustered at
+    # the stream's tail must not eat the window -- older lived records backfill
+    # it, so the reflector still sees recent_window records.
+    mem = _stream(n=3)
+    for i in range(4):
+        mem.add_plan(f"Plan: stop {i}", turn=3, importance=8.0)
+    reflector = _FakeReflector(["What should I make of Maria?"])
+    created = reflect(mem, reflector, turn=4, recent_window=4)
+
+    assert created  # slice-then-filter left an empty seed and no reflection
+    (seed,) = reflector.questions_calls
+    assert [r.kind for r in seed] == [MemoryKind.OBSERVATION] * 3
 
 
 def test_reflection_never_cites_an_unlived_plan_stop():

@@ -133,9 +133,12 @@ class DailyPlan:
     """An agent's plan for the day, across all three levels.
 
     ``stops`` is the part the step loop consumes; ``day``/``hours`` are the
-    higher-altitude reasoning, kept so retrieval, reflection, and revision can see
-    the agent's intentions at every level (and written into the memory stream as
-    ``MemoryKind.PLAN`` records -- see :func:`plan_memory_lines`).
+    higher-altitude reasoning, kept so retrieval and plan revision can see the
+    agent's intentions at every level (and written into the memory stream as
+    ``MemoryKind.PLAN`` records -- see :func:`plan_memory_lines`). Reflection is
+    the deliberate exception: it filters ``PLAN`` records from its inputs,
+    because reasoning over intentions as if they had happened lets an agent
+    "remember" its own future (#777).
 
     ``revision`` starts at 0 and is bumped every time :func:`replace_tail`
     rewrites the not-yet-executed tail of the plan.
