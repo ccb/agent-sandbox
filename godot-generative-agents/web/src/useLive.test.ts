@@ -302,6 +302,7 @@ describe("followLive", () => {
   // mid-run (the restart tests rewind the cursor this way).
   let live: Record<string, unknown>;
   let events: Record<string, unknown>;
+  let usage: Record<string, unknown>;
   let stop: () => void = () => {};
   const setState = (up: (s: LiveState) => LiveState) => {
     state = up(state);
@@ -321,6 +322,7 @@ describe("followLive", () => {
       meta: null,
     };
     events = { latest_cursor: 9, oldest_cursor: null, events: [call(9, 9)] };
+    usage = { available: false };
     FakeWS.all = [];
     vi.stubGlobal("WebSocket", FakeWS);
     vi.stubGlobal(
@@ -330,7 +332,7 @@ describe("followLive", () => {
         const body = url.endsWith("/live")
           ? live
           : url.endsWith("/usage")
-            ? { available: false }
+            ? usage
             : events;
         return { ok: true, json: async () => body };
       }),
@@ -552,5 +554,31 @@ describe("followLive", () => {
     await vi.advanceTimersByTimeAsync(1000);
     expect(urls("/events?since=4")).toHaveLength(1); // re-anchored at the handshake's cursor
     expect(state.calls.map((c) => c.call_no)).toEqual([2]); // old log cleared, new rows flow
+  });
+
+  it("re-polls /usage on the slow cadence so the run counters and social block move (#819)", async () => {
+    const sock = await start();
+    sock.open();
+    expect(state.usage).toEqual({ available: false }); // the handshake's read
+    usage = {
+      available: true,
+      social: { co_settled_pair_steps: 12, by_pair: { "a + b": 12 }, conversations: 1 },
+    };
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(urls("/usage").length).toBeGreaterThanOrEqual(2); // handshake + re-poll
+    expect((state.usage as unknown as Record<string, unknown>).social).toEqual({
+      co_settled_pair_steps: 12,
+      by_pair: { "a + b": 12 },
+      conversations: 1,
+    });
+  });
+
+  it("keeps the same state object when /usage hasn't changed (skips a re-render)", async () => {
+    const sock = await start();
+    sock.open();
+    const before = state;
+    await vi.advanceTimersByTimeAsync(10_000); // re-poll returns an identical body
+    expect(urls("/usage").length).toBeGreaterThanOrEqual(2); // it DID re-read...
+    expect(state).toBe(before); // ...but an unchanged body must not re-render
   });
 });

@@ -27,6 +27,10 @@ const POLL_MS = 1000; // ~the loop's pace; a missed tick just arrives next poll
 const MAX_ROWS_PER_AGENT = 200; // plenty for a day (~55-60 calls); keeps re-renders cheap
 const MAX_EVENT_ROWS = 200; // world-level rows are rarer than calls; one shared cap
 
+// /usage re-poll cadence (#819): slow — the strip's exact totals ride every
+// feed record; this only freshens the run-scoped counters and social block.
+const USAGE_POLL_MS = 10_000;
+
 /** A stream record plus the client wall-clock ms it reached the page — the LLM
  * dashboard's recency signal (the wire record carries only a "HH:MM:SS" time). */
 export type ReceivedLlmCall = LlmCallRecord & { receivedAt: number };
@@ -61,7 +65,7 @@ export interface LiveState {
   connected: boolean; // the last poll succeeded
   live: boolean; // the handshake reported a live loop (GET /live enabled: true)
   meta: LiveMeta | null; // the world's replay-meta shape, from the handshake
-  usage: UsageSummary | null; // one GET /usage read at handshake (budget ceiling)
+  usage: UsageSummary | null; // GET /usage — handshake read + a slow re-poll (#819)
   running: boolean;
   paused: boolean;
   step: number; // latest completed sim step seen on the feed
@@ -268,6 +272,7 @@ export function followLive(
 ): () => void {
   let cancelled = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let usageTimer: ReturnType<typeof setTimeout> | undefined;
   let ws: WebSocket | null = null;
   let cursor = 0;
   let bootId: string | null = null; // last-seen GET /live boot nonce (#578)
@@ -283,9 +288,9 @@ export function followLive(
     const res = await fetch(`${base}/live`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const hs = (await res.json()) as LiveStatusResponse;
-    // One /usage read alongside the handshake, for the dashboard's budget
-    // line: max_cost_usd never changes, and every stream record carries
-    // the running total (cum_cost_usd), so this needn't repeat.
+    // One /usage read alongside the handshake seeds the budget line; the
+    // slow pollUsage loop below keeps the run-scoped counters and the
+    // social block (#795/#819) fresh from then on.
     const usage = await fetch(`${base}/usage`)
       .then((r) => (r.ok ? (r.json() as Promise<UsageSummary>) : null))
       .catch(() => null);
@@ -432,6 +437,29 @@ export function followLive(
     };
   };
 
+  // The handshake's one-shot /usage read goes stale the moment the run-scoped
+  // counters (#526) and the social block (#795/#819) start moving, so re-read
+  // it on a slow cadence. Only a CHANGED payload lands in state: an identical
+  // body returns the same object, so React skips the re-render (the hook's
+  // usual no-churn discipline).
+  const pollUsage = async () => {
+    try {
+      const res = await fetch(`${base}/usage`);
+      if (res.ok) {
+        const fresh = (await res.json()) as UsageSummary;
+        if (cancelled) return;
+        setState((s) =>
+          JSON.stringify(s.usage) === JSON.stringify(fresh) ? s : { ...s, usage: fresh },
+        );
+      }
+    } catch {
+      // The feed poll owns connectivity signalling; a failed refresh just
+      // keeps the last snapshot.
+    }
+    if (!cancelled) usageTimer = setTimeout(pollUsage, USAGE_POLL_MS);
+  };
+  usageTimer = setTimeout(pollUsage, USAGE_POLL_MS);
+
   const connect = async () => {
     if (!wsUsable) {
       void poll();
@@ -452,6 +480,7 @@ export function followLive(
   return () => {
     cancelled = true;
     clearTimeout(timer);
+    clearTimeout(usageTimer);
     ws?.close();
   };
 }
