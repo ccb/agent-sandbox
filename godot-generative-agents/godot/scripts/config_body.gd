@@ -32,6 +32,11 @@ static func build_post_body(state: Dictionary) -> Dictionary:
 		body["tick_seconds"] = float(state.get("tick", 0.0))
 	if state.get("brain", "") == "llm" and float(state.get("max_cost", 0.0)) > 0.0:
 		body["max_cost"] = float(state.get("max_cost", 0.0))
+	# The planner knob (#791): same only-send-changed rule as `brain`. The
+	# scene passes "" for both keys when the backend serves no `plans`
+	# vocabulary (pre-#790), so nothing rides in that case either.
+	if str(state.get("plan", "")) != str(state.get("initial_plan", "")):
+		body["plan"] = str(state.get("plan", ""))
 	var edits: Dictionary = state.get("knob_edits", {})
 	if not edits.is_empty():
 		body["sim_config"] = merge_knobs(state.get("knobs_current", {}), edits)
@@ -58,3 +63,21 @@ static func _deep_merge(into: Dictionary, edits: Dictionary) -> void:
 			_deep_merge(into[k], v)
 		else:
 			into[k] = v.duplicate(true) if typeof(v) == TYPE_DICTIONARY else v
+
+
+# The planner a re-run seed should select (#791): prefer the saved REQUEST
+# (plan_request, e.g. "auto") over the resolved value (plan), so re-running a
+# saved setup reproduces what was asked rather than freezing what it resolved
+# to that day. "" = the seed carries no planner (a run saved before #790).
+static func seed_plan(seed: Dictionary) -> String:
+	return str(seed.get("plan_request", seed.get("plan", "")))
+
+
+# The planner a selection will actually run (#791) -- the client-side mirror
+# of the server's _resolve_plan_mode auto rule ("auto" -> llm iff the llm
+# brain, else schedule). Cosmetic, for the hint label only: the server stays
+# the authority, and the applied echo's `plan` is what a saved run records.
+static func effective_plan(plan: String, brain: String) -> String:
+	if plan != "auto":
+		return plan
+	return "llm" if brain == "llm" else "schedule"
