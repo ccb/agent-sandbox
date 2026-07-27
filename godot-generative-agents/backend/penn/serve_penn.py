@@ -1455,6 +1455,10 @@ class PennStepper:
             # #795: whether this run had any chance of being social. Zero here
             # with a nonzero step count is the "structurally impossible"
             # signature the issue reported -- surfaced rather than silent.
+            # ``conversations`` counts *completed* ones (what ``maybe_converse``
+            # returns as it ends them), so a conversation still mid-exchange at
+            # the run's last tick isn't here -- don't diff it against the
+            # viewer's live conversation feed and read an off-by-one.
             "social": {
                 "co_settled_pair_steps": self._co_settled_total,
                 "by_pair": self._by_pair_json(),
