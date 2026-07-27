@@ -467,7 +467,10 @@ def _names_only_real_places(text: str, real: str, world_places: list[str]) -> bo
     Cue matching in :meth:`HeuristicJudge._world_grounding` is window-scoped, so a
     partner's *allowed* off-map backstory makes every cue-carrying line in the
     window attributable -- including "meet me at the Cafe", where the Cafe is real
-    (issue #807). A line that grounds itself is exempt.
+    (issue #807). A line that grounds itself is exempt -- even when its cue is
+    corroborating something off-map named elsewhere in the window, which is a
+    real recall ceiling (#807); the LLM judge is the backstop for what that lets
+    through.
 
     Two ways to name a real place, and both are needed. A gazetteer noun that
     resolves real covers "cafe"; a ``meta.locations`` name appearing verbatim
@@ -475,19 +478,25 @@ def _names_only_real_places(text: str, real: str, world_places: list[str]) -> bo
     shipped Penn world matches exactly one gazetteer noun ("gallery", via Van Pelt
     -- Kamin Gallery), so the noun check alone would exempt almost nothing there.
 
-    Returning False as soon as the line names *any* off-map noun is what keeps the
-    corroborator catch: a line that names no place at all is not self-grounded, so
-    it stays eligible to be scored.
+    Two guards, one each. A line naming *any* off-map noun returns False at once,
+    so "the Library, then the boathouse" still scores. A line naming no place at
+    all satisfies neither half of the return below, so Casey's "Oh yeah, I totally
+    went!" stays eligible -- that is the corroborator catch.
     """
     low = text.lower()
     words = {word for word in re.findall(r"[a-z]+", low) if word in _PLACE_NOUNS}
     if any(word not in real for word in words):
         return False
-    # Word boundaries, not a bare substring: a one-word world place ("Bar") would
-    # otherwise match inside "barely". The place-noun check above can stay a plain
-    # `in real` test because it compares whole words against the joined name list.
+    # A boundary check, not a bare substring: a one-word world place ("Bar")
+    # would otherwise match inside "barely". Lookaround, not `\b`: `\b` requires
+    # a word character on both sides of the match, so a place name ending in
+    # punctuation ("Reading Room (2F)") would fail to match even before a real
+    # word boundary like a trailing space. The place-noun check above can stay a
+    # plain `in real` test because it compares whole words against the joined
+    # name list.
     return bool(words) or any(
-        re.search(rf"\b{re.escape(place.lower())}\b", low) for place in world_places
+        re.search(rf"(?<!\w){re.escape(place.lower())}(?!\w)", low)
+        for place in world_places
     )
 
 

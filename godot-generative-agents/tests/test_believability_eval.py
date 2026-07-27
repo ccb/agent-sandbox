@@ -533,6 +533,33 @@ def test_world_grounding_exempts_a_real_place_invitation_beside_off_map_backstor
     assert judge._world_grounding(ev).score == 10.0
 
 
+def test_world_grounding_exempts_a_real_place_the_verbatim_check_cannot_cover():
+    # Issue #807 mutation gap: "meet me at the Cafe" (the test above) satisfies
+    # BOTH halves of `_names_only_real_places` at once -- the gazetteer noun
+    # "cafe" AND the verbatim meta.locations name "Cafe" -- so it doesn't pin the
+    # gazetteer half alone; deleting `bool(words) or` from the predicate leaves
+    # every existing test green. This case isolates it: the shipped Penn world's
+    # 18 location names are proper nouns, and `_PLACE_NOUNS` carries exactly one
+    # of them ("gallery", via Van Pelt -- Kamin Gallery), so "meet me at the
+    # gallery" is exempt only because the gazetteer noun resolves real -- no
+    # meta.locations name appears verbatim in that line.
+    judge = HeuristicJudge()
+    replay = make_replay()
+    replay["meta"]["locations"] = ["Van Pelt — Kamin Gallery", "Houston Hall"]
+    ev = build_evidence(replay)["Ada"]
+    ev.conversations = [
+        _convo(
+            1,
+            2,
+            [
+                ["Bea", "I row out of the boathouse most mornings."],
+                ["Ada", "Nice -- meet me at the gallery after?"],
+            ],
+        )
+    ]
+    assert judge._world_grounding(ev).score == 10.0
+
+
 def test_world_grounding_exempts_a_real_place_the_gazetteer_does_not_carry():
     # The half that matters on the shipped Penn world: its 18 location names are
     # proper nouns, and `_PLACE_NOUNS` carries exactly one of them ("gallery", via
