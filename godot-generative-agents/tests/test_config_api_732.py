@@ -315,6 +315,25 @@ def test_post_config_accepts_the_plan_knob():
     assert client.post("/config", json={"plan": "llm"}).status_code == 400
 
 
+def test_config_serves_the_asked_for_plan():
+    # #791: run.plan is the RESOLVED planner (never "auto"), which is the wrong
+    # default for a setup-screen dropdown -- an untouched dropdown must mean
+    # "keep the session's request" under the only-send-changed contract. So
+    # both GET /config and the applied echo also carry the raw request.
+    client, stepper = _client()
+    body = client.get("/config").json()
+    assert body["run"]["plan"] == "schedule"  # resolved: free brain
+    assert body["run"]["plan_request"] == "auto"  # what was actually asked
+    resp = client.post("/config", json={"plan": "schedule", "brain": "scripted"})
+    assert resp.status_code == 200
+    applied = resp.json()["applied"]
+    assert applied["plan"] == "schedule"
+    assert applied["plan_request"] == "schedule"
+    # The next GET reflects the new request, so a reloaded setup screen
+    # defaults to the explicit opt-out rather than silently reverting to auto.
+    assert client.get("/config").json()["run"]["plan_request"] == "schedule"
+
+
 def test_create_run_drops_a_prior_applied_config(tmp_path):
     stepper = _mock_stepper(run_store=RunStore(tmp_path / "runs"))
     stepper.apply_config(cast=["diego"])

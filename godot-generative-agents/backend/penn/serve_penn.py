@@ -1612,6 +1612,10 @@ class PennStepper:
             "run": {
                 "brain": self._brain_name(),
                 "plan": self.plan_mode,
+                # The RAW request (#791): "auto" until someone opts out. The
+                # setup screen defaults its dropdown to this, so an untouched
+                # dropdown truthfully means "keep the session's request".
+                "plan_request": self._plan_mode_flag,
                 "steps": self.num_steps,
                 "stop_time": self._stop_time(),
                 "max_cost": self.ledger.max_cost_usd,
@@ -1769,6 +1773,10 @@ class PennStepper:
             # The RESOLVED planner (#787), matching `brain` above -- what the
             # run will actually do, not the "auto" that was asked for.
             "plan": self.plan_mode,
+            # ...and the "auto" (or explicit value) that WAS asked for (#791),
+            # so a saved run's re-run seed reproduces the request rather than
+            # freezing the resolution.
+            "plan_request": self._plan_mode_flag,
             "sim_config": self._sim_config_for_manifest(),
             "run": {
                 "steps": self.num_steps,
