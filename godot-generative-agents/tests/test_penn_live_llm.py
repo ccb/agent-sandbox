@@ -382,6 +382,53 @@ def _llm_stepper(
     )
 
 
+def test_run_usage_reports_the_social_block(monkeypatch):
+    stepper = _llm_stepper(monkeypatch, plan="llm")
+    # Drive the accumulators directly rather than hoping the scripted world
+    # happens to co-settle: this test is about the reporting shape -- the
+    # "A + B" key format, the busiest-pair ordering, and the total -- not
+    # about whether five scripted ticks produce an encounter. Task 6's tests
+    # already cover the counting itself.
+    stepper._co_settled_by_pair = {
+        ("Diego Torres", "Sofia Ramirez"): 248,
+        ("Professor Tanaka", "Sofia Ramirez"): 90,
+    }
+    stepper._co_settled_total = 338
+    stepper._conversations_total = 3
+    social = stepper.run_usage()["social"]
+    assert social["co_settled_pair_steps"] == 338
+    assert social["conversations"] == 3
+    # JSON-safe keys, busiest pair first.
+    assert list(social["by_pair"].items()) == [
+        ("Diego Torres + Sofia Ramirez", 248),
+        ("Professor Tanaka + Sofia Ramirez", 90),
+    ]
+
+
+def test_run_usage_social_block_starts_at_zero(monkeypatch):
+    stepper = _llm_stepper(monkeypatch, plan="llm")
+    assert stepper.run_usage()["social"] == {
+        "co_settled_pair_steps": 0,
+        "by_pair": {},
+        "conversations": 0,
+    }
+
+
+def test_a_socially_dead_run_warns_at_finish(monkeypatch, capsys):
+    stepper = _llm_stepper(monkeypatch, plan="llm")
+    stepper._co_settled_total = 0
+    stepper._step_idx = 1200  # a finished run, not an empty one
+    stepper._finish_run()
+    assert "no two agents were ever settled together" in capsys.readouterr().out
+
+
+def test_a_social_run_does_not_warn(monkeypatch, capsys):
+    stepper = _llm_stepper(monkeypatch, plan="llm")
+    stepper._co_settled_total = 12
+    stepper._finish_run()
+    assert "no two agents were ever settled together" not in capsys.readouterr().out
+
+
 def test_public_events_are_seeded_to_everyone_but_the_host(monkeypatch):
     from backend.cognition import EVENT_IMPORTANCE, _IMPORTANCE_LOCKED
 

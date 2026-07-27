@@ -1199,6 +1199,11 @@ class PennStepper:
         # react pass's edge detector. Fresh per day/reset, like the two
         # conversation dicts above.
         self._react_state = {}
+        # #795: this run's social opportunity. Reset per day/reset, like the
+        # react and conversation state above.
+        self._co_settled_total = 0
+        self._co_settled_by_pair: dict[tuple[str, str], int] = {}
+        self._conversations_total = 0
         self.emoji = {p["name"]: p["emoji"] for p in self.world.personas}
         self.order = [p["name"] for p in self.world.personas]
         self.state = {}
@@ -1424,6 +1429,19 @@ class PennStepper:
             "run_failed_calls": run_failed_calls,
             "run_cost_usd": self._run_cost_usd(),
             "run_by_actor": {a: round(c, 6) for a, c in run_by_actor.items()},
+            # #795: whether this run had any chance of being social. Zero here
+            # with a nonzero step count is the "structurally impossible"
+            # signature the issue reported -- surfaced rather than silent.
+            "social": {
+                "co_settled_pair_steps": self._co_settled_total,
+                "by_pair": {
+                    f"{a} + {b}": n
+                    for (a, b), n in sorted(
+                        self._co_settled_by_pair.items(), key=lambda kv: -kv[1]
+                    )
+                },
+                "conversations": self._conversations_total,
+            },
         }
 
     def meta(self) -> dict:
@@ -1784,7 +1802,8 @@ class PennStepper:
         ):
             time.sleep(self.stall_seconds)
         decide_info = {}
-        raw, _chats = step(
+        social_info: dict = {}
+        raw, chats = step(
             self.game,
             self.chars,
             self.state,
@@ -1814,7 +1833,12 @@ class PennStepper:
             deciding_sink=(
                 self._deciding_sink if self.llm_client is not None else None
             ),
+            social_info=social_info,
         )
+        self._conversations_total += chats
+        for pair in social_info.get("pairs", ()):
+            self._co_settled_by_pair[pair] = self._co_settled_by_pair.get(pair, 0) + 1
+        self._co_settled_total += social_info.get("co_settled", 0)
         self.last_deciders = decide_info.get("deciders", 0)
         for name in decide_info.get("timeouts", ()):
             # Mirror the injector's FIRE print: the skipped decision must be
@@ -1910,6 +1934,20 @@ class PennStepper:
         # (#307).
         self._persist_pending_events()
         self._persist_pending_wishes()
+        # #795: a run that never gave two agents a moment together produced no
+        # conversation and could not have. Say so -- that silence is the whole
+        # complaint the issue opened with.
+        if (
+            self.llm_client is not None
+            and self._step_idx
+            and not self._co_settled_total
+        ):
+            print(
+                f"  - WARNING no two agents were ever settled together in "
+                f"{self._step_idx} steps -- conversation was impossible this "
+                f"run (#795). Check the day plans: try --plan schedule to "
+                f"compare."
+            )
         if (
             self.run_store is not None
             and self._run_id is not None
@@ -1936,7 +1974,15 @@ class PennStepper:
                 "sha256": file_sha256(self._cassette_path),
             },
             engine_version=self._engine_sha,
-            result={"steps": self._step_idx, "cost_usd": self._run_cost_usd()},
+            result={
+                "steps": self._step_idx,
+                "cost_usd": self._run_cost_usd(),
+                "co_settled_pair_steps": self._co_settled_total,
+                "by_pair": {
+                    f"{a} + {b}": n for (a, b), n in self._co_settled_by_pair.items()
+                },
+                "conversations": self._conversations_total,
+            },
         )
         record.save(str(self.run_store.root / self._run_id / "run.yaml"))
 
