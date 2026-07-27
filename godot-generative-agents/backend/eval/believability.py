@@ -369,6 +369,10 @@ DIMENSIONS = (
     "memory_use",
 )
 
+# A silent agent this co-located had someone to talk to and did not. Below it,
+# social grounding stays n/a -- solitude is not a social failure (#781).
+SILENT_COLOCATION_FLOOR = 0.10
+
 
 @dataclass
 class DimScore:
@@ -736,7 +740,34 @@ class HeuristicJudge:
         has not already said (#781)?
         """
         if not ev.conversations:
-            return DimScore(None, note="no conversations observed for this agent")
+            near = sum(
+                1
+                for step in range(ev.n_steps)
+                if any(
+                    step < len(other.positions)
+                    and (ev.positions[step][0] - other.positions[step][0]) ** 2
+                    + (ev.positions[step][1] - other.positions[step][1]) ** 2
+                    <= ev.vision_r**2
+                    for name, other in evidence_by_name.items()
+                    if name != ev.name
+                )
+            )
+            fraction = near / ev.n_steps if ev.n_steps else 0.0
+            if fraction < SILENT_COLOCATION_FLOOR:
+                return DimScore(None, note="no conversations observed for this agent")
+            # Scored, not skipped: an n/a drops out of every mean, so never
+            # speaking used to be free -- R4's silent Wesley Okafor was the
+            # top-scoring agent in the whole #760 batch-1 (#781). Flat, because
+            # the dimension has nothing to grade; the note carries what happened.
+            return DimScore(
+                _scale(0.0),
+                [
+                    f"within sight of another agent for {near} of "
+                    f"{ev.n_steps} steps without ever speaking"
+                ],
+                f"never spoke, though within sight of another agent for "
+                f"{fraction:.0%} of the run",
+            )
         scores = []
         evidence = []
         # Per-pair vocabulary so far, for the novelty term below. Windows are

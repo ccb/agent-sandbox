@@ -439,6 +439,31 @@ def test_social_grounding_penalises_a_rerun_conversation():
     assert any("new to this pair" in line for line in rerun.evidence)
 
 
+def test_social_grounding_scores_a_silent_agent_who_had_the_chance():
+    """#781: never speaking used to mean n/a, which drops out of the mean --
+    R4's silent Wesley Okafor was the top-scoring agent in the batch."""
+    judge = HeuristicJudge()
+    evidence = build_evidence(make_replay())
+    for ev in evidence.values():
+        ev.conversations = []
+
+    score = judge._social_grounding(evidence["Ada"], evidence)
+    assert score.score == 1.0
+    assert "never spoke" in score.note
+    assert "55%" in score.note  # Ada is within sight of Bea for 33 of 60 steps
+
+
+def test_social_grounding_stays_na_for_an_agent_who_was_never_near_anyone():
+    """The floor only penalises a missed opportunity, not solitude."""
+    judge = HeuristicJudge()
+    evidence = build_evidence(make_replay())
+    for ev in evidence.values():
+        ev.conversations = []
+    evidence["Ada"].positions = [(500, 500)] * evidence["Ada"].n_steps
+
+    assert judge._social_grounding(evidence["Ada"], evidence).score is None
+
+
 # ------------------------------------------------------------ world grounding
 
 
@@ -795,6 +820,9 @@ def test_heuristic_social_grounding_is_na_without_conversations():
     for frame in replay["frames"]:
         for entry in frame.values():
             entry["chat"] = None
+        # Out of everyone's sight, too: since #781 a silent agent who stood
+        # within vision of someone is scored rather than skipped.
+        frame["Ada"]["x"], frame["Ada"]["y"] = 500, 500
     report = audit(replay, judge=HeuristicJudge(), source="fixture")
     entry = report["agents"]["Ada"]["dimensions"]["social_grounding"]
     assert entry["score"] is None
