@@ -425,8 +425,83 @@ def test_a_socially_dead_run_warns_at_finish(monkeypatch, capsys):
 def test_a_social_run_does_not_warn(monkeypatch, capsys):
     stepper = _llm_stepper(monkeypatch, plan="llm")
     stepper._co_settled_total = 12
+    stepper._step_idx = 1200  # a finished run, like the sibling test above --
+    # else _step_idx == 0 alone would suppress the warning and this test
+    # would pass for the wrong reason.
     stepper._finish_run()
     assert "no two agents were ever settled together" not in capsys.readouterr().out
+
+
+def test_a_socially_dead_mock_run_never_warns(capsys):
+    # The warning is real-brain-only (llm_client is not None): _llm_stepper
+    # always wires a (scripted) real-shaped brain regardless of plan_mode, so
+    # this needs a bare PennStepper with no llm dict at all -- the actual
+    # mock-brain path every offline test/bake runs, and never social in the
+    # sense #795 means, so warning there would just be noise.
+    stepper = PennStepper(num_steps=2, world=build_penn_world())
+    assert stepper.llm_client is None
+    stepper._co_settled_total = 0
+    stepper._step_idx = 1200
+    stepper._finish_run()
+    assert "no two agents were ever settled together" not in capsys.readouterr().out
+
+
+def test_a_resumed_run_does_not_false_alarm(monkeypatch, capsys):
+    # #795 review: _adopt_run restarts _co_settled_total at 0 for this
+    # process (unlike cost, which #543's _cost_base carries across resume) --
+    # reconstructing it from persisted frames is a bigger change than this
+    # task warrants. A resumed run must stay silent rather than false-alarm
+    # on a day that (for all this process knows) was perfectly social before
+    # the resume.
+    stepper = _llm_stepper(monkeypatch, plan="llm")
+    stepper._co_settled_total = 0
+    stepper._step_idx = 1200
+    stepper._resumed = True
+    stepper._finish_run()
+    assert "no two agents were ever settled together" not in capsys.readouterr().out
+
+
+def test_finish_run_only_warns_once(monkeypatch, capsys):
+    # #795 review: the live loop keeps calling _finish_run() on every tick of
+    # an already-finished day (and POST /resume on a finished run reaches it
+    # too) -- the warning must fire on the FIRST call only, not spam forever.
+    stepper = _llm_stepper(monkeypatch, plan="llm")
+    stepper._co_settled_total = 0
+    stepper._step_idx = 1200
+    stepper._finish_run()
+    stepper._finish_run()
+    stepper._finish_run()
+    assert (
+        capsys.readouterr().out.count("no two agents were ever settled together") == 1
+    )
+
+
+def test_tick_wires_social_info_into_the_accumulators(monkeypatch):
+    # #795 review: deleting `social_info=social_info` and the two accumulator
+    # lines from tick() still passes every other new test here -- three set
+    # the accumulators by hand, the fourth only asserts zeros. This is the
+    # one test that would catch it, by replacing step() itself and checking
+    # what tick() does with what step() reports back.
+    stepper = _llm_stepper(monkeypatch, plan="llm")
+
+    def fake_step(*args, **kwargs):
+        social_info = kwargs["social_info"]
+        social_info.update(co_settled=2, pairs=[("Diego Torres", "Sofia Ramirez")])
+        # A minimal valid per-persona raw frame -- tick() converts every
+        # entry via penn_world.replay_frame_entry right after the step()
+        # call, so an empty raw would KeyError before reaching the seam
+        # this test is actually about.
+        raw = {
+            name: {"movement": (0, 0), "description": "", "pronunciatio": ""}
+            for name in stepper.order
+        }
+        return raw, 2
+
+    monkeypatch.setattr(serve_penn, "step", fake_step)
+    stepper.tick()
+    assert stepper._co_settled_total == 2
+    assert stepper._co_settled_by_pair == {("Diego Torres", "Sofia Ramirez"): 1}
+    assert stepper._conversations_total == 2
 
 
 def test_public_events_are_seeded_to_everyone_but_the_host(monkeypatch):

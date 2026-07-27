@@ -598,6 +598,9 @@ def test_stepper_resumes_a_persisted_run(tmp_path):
     )
     assert resumed.run_id == run_id
     assert resumed.step == 3
+    # #795: a resumed process didn't watch the pre-resume steps, so it must
+    # not claim a zero co-settled total means the day was ever social-dead.
+    assert resumed._resumed is True
     # Positions come back from the last stored frame...
     last = first3[-1]
     for name in resumed.order:
