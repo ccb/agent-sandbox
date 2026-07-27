@@ -1,0 +1,68 @@
+"""The planner's memory + grounding fixes (issue #795).
+
+#795: under `--plan llm` no two agents were ever settled in the same room.
+The cause was not planner blindness -- the agent's own commitments are
+already seeded at t=0 by attach_agents and already retrieved -- but that
+LLMPlanner.generate passed the retrieved block only to _day_outline, so
+every place and duration was chosen two summarisation hops downstream.
+"""
+
+import sys
+import pathlib
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+
+from backend.planner import LLMPlanner  # noqa: E402
+
+
+class RecordingClient:
+    """Captures every (tool_name, user_message) the planner sends."""
+
+    def __init__(self):
+        self.sent = []
+
+    def call_tool(self, messages, tool, max_tokens=256, temperature=0.0):
+        self.sent.append((tool["name"], messages[-1]["content"]))
+        if tool["name"] == "day_outline":
+            return {"blocks": [{"label": "midday", "summary": "lunch then study"}]}
+        if tool["name"] == "hourly_plan":
+            return {"hours": [{"start_hour": 12, "summary": "lunch at Houston Hall"}]}
+        return {"stops": [{"place": "Houston Hall", "activity": "eating lunch"}]}
+
+    def user_message_for(self, tool_name):
+        return next(body for name, body in self.sent if name == tool_name)
+
+
+class FakeMemory:
+    """Minimal stand-in for AgentMemory.retrieve()."""
+
+    def __init__(self, texts):
+        self._records = [type("R", (), {"text": t})() for t in texts]
+
+    def retrieve(self, query, turn, **kwargs):
+        return self._records
+
+
+COMMITMENT = (
+    "Plan: go to Irvine Auditorium and setting up for an afternoon guest lecture."
+)
+
+
+def test_memory_reaches_every_planning_level():
+    client = RecordingClient()
+    planner = LLMPlanner(client)
+    planner.generate(
+        persona={"persona": "I am Professor Tanaka."}, memory=FakeMemory([COMMITMENT])
+    )
+    for level in ("day_outline", "hourly_plan", "minute_plan"):
+        assert COMMITMENT in client.user_message_for(
+            level
+        ), f"{level} did not receive the retrieved memory block"
+
+
+def test_no_memory_leaves_every_level_clean():
+    """With no memory, no level gains a stray 'You remember:' header."""
+    client = RecordingClient()
+    LLMPlanner(client).generate(persona={"persona": "I am Diego."}, memory=None)
+    for _name, body in client.sent:
+        assert "You remember:" not in body

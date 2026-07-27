@@ -211,8 +211,14 @@ class LLMPlanner:
         persona_text = self._persona_text(persona)
         mem = self._memory_block(memory, "what matters for my day today", turn=0)
         day = self._day_outline(persona_text, mem)
-        hours = self._hourly(persona_text, day)
-        stops = self._minute(persona_text, hours)
+        # #795: the retrieved block goes to EVERY level, not just the outline.
+        # The agent's own commitments (seeded at t=0 by attach_agents, importance
+        # 5.0) are what name the places it is obliged to be at; passing them only
+        # to _day_outline meant place and duration were chosen two lossy
+        # summarisation hops later, and an authored obligation -- "setting up for
+        # an afternoon guest lecture at Irvine Auditorium" -- simply vanished.
+        hours = self._hourly(persona_text, day, mem)
+        stops = self._minute(persona_text, hours, mem)
         return DailyPlan(day=day, hours=hours, stops=stops)
 
     def revise(
@@ -258,7 +264,9 @@ class LLMPlanner:
                 blocks.append(DayBlock(label=label, summary=summary))
         return blocks
 
-    def _hourly(self, persona_text: str, day: list[DayBlock]) -> list[HourBlock]:
+    def _hourly(
+        self, persona_text: str, day: list[DayBlock], mem: str = ""
+    ) -> list[HourBlock]:
         outline = "; ".join(f"{b.label}: {b.summary}" for b in day) or "(none)"
         hours_hint = ""
         if self.clock is not None and self.num_steps is not None:
@@ -266,7 +274,8 @@ class LLMPlanner:
             if hours:
                 hours_hint = f"Plan only these hours of the day: {hours}.\n"
         user = (
-            f"{persona_text}\n{self._window_line()}Your day outline: {outline}.\n"
+            f"{persona_text}\n{self._window_line()}{self._memory_line(mem)}"
+            f"Your day outline: {outline}.\n"
             f"{hours_hint}Give one line per hour."
         )
         result = self._call(user, HOURLY_TOOL)
@@ -280,12 +289,15 @@ class LLMPlanner:
                 hours.append(HourBlock(start_hour=hour, summary=summary))
         return hours
 
-    def _minute(self, persona_text: str, hours: list[HourBlock]) -> list[Stop]:
+    def _minute(
+        self, persona_text: str, hours: list[HourBlock], mem: str = ""
+    ) -> list[Stop]:
         plan = (
             "; ".join(f"{h.start_hour:02d}:00 {h.summary}" for h in hours) or "(none)"
         )
         user = (
-            f"{persona_text}\nYour hourly plan: {plan}.\n{self._places_line()}"
+            f"{persona_text}\n{self._memory_line(mem)}"
+            f"Your hourly plan: {plan}.\n{self._places_line()}"
             "Turn it into concrete stops."
         )
         return self._minute_from_user(user)
