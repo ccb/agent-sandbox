@@ -45,9 +45,7 @@ class FakeMemory:
         return self._records
 
 
-COMMITMENT = (
-    "Plan: go to Irvine Auditorium and setting up for an afternoon guest lecture."
-)
+COMMITMENT = "Plan: go to Irvine Auditorium and setting up for a morning guest lecture."
 
 
 def test_memory_reaches_every_planning_level():

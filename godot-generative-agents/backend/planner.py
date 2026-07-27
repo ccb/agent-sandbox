@@ -259,7 +259,7 @@ class LLMPlanner:
         # 5.0) are what name the places it is obliged to be at; passing them only
         # to _day_outline meant place and duration were chosen two lossy
         # summarisation hops later, and an authored obligation -- "setting up for
-        # an afternoon guest lecture at Irvine Auditorium" -- simply vanished.
+        # a morning guest lecture at Irvine Auditorium" -- simply vanished.
         hours = self._hourly(persona_text, day, mem)
         stops = self._minute(persona_text, hours, mem)
         return DailyPlan(day=day, hours=hours, stops=stops)

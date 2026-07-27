@@ -103,8 +103,8 @@ export interface LiveStatusResponse {
 }
 
 // This run's social opportunity (#795): co-settled pair-steps (both agents
-// settled in the same room), broken down by pair ("A + B" keys, busiest
-// first), plus the conversation count. Zero co_settled_pair_steps with a
+// settled within earshot of each other), broken down by pair ("A + B" keys,
+// busiest first), plus the conversation count. Zero co_settled_pair_steps with a
 // nonzero step count means conversation was structurally impossible this
 // run — surfaced instead of silently reporting nothing.
 export interface RunSocial {

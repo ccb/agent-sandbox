@@ -48,8 +48,8 @@ agent's authored `schedule:` as a t=0 PLAN memory at importance 5.0, explicitly
 commented *"Done before planning so a generative planner can reason over them."*
 Tanaka's t=0 memory reads:
 
-> Plan: go to Irvine Auditorium and setting up for an afternoon guest lecture.
-> Today's stops: setting up for an afternoon guest lecture at Irvine Auditorium,
+> Plan: go to Irvine Auditorium and setting up for a morning guest lecture.
+> Today's stops: setting up for a morning guest lecture at Irvine Auditorium,
 > then holding a problem session for her physics class at Williams Hall —
 > Classroom A.
 
@@ -205,7 +205,7 @@ actively lying to the model.
 events:
 - label: a guest lecture on gravitational waves
   at: Irvine Auditorium
-  when: this afternoon
+  when: this morning
   host: Professor Tanaka        # optional
 ```
 
@@ -222,7 +222,7 @@ survive.
 **Seeding.** A new `public_event.prompty` renders one t=0 observation —
 
 > There's a guest lecture on gravitational waves at Irvine Auditorium this
-> afternoon, hosted by Professor Tanaka. It's open to anyone.
+> morning, hosted by Professor Tanaka. It's open to anyone.
 
 — seeded through the existing `seed.seed_relationships` path, tagged
 `{"seed", "event"}`, at importance **4.0**: above a background acquaintance (3.0)
@@ -255,7 +255,14 @@ depends on the durations the model now picks with grounding.
 ### Part 3 — the co-settled metric
 
 **Definition.** A *co-settled pair-step* is one step in which two agents are both
-settled (`performing and not path`) and share a `char.location`. Counted **before**
+settled (`performing and not path`) **and within earshot of each other** —
+`conversation.can_converse`, the exact predicate `find_conversation_pairs` uses,
+so the test routes through the game's `audience_for` seam. On Penn that seam is
+`penn_world`'s perception override (`perceivable_locations` + `can_perceive`,
+Chebyshev `vision_r`), which matters because "Penn campus" is a single outdoor
+hub Location spanning the whole map: a bare `char.location is char.location`
+test would score two agents idling hundreds of tiles apart as co-settled, and a
+still-dead run would report healthy opportunity. Counted **before**
 the cooldown/busy/conversing filters: this measures *opportunity*, not
 eligibility. A pair mid-conversation or on cooldown still counts, which is what
 makes the 399-vs-0 comparison meaningful.

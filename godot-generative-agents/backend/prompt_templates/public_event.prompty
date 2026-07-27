@@ -19,14 +19,14 @@ inputs:
     description: The world location it happens at, e.g. "Irvine Auditorium".
   when:
     type: string
-    description: Free prose timing, e.g. "this afternoon". Deliberately not clock-coupled.
+    description: Free prose timing, e.g. "this morning". Deliberately not clock-coupled.
   host:
     type: string
     description: The cast member holding it. Optional -- empty drops the clause.
 sample:
   label: a guest lecture on gravitational waves
   at: Irvine Auditorium
-  when: this afternoon
+  when: this morning
   host: Professor Tanaka
 ---
 There's {{ label }} at {{ at }} {{ when }}{% if host %}, hosted by {{ host }}{% endif %}. It's open to anyone.

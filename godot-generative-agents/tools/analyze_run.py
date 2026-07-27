@@ -163,11 +163,14 @@ def _load_run_record(run_id: str, runs_dir: pathlib.Path) -> dict:
             if value == "":
                 nested_key = key
                 result[key] = {}
-            elif value in ("{}", "[]"):
+            elif value == "{}":
                 nested_key = None
-                result[key] = {} if value == "{}" else []
+                result[key] = {}
             elif value[:1] in "{[":
-                return {}  # non-empty flow-style collection -- can't confirm the shape
+                # Any other flow-style collection -- including an empty `[]`,
+                # which render() would then call .items() on. Unreachable today
+                # (_by_pair_json always writes a mapping), fail-safe anyway.
+                return {}  # can't confirm the shape
             else:
                 nested_key = None
                 result[key] = int(value) if value.lstrip("-").isdigit() else value
@@ -449,18 +452,20 @@ def self_check() -> None:
         assert "co-settled  0 pair-steps  [run record]" in out, out
 
     # Fail-safe: a flow-style value this scanner does not understand (a
-    # non-empty `{...}`) must abandon the whole record, not guess at it --
-    # never a wrong number labelled authoritative. Caller falls back to
-    # the frame proxy for such a run, same as if run.yaml were absent.
-    with tempfile.TemporaryDirectory() as tmp:
-        runs_dir = pathlib.Path(tmp)
-        run_dir = runs_dir / "run-weird"
-        run_dir.mkdir()
-        (run_dir / "run.yaml").write_text(
-            "result:\n  co_settled_pair_steps: 7\n  by_pair: {a: 1, b: 2}\n",
-            encoding="utf-8",
-        )
-        assert _load_run_record("run-weird", runs_dir) == {}
+    # non-empty `{...}`, or ANY `[...]` -- render() calls .items() on by_pair)
+    # must abandon the whole record, not guess at it -- never a wrong number
+    # labelled authoritative. Caller falls back to the frame proxy for such a
+    # run, same as if run.yaml were absent.
+    for weird in ("{a: 1, b: 2}", "[]", "[1, 2]"):
+        with tempfile.TemporaryDirectory() as tmp:
+            runs_dir = pathlib.Path(tmp)
+            run_dir = runs_dir / "run-weird"
+            run_dir.mkdir()
+            (run_dir / "run.yaml").write_text(
+                f"result:\n  co_settled_pair_steps: 7\n  by_pair: {weird}\n",
+                encoding="utf-8",
+            )
+            assert _load_run_record("run-weird", runs_dir) == {}, weird
 
     print("self-check OK")
 
@@ -468,8 +473,12 @@ def self_check() -> None:
 def main() -> int:
     ap = argparse.ArgumentParser(description="Summarise one persisted live-LLM run.")
     ap.add_argument("run_id", nargs="?")
+    # tools/ -> godot-generative-agents/ -> runs/, i.e. run_store.DEFAULT_RUNS_DIR.
+    # (Not imported: this file is deliberately stdlib-only. The `/ "runs"` was
+    # lost when the script was promoted out of runs/issue-760-batch-2/, where
+    # parents[1] already WAS the runs dir.)
     ap.add_argument(
-        "--runs-dir", default=str(pathlib.Path(__file__).resolve().parents[1])
+        "--runs-dir", default=str(pathlib.Path(__file__).resolve().parents[1] / "runs")
     )
     ap.add_argument("--usage", help="usage.json captured before /shutdown")
     ap.add_argument("--json", action="store_true")

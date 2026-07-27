@@ -4,16 +4,16 @@ home: Penn campus
 persona: I am Professor Tanaka, 47, a physicist at Penn. I am precise and warm with
   students, and happiest explaining the universe with a marker in hand.
 emoji: 🔬
-# Starts outside Irvine, where she is hosting an afternoon guest lecture, and stays
+# Starts outside Irvine, where she is hosting a morning guest lecture, and stays
 # long enough that Diego and Sofia arrive while she is still setting up.
 start_tile:
 - 180
 - 212
 schedule:
 - place: Irvine Auditorium
-  activity: setting up for an afternoon guest lecture
+  activity: setting up for a morning guest lecture
   emoji: 🔬
-  # Holds the hall all afternoon -- long enough that Sofia (who only drifts over
+  # Holds the hall all morning -- long enough that Sofia (who only drifts over
   # after a long spell in the gallery) arrives while she is still there (see
   # `meetings` below).
   steps: 800

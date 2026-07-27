@@ -179,7 +179,7 @@ for the session — saving them to disk is a separate follow-up.
 **Analyzing a saved run offline.** `tools/analyze_run.py` (promoted from a
 batch-2 scratch script, #795) summarises one `runs/<id>/` directory: verbs,
 `talk_to` share, conversations, and co-settled pair-steps (two agents settled
-in the same room, with a per-pair breakdown):
+within earshot of each other, with a per-pair breakdown):
 
 ```bash
 uv run python godot-generative-agents/tools/analyze_run.py <run-id>

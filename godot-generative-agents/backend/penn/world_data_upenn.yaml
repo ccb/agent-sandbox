@@ -56,7 +56,13 @@ cast: [diego, tanaka, sofia]
 events:
 - label: a guest lecture on gravitational waves
   at: Irvine Auditorium
-  when: this afternoon
+  # "this morning", not "this afternoon": the acceptance run starts at SIM_START
+  # (08:00) and 1200 steps of SEC_PER_STEP=10 ends at 11:20, and the planner is
+  # told that window (#795, LLMPlanner._window_line). An afternoon event is
+  # outside it, so a well-grounded model would correctly drop the one anchor the
+  # cast is meant to converge on -- including for its host. Tanaka's Irvine stop
+  # is 800 steps from step 0 (08:00-10:13), which was always morning anyway.
+  when: this morning
   host: Professor Tanaka
 
 locations:

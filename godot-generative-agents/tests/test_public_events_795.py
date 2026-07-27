@@ -38,10 +38,10 @@ def _world(tmp_path, events, cast_names=("Ana",)):
 
 def test_a_valid_event_survives_composition(tmp_path):
     path = _world(
-        tmp_path, [{"label": "a lecture", "at": "Hall", "when": "this afternoon"}]
+        tmp_path, [{"label": "a lecture", "at": "Hall", "when": "this morning"}]
     )
     assert load_world_yaml(path)["events"] == [
-        {"label": "a lecture", "at": "Hall", "when": "this afternoon"}
+        {"label": "a lecture", "at": "Hall", "when": "this morning"}
     ]
 
 
@@ -87,11 +87,11 @@ def test_public_event_prompty_renders_exactly():
         "public_event",
         label="a guest lecture on gravitational waves",
         at="Irvine Auditorium",
-        when="this afternoon",
+        when="this morning",
         host="Professor Tanaka",
     ) == (
         "There's a guest lecture on gravitational waves at Irvine Auditorium "
-        "this afternoon, hosted by Professor Tanaka. It's open to anyone."
+        "this morning, hosted by Professor Tanaka. It's open to anyone."
     )
 
 
