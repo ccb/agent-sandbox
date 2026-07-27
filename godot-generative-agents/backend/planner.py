@@ -172,6 +172,38 @@ MINUTE_TOOL = {
 }
 
 
+def median_travel_minutes(world_map, addresses, clock) -> int | None:
+    """Median pairwise walk cost between *addresses*, in in-game minutes (#795).
+
+    Chebyshev tile gap between each pair's first tile, which -- since the walk
+    advances one tile per step -- is the minimum number of steps that walk can
+    take. A lower bound, deliberately: the prompt that consumes it says "at
+    least about N minutes", and running real A* for every location pair at
+    every _build would cost real time for a number the model only needs to be
+    directionally right about.
+
+    Returns None when there is no map, no clock, or fewer than two addresses
+    with known tiles -- the caller then omits the clause rather than inventing
+    a constant.
+    """
+    if world_map is None or clock is None:
+        return None
+    anchors = []
+    for address in addresses:
+        tiles = world_map.tiles_for(address) if address else set()
+        if tiles:
+            anchors.append(min(tiles))  # min() keeps this deterministic
+    if len(anchors) < 2:
+        return None
+    gaps = sorted(
+        max(abs(a[0] - b[0]), abs(a[1] - b[1]))
+        for i, a in enumerate(anchors)
+        for b in anchors[i + 1 :]
+    )
+    median_tiles = gaps[len(gaps) // 2]
+    return clock.minutes_for_steps(median_tiles) or None
+
+
 class LLMPlanner:
     """Generate and revise a day's plan with a real model (design doc §6-§9).
 
@@ -197,6 +229,7 @@ class LLMPlanner:
         clock=None,
         num_steps=None,
         max_tokens: int = 700,
+        travel_minutes: int | None = None,
     ):
         self.client = client
         self.known_places = set(known_places)
@@ -208,6 +241,10 @@ class LLMPlanner:
         self.clock = clock
         self.num_steps = num_steps
         self.max_tokens = max_tokens
+        # #795: median cross-campus walk cost in minutes, computed from this
+        # world's own map (see median_travel_minutes). None -> the minute
+        # prompt omits the travel clause rather than fabricating a constant.
+        self.travel_minutes = travel_minutes
 
     # -- the three generation levels -----------------------------------------
 
@@ -302,7 +339,8 @@ class LLMPlanner:
             "; ".join(f"{h.start_hour:02d}:00 {h.summary}" for h in hours) or "(none)"
         )
         user = (
-            f"{persona_text}\n{self._window_line()}{self._memory_line(mem)}"
+            f"{persona_text}\n{self._window_line()}{self._travel_line()}"
+            f"{self._memory_line(mem)}"
             f"Your hourly plan: {plan}.\n{self._places_line()}"
             "Turn it into concrete stops."
         )
@@ -392,3 +430,16 @@ class LLMPlanner:
         start = self.clock.time_at(0).strftime("%H:%M")
         end = self.clock.time_at(self.num_steps).strftime("%H:%M")
         return f"This simulation runs from {start} to {end} today; plan only that window.\n"
+
+    def _travel_line(self) -> str:
+        """Tell the model travel is not free, when we know what it costs.
+
+        Empty when no hint was computed -- an omitted clause beats a
+        fabricated constant."""
+        if not self.travel_minutes:
+            return ""
+        return (
+            "`minutes` is time spent AT a place; travel to get there is charged "
+            f"on top of it, and crossing campus takes at least about "
+            f"{self.travel_minutes} minutes.\n"
+        )

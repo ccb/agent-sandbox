@@ -61,6 +61,7 @@ from backend.run_store import DEFAULT_RUNS_DIR, RunStore
 from backend.sim_clock import SimClock
 from backend.sim_config import CognitionConfig, SimulationConfig
 from backend.cognition import attach_agents
+from backend.planner import median_travel_minutes
 from scripted_brain import build_scripted_brains
 from penn_world import (
     DIALOGUE_FADE_STEPS,
@@ -1109,6 +1110,14 @@ class PennStepper:
             planner_client=self.planner_client,
             location_names=frozenset(loc["name"] for loc in self.world.locations),
             clock=self.clock,
+            # #795: what a walk actually costs, so the planner can budget for it
+            # instead of guessing. Computed from this world's map, so a different
+            # campus gets a different number; None -> the clause is omitted.
+            travel_minutes=median_travel_minutes(
+                self.world.world_map,
+                [loc.get("address") for loc in self.world.locations],
+                self.clock,
+            ),
             out_planner_sources=planner_sources,
             extra_action_names=PENN_ACTION_VERBS,
         )

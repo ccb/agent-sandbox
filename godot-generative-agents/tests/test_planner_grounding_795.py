@@ -13,7 +13,7 @@ import pathlib
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-from backend.planner import LLMPlanner  # noqa: E402
+from backend.planner import LLMPlanner, median_travel_minutes  # noqa: E402
 from backend.sim_clock import SimClock  # noqa: E402
 
 
@@ -135,3 +135,50 @@ def test_plan_system_prompt_is_not_smallville():
     from backend.prompt_templates import render
 
     assert "Smallville" not in render("plan_system")
+
+
+class FakeMap:
+    """Two addresses 60 tiles apart, one unknown."""
+
+    def __init__(self):
+        self.address_tiles = {
+            "A:one:x": {(0, 0)},
+            "A:two:x": {(60, 0)},
+            "A:three:x": {(0, 30)},
+        }
+
+    def tiles_for(self, address):
+        return self.address_tiles.get(address, set())
+
+
+def test_median_travel_minutes_is_a_chebyshev_lower_bound():
+    # Pairs: (0,0)-(60,0)=60, (0,0)-(0,30)=30, (60,0)-(0,30)=60. Median = 60
+    # tiles == 60 steps == 600 in-game seconds == 10 minutes at sec_per_step 10.
+    got = median_travel_minutes(
+        FakeMap(), ["A:one:x", "A:two:x", "A:three:x"], _clock()
+    )
+    assert got == 10
+
+
+def test_median_travel_minutes_is_none_without_a_map():
+    assert median_travel_minutes(None, ["A:one:x"], _clock()) is None
+    assert median_travel_minutes(FakeMap(), [], _clock()) is None
+
+
+def test_minute_prompt_carries_the_travel_clause_when_known():
+    client = MinutesClient()
+    LLMPlanner(client, clock=_clock(), num_steps=1200, travel_minutes=23).generate(
+        persona={"persona": "I am Diego."}
+    )
+    body = client.user_message_for("minute_plan")
+    assert "23 minutes" in body
+    assert "charged on top" in body
+
+
+def test_minute_prompt_omits_the_travel_clause_when_unknown():
+    """No fabricated constant: with no hint the clause is absent entirely."""
+    client = MinutesClient()
+    LLMPlanner(client, clock=_clock(), num_steps=1200).generate(
+        persona={"persona": "I am Diego."}
+    )
+    assert "charged on top" not in client.user_message_for("minute_plan")

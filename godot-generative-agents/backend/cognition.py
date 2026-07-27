@@ -486,6 +486,7 @@ def attach_agents(
     llm_client=None,
     clock=None,
     num_steps: int | None = None,
+    travel_minutes: int | None = None,
     out_planner_sources: dict | None = None,
     out_plans: dict | None = None,
     extra_action_names: list[str] | None = None,
@@ -724,7 +725,11 @@ def attach_agents(
                 | {stop["place"] for p in personas for stop in p["schedule"]}
             )
             planner = LLMPlanner(
-                planner_client, plan_locations, clock=clock, num_steps=num_steps
+                planner_client,
+                plan_locations,
+                clock=clock,
+                num_steps=num_steps,
+                travel_minutes=travel_minutes,
             )
             plan = planner.generate(persona=spec, memory=agent.memory)
             if plan.stops:
