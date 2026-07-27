@@ -1486,6 +1486,10 @@ class PennStepper:
             # bake writes, so the social-graph pop-up (#252) sees identical
             # seed edges live and baked.
             "relationships": self.world.relationships,
+            # #780: same sorted place list the bake writes, so baked and live
+            # meta cannot drift. Reads PennWorld.locations, as the planner's
+            # known_places already does.
+            "locations": sorted(loc["name"] for loc in self.world.locations),
             # What is driving the cast: None under the mock brain, else the
             # provider/model, so the viewer can say which model it is watching.
             "llm": (

@@ -184,6 +184,7 @@ def test_stepper_meta_shape():
         "personas",
         "relationships",
         "llm",
+        "locations",
     }
     assert meta["vision_r"] == VISION_R
     assert len(meta["personas"]) == 3

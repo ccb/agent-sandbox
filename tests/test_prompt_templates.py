@@ -132,6 +132,52 @@ def test_npc_dialogue_bare():
     assert out == f"You are an NPC in a text adventure game.\n{_DIALOGUE}"
 
 
+# ---------------------------------------------------------------------------
+# place_grounding -- the #780 dialogue place-grounding block
+# ---------------------------------------------------------------------------
+
+_OFF_MAP = (
+    "Anywhere else you mention is somewhere from your life outside this world. "
+    "You may talk about it, but do not claim to have just been there, and do "
+    "not invite anyone to meet you there."
+)
+
+
+def test_place_grounding_full():
+    # `visited` excludes wherever the speaker is standing -- that is named on its
+    # own line, and _place_grounding_block filters it out of the been-to list. The
+    # inputs here mirror the template's documented sample for that reason.
+    out = prompt_templates.render(
+        "place_grounding",
+        places="College Hall, Houston Hall, Irvine Auditorium",
+        here="Houston Hall",
+        visited="College Hall",
+    )
+    assert out == (
+        "Places in this world you can walk to: "
+        "College Hall, Houston Hall, Irvine Auditorium.\n"
+        "You are at Houston Hall.\n"
+        "You have been to: College Hall.\n"
+        f"{_OFF_MAP}"
+    )
+
+
+def test_place_grounding_drops_empty_lines():
+    # Early in a run an agent has been nowhere yet, and a game may not know
+    # where the speaker is standing: both sentences vanish rather than
+    # rendering blank.
+    out = prompt_templates.render(
+        "place_grounding",
+        places="College Hall, Houston Hall",
+        here="",
+        visited="",
+    )
+    assert out == (
+        "Places in this world you can walk to: College Hall, Houston Hall.\n"
+        f"{_OFF_MAP}"
+    )
+
+
 # ----------------------------------------------------------------------
 # reflect_system: the periodic-reflection system message (issue #84)
 # ----------------------------------------------------------------------
