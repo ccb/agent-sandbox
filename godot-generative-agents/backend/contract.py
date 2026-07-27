@@ -20,7 +20,9 @@ and played by the Godot viewer) is::
         ],
         "relationships": [               # penn_world.relationships_meta
           {"a", "b", "kind", "closeness", "description"}
-        ]
+        ],
+        "locations",                     # world place names, sorted (#780) --
+                                         #   additive, absent pre-#780
       },
       "frames": [ {persona_name: AgentFrame}, ... ],   # one dict per step
       "memory_streams": {persona_name: [MemoryRecord, ...]},

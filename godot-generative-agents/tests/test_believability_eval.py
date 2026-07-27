@@ -182,6 +182,7 @@ def make_replay():
                 _persona("Bea", "Gym", "lifting weights"),
             ],
             "relationships": [],
+            "locations": ["Cafe", "Gym", "Library"],
         },
         "frames": frames,
         "memory_streams": streams,
@@ -286,6 +287,36 @@ def test_build_evidence_finds_the_shared_conversation():
     assert evidence["Bea"].conversations == ada.conversations
 
 
+def test_build_evidence_merges_a_growing_conversation_into_one_window():
+    # The live producer (#371) repaints the accumulated transcript onto `chat`
+    # every tick, so consecutive frames carry strictly-growing prefixes of the
+    # same conversation. build_evidence must not let that read as N windows (#799).
+    lines = [["Ada", "Hi."], ["Bea", "Hello."], ["Ada", "Bye."]]
+    frames = [
+        {
+            "Ada": {"x": 0, "y": 0, "act": "chatting", "chat": lines[: i + 1]},
+            "Bea": {"x": 0, "y": 0, "act": "chatting", "chat": lines[: i + 1]},
+        }
+        for i in range(len(lines))
+    ]
+    replay = {
+        "meta": {"personas": [{"name": "Ada"}, {"name": "Bea"}]},
+        "frames": frames,
+        "memory_streams": {},
+    }
+    evidence = build_evidence(replay)
+    assert len(evidence["Ada"].conversations) == 1
+    conv = evidence["Ada"].conversations[0]
+    assert conv.transcript == lines
+    assert (conv.start, conv.end) == (0, 2)
+
+    # And the user-visible symptom from the issue: social_grounding's count
+    # reflects one conversation, not one per tick.
+    judge = HeuristicJudge()
+    note = judge._social_grounding(evidence["Ada"], evidence).note
+    assert note == "1 conversation(s) checked"
+
+
 def test_build_evidence_collects_decision_frames_with_retrieved_memories():
     evidence = build_evidence(make_replay())
     ada = evidence["Ada"]
@@ -294,6 +325,199 @@ def test_build_evidence_collects_decision_frames_with_retrieved_memories():
     assert r["step"] == 10
     assert r["act"].startswith("eating breakfast")
     assert r["memories"][0]["text"].startswith("Plan: go to Cafe")
+
+
+# ------------------------------------------------------------ world grounding
+
+
+def _convo(start, end, transcript, participants=("Ada", "Bea")):
+    from backend.eval.believability import Conversation
+
+    return Conversation(
+        start=start, end=end, participants=list(participants), transcript=transcript
+    )
+
+
+def test_world_grounding_is_a_rubric_dimension():
+    from backend.eval.believability import BELIEVABILITY_TOOL
+
+    assert "world_grounding" in DIMENSIONS
+    props = BELIEVABILITY_TOOL["parameters"]["properties"]
+    assert "world_grounding" in props
+    assert "world_grounding" in BELIEVABILITY_TOOL["parameters"]["required"]
+
+
+def test_merge_growth_windows_collapses_an_accumulating_transcript():
+    # The live producer (#371) appends one line per tick, so _conversations_in
+    # keys every growth as its own window: one meeting looked like 23.
+    from backend.eval.believability import _merge_growth_windows
+
+    a = [["Ada", "Hi."]]
+    b = [["Ada", "Hi."], ["Bea", "Hello."]]
+    c = [["Ada", "Hi."], ["Bea", "Hello."], ["Ada", "Bye."]]
+    merged = _merge_growth_windows([_convo(1, 1, a), _convo(2, 2, b), _convo(3, 3, c)])
+    assert len(merged) == 1
+    assert merged[0].transcript == c
+    assert (merged[0].start, merged[0].end) == (1, 3)
+
+
+def test_merge_growth_windows_collapses_two_conversations_running_at_once():
+    # The producer keys `active` by pair frozenset, so two pairs can talk at the
+    # same time -- fifteen personas on a campus makes that common. Their growth
+    # windows then interleave in (start, end) order, so a merge that only looks
+    # at the PREVIOUS window sees the other pair's fragment every time, fails
+    # the participants check, and appends everything unmerged: the #799
+    # overcount, back again exactly when conversations overlap.
+    from backend.eval.believability import _merge_growth_windows
+
+    ab = [["Ada", "Hi."]], [["Ada", "Hi."], ["Bea", "Hello."]]
+    cd = [["Cy", "Yo."]], [["Cy", "Yo."], ["Di", "Hey."]]
+    merged = _merge_growth_windows(
+        [
+            _convo(1, 1, ab[0], ("Ada", "Bea")),
+            _convo(1, 1, cd[0], ("Cy", "Di")),
+            _convo(2, 2, ab[1], ("Ada", "Bea")),
+            _convo(2, 2, cd[1], ("Cy", "Di")),
+        ]
+    )
+    assert len(merged) == 2
+    by_pair = {frozenset(c.participants): c for c in merged}
+    assert by_pair[frozenset(("Ada", "Bea"))].transcript == ab[1]
+    assert by_pair[frozenset(("Cy", "Di"))].transcript == cd[1]
+    assert all((c.start, c.end) == (1, 2) for c in merged)
+
+
+def test_merge_growth_windows_keeps_a_pairs_second_meeting_separate():
+    # The guard the per-pair keying must not lose: the same pair meeting AGAIN
+    # later is two windows, not one grown window -- even though the key matches.
+    from backend.eval.believability import _merge_growth_windows
+
+    morning = [["Ada", "Morning."]]
+    evening = [["Ada", "Evening."]]
+    merged = _merge_growth_windows([_convo(1, 3, morning), _convo(400, 402, evening)])
+    assert len(merged) == 2
+    assert [c.transcript for c in merged] == [morning, evening]
+
+
+def test_world_grounding_flags_an_invented_place_with_an_invitation():
+    judge = HeuristicJudge()
+    ev = build_evidence(make_replay())["Ada"]
+    ev.conversations = [
+        _convo(
+            1,
+            1,
+            [
+                [
+                    "Ada",
+                    "It's right down by the river, a ten-minute "
+                    "walk through the athletic complex -- come by!",
+                ]
+            ],
+        )
+    ]
+    score = judge._world_grounding(ev)
+    assert score.score is not None and score.score < 5
+    # Two separate assertions, each pinned to one word: the evidence lines
+    # this dimension emits are built from the classified word lists
+    # (`invented`/`seen`), never from the raw transcript text, so each check
+    # only passes when the gazetteer actually recognized that word -- if
+    # `_PLACE_NOUNS` regresses and silently drops one of them, that half
+    # fails loudly instead of being masked by the other.
+    assert any("river" in e for e in score.evidence)
+    assert any("complex" in e for e in score.evidence)
+
+
+def test_world_grounding_allows_bare_off_map_backstory():
+    # A rower may talk about her boathouse; §1 of the spec permits it. Only a
+    # first-hand claim or an invitation is a defect.
+    judge = HeuristicJudge()
+    ev = build_evidence(make_replay())["Ada"]
+    ev.conversations = [
+        _convo(1, 1, [["Ada", "I row, so I'm always rushing in from the boathouse."]])
+    ]
+    assert judge._world_grounding(ev).score == 10.0
+
+
+def test_world_grounding_does_not_flag_real_places():
+    judge = HeuristicJudge()
+    ev = build_evidence(make_replay())["Ada"]
+    ev.conversations = [
+        _convo(1, 1, [["Ada", "I went to the Library and then the Gym."]])
+    ]
+    assert judge._world_grounding(ev).score == 10.0
+
+
+def test_world_grounding_catches_a_cue_with_no_place_noun_in_its_window():
+    # The Casey case: "Oh yeah, I totally went!" names no place, but the window
+    # names the boathouse, so the claim is attributable.
+    judge = HeuristicJudge()
+    ev = build_evidence(make_replay())["Ada"]
+    ev.conversations = [
+        _convo(
+            1,
+            2,
+            [
+                ["Bea", "Did you ever make it down to the boathouse?"],
+                ["Ada", "Oh yeah, I totally went! The light was perfect down there."],
+            ],
+        )
+    ]
+    score = judge._world_grounding(ev)
+    assert score.score is not None and score.score < 10
+    assert any("Ada" in e for e in score.evidence)
+
+
+def test_world_grounding_evidence_distinguishes_two_claims_in_one_window():
+    # Two first-hand claims about the same off-map place in one window used to
+    # emit byte-identical evidence lines (the cue phrase now distinguishes
+    # them), and a flagged window also got a redundant "place words seen"
+    # trailer on top of its per-line findings (now suppressed).
+    judge = HeuristicJudge()
+    ev = build_evidence(make_replay())["Ada"]
+    ev.conversations = [
+        _convo(
+            1,
+            1,
+            [
+                ["Ada", "I went to the boathouse yesterday, it was great."],
+                ["Ada", "Yeah, come by the boathouse sometime!"],
+            ],
+        )
+    ]
+    ev_lines = judge._world_grounding(ev).evidence
+    claims = [e for e in ev_lines if "claims first-hand experience" in e]
+    assert len(claims) == 2
+    assert len(set(claims)) == 2  # distinct, not duplicated
+    # The cue phrase is what distinguishes them, and it never leaks a place
+    # noun into the evidence: "boathouse" appears only via the classified list.
+    assert "i went" in claims[0] and "come by" in claims[1]
+    # A flagged window gets no redundant summary trailer.
+    assert not any("place words seen" in e for e in ev_lines)
+
+
+def test_world_grounding_is_none_without_conversations():
+    judge = HeuristicJudge()
+    ev = build_evidence(make_replay())["Ada"]
+    ev.conversations = []
+    assert judge._world_grounding(ev).score is None
+
+
+def test_world_grounding_is_none_on_a_replay_baked_before_780():
+    # Task 4's meta.locations is optional: a replay baked before it exists
+    # must still audit, just without this one dimension.
+    judge = HeuristicJudge()
+    replay = make_replay()
+    del replay["meta"]["locations"]
+    ev = build_evidence(replay)["Ada"]
+    score = judge._world_grounding(ev)
+    assert score.score is None
+    assert "meta.locations" in score.note
+
+
+def test_evidence_text_lists_the_worlds_places():
+    evidence = build_evidence(make_replay())
+    text = evidence_text(evidence["Ada"], evidence)
+    assert "Places that exist in this world: Cafe, Gym, Library" in text
 
 
 # ------------------------------------------------------------ heuristic judge
@@ -361,6 +585,7 @@ GRADE = {
     },
     "temporal_sanity": {"score": 8, "evidence": ["steps 40-59: afternoon stop"]},
     "social_grounding": {"score": 7, "evidence": ["steps 12-20: cafe chat"]},
+    "world_grounding": {"score": 10, "evidence": ["no off-map places mentioned"]},
     "memory_use": {"score": 6, "evidence": ["step 10: plan memory retrieved"]},
 }
 
@@ -448,10 +673,18 @@ def test_rubric_prompt_renders_exactly():
         "  timing.\n"
         "- social_grounding: conversation lines reference real shared context\n"
         "  from both participants' memory streams, not confabulation.\n"
+        # Deliberately the SAME rule the heuristic and the place_grounding
+        # prompt enforce -- off-map is sayable, just not visitable. A stricter
+        # judge bullet (an earlier draft also policed real-but-never-visited
+        # places) would make every judge-vs-heuristic delta on this dimension
+        # partly a measure of rule mismatch rather than of the run.
+        "- world_grounding: the agent may mention places outside this world, but\n"
+        "  never claims to have just been to one, and never invites anyone to\n"
+        "  meet there.\n"
         "- memory_use: the memories retrieved for each decision were relevant\n"
         "  to the decision made.\n"
         "\n"
-        "Call grade_believability once, with all four dimensions."
+        "Call grade_believability once, with all five dimensions."
     )
 
 

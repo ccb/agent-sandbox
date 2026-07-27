@@ -1356,10 +1356,10 @@ endpoints (`/runs`, above) serve the same history over HTTP.
 
 An **offline** eval over a finished run's exported artifacts — no live
 coupling, no new export fields. It reads a baked replay JSON *or* a RunStore
-run directory and writes a per-agent day-coherence report: four rubric
-dimensions (plan coherence, temporal sanity, social grounding, memory use),
-each scored 1–10 with cited step examples, plus a run-level summary — so
-cognition changes (#579) can be compared run-over-run.
+run directory and writes a per-agent day-coherence report: five rubric
+dimensions (plan coherence, temporal sanity, social grounding, world
+grounding, memory use), each scored 1–10 with cited step examples, plus a
+run-level summary — so cognition changes (#579) can be compared run-over-run.
 
 ```bash
 # a baked replay (regenerate it first — it's git-ignored):

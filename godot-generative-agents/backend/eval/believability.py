@@ -10,7 +10,7 @@ It is read-only and offline: point it at a baked replay JSON (what
 ``generate_penn_replay.py`` writes) or at a #304 RunStore run directory
 (``runs/<run_id>/``). No live coupling, no new export fields.
 
-Four rubric dimensions, each scored 1-10 with cited step examples:
+Five rubric dimensions, each scored 1-10 with cited step examples:
 
 * **plan coherence** -- did the agent's actions match its plan (or deviate
   visibly), in the plan's order?
@@ -18,6 +18,8 @@ Four rubric dimensions, each scored 1-10 with cited step examples:
   should, without frame-to-frame thrash?
 * **social grounding** -- do conversation lines reference real shared context
   (both participants' streams), between agents actually standing together?
+* **world grounding** -- does the agent avoid claiming first-hand experience
+  of (or inviting someone to) a place that doesn't exist in this world?
 * **memory use** -- were the memories retrieved for a decision relevant to
   the action taken?
 
@@ -165,6 +167,7 @@ class AgentEvidence:
     vision_r: float
     start_dt: datetime.datetime | None
     sec_per_step: int
+    world_places: list[str] = field(default_factory=list)  # meta.locations (#780)
 
     def time_at(self, step: int) -> str:
         """The sim wall-clock at *step* (``HH:MM``), or the bare step number
@@ -209,9 +212,12 @@ def _conversations_in(frames: list[dict]) -> list[Conversation]:
     are the agents carrying it.
 
     This leans on the viewer contract that a window's transcript is repainted
-    *identically* frame to frame. A producer that instead accumulated lines
-    per frame would key each growth as a new window and overcount -- if that
-    contract ever changes, this grouping must change with it.
+    *identically* frame to frame. A producer that instead accumulates lines
+    per frame keys each growth as a new window here -- ``build_evidence``
+    merges those growth windows back together right after calling this
+    (:func:`_merge_growth_windows`, #799), so callers never see the
+    fragmentation even though this function's own grouping stays
+    identical-payload keying.
     """
     conversations: list[Conversation] = []
     open_convs: dict[str, Conversation] = {}  # transcript key -> in-progress window
@@ -242,6 +248,65 @@ def _conversations_in(frames: list[dict]) -> list[Conversation]:
     return conversations
 
 
+def _merge_growth_windows(conversations: list[Conversation]) -> list[Conversation]:
+    """Collapse one live conversation's per-tick growth into a single window.
+
+    ``_conversations_in`` groups frames by *identical* chat payload, and warns
+    in its own docstring that a producer accumulating lines per frame "would
+    key each growth as a new window and overcount". The multi-tick producer
+    (#371) does exactly that -- one Dana/Casey meeting registered as 23
+    windows -- which both fragments window context and would score the same
+    line many times over.
+
+    Starting no later than one step after the open window's end AND one
+    transcript a prefix of the other means the same meeting growing
+    tick-by-tick; the longer transcript wins. The prefix check matters: two
+    windows that merely overlap in time but carry unrelated transcripts are a
+    different conversation, not a growth, and must not be collapsed into one --
+    doing so would silently discard whichever transcript lost, along with any
+    confabulation inside it.
+
+    "The open window" is tracked **per participant set**, not as the single last
+    window appended. The producer keys its ``active`` map by pair frozenset, so
+    two pairs can be talking at the same time; their growth fragments then
+    interleave in ``(start, end)`` order, and comparing each one against the
+    previous window overall would hand every A--B fragment a C--D window to fail
+    the participants check against -- restoring the whole #799 overcount exactly
+    when conversations overlap, which on a campus of fifteen is often. Keying by
+    participants makes the old equality check redundant; the adjacency and prefix
+    guards still keep a pair's genuinely *separate* later meeting apart, since it
+    starts long after the earlier window's end.
+
+    Called centrally from ``build_evidence``, right after ``_conversations_in``,
+    so every dimension -- ``social_grounding``, ``world_grounding``, and the LLM
+    judge's ``evidence_text`` -- reads the same merged ``AgentEvidence.conversations``
+    (#799). It started out local to ``_world_grounding`` alone, deferred because
+    fixing it centrally would move already-published ``social_grounding`` scores;
+    that review has since happened.
+    """
+    merged: list[Conversation] = []
+    open_window: dict[frozenset[str], Conversation] = {}
+    for conv in sorted(conversations, key=lambda c: (c.start, c.end)):
+        key = frozenset(conv.participants)
+        prev = open_window.get(key)
+        if prev is not None and conv.start <= prev.end + 1:
+            short, long_ = sorted((conv.transcript, prev.transcript), key=len)
+            if long_[: len(short)] == short:  # a growth of the open window
+                prev.end = max(prev.end, conv.end)
+                if len(conv.transcript) > len(prev.transcript):
+                    prev.transcript = list(conv.transcript)
+                continue
+        window = Conversation(
+            start=conv.start,
+            end=conv.end,
+            participants=list(conv.participants),
+            transcript=list(conv.transcript),
+        )
+        merged.append(window)
+        open_window[key] = window
+    return merged
+
+
 def build_evidence(replay: dict) -> dict[str, AgentEvidence]:
     """Digest *replay* into one :class:`AgentEvidence` per persona."""
     meta = replay.get("meta", {})
@@ -251,7 +316,8 @@ def build_evidence(replay: dict) -> dict[str, AgentEvidence]:
     start_dt = _parse_start(meta)
     sec_per_step = int(meta.get("sec_per_step", 10))
     vision_r = float(meta.get("vision_r", 8))
-    conversations = _conversations_in(frames)
+    conversations = _merge_growth_windows(_conversations_in(frames))
+    world_places = sorted(meta.get("locations") or [])
 
     evidence: dict[str, AgentEvidence] = {}
     for spec in personas:
@@ -285,12 +351,13 @@ def build_evidence(replay: dict) -> dict[str, AgentEvidence]:
             vision_r=vision_r,
             start_dt=start_dt,
             sec_per_step=sec_per_step,
+            world_places=world_places,
         )
     return evidence
 
 
 # ---------------------------------------------------------------------------
-# Scores and the rubric's four dimensions
+# Scores and the rubric's five dimensions
 # ---------------------------------------------------------------------------
 
 # The rubric, in report order. Every judge scores exactly these.
@@ -298,6 +365,7 @@ DIMENSIONS = (
     "plan_coherence",
     "temporal_sanity",
     "social_grounding",
+    "world_grounding",
     "memory_use",
 )
 
@@ -358,6 +426,41 @@ _STOPWORDS = {
 }
 
 
+# Common nouns for places a campus agent might invent (issue #780). Case is
+# useless here: the real confabulations -- "boathouse", "the river", "athletic
+# complex" -- were all lowercase. A hit is only a candidate: it is discarded
+# when it falls inside a real location name, so "Kamin Gallery" and "Reception
+# Hall" don't false-positive.
+# ponytail: naive gazetteer; the LLM judge is the backstop when it misses.
+_PLACE_NOUNS = frozenset(
+    """annex arena bar boathouse bridge cafe center centre complex courtyard
+    creek dorm field garden gallery gym lab market museum park pool quad rink
+    restaurant river shop stadium station store studio theater theatre trail
+    track""".split()
+)
+
+# Phrases that turn naming a place into a checkable claim: having been there,
+# or inviting someone to go. Taken from the actual #780 transcript rather than
+# invented. Bare mentions are allowed -- see the spec's non-goal.
+_EXPERIENCE_CUES = (
+    "been there",
+    "check it out",
+    "come by",
+    "down there",
+    "i went",
+    "made it down",
+    "make it down",
+    "meet me",
+    "minute walk",
+    "shots of",
+    "show me",
+    "swing by",
+    "totally went",
+    "walk if you",
+    "went to",
+)
+
+
 def _content_words(text: str) -> set[str]:
     """The meaningful lowercase words of *text* (4+ letters, minus stopwords).
 
@@ -406,6 +509,7 @@ class HeuristicJudge:
             "plan_coherence": self._plan_coherence(ev),
             "temporal_sanity": self._temporal_sanity(ev),
             "social_grounding": self._social_grounding(ev, evidence_by_name),
+            "world_grounding": self._world_grounding(ev),
             "memory_use": self._memory_use(ev),
         }
 
@@ -625,7 +729,104 @@ class HeuristicJudge:
             f"{len(ev.conversations)} conversation(s) checked",
         )
 
-    # -- dimension 4: memory use ----------------------------------------------
+    # -- dimension 4: world grounding -----------------------------------------
+
+    def _world_grounding(self, ev: AgentEvidence) -> DimScore:
+        """Does the agent talk about places that actually exist (issue #780)?
+
+        Naming an off-map place is allowed -- a rower may talk about her
+        boathouse. What is not allowed is claiming first-hand experience of it
+        or inviting someone to meet there, so only cue-carrying lines score.
+
+        Cues are matched **per window, not per line**: the worst line in the
+        run that motivated this ("Oh yeah, I totally went! The light was
+        perfect down there") names no place at all, and is only attributable
+        because the partner named the boathouse earlier in the same window.
+        """
+        if not ev.conversations:
+            return DimScore(None, note="no conversations observed for this agent")
+        if not ev.world_places:
+            return DimScore(
+                None, note="replay carries no meta.locations (baked before #780)"
+            )
+        real = " | ".join(ev.world_places).lower()
+        scores: list[float] = []
+        evidence: list[str] = []
+        for conv in ev.conversations:
+            lines = [line for line in conv.transcript if len(line) == 2]
+            # Every place-noun word this window names at all, and which of
+            # those are off-map. Tracking *both* (not just the off-map ones)
+            # is what lets the evidence say what the classifier saw: "cafe,
+            # gym -- all real" reads differently from "saw nothing", even
+            # though both currently score 10.0 -- and a real Penn world where
+            # "Franklin Field" kills "field" or "Pottruck Gym" kills "gym" (the
+            # substring check is deliberate, see module docstring) needs that
+            # distinction visible, or a blinded gazetteer is invisible too.
+            seen = sorted(
+                {
+                    word
+                    for _, text in lines
+                    for word in re.findall(r"[a-z]+", text.lower())
+                    if word in _PLACE_NOUNS
+                }
+            )
+            invented = [word for word in seen if word not in real]
+            mine = [(sp, tx) for sp, tx in lines if sp == ev.name]
+            if not mine:
+                continue
+            claimed = [
+                (sp, tx)
+                for sp, tx in mine
+                if invented and any(cue in tx.lower() for cue in _EXPERIENCE_CUES)
+            ]
+            scores.append(1.0 - len(claimed) / len(mine))
+            for sp, tx in claimed[:3]:
+                # Name the cue phrase(s) that turned this line into a claim:
+                # it is real signal, and it makes two claims in one window read
+                # distinctly instead of emitting the same string twice. Cues
+                # are a fixed vocabulary with no place nouns in it, so quoting
+                # them cannot smuggle a raw place name back into the evidence
+                # and mask a place-classification assertion (see #780 I2).
+                cues = ", ".join(c for c in _EXPERIENCE_CUES if c in tx.lower())
+                evidence.append(
+                    f"steps {conv.start}-{conv.end} ({ev.time_at(conv.start)}): "
+                    f'{sp} claims first-hand experience ("{cues}") in a window '
+                    f"that names {', '.join(invented)} -- not in this world"
+                )
+            if invented and not claimed:
+                evidence.append(
+                    f"steps {conv.start}-{conv.end}: mentions {', '.join(invented)} "
+                    f"(not in this world) without claiming to have been there -- "
+                    f"allowed, not scored"
+                )
+            elif not claimed:
+                # No claim was flagged here -- but say what the classifier
+                # actually saw, so a gazetteer that silently missed everything
+                # doesn't read the same as a genuinely clean day. (When a claim
+                # WAS flagged, the per-line findings above already name what was
+                # seen, so this summary would only repeat them.) Reaching this
+                # branch means `invented` is empty -- a non-empty `invented`
+                # with no claim took the branch above -- so the verdict is just
+                # "nothing" vs "all real".
+                verdict = (
+                    f"place words seen: {', '.join(seen)} -- all real"
+                    if seen
+                    else "no place words seen"
+                )
+                evidence.append(
+                    f"steps {conv.start}-{conv.end} ({ev.time_at(conv.start)}): "
+                    f"{verdict}; {len(mine)} line(s) of {ev.name} checked"
+                )
+        if not scores:
+            return DimScore(None, note="this agent said nothing in any window")
+        return DimScore(
+            _scale(sum(scores) / len(scores)),
+            evidence,
+            f"{len(scores)} conversation window(s) checked against "
+            f"{len(ev.world_places)} real place(s)",
+        )
+
+    # -- dimension 5: memory use ----------------------------------------------
 
     def _memory_use(self, ev: AgentEvidence) -> DimScore:
         """Were the memories retrieved for each decision relevant to it?
@@ -752,7 +953,7 @@ _DIM_SCHEMA = {
 BELIEVABILITY_TOOL = {
     "name": "grade_believability",
     "description": (
-        "Grade one agent's recorded day on the four believability dimensions, "
+        "Grade one agent's recorded day on the five believability dimensions, "
         "1-10 each, with step-cited evidence."
     ),
     "parameters": {
@@ -792,6 +993,10 @@ def evidence_text(ev: AgentEvidence, evidence_by_name: dict[str, AgentEvidence])
         lines.append(
             f"Sim day starts {ev.start_dt}; one step is {ev.sec_per_step}s; "
             f"{ev.n_steps} steps recorded."
+        )
+    if ev.world_places:
+        lines.append(
+            "Places that exist in this world: " + ", ".join(ev.world_places) + "."
         )
 
     lines += ["", "Schedule (the plan the day was generated from):"]
