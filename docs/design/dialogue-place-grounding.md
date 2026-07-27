@@ -402,10 +402,10 @@ the existing frames, not an A/B re-run.
   is unchanged and still fires for windows that genuinely carry no claim — it
   is part of the byte-identity of the published `run-20260724-201036-e8c405`
   report, where the exemption fires zero times. The obvious alternative —
-  splitting the cue list
-  into invite-cues and visited-cues and exempting only invitations — was
-  rejected: it re-flags the innocent "I went to the Library" whenever a
-  partner mentions a boathouse, the same false positive #807 exists to fix.
+  splitting the cue list into invite-cues and visited-cues and exempting only
+  invitations — was rejected: it re-flags the innocent "I went to the Library"
+  whenever a partner mentions a boathouse, the same false positive #807 exists
+  to fix.
 
   Two further false positives are known and unfixed, both the same
   gazetteer/verbatim ceiling: "meet me at Van Pelt at 3?" (the short form of
