@@ -198,6 +198,11 @@ _IMPORTANCE_LOCKED = "importance_locked"
 _IMPORTANCE_SCORED = "importance_scored"
 _IMPORTANCE_ATTEMPTS = "importance_score_attempts"
 
+# #795: a public announcement sits above a background acquaintance (the 3.0
+# relationship seed) and below the agent's own commitments (the 5.0 plan
+# memory) -- it should inform the day without outranking an obligation.
+EVENT_IMPORTANCE = 4.0
+
 # Bounds on the scorer's retry loop (issue #759). The rescan deliberately has no
 # cursor, so a malformed reply is retried next tick -- but unbounded, a brain
 # that keeps failing (or one that never answers score_memories) would re-send an
@@ -486,6 +491,8 @@ def attach_agents(
     llm_client=None,
     clock=None,
     num_steps: int | None = None,
+    travel_minutes: int | None = None,
+    events: list[dict] | None = None,
     out_planner_sources: dict | None = None,
     out_plans: dict | None = None,
     extra_action_names: list[str] | None = None,
@@ -531,6 +538,16 @@ def attach_agents(
     social-graph card but never delivered to an agent, so authored rivals,
     siblings, and TAs behaved like strangers who happened to be standing nearby.
     No key -> nothing seeded, so a world without a social graph is unchanged.
+
+    Pass ``events`` (a world YAML's validated ``events:`` list, issue #795) to
+    seed each announced happening as a t=0 observation into every agent's
+    memory *except* its host's -- the host already carries it as their own
+    commitment, at higher importance, from their schedule. Seeded only when
+    ``planner_client`` is also given: :class:`~backend.planner.MockPlanner`
+    ignores memory entirely, so seeding under the mock would shift the
+    top-6 retrieval and move the replay while informing nothing. With
+    ``events=None`` -- the default -- nothing is seeded and the replay is
+    unchanged.
 
     Pass a ``planner_client`` (an engine ``LlmClient``) to plan each day with a
     real model (:class:`~backend.planner.LLMPlanner`, issue #83). With none -- the
@@ -703,6 +720,31 @@ def attach_agents(
         # authored 3.0 (a deliberately-background social prior) as 6-8.
         for rec in seed.seed_relationships(agent.memory, statements):
             rec.metadata[_IMPORTANCE_LOCKED] = True
+        # Public events (#795): announced happenings anyone on campus could know
+        # about. Seeded ONLY when an LLM planner will actually read them --
+        # MockPlanner replays the authored schedule and ignores memory entirely,
+        # so seeding under the mock would shift the top-6 retrieval, change
+        # st["memories"], and move the bake while informing nothing. Same
+        # reasoning as the score_new_memories / maybe_reflect gates.
+        # The host is skipped: their own schedule already gives them this at
+        # importance 5.0, and the noticeboard phrasing would read "hosted by me".
+        if planner_client is not None:
+            announcements = [
+                render(
+                    "public_event",
+                    label=event["label"],
+                    at=event["at"],
+                    when=event["when"],
+                    host=event.get("host") or "",
+                )
+                for event in (events or [])
+                if event.get("host") != char.name
+            ]
+            for rec in seed.seed_relationships(
+                agent.memory, announcements, importance=EVENT_IMPORTANCE
+            ):
+                rec.metadata[_IMPORTANCE_LOCKED] = True
+                rec.tags = {"seed", "event"}
         # -- Opt-in seeded memories (#595): author t=0 observations (e.g. an aversive
         # -- "the unboiled water made me sick" memory) so a live brain can retrieve
         # -- and reason from them. Importance 5.0 matches the plan-memory seed so it
@@ -724,7 +766,11 @@ def attach_agents(
                 | {stop["place"] for p in personas for stop in p["schedule"]}
             )
             planner = LLMPlanner(
-                planner_client, plan_locations, clock=clock, num_steps=num_steps
+                planner_client,
+                plan_locations,
+                clock=clock,
+                num_steps=num_steps,
+                travel_minutes=travel_minutes,
             )
             plan = planner.generate(persona=spec, memory=agent.memory)
             if plan.stops:

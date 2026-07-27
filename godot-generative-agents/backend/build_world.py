@@ -76,6 +76,7 @@ def load_world_yaml(path, cast: list[str] | None = None) -> dict:
         data = yaml.safe_load(f) or {}
     ids = cast if cast is not None else data.get("cast")
     if ids is None:
+        data.setdefault("events", [])
         return data
     if not ids:
         raise ValueError(f"cast: empty cast for {path}")
@@ -153,6 +154,36 @@ def load_world_yaml(path, cast: list[str] | None = None) -> dict:
                 meetings.append(meeting)
     data["relationships"] = relationships
     data["meetings"] = meetings
+
+    # Public events (#795): world-level, not per-persona, so they need no
+    # composition -- a top-level `events:` already survived into `data`. What
+    # they need is the same fail-loud validation `meetings:` gets, because an
+    # event that names a place nobody has is an authoring bug that would
+    # otherwise reach every agent's memory as a plausible-sounding lie.
+    places = {loc.get("name") for loc in data.get("locations") or []}
+    events = []
+    for event in data.get("events") or []:
+        for field in ("label", "at", "when"):
+            if not event.get(field):
+                raise ValueError(
+                    f"{path}: event {event.get('label') or event!r} is "
+                    f"missing required field {field!r}"
+                )
+        if event["at"] not in places:
+            raise ValueError(
+                f"{path}: event {event['label']!r} names unknown place "
+                f"{event['at']!r}"
+            )
+        host = event.get("host")
+        if host is not None:
+            if host not in known:
+                raise ValueError(
+                    f"{path}: event {event['label']!r} names unknown host " f"{host!r}"
+                )
+            if host not in names:
+                continue  # host is parked outside this cast -> no event
+        events.append(event)
+    data["events"] = events
     return data
 
 

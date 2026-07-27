@@ -61,6 +61,7 @@ from backend.run_store import DEFAULT_RUNS_DIR, RunStore
 from backend.sim_clock import SimClock
 from backend.sim_config import CognitionConfig, SimulationConfig
 from backend.cognition import attach_agents
+from backend.planner import median_travel_minutes
 from scripted_brain import build_scripted_brains
 from penn_world import (
     DIALOGUE_FADE_STEPS,
@@ -1109,6 +1110,18 @@ class PennStepper:
             planner_client=self.planner_client,
             location_names=frozenset(loc["name"] for loc in self.world.locations),
             clock=self.clock,
+            # #795: what a walk actually costs, so the planner can budget for it
+            # instead of guessing. Computed from this world's map, so a different
+            # campus gets a different number; None -> the clause is omitted.
+            travel_minutes=median_travel_minutes(
+                self.world.world_map,
+                [loc.get("address") for loc in self.world.locations],
+                self.clock,
+            ),
+            # #795: the world's announced happenings, seeded to every agent
+            # but the host -- only reaches memory under a real planner (see
+            # cognition.attach_agents), so this is inert under the mock brain.
+            events=self.world.events,
             out_planner_sources=planner_sources,
             extra_action_names=PENN_ACTION_VERBS,
         )
@@ -1186,6 +1199,17 @@ class PennStepper:
         # react pass's edge detector. Fresh per day/reset, like the two
         # conversation dicts above.
         self._react_state = {}
+        # #795: this run's social opportunity. Reset per day/reset, like the
+        # react and conversation state above. _adopt_run flips _resumed True
+        # below when this build is a resume, not a fresh day -- a resumed
+        # run's accumulators restart at 0 with this process (unlike cost,
+        # #543's _cost_base is NOT reconstructed for co-settlement here on
+        # purpose, see _adopt_run), so they cannot be trusted as "this day had
+        # no social opportunity" and the #795 finish warning must stay quiet.
+        self._co_settled_total = 0
+        self._co_settled_by_pair: dict[tuple[str, str], int] = {}
+        self._conversations_total = 0
+        self._resumed = False
         self.emoji = {p["name"]: p["emoji"] for p in self.world.personas}
         self.order = [p["name"] for p in self.world.personas]
         self.state = {}
@@ -1285,7 +1309,12 @@ class PennStepper:
         the ``_events_seen``/``_persist_events_seen`` cursors and the wish
         buffers (correct -- the new ``game.events``/``game.wishes`` start
         empty; the stored ``events.jsonl``/``wishes.jsonl`` are append-only
-        history).
+        history). The #795 co-settled accumulators are the same: this
+        process's ``_co_settled_total`` restarts at 0, not reconstructed from
+        the persisted frames (a bigger change than the counter warrants) --
+        ``_resumed`` records that this day is not fully observed by this
+        process, so ``_finish_run`` knows a zero total here would be a false
+        alarm, not evidence.
         """
         if row is None:
             row = self._resumable_row(run_id)
@@ -1293,6 +1322,7 @@ class PennStepper:
             frames = self.run_store.read_frames(run_id)
         self._run_id = run_id
         self._step_idx = len(frames)
+        self._resumed = True
         if frames:
             last = frames[-1]
             for name in self.order:
@@ -1365,6 +1395,17 @@ class PennStepper:
             6,
         )
 
+    def _by_pair_json(self) -> dict:
+        # THE `by_pair` shape, defined once (#795, mirrors _run_cost_usd
+        # above): JSON-safe "A + B" keys, busiest pair first. run_usage() and
+        # _write_run_record() both serve this -- one order, not two.
+        return {
+            f"{a} + {b}": n
+            for (a, b), n in sorted(
+                self._co_settled_by_pair.items(), key=lambda kv: -kv[1]
+            )
+        }
+
     def run_usage(self) -> dict:
         """This run's slice of the lifetime ledger (#526).
 
@@ -1411,6 +1452,18 @@ class PennStepper:
             "run_failed_calls": run_failed_calls,
             "run_cost_usd": self._run_cost_usd(),
             "run_by_actor": {a: round(c, 6) for a, c in run_by_actor.items()},
+            # #795: whether this run had any chance of being social. Zero here
+            # with a nonzero step count is the "structurally impossible"
+            # signature the issue reported -- surfaced rather than silent.
+            # ``conversations`` counts *completed* ones (what ``maybe_converse``
+            # returns as it ends them), so a conversation still mid-exchange at
+            # the run's last tick isn't here -- don't diff it against the
+            # viewer's live conversation feed and read an off-by-one.
+            "social": {
+                "co_settled_pair_steps": self._co_settled_total,
+                "by_pair": self._by_pair_json(),
+                "conversations": self._conversations_total,
+            },
         }
 
     def meta(self) -> dict:
@@ -1775,7 +1828,8 @@ class PennStepper:
         ):
             time.sleep(self.stall_seconds)
         decide_info = {}
-        raw, _chats = step(
+        social_info: dict = {}
+        raw, chats = step(
             self.game,
             self.chars,
             self.state,
@@ -1805,7 +1859,12 @@ class PennStepper:
             deciding_sink=(
                 self._deciding_sink if self.llm_client is not None else None
             ),
+            social_info=social_info,
         )
+        self._conversations_total += chats
+        for pair in social_info.get("pairs", ()):
+            self._co_settled_by_pair[pair] = self._co_settled_by_pair.get(pair, 0) + 1
+        self._co_settled_total += social_info.get("co_settled", 0)
         self.last_deciders = decide_info.get("deciders", 0)
         for name in decide_info.get("timeouts", ()):
             # Mirror the injector's FIRE print: the skipped decision must be
@@ -1895,20 +1954,44 @@ class PennStepper:
         self._persist_events_seen = len(self.game.events)
 
     def _finish_run(self) -> None:
-        # Idempotent: the live loop keeps ticking a finished day (every tick
-        # returns None) and only the first one flips the status. The tail
-        # flush catches events (and wishes, #622) logged after the final tick
-        # (#307).
+        # The tail flush catches events (and wishes, #622) logged after the
+        # final tick (#307) -- these stay outside the idempotence guard below
+        # since a straggler can land between two calls here (e.g. two
+        # already-finished ticks with a POST /world/event between them) and
+        # each is a cheap no-op without a store or new pending item anyway.
         self._persist_pending_events()
         self._persist_pending_wishes()
+        # Idempotent from here down: the live loop keeps ticking a finished
+        # day (every tick returns None) and repeated POST /resume calls on an
+        # already-finished run reach here too -- only the FIRST call may warn
+        # or touch the store, or a long-lived live loop would re-print the
+        # #795 warning below forever.
+        if self._run_finished:
+            return
+        # #795: a run that never gave two agents a moment together produced no
+        # conversation and could not have. Say so -- that silence is the whole
+        # complaint the issue opened with. A resumed run is excluded: its
+        # accumulators restart at 0 with this process (unlike cost, which
+        # #543's _cost_base carries across resume) rather than being
+        # reconstructed from persisted frames, so a zero here means "this
+        # process didn't see it", not "it never happened" -- printing would be
+        # a false alarm, and silence beats that.
         if (
-            self.run_store is not None
-            and self._run_id is not None
-            and not self._run_finished
+            self.llm_client is not None
+            and self._step_idx
+            and not self._co_settled_total
+            and not self._resumed
         ):
+            print(
+                f"  - WARNING no two agents were ever settled together in "
+                f"{self._step_idx} steps -- conversation was impossible this "
+                f"run (#795). Check the day plans: try --plan schedule to "
+                f"compare."
+            )
+        if self.run_store is not None and self._run_id is not None:
             self.run_store.update_run(self._run_id, status="finished")
             self._write_run_record()
-            self._run_finished = True
+        self._run_finished = True
 
     def _write_run_record(self) -> None:
         """Save the run's reproducibility recipe next to its frames (#715).
@@ -1927,7 +2010,13 @@ class PennStepper:
                 "sha256": file_sha256(self._cassette_path),
             },
             engine_version=self._engine_sha,
-            result={"steps": self._step_idx, "cost_usd": self._run_cost_usd()},
+            result={
+                "steps": self._step_idx,
+                "cost_usd": self._run_cost_usd(),
+                "co_settled_pair_steps": self._co_settled_total,
+                "by_pair": self._by_pair_json(),
+                "conversations": self._conversations_total,
+            },
         )
         record.save(str(self.run_store.root / self._run_id / "run.yaml"))
 

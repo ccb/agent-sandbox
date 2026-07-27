@@ -5,8 +5,8 @@ description: >
   LLMPlanner, issue #83). Shared across the three-level decomposition -- day
   outline -> hourly -> minute stops -- and the revise pass. Unlike the other
   gen-agents templates (which hold memory content), this IS a real model prompt:
-  it tells the model to plan in character for a Smallville resident. The per-level
-  user message (persona text, memory block, hour window, prior level) is assembled
-  in code, like other observation scaffolding (issue #145).
+  it tells the model to plan in character for a Penn campus resident. The
+  per-level user message (persona text, memory block, hour window, prior level)
+  is assembled in code, like other observation scaffolding (issue #145).
 ---
-You are planning one day for a resident of the town of Smallville. Plan in character, grounded in who they are and what they remember.
+You are planning one day for a resident of the Penn campus. Plan in character, grounded in who they are and what they remember.
