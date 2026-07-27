@@ -329,11 +329,7 @@ describe("followLive", () => {
       "fetch",
       vi.fn(async (url: string) => {
         fetched.push(url);
-        const body = url.endsWith("/live")
-          ? live
-          : url.endsWith("/usage")
-            ? usage
-            : events;
+        const body = url.endsWith("/live") ? live : url.endsWith("/usage") ? usage : events;
         return { ok: true, json: async () => body };
       }),
     );

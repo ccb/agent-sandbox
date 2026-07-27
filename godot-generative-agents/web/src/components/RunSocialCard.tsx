@@ -42,20 +42,13 @@ export function socialView(social: RunSocial | undefined, step: number): SocialV
   };
 }
 
-export function RunSocialCard({
-  social,
-  step,
-}: {
-  social: RunSocial | undefined;
-  step: number;
-}) {
+export function RunSocialCard({ social, step }: { social: RunSocial | undefined; step: number }) {
   const v = socialView(social, step);
   if (!v) return null;
   return (
     <div className="agent-field social-card">
       <span className="agent-field-label">
-        Social{" "}
-        {v.pairSteps > 0 && <span className="agent-history-count">{v.pairSteps}</span>}
+        Social {v.pairSteps > 0 && <span className="agent-history-count">{v.pairSteps}</span>}
       </span>
       <p className="social-line">
         <strong>{v.pairSteps}</strong> co-settled pair-steps · <strong>{v.conversations}</strong>{" "}
