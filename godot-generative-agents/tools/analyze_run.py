@@ -131,7 +131,18 @@ def _load_run_record(run_id: str, runs_dir: pathlib.Path) -> dict:
     needed, so a small indent-tracking scanner beats adding a dependency to
     a stdlib-only tool. `result.save()` writes block-style YAML at a fixed
     2/4-space indent (verified against `RunRecord.save`'s `yaml.safe_dump`),
-    which is all this relies on -- it is not a general YAML parser."""
+    which is all this relies on -- it is not a general YAML parser.
+
+    One flow-style case is unavoidable even in block-style output: PyYAML
+    always renders an EMPTY collection as `{}`/`[]`, never as an empty
+    block (there is no block spelling of "nothing here"). `by_pair: {}` is
+    exactly the zero-co-settled run #795 is about, so it must parse to an
+    empty dict, not the literal string `"{}"`. Anything flow-style beyond
+    that -- a non-empty `{...}`/`[...]` -- is a shape this scanner does not
+    understand, and *guessing* at it risks a wrong number labelled
+    authoritative. So it fails safe instead: abandon the whole record and
+    let the caller fall back to the frame proxy.
+    """
     path = runs_dir / run_id / "run.yaml"
     if not path.is_file():
         return {}
@@ -148,16 +159,24 @@ def _load_run_record(run_id: str, runs_dir: pathlib.Path) -> dict:
         indent = len(line) - len(line.lstrip(" "))
         key, _, value = line.strip().partition(":")
         value = value.strip()
-        parsed = int(value) if value.lstrip("-").isdigit() else value
         if indent == 2:
             if value == "":
                 nested_key = key
                 result[key] = {}
+            elif value in ("{}", "[]"):
+                nested_key = None
+                result[key] = {} if value == "{}" else []
+            elif value[:1] in "{[":
+                return {}  # non-empty flow-style collection -- can't confirm the shape
             else:
                 nested_key = None
-                result[key] = parsed
+                result[key] = int(value) if value.lstrip("-").isdigit() else value
         elif indent == 4 and nested_key:
-            result[nested_key][key] = parsed
+            if value[:1] in "{[":
+                return {}  # same fail-safe, one level down
+            result[nested_key][key] = (
+                int(value) if value.lstrip("-").isdigit() else value
+            )
     return {"result": result} if result else {}
 
 
@@ -383,6 +402,65 @@ def self_check() -> None:
             "Tanaka + Sofia Ramirez": 90,
         }, record
         assert _load_run_record("missing", runs_dir) == {}
+
+    # #795 CRITICAL regression: PyYAML always renders an EMPTY dict as flow
+    # style (`by_pair: {}`) even under block-style dump -- there is no block
+    # spelling of "nothing here". That is exactly the zero-co-settled run
+    # this tool exists to surface, and the naive parser above stored the
+    # literal string "{}" for it, which crashed render()'s `.items()` call.
+    # This exact YAML text is real `yaml.safe_dump(..., sort_keys=False)`
+    # output for that shape (checked in a throwaway probe, not re-derived
+    # here) -- a hand-typed guess is how the original bug hid.
+    with tempfile.TemporaryDirectory() as tmp:
+        runs_dir = pathlib.Path(tmp)
+        run_dir = runs_dir / "run-zero"
+        run_dir.mkdir()
+        (run_dir / "frames.jsonl").write_text(
+            '{"A": {"act": "reading @ x", "loc": "Hall"}}\n'
+            '{"A": {"act": "walking to Green @ x", "loc": "Green"}}\n',
+            encoding="utf-8",
+        )
+        (run_dir / "run.yaml").write_text(
+            "game: penn\n"
+            "seed: 42\n"
+            "cassette:\n"
+            "  path: cassette.jsonl\n"
+            "  sha256: abc123\n"
+            "engine_version: deadbeef\n"
+            "result:\n"
+            "  steps: 1200\n"
+            "  cost_usd: 0.234\n"
+            "  co_settled_pair_steps: 0\n"
+            "  by_pair: {}\n"
+            "  conversations: 0\n"
+            "steps_list: []\n",
+            encoding="utf-8",
+        )
+        record = _load_run_record("run-zero", runs_dir)
+        assert record["result"]["co_settled_pair_steps"] == 0, record
+        assert record["result"]["by_pair"] == {}, record
+        # The bug was in render(), not the parser -- a parser-only assert
+        # would have missed it. Run the real summarise() -> render() path.
+        s = summarise("run-zero", runs_dir, usage=None)
+        assert s["co_settled"] == 0, s
+        assert s["co_settled_source"] == "run record", s
+        assert s["by_pair"] == {}, s
+        out = render(s)
+        assert "co-settled  0 pair-steps  [run record]" in out, out
+
+    # Fail-safe: a flow-style value this scanner does not understand (a
+    # non-empty `{...}`) must abandon the whole record, not guess at it --
+    # never a wrong number labelled authoritative. Caller falls back to
+    # the frame proxy for such a run, same as if run.yaml were absent.
+    with tempfile.TemporaryDirectory() as tmp:
+        runs_dir = pathlib.Path(tmp)
+        run_dir = runs_dir / "run-weird"
+        run_dir.mkdir()
+        (run_dir / "run.yaml").write_text(
+            "result:\n  co_settled_pair_steps: 7\n  by_pair: {a: 1, b: 2}\n",
+            encoding="utf-8",
+        )
+        assert _load_run_record("run-weird", runs_dir) == {}
 
     print("self-check OK")
 
