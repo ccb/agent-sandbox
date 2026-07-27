@@ -21,6 +21,7 @@ to a file, and the live server (``penn.serve_penn``) drives ``step`` tick-by-tic
 
 import concurrent.futures
 
+from text_adventure_games.conversation import can_converse
 from text_adventure_games.planning import (
     ACTION_FAILED,
     BEHIND_SCHEDULE,
@@ -167,6 +168,57 @@ def _decision_trace(agent, command: str, ok: bool) -> list:
     return consults + [{"kind": "action", "tool": verb, "ok": ok}]
 
 
+def count_co_settled(game, chars, state, order) -> list[tuple[str, str]]:
+    """Pairs that could actually have talked to each other this step (#795).
+
+    Both halves are the real gates :func:`cognition.maybe_converse` applies:
+
+    * **settled** -- ``(performing or conversing) and not path``. A talk_to-
+      opened conversation (:func:`cognition._advance_conversation`) never sets
+      ``performing`` -- it pins ``conversing`` instead, and the agent was
+      already idle (``not path``) the instant it decided to talk -- so
+      ``performing`` alone missed every conversing pair that started that way
+      and undercounted a run that plainly had conversation in it (#795 review:
+      a real 77-step talk between two settled agents scored 0). An idle agent
+      (neither flag set) still does not count;
+    * **within earshot** -- :func:`conversation.can_converse`, the exact
+      predicate :func:`conversation.find_conversation_pairs` uses, so this
+      goes through the game's ``audience_for`` seam. That matters on Penn:
+      ``penn_world`` overrides ``audience_for`` with
+      ``perceivable_locations`` + ``can_perceive`` (Chebyshev ``vision_r``),
+      because "Penn campus" is one outdoor hub Location spanning the whole
+      map. A plain ``location is location`` test would score two agents idling
+      hundreds of tiles apart as a co-settled pair-step -- letting a still-dead
+      run report healthy opportunity and suppress the zero-warning. This is the
+      number that decides whether #795 is fixed, so it has to mean what it says.
+
+    Deliberately *not* applied: cooldowns, the conversing pin, and busy-ness.
+    This measures the **opportunity** to talk, not eligibility to start a new
+    conversation right now, so a pair mid-conversation or on cooldown still
+    counts. That is what makes the count comparable across runs (#795's
+    399-vs-0 table).
+
+    A ``None`` location never pairs: two agents who are nowhere are not
+    together. (``can_converse`` would also reject them, via the default
+    ``audience_for``; the filter keeps them out of the O(n^2) scan and out of
+    an override's way.) Same budget :func:`maybe_react`'s proximity scan
+    already pays.
+    """
+    settled = [
+        name
+        for name in order
+        if (state[name]["performing"] or state[name].get("conversing"))
+        and not state[name]["path"]
+        and chars[name].location is not None
+    ]
+    return [
+        (a, b)
+        for i, a in enumerate(settled)
+        for b in settled[i + 1 :]
+        if can_converse(game, chars[a], chars[b])
+    ]
+
+
 def step(
     game,
     chars: dict,
@@ -188,6 +240,7 @@ def step(
     decide_pending: dict | None = None,
     decide_info: dict | None = None,
     deciding_sink=None,
+    social_info: dict | None = None,
 ) -> tuple[dict, int]:
     """Run exactly one 10-second tick and return ``(frame, chats_this_step)``.
 
@@ -713,6 +766,11 @@ def step(
     # brain, so the default replay is unchanged.
     chats_this_step = 0
     if conversation_enabled:
+        # #795: count the opportunity to talk BEFORE any conversation machinery
+        # runs this tick, so the metric is independent of cooldowns and pins.
+        if social_info is not None:
+            pairs = count_co_settled(game, chars, state, order)
+            social_info.update(co_settled=len(pairs), pairs=pairs)
         # React-or-continue (#370): BEFORE the conversation pass, so a greet's
         # first line is spoken this same tick by maybe_converse's advance
         # phase. Off by default (cog.react_enabled) -> byte-identical.
@@ -890,6 +948,14 @@ def simulate(
     cog = cognition if cognition is not None else CognitionConfig()
 
     game, chars = build_world_fn(world_map)
+    # KNOWN GAP (#795): attach_agents also takes `events` (the world's public
+    # noticeboard, seeded at t=0) and `travel_minutes` (the map-derived
+    # cross-campus walk cost handed to the planner), and simulate() threads
+    # neither -- so a real planner driven through simulate() gets a plan with no
+    # shared anchor and no travel budget. Nothing does that today: the live path
+    # (penn.serve_penn) calls attach_agents directly and passes both, and the
+    # bake is mock-only, where both are inert. Add the two pass-throughs the day
+    # a `--plan llm` caller comes through simulate().
     attach_agents(
         chars,
         personas,

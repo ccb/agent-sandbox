@@ -133,8 +133,8 @@ MINUTE_TOOL = {
     "name": "minute_plan",
     "description": (
         "Turn the plan into concrete stops: where to go, what to do there, and "
-        "for how many sim steps before moving on (omit steps on the last stop to "
-        "stay put). Use only known places."
+        "for how many minutes to stay before moving on (omit minutes on the last "
+        "stop to stay put). Use only known places."
     ),
     "parameters": {
         "type": "object",
@@ -148,9 +148,15 @@ MINUTE_TOOL = {
                         "place": {"type": "string"},
                         "activity": {"type": "string"},
                         "emoji": {"type": "string"},
-                        "steps": {"type": "integer"},
+                        "minutes": {
+                            "type": "integer",
+                            "description": (
+                                "In-game minutes spent AT this place. Travel time "
+                                "to get here is charged separately, on top of this."
+                            ),
+                        },
                     },
-                    # emoji/steps stay genuinely optional (a missing steps means
+                    # emoji/minutes stay genuinely optional (missing minutes means
                     # "stay put"), so this tool is best-effort, not OpenAI strict
                     # (#357) -- forcing every field required would change that
                     # meaning. additionalProperties:false still tightens
@@ -164,6 +170,38 @@ MINUTE_TOOL = {
         "additionalProperties": False,
     },
 }
+
+
+def median_travel_minutes(world_map, addresses, clock) -> int | None:
+    """Median pairwise walk cost between *addresses*, in in-game minutes (#795).
+
+    Chebyshev tile gap between each pair's first tile, which -- since the walk
+    advances one tile per step -- is the minimum number of steps that walk can
+    take. A lower bound, deliberately: the prompt that consumes it says "at
+    least about N minutes", and running real A* for every location pair at
+    every _build would cost real time for a number the model only needs to be
+    directionally right about.
+
+    Returns None when there is no map, no clock, or fewer than two addresses
+    with known tiles -- the caller then omits the clause rather than inventing
+    a constant.
+    """
+    if world_map is None or clock is None:
+        return None
+    anchors = []
+    for address in addresses:
+        tiles = world_map.tiles_for(address) if address else set()
+        if tiles:
+            anchors.append(min(tiles))  # min() keeps this deterministic
+    if len(anchors) < 2:
+        return None
+    gaps = sorted(
+        max(abs(a[0] - b[0]), abs(a[1] - b[1]))
+        for i, a in enumerate(anchors)
+        for b in anchors[i + 1 :]
+    )
+    median_tiles = gaps[len(gaps) // 2]
+    return clock.minutes_for_steps(median_tiles) or None
 
 
 class LLMPlanner:
@@ -191,6 +229,7 @@ class LLMPlanner:
         clock=None,
         num_steps=None,
         max_tokens: int = 700,
+        travel_minutes: int | None = None,
     ):
         self.client = client
         self.known_places = set(known_places)
@@ -202,6 +241,10 @@ class LLMPlanner:
         self.clock = clock
         self.num_steps = num_steps
         self.max_tokens = max_tokens
+        # #795: median cross-campus walk cost in minutes, computed from this
+        # world's own map (see median_travel_minutes). None -> the minute
+        # prompt omits the travel clause rather than fabricating a constant.
+        self.travel_minutes = travel_minutes
 
     # -- the three generation levels -----------------------------------------
 
@@ -211,8 +254,14 @@ class LLMPlanner:
         persona_text = self._persona_text(persona)
         mem = self._memory_block(memory, "what matters for my day today", turn=0)
         day = self._day_outline(persona_text, mem)
-        hours = self._hourly(persona_text, day)
-        stops = self._minute(persona_text, hours)
+        # #795: the retrieved block goes to EVERY level, not just the outline.
+        # The agent's own commitments (seeded at t=0 by attach_agents, importance
+        # 5.0) are what name the places it is obliged to be at; passing them only
+        # to _day_outline meant place and duration were chosen two lossy
+        # summarisation hops later, and an authored obligation -- "setting up for
+        # a morning guest lecture at Irvine Auditorium" -- simply vanished.
+        hours = self._hourly(persona_text, day, mem)
+        stops = self._minute(persona_text, hours, mem)
         return DailyPlan(day=day, hours=hours, stops=stops)
 
     def revise(
@@ -258,7 +307,9 @@ class LLMPlanner:
                 blocks.append(DayBlock(label=label, summary=summary))
         return blocks
 
-    def _hourly(self, persona_text: str, day: list[DayBlock]) -> list[HourBlock]:
+    def _hourly(
+        self, persona_text: str, day: list[DayBlock], mem: str = ""
+    ) -> list[HourBlock]:
         outline = "; ".join(f"{b.label}: {b.summary}" for b in day) or "(none)"
         hours_hint = ""
         if self.clock is not None and self.num_steps is not None:
@@ -266,7 +317,8 @@ class LLMPlanner:
             if hours:
                 hours_hint = f"Plan only these hours of the day: {hours}.\n"
         user = (
-            f"{persona_text}\n{self._window_line()}Your day outline: {outline}.\n"
+            f"{persona_text}\n{self._window_line()}{self._memory_line(mem)}"
+            f"Your day outline: {outline}.\n"
             f"{hours_hint}Give one line per hour."
         )
         result = self._call(user, HOURLY_TOOL)
@@ -280,12 +332,24 @@ class LLMPlanner:
                 hours.append(HourBlock(start_hour=hour, summary=summary))
         return hours
 
-    def _minute(self, persona_text: str, hours: list[HourBlock]) -> list[Stop]:
+    def _minute(
+        self, persona_text: str, hours: list[HourBlock], mem: str = ""
+    ) -> list[Stop]:
         plan = (
             "; ".join(f"{h.start_hour:02d}:00 {h.summary}" for h in hours) or "(none)"
         )
         user = (
-            f"{persona_text}\nYour hourly plan: {plan}.\n{self._places_line()}"
+            f"{persona_text}\n{self._window_line()}{self._travel_line()}"
+            # #795: stops execute back-to-back from step 0, so hitting a
+            # time-critical stop (e.g. a 10:00 lecture) is arithmetic the model
+            # has to do itself -- nothing else in this prompt says stops run in
+            # sequence or that travel time stacks on top of each one's duration.
+            "Stops run back-to-back starting at the window's opening time, so "
+            "each stop's minutes plus the travel to reach the next stop is what "
+            "determines when that next stop begins -- choose durations that "
+            "land any time-critical stop at its intended hour.\n"
+            f"{self._memory_line(mem)}"
+            f"Your hourly plan: {plan}.\n{self._places_line()}"
             "Turn it into concrete stops."
         )
         return self._minute_from_user(user)
@@ -294,18 +358,29 @@ class LLMPlanner:
         result = self._call(user, MINUTE_TOOL)
         stops = []
         # Validated upstream (#357): place/activity are strings, emoji is a
-        # string-or-null, steps an int-or-null. The one remaining check is the
-        # *semantic* one -- a non-positive or null step count means "stay put"
+        # string-or-null, minutes an int-or-null. The one remaining check is the
+        # *semantic* one -- a non-positive or null duration means "stay put"
         # -- which the schema can't express (OpenAI strict mode drops `minimum`).
         for s in result.get("stops") or []:
             place, activity = s.get("place"), s.get("activity")
             if not (place and activity):
                 continue
-            steps = s.get("steps")
+            minutes = s.get("minutes")
             if not (
-                isinstance(steps, int) and not isinstance(steps, bool) and steps > 0
+                isinstance(minutes, int)
+                and not isinstance(minutes, bool)
+                and minutes > 0
             ):
                 steps = None
+            elif self.clock is not None:
+                # #795: the model answers in minutes -- a unit it has intuition
+                # for -- and we convert once, here. Stop.steps stays the internal
+                # unit, so nothing downstream changes.
+                steps = self.clock.steps_for_seconds(minutes * 60) or None
+            else:
+                # No clock (tests that omit one): read the value as steps, which
+                # is exactly what this field meant before #795.
+                steps = minutes
             stops.append(
                 Stop(
                     place=place,
@@ -363,3 +438,16 @@ class LLMPlanner:
         start = self.clock.time_at(0).strftime("%H:%M")
         end = self.clock.time_at(self.num_steps).strftime("%H:%M")
         return f"This simulation runs from {start} to {end} today; plan only that window.\n"
+
+    def _travel_line(self) -> str:
+        """Tell the model travel is not free, when we know what it costs.
+
+        Empty when no hint was computed -- an omitted clause beats a
+        fabricated constant."""
+        if not self.travel_minutes:
+            return ""
+        return (
+            "`minutes` is time spent AT a place; travel to get there is charged "
+            f"on top of it, and crossing campus takes at least about "
+            f"{self.travel_minutes} minutes.\n"
+        )

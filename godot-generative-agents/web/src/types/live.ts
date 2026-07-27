@@ -102,6 +102,17 @@ export interface LiveStatusResponse {
   boot_id?: string | null;
 }
 
+// This run's social opportunity (#795): co-settled pair-steps (both agents
+// settled within earshot of each other), broken down by pair ("A + B" keys,
+// busiest first), plus the conversation count. Zero co_settled_pair_steps with a
+// nonzero step count means conversation was structurally impossible this
+// run — surfaced instead of silently reporting nothing.
+export interface RunSocial {
+  co_settled_pair_steps: number;
+  by_pair: Record<string, number>;
+  conversations: number;
+}
+
 // GET /usage — the run ledger's summary (tokens and dollars, #264).
 // `available: false` means no ledger is wired (a zeroed summary with only the
 // core fields); the budget fields appear only when the server was started with
@@ -141,6 +152,8 @@ export interface UsageSummary {
   run_failed_calls?: number;
   run_cost_usd?: number;
   run_by_actor?: Record<string, number>;
+  // Present only alongside the other run-scoped fields above.
+  social?: RunSocial;
 }
 
 // GET /agents/{name}/memory — the live counterpart of the baked
