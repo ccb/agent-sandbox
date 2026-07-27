@@ -446,3 +446,24 @@
     animation: none;
   }
 }
+
+/* RunSocialCard (#819): the run's co-settled/conversation counters (#795). */
+.social-line {
+  margin: 0.25rem 0;
+}
+.social-quiet {
+  color: #b58b00;
+}
+.social-pairs {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+}
+.social-pairs li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.social-pair-steps {
+  font-variant-numeric: tabular-nums;
+}
