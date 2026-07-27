@@ -1062,7 +1062,18 @@ def audit(
         )
         for dim in DIMENSIONS
     }
-    overall = _mean([a["overall"] for a in agents.values() if a["overall"] is not None])
+    scored = {
+        name: a["overall"] for name, a in agents.items() if a["overall"] is not None
+    }
+    overall = _mean(list(scored.values()))
+    # The floor beside the mean: a run mean over agents lets a broken pair hide
+    # behind a healthy majority, which is how #760's groundhog-day run outscored
+    # the healthiest one (#781).
+    weakest = (
+        {"name": min(scored, key=lambda n: scored[n]), "score": min(scored.values())}
+        if scored
+        else None
+    )
     return {
         "run": {
             "source": source,
@@ -1072,7 +1083,11 @@ def audit(
         },
         "judge": judge_info(judge),
         "agents": agents,
-        "summary": {"overall": overall, "by_dimension": by_dimension},
+        "summary": {
+            "overall": overall,
+            "weakest": weakest,
+            "by_dimension": by_dimension,
+        },
     }
 
 
@@ -1361,6 +1376,11 @@ def render_markdown(report: dict) -> str:
             f"| {_label(dim)} | {_fmt_score(report['summary']['by_dimension'][dim])} |"
         )
     lines.append(f"| **Overall** | **{_fmt_score(report['summary']['overall'])}** |")
+    weakest = report["summary"].get("weakest")
+    if weakest:
+        lines.append(
+            f"| Weakest agent | {weakest['name']} ({_fmt_score(weakest['score'])}) |"
+        )
     for name, agent in report["agents"].items():
         lines += ["", f"## {name}", "", f"Overall: **{_fmt_score(agent['overall'])}**"]
         for dim in DIMENSIONS:

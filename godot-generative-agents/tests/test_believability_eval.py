@@ -21,6 +21,7 @@ from backend.eval.believability import (
     evidence_text,
     load_replay,
     main,
+    render_markdown,
     scramble_replay,
 )
 from backend.run_store import RunStore
@@ -829,6 +830,20 @@ def test_heuristic_social_grounding_is_na_without_conversations():
     assert "no conversations" in entry["note"].lower()
     # An n/a dimension is excluded from the means, not counted as zero.
     assert report["agents"]["Ada"]["overall"] >= 7
+
+
+# ------------------------------------------------------------ run roll-up
+
+
+def test_summary_names_the_weakest_agent():
+    """#781: a run mean lets a broken pair hide behind a healthy majority."""
+    report = audit(make_replay(), judge=HeuristicJudge(), source="fixture")
+    weakest = report["summary"]["weakest"]
+    scores = {n: a["overall"] for n, a in report["agents"].items()}
+
+    assert weakest["name"] in scores
+    assert weakest["score"] == min(scores.values())
+    assert f"Weakest agent | {weakest['name']}" in render_markdown(report)
 
 
 def test_scrambled_frames_score_measurably_worse():
