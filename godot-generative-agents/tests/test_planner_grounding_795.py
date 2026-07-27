@@ -180,3 +180,18 @@ def test_minute_prompt_omits_the_travel_clause_when_unknown():
         persona={"persona": "I am Diego."}
     )
     assert "charged on top" not in client.user_message_for("minute_plan")
+
+
+def test_minute_prompt_states_stops_run_consecutively():
+    """#795: nothing else here says stops execute back-to-back, so hitting a
+    named hour (e.g. a 10:00 lecture) was arithmetic the model never knew it
+    had to do."""
+    client = MinutesClient()
+    LLMPlanner(client, clock=_clock(), num_steps=1200).generate(
+        persona={"persona": "I am Diego."}
+    )
+    body = client.user_message_for("minute_plan")
+    assert (
+        "each stop's minutes plus the travel to reach the next stop is what "
+        "determines when that next stop begins" in body
+    )

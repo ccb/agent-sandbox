@@ -56,13 +56,19 @@ cast: [diego, tanaka, sofia]
 events:
 - label: a guest lecture on gravitational waves
   at: Irvine Auditorium
-  # "this morning", not "this afternoon": the acceptance run starts at SIM_START
-  # (08:00) and 1200 steps of SEC_PER_STEP=10 ends at 11:20, and the planner is
-  # told that window (#795, LLMPlanner._window_line). An afternoon event is
-  # outside it, so a well-grounded model would correctly drop the one anchor the
-  # cast is meant to converge on -- including for its host. Tanaka's Irvine stop
-  # is 800 steps from step 0 (08:00-10:13), which was always morning anyway.
-  when: this morning
+  # A concrete clock time, not "this morning" (post-run review, #795): "this
+  # morning" gave both sides something to intend but nothing to aim at, so a
+  # live run settled Diego and Tanaka in Irvine with zero overlap -- both
+  # correctly *there for the lecture*, at times 78 minutes apart. 10:00 sits
+  # inside the acceptance run's window (SIM_START 08:00, 1200 steps of
+  # SEC_PER_STEP=10 -> 11:20, the window LLMPlanner._window_line states) and
+  # inside Tanaka's authored Irvine stop (800 steps from step 0 -> 08:00-10:13),
+  # so the anchor is reachable on both the run clock and her own schedule.
+  when: at 10:00
+  # attach_agents deliberately does not seed this announcement to the host
+  # (her own schedule already carries the commitment) -- so the time also has
+  # to live in her authored activity string (personas/tanaka.yaml) or she would
+  # never learn it while her guests do. See that file's comment for why.
   host: Professor Tanaka
 
 locations:

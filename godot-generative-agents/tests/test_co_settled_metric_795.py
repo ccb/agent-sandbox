@@ -1,11 +1,12 @@
 """Co-settled pair-steps (issue #795).
 
 The metric that makes a socially dead run visible. A co-settled pair-step is
-one step in which two agents are both settled -- `performing and not path` --
-AND within earshot of each other under the game's `audience_for` seam, i.e.
-`conversation.can_converse`: the exact predicate `find_conversation_pairs`
-uses. Counted BEFORE the cooldown/busy filters: this measures opportunity, not
-eligibility, which is what makes the issue's 399-vs-0 comparison meaningful.
+one step in which two agents are both settled -- `(performing or conversing)
+and not path` -- AND within earshot of each other under the game's
+`audience_for` seam, i.e. `conversation.can_converse`: the exact predicate
+`find_conversation_pairs` uses. Counted BEFORE the cooldown/busy filters: this
+measures opportunity, not eligibility, which is what makes the issue's
+399-vs-0 comparison meaningful.
 
 The earshot half is not decoration. "Penn campus" is a single outdoor hub
 Location spanning the whole map, so a `location is location` test would score
@@ -105,14 +106,30 @@ def test_different_rooms_do_not_count():
 
 
 def test_a_conversing_pair_still_counts():
-    """Opportunity, not eligibility -- a pair mid-conversation is co-settled."""
+    """Opportunity, not eligibility -- a pair mid-conversation is co-settled.
+
+    A talk_to-opened conversation (cognition._advance_conversation) never sets
+    `performing` -- it pins `conversing` instead -- so this is the realistic
+    shape (#795 review: this exact gap undercounted a run with a real 77-step
+    conversation as zero)."""
     hall = FakeLocation()
     chars = {"A": FakeChar(hall, "A"), "B": FakeChar(hall, "B")}
     state = {
-        "A": _state(performing=True, conversing=True),
-        "B": _state(performing=True, conversing=True),
+        "A": _state(performing=False, conversing=True),
+        "B": _state(performing=False, conversing=True),
     }
     assert count_co_settled(RoomGame, chars, state, ["A", "B"]) == [("A", "B")]
+
+
+def test_an_idle_agent_does_not_count():
+    """Neither performing nor conversing -- not an opportunity to talk."""
+    hall = FakeLocation()
+    chars = {"A": FakeChar(hall, "A"), "B": FakeChar(hall, "B")}
+    state = {
+        "A": _state(performing=False, conversing=False),
+        "B": _state(performing=True),
+    }
+    assert count_co_settled(RoomGame, chars, state, ["A", "B"]) == []
 
 
 def test_a_locationless_agent_never_pairs():

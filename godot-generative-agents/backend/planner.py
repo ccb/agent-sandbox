@@ -340,6 +340,14 @@ class LLMPlanner:
         )
         user = (
             f"{persona_text}\n{self._window_line()}{self._travel_line()}"
+            # #795: stops execute back-to-back from step 0, so hitting a
+            # time-critical stop (e.g. a 10:00 lecture) is arithmetic the model
+            # has to do itself -- nothing else in this prompt says stops run in
+            # sequence or that travel time stacks on top of each one's duration.
+            "Stops run back-to-back starting at the window's opening time, so "
+            "each stop's minutes plus the travel to reach the next stop is what "
+            "determines when that next stop begins -- choose durations that "
+            "land any time-critical stop at its intended hour.\n"
             f"{self._memory_line(mem)}"
             f"Your hourly plan: {plan}.\n{self._places_line()}"
             "Turn it into concrete stops."

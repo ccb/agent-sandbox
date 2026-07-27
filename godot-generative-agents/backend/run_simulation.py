@@ -173,8 +173,14 @@ def count_co_settled(game, chars, state, order) -> list[tuple[str, str]]:
 
     Both halves are the real gates :func:`cognition.maybe_converse` applies:
 
-    * **settled** -- ``performing and not path``, the same test its pair scan
-      builds its candidate list from;
+    * **settled** -- ``(performing or conversing) and not path``. A talk_to-
+      opened conversation (:func:`cognition._advance_conversation`) never sets
+      ``performing`` -- it pins ``conversing`` instead, and the agent was
+      already idle (``not path``) the instant it decided to talk -- so
+      ``performing`` alone missed every conversing pair that started that way
+      and undercounted a run that plainly had conversation in it (#795 review:
+      a real 77-step talk between two settled agents scored 0). An idle agent
+      (neither flag set) still does not count;
     * **within earshot** -- :func:`conversation.can_converse`, the exact
       predicate :func:`conversation.find_conversation_pairs` uses, so this
       goes through the game's ``audience_for`` seam. That matters on Penn:
@@ -201,7 +207,7 @@ def count_co_settled(game, chars, state, order) -> list[tuple[str, str]]:
     settled = [
         name
         for name in order
-        if state[name]["performing"]
+        if (state[name]["performing"] or state[name].get("conversing"))
         and not state[name]["path"]
         and chars[name].location is not None
     ]
