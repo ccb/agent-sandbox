@@ -58,6 +58,39 @@ _COMPASS_WORDS = (
 # convention greppable and the failure message obvious.
 _BANNED_ACTIVITY_SUBSTRINGS = ("ate ", "eat ", "get ", "take ", "drink")
 
+# Wall-clock words the run never reaches (#812). A run covers SIM_START 08:00 +
+# 1200 steps x 10 s/step = 08:00-11:20, and LLMPlanner._window_line tells the
+# model to "plan only that window" -- so an authored stop naming a time outside
+# it asks a well-grounded planner to do the correct thing and DROP the stop,
+# silently. That was #795's zero: Tanaka's activity said "an afternoon guest
+# lecture" while her stop ran 08:00-10:13, and the model dropping it looked like
+# a broken fix. A stop's POSITION in the schedule already encodes when it
+# happens, so the activity says WHAT, not when.
+#
+# Deliberately not every time-of-day word. "morning" stays legal -- the window
+# IS the morning, so imani's "morning stretches" at 08:00 is true grounding --
+# and so do "dawn"/"sunrise"/"overnight", which are already finished at 08:00
+# and read as past reference ("the overnight returns cart" names an object).
+# An explicit clock time stays legal too, and that is the reason this bans
+# WORDS rather than any time reference: tanaka's "the 10:00 guest lecture" is
+# #795's shared anchor with the world event and sits inside the window, so a
+# word list never matches it and needs no carve-out. Word boundaries do the
+# rest -- `\bnight\b` misses "overnight", `\bnoon\b` misses "afternoon".
+_OUT_OF_WINDOW_TIME_WORDS = (
+    "afternoon",
+    "afternoons",
+    "midday",
+    "noon",
+    "evening",
+    "evenings",
+    "night",
+    "nights",
+    "tonight",
+    "midnight",
+    "dusk",
+    "sunset",
+)
+
 
 # --------------------------------------------------------------------------- #
 # Module-scoped world state: one composed library, one built game, shared by
@@ -212,6 +245,19 @@ def test_activities_avoid_the_banned_verb_substrings(library_specs):
                 assert banned not in lowered, (
                     f"personas/{pid}.yaml: activity {stop['activity']!r} "
                     f"contains banned substring {banned!r} (see README.md)"
+                )
+
+
+def test_activities_avoid_times_the_run_never_reaches(library_specs):
+    for pid, spec in library_specs.items():
+        for stop in spec["schedule"]:
+            lowered = stop["activity"].lower()
+            for word in _OUT_OF_WINDOW_TIME_WORDS:
+                assert not re.search(rf"\b{word}\b", lowered), (
+                    f"personas/{pid}.yaml: activity {stop['activity']!r} names "
+                    f"{word!r}, outside the 08:00-11:20 run window -- a real "
+                    "planner drops the stop. The schedule position already says "
+                    "when (see README.md)"
                 )
 
 

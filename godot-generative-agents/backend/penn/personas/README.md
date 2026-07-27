@@ -70,7 +70,26 @@ Persona fields (same shape `build_world` has always consumed): `name`, `home`,
 `persona`, `emoji`, `start_tile`, `schedule` (see the big comment atop
 `backend/build_world.py` for the schedule contract, and note a stop's `place`
 must not contain a bare compass word — the parser reads "West Wing" as "go
-west"). Plus two optional blocks that compose into the world's top level:
+west").
+
+A stop's `activity:` says **what** the agent is doing, never **when**. The stop's
+position in the `schedule` already encodes the timing, so a wall-clock word there
+is a second source of truth that can disagree with the run clock: a run covers
+08:00–11:20 (`SIM_START` 08:00 + 1200 steps × 10 s/step) and the planner is told
+to plan only that window, so an activity naming a time outside it ("heading to an
+*afternoon* seminar") asks a well-grounded model to do the right thing and drop
+the stop — silently. That was #795's zero. The sweep in
+`tests/test_persona_library_762.py` therefore rejects `afternoon`, `midday`,
+`noon`, `evening`, `night`, `tonight`, `midnight`, `dusk` and `sunset` in
+`activity:` (#812). `morning` stays legal — the window *is* the morning — as do
+`dawn`/`sunrise`/`overnight`, which are already finished at 08:00 and read as
+past reference. An explicit clock time is the one deliberate exception, and only
+to anchor a shared world event that falls inside the window, the way
+`tanaka.yaml`'s "setting up for the 10:00 guest lecture" mirrors the world YAML's
+`when: at 10:00`. Habitual `persona:` prose is unaffected — `victor.yaml`'s
+"spends afternoons in the union" is true as written.
+
+Plus two optional blocks that compose into the world's top level:
 
 - `relationships:` — seed social-graph edges (`{a, b, kind, closeness,
   description}`; `closeness` is 1 (acquaintance) to 5 (inseparable) and drives
