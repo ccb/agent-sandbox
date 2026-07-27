@@ -461,6 +461,36 @@ _EXPERIENCE_CUES = (
 )
 
 
+def _names_only_real_places(text: str, real: str, world_places: list[str]) -> bool:
+    """Does this one line name a place that exists here, and none that doesn't?
+
+    Cue matching in :meth:`HeuristicJudge._world_grounding` is window-scoped, so a
+    partner's *allowed* off-map backstory makes every cue-carrying line in the
+    window attributable -- including "meet me at the Cafe", where the Cafe is real
+    (issue #807). A line that grounds itself is exempt.
+
+    Two ways to name a real place, and both are needed. A gazetteer noun that
+    resolves real covers "cafe"; a ``meta.locations`` name appearing verbatim
+    covers "Van Pelt Library", which the common-noun gazetteer does not carry. The
+    shipped Penn world matches exactly one gazetteer noun ("gallery", via Van Pelt
+    -- Kamin Gallery), so the noun check alone would exempt almost nothing there.
+
+    Returning False as soon as the line names *any* off-map noun is what keeps the
+    corroborator catch: a line that names no place at all is not self-grounded, so
+    it stays eligible to be scored.
+    """
+    low = text.lower()
+    words = {word for word in re.findall(r"[a-z]+", low) if word in _PLACE_NOUNS}
+    if any(word not in real for word in words):
+        return False
+    # Word boundaries, not a bare substring: a one-word world place ("Bar") would
+    # otherwise match inside "barely". The place-noun check above can stay a plain
+    # `in real` test because it compares whole words against the joined name list.
+    return bool(words) or any(
+        re.search(rf"\b{re.escape(place.lower())}\b", low) for place in world_places
+    )
+
+
 def _content_words(text: str) -> set[str]:
     """The meaningful lowercase words of *text* (4+ letters, minus stopwords).
 
@@ -742,6 +772,10 @@ class HeuristicJudge:
         run that motivated this ("Oh yeah, I totally went! The light was
         perfect down there") names no place at all, and is only attributable
         because the partner named the boathouse earlier in the same window.
+
+        Window scoping costs precision, so a line that names a real place and no
+        off-map one is exempt (#807): "meet me at the Cafe" is not a claim about
+        my partner's boathouse just because she mentioned it in the same window.
         """
         if not ev.conversations:
             return DimScore(None, note="no conversations observed for this agent")
@@ -777,7 +811,9 @@ class HeuristicJudge:
             claimed = [
                 (sp, tx)
                 for sp, tx in mine
-                if invented and any(cue in tx.lower() for cue in _EXPERIENCE_CUES)
+                if invented
+                and any(cue in tx.lower() for cue in _EXPERIENCE_CUES)
+                and not _names_only_real_places(tx, real, ev.world_places)
             ]
             scores.append(1.0 - len(claimed) / len(mine))
             for sp, tx in claimed[:3]:

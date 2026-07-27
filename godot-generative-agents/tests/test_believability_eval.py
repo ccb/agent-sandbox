@@ -514,6 +514,65 @@ def test_world_grounding_is_none_on_a_replay_baked_before_780():
     assert "meta.locations" in score.note
 
 
+def test_world_grounding_exempts_a_real_place_invitation_beside_off_map_backstory():
+    # Issue #807. Window-scoped cue matching made my partner's *allowed* boathouse
+    # backstory attach to my invitation to a place that exists here. My line
+    # grounds itself, so it is not a claim about her boathouse.
+    judge = HeuristicJudge()
+    ev = build_evidence(make_replay())["Ada"]
+    ev.conversations = [
+        _convo(
+            1,
+            2,
+            [
+                ["Bea", "I row out of the boathouse most mornings."],
+                ["Ada", "Nice -- meet me at the Cafe after?"],
+            ],
+        )
+    ]
+    assert judge._world_grounding(ev).score == 10.0
+
+
+def test_world_grounding_exempts_a_real_place_the_gazetteer_does_not_carry():
+    # The half that matters on the shipped Penn world: its 18 location names are
+    # proper nouns, and `_PLACE_NOUNS` carries exactly one of them ("gallery", via
+    # Van Pelt -- Kamin Gallery). Exempting only gazetteer nouns would exempt
+    # almost nothing there, so the line is also checked against meta.locations.
+    from backend.eval.believability import _PLACE_NOUNS
+
+    assert "library" not in _PLACE_NOUNS  # pins what makes this case distinct
+    judge = HeuristicJudge()
+    ev = build_evidence(make_replay())["Ada"]
+    ev.conversations = [
+        _convo(
+            1,
+            2,
+            [
+                ["Bea", "I row out of the boathouse most mornings."],
+                ["Ada", "Nice -- meet me at the Library after?"],
+            ],
+        )
+    ]
+    assert judge._world_grounding(ev).score == 10.0
+
+
+def test_world_grounding_still_flags_a_real_and_an_invented_place_in_one_line():
+    # The exemption is "names a real place AND no off-map one". Naming both is
+    # still a first-hand claim about the off-map one, so it stays scored.
+    judge = HeuristicJudge()
+    ev = build_evidence(make_replay())["Ada"]
+    ev.conversations = [
+        _convo(
+            1,
+            1,
+            [["Ada", "Meet me at the Library, then we'll walk to the boathouse!"]],
+        )
+    ]
+    score = judge._world_grounding(ev)
+    assert score.score is not None and score.score < 10
+    assert any("boathouse" in e for e in score.evidence)
+
+
 def test_evidence_text_lists_the_worlds_places():
     evidence = build_evidence(make_replay())
     text = evidence_text(evidence["Ada"], evidence)
