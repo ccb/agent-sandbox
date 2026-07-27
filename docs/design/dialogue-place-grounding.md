@@ -372,12 +372,18 @@ the existing frames, not an A/B re-run.
   make the heuristic judge useful offline for free; the LLM judge is the
   fallback when they miss.
 - Cue matching is window-scoped, which is the only reason a corroborator whose
-  own line names no place is catchable at all (§3.3) — and also the source of a
-  known false positive: a real-place invitation of mine gets flagged when my
-  partner's allowed off-map backstory is anywhere in the same window. Filed as
-  **#807** with the fix (exempt a cue-line naming a real place noun and no
-  invented one), deliberately left out of this change so the 7.93 baseline moves
-  once rather than twice.
+  own line names no place is catchable at all (§3.3). That scoping also cost
+  precision — a real-place invitation of mine got flagged when my partner's
+  allowed off-map backstory was anywhere in the same window — **fixed in #807**
+  by exempting a line that names a real place and no off-map one
+  (`_names_only_real_places`). The exemption is per line; the window scoping
+  stays, because it is what catches the corroborator. It also matches a
+  `meta.locations` name verbatim, not just a gazetteer noun: Penn's 18 place
+  names are proper nouns and the gazetteer carries exactly one of them
+  ("gallery"), so a noun-only exemption would have been a no-op here.
+  It moved no score on `run-20260724-201036-e8c405` — every line flagged there
+  either names the invented place itself or names no place at all — so the 7.93
+  baseline stands.
 - `_merge_growth_windows` merges on same participants, contiguity, **and an
   actual prefix relation between the two transcripts**. It compensates for the
   `_conversations_in` overcount (§3.3a) rather than fixing that function's
