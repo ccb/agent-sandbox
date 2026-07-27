@@ -7,9 +7,9 @@ decomposed top-down across three levels (see ``docs/design/daily-planning.md``):
   cafe"), no exact times;
 * **hourly plan** -- one :class:`HourBlock` per in-sim hour;
 * **minute plan** -- concrete :class:`Stop`s
-  ``{place, activity, emoji, steps, commands, furniture}``, the *only* level the
-  step loop consumes (it is exactly the schedule shape the Smallville port
-  already drives via ``advance()``).
+  ``{place, activity, emoji, steps, commands, furniture, start_hour}``, the
+  *only* level the step loop consumes (it is exactly the schedule shape the
+  Smallville port already drives via ``advance()``).
 
 Following the same restraint as ``memory.py`` and ``knowledge.py``, this module
 is **pure data with no engine imports**: the dataclasses and the helper
@@ -75,6 +75,16 @@ class Stop:
     walk target to that furniture's tile instead of the room centroid. Like
     ``commands`` it was dropped by the whitelist round-trip before this field
     (#603); ``None`` for a stop with no such hint.
+
+    ``start_hour`` is the clock hour this stop is *pinned* to -- a lecture at
+    10:00, a meeting at 14:00 -- and ``None`` for the ordinary stop that simply
+    happens whenever the ones before it finish. A planner that reasons about the
+    day in hours before decomposing it into stops (``LLMPlanner``) knows this
+    number one stage before it emits the stop, and used to throw it away at that
+    boundary: nothing carried the anchor forward, so nothing could check that the
+    preceding durations plus travel actually land the stop on its hour (#821).
+    Note it is only an *intention*, like every other field here -- it moves
+    nobody; the planner reads it back to validate its own arithmetic.
     """
 
     place: str  # must resolve to a known Location name when executed
@@ -83,6 +93,7 @@ class Stop:
     steps: int | None = None  # None => stay put indefinitely
     commands: tuple[str, ...] = ()  # authored commands to fire at this stop
     furniture: str | None = None  # fixture to occupy at this stop (#603)
+    start_hour: int | None = None  # clock hour this stop is pinned to (#821)
 
     def __post_init__(self):
         # Normalize commands to a tuple no matter how it arrived -- a YAML/JSON
@@ -97,11 +108,15 @@ class Stop:
     def to_schedule_entry(self) -> dict:
         """The plain dict the Smallville client/loop already understands.
 
-        ``commands`` and ``furniture`` are emitted only when set, so a stop
-        without them serializes byte-identically to its authored
+        ``commands``, ``furniture`` and ``start_hour`` are emitted only when set,
+        so a stop without them serializes byte-identically to its authored
         ``world_data.yaml`` entry -- the round-trip fidelity the Smallville suite
         pins (a committed schedule must equal the authored spec, which carries no
-        empty ``commands``/``furniture`` key).
+        empty ``commands``/``furniture``/``start_hour`` key).
+
+        ``start_hour`` tests ``is not None``, not truthiness: midnight is hour
+        ``0``, which is falsy, so a truthiness guard here would silently drop a
+        legitimate anchor rather than merely add a key.
         """
         entry = {
             "place": self.place,
@@ -113,6 +128,8 @@ class Stop:
             entry["commands"] = list(self.commands)
         if self.furniture:
             entry["furniture"] = self.furniture
+        if self.start_hour is not None:
+            entry["start_hour"] = self.start_hour
         return entry
 
     @classmethod
@@ -125,6 +142,7 @@ class Stop:
             steps=entry.get("steps"),
             commands=entry.get("commands") or (),
             furniture=entry.get("furniture"),
+            start_hour=entry.get("start_hour"),
         )
 
 
