@@ -290,6 +290,25 @@ def _turnarounds(frames: list, sec_per_step: int = 10, start: str = "") -> list[
     return events
 
 
+def _load_manifest(run_dir: pathlib.Path) -> dict:
+    """The run's manifest.json, or ``{}``.
+
+    frames.jsonl has no clock, so this is the only record of how much sim-time
+    a step is worth. The exporter writes ``sec_per_step`` and ``start`` into
+    it (#580). Without it the tool falls back to the exporter's own default of
+    10 s/step and *says* which it used, rather than printing minutes derived
+    from a guess as if they were measured.
+    """
+    path = run_dir / "manifest.json"
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
 def summarise(run_id: str, runs_dir: pathlib.Path, usage: dict | None) -> dict:
     run_dir = runs_dir / run_id
     frames, steps = read_frames(run_dir / "frames.jsonl")
@@ -325,7 +344,11 @@ def summarise(run_id: str, runs_dir: pathlib.Path, usage: dict | None) -> dict:
         co_settled, by_pair = _co_settled_from_frames(frames)
         co_settled_source = "frames (approximate: idle counts as settled)"
 
-    turnarounds = _turnarounds(frames)
+    manifest = _load_manifest(run_dir)
+    spm = manifest.get("sec_per_step")
+    spm_ok = isinstance(spm, int) and not isinstance(spm, bool) and spm > 0
+    sec_per_step = spm if spm_ok else 10
+    turnarounds = _turnarounds(frames, sec_per_step, str(manifest.get("start") or ""))
     thrash = dict(sorted(collections.Counter(e["agent"] for e in turnarounds).items()))
 
     out = {
@@ -348,6 +371,8 @@ def summarise(run_id: str, runs_dir: pathlib.Path, usage: dict | None) -> dict:
             round(verbs.get("talk_to", 0) / total_verbs, 4) if total_verbs else 0.0
         ),
         "walking_share": round(walking / agent_frames, 4) if agent_frames else 0.0,
+        "sec_per_step": sec_per_step,
+        "sec_per_step_source": "manifest.json" if spm_ok else "default (no manifest)",
         # #826: arrivals that immediately departed again -- a walk segment
         # followed by another walk with no arrival between. 20 across #760
         # batch 4 (Priya 4, Mateo 16); expect ~0 once the decide seam tells an
@@ -424,7 +449,8 @@ def render(s: dict) -> str:
             f"  persisted   status={p['status']} cost=${p['cost']:.4f} steps={p['steps']}"
         )
     lines += [
-        f"  walking     {s['walking_share']:.1%} of agent-frames",
+        f"  walking     {s['walking_share']:.1%} of agent-frames"
+        f"   ({s['sec_per_step']}s per step, {s['sec_per_step_source']})",
         f"  thrash      {s['arrived_then_departed_total']} arrivals departed again"
         + (
             "  "
@@ -696,6 +722,19 @@ def self_check() -> None:
     # 3-step leg to 0 min rather than fabricating 3.
     assert _turnarounds(split)[0]["clock"] == ""
     assert {e["abandoned_minutes"] for e in _turnarounds(split)} == {0}
+
+    # #850: manifest.json is the only record of sim-time per step. Absent or
+    # unreadable falls back to 10 and is labelled as a fallback, never printed
+    # as if measured.
+    with tempfile.TemporaryDirectory() as tmp:
+        run_dir = pathlib.Path(tmp)
+        assert _load_manifest(run_dir) == {}
+        (run_dir / "manifest.json").write_text("{ not json", encoding="utf-8")
+        assert _load_manifest(run_dir) == {}
+        (run_dir / "manifest.json").write_text(
+            '{"sec_per_step": 10, "start": "2023-02-13 08:00:00"}', encoding="utf-8"
+        )
+        assert _load_manifest(run_dir)["sec_per_step"] == 10
 
     print("self-check OK")
 
