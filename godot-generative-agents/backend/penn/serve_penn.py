@@ -112,7 +112,12 @@ TIER_ROLES = frozenset(
 # Thinking-depth levels for models that support it (--effort / llm.effort).
 # Ordered cheapest-first; unset means "send no thinking config at all", which
 # keeps every existing run's request payload exactly as it was.
-EFFORT_LEVELS = ("low", "medium", "high", "max")
+# `xhigh` sits between high and max and arrived with Opus 4.7; it is valid on
+# every model this repo can drive at effort (Sonnet 5, Opus 4.7+, Fable 5).
+# Leaving it out didn't just miss a level -- this tuple feeds BOTH the argparse
+# choices below and resolve_llm's SystemExit, so `--effort xhigh` died at
+# startup from the CLI, the world YAML, and POST /config alike.
+EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
 
 # Mid-run brain-outage threshold (#745): after this many CONSECUTIVE failed
 # real-brain calls (error rows in the ledger with no genuine answer between
