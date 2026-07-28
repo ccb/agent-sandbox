@@ -259,7 +259,7 @@ def test_model_emoji_wins_and_deviation_falls_to_persona_default():
     )
     # The two meanings have separated (#831): the stop is credited because the
     # activity ran, while the emoji still knows this was not the planned place.
-    assert state["Ada"]["on_plan"] is True
+    assert state["Ada"]["credit_stop"] is True
     assert state["Ada"]["pron"] == "\U0001f9d1"  # persona default, not the book
 
 
@@ -276,7 +276,7 @@ def test_model_supplied_emoji_overrides_stop_and_persona():
     game, ada = _world(llm_client=brain, place="The Green")
     state = _state()
     _run_step(game, {"Ada": ada}, state, 0, _clock())
-    assert state["Ada"]["on_plan"] is True
+    assert state["Ada"]["credit_stop"] is True
     assert state["Ada"]["pron"] == "\U0001f9ea"
 
 
@@ -361,7 +361,7 @@ def test_a_deviation_credits_the_stop_and_fires_one_revision():
     assert RevisionTrigger(DEVIATED, 0).reason == "deviated"
 
 
-def test_on_plan_perform_still_advances_the_pointer():
+def test_credit_stop_perform_still_advances_the_pointer():
     # A two-stop schedule driven by the default mock: travel->perform stop 0,
     # then the pointer advances to stop 1. This is the byte-identical baseline
     # advance-by-match must preserve.
@@ -401,11 +401,11 @@ def test_off_plan_perform_without_duration_is_bounded_not_frozen():
     game, ada = _world(llm_client=brain, place="Cafe", steps=None)
     state = _state()
     _run_step(game, {"Ada": ada}, state, 0, _clock())
-    # #831: on_plan now means "credited", not "matched place" -- this settle is
-    # still off-plan (Cafe scheduled, performed at The Green), it's just
-    # credited like any other completed activity. The subject here is the
-    # duration ceiling below, not on_plan.
-    assert state["Ada"]["on_plan"] is True
+    # #831: credit_stop now means "credited", not "matched place" -- this
+    # settle is still off-plan (Cafe scheduled, performed at The Green), it's
+    # just credited like any other completed activity. The subject here is
+    # the duration ceiling below, not credit_stop.
+    assert state["Ada"]["credit_stop"] is True
     # 90-minute ceiling at 10s/step = 540 steps, not None (frozen).
     assert state["Ada"]["perform_until"] == 0 + 540
 

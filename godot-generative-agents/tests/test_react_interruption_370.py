@@ -584,7 +584,7 @@ def _full_state(tile, path, conversing=False):
         "memories": [],
         "chat": None,
         "stop_since": 0,
-        "on_plan": True,
+        "credit_stop": True,
         "conversing": conversing,
     }
 

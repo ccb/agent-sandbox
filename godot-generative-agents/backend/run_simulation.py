@@ -378,7 +378,7 @@ def step(
             # this gate. Upgrade: a general stop deadline, still rejected (bake-
             # drift risk; see the design spec's "Rejected: a general stop
             # deadline"). #831 removed the place condition, not this one.
-            credited = st.get("on_plan", True)
+            credited = st.get("credit_stop", True)
             advanced = credited and char.agent.schedule.advance()
             # Settling here for the rest of the run is the end-of-day rule, and
             # the mock bake rests on it -- but it belongs to an agent that
@@ -625,7 +625,7 @@ def step(
                     # hint and the deviation revision below -- while the flag the
                     # pre-pass reads is now "this settle earned the credit".
                     matched = at_scheduled_stop(char)
-                    st["on_plan"] = True
+                    st["credit_stop"] = True
                     activity = char.get_property("activity") or "spending time"
                     if not matched:
                         # Off-plan: let the planner rewrite the stale tail so the
@@ -766,7 +766,7 @@ def step(
             "memories": st["memories"],
             # .get(): some state dicts (PennStepper's own init, and test
             # fixtures built before #359) don't carry this key -- same
-            # tolerance already given "on_plan" elsewhere in this file.
+            # tolerance already given "credit_stop" elsewhere in this file.
             "trace": st.get("trace", []),
         }
 
@@ -1014,11 +1014,13 @@ def simulate(
             # The step the agent's current schedule stop began (walking there
             # counts) -- feeds the decide-context block (#580).
             "stop_since": 0,
-            # Did the last settle happen at the scheduled place? (#581) The
-            # pre-pass only advances the stop pointer when this is True; a
-            # deviation keeps the pointer. Defaults True so a never-performed
-            # agent's first advance is safe.
-            "on_plan": True,
+            # Did the last settle earn this stop's credit? (#581, #831) The
+            # pre-pass only advances the stop pointer when this is True. Any
+            # completed activity earns it, wherever it ran; only a dead-talk idle
+            # (cognition.settle_after_dead_talk) clears it, having completed
+            # nothing. Defaults True so a never-performed agent's first advance
+            # is safe.
+            "credit_stop": True,
             # Pinned while a multi-tick conversation runs (issue #371): step()'s
             # pre-pass skips schedule-advance/decision/movement for a conversing
             # agent, so the meeting isn't interrupted. Stays set through the

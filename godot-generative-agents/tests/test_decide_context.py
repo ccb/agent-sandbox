@@ -414,7 +414,7 @@ def test_stop_since_survives_a_completed_offplan_activity():
             "desc": "grabbing coffee",
             # Settled by a dropped talk (#689), expiring at 399: credits nothing.
             "performing": True,
-            "on_plan": False,
+            "credit_stop": False,
             "perform_until": 399,
             "reasoning": "(deviating)",
             "memories": [],

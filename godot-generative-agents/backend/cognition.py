@@ -1129,14 +1129,16 @@ def at_scheduled_stop(char) -> bool:
     """Is ``char`` standing at the place its current schedule stop names?
 
     The one definition of "on plan" (#826 review): the furniture bias, the
-    perform settle's emoji/furniture signal, the instantaneous-command emoji
-    and the arrival re-anchor all ask this same question instead of keeping
+    perform settle's emoji/furniture signal, the instantaneous-command emoji,
+    the arrival re-anchor, and the pre-pass's end-of-day check
+    (``done_for_the_day``, #831) all ask this same question instead of keeping
     their own inline copy, so a change to what "at the scheduled stop" means
     (room-level addresses, a stop with no place) has one place to miss, not
-    several. (The conversation stop-credit used to be a fifth caller; #831
-    dropped its place check -- a completed settle credits its stop wherever it
-    ran, conversation or not.) False when the agent is nowhere, or the stop
-    names no place -- an unplaced stop is not somewhere you can be standing.
+    several. (The conversation stop-credit was a caller too, until #831
+    dropped its place check there -- a completed settle credits its stop
+    wherever it ran, conversation or not.) False when the agent is nowhere, or
+    the stop names no place -- an unplaced stop is not somewhere you can be
+    standing.
     """
     place = getattr(getattr(char.agent, "schedule", None), "destination", None)
     return bool(place) and char.location is not None and char.location.name == place
@@ -1991,8 +1993,8 @@ def settle_after_dead_talk(st: dict, step: int, steps: int) -> None:
 
     A talk is instantaneous (it never sets `performing`), so without this the
     agent is instantly `due` again every tick until the #86 pair cooldown
-    expires -- a fully paid decide+score retry loop. `on_plan = False` is load
-    bearing: it makes this settle's expiry (the top-of-tick pre-pass) read
+    expires -- a fully paid decide+score retry loop. `credit_stop = False` is
+    load bearing: it makes this settle's expiry (the top-of-tick pre-pass) read
     `credited = False`, which skips `schedule.advance()` and un-latches without
     it -- a dead talk never completed a real schedule stop.
 
@@ -2005,7 +2007,7 @@ def settle_after_dead_talk(st: dict, step: int, steps: int) -> None:
     plain int, not the config object, so both callers stay flat-kwarg.
     """
     st["performing"] = True
-    st["on_plan"] = False
+    st["credit_stop"] = False
     st["perform_until"] = step + steps
 
 
@@ -2122,20 +2124,21 @@ def _credit_stop_for_conversation(char, st) -> bool:
     scheduled stop (issue #778; place requirement dropped by #831).
 
     ``schedule.advance()`` fires from exactly one place -- ``run_simulation``'s
-    latch-expiry pre-pass -- and only for an ON-PLAN settle. But a ``talk_to``
-    is an instantaneous command that routes through
-    ``_settle_after_dead_talk``, which sets ``on_plan = False`` (#689,
-    correctly: a *dead* talk completed nothing), and a talk that went on to open
-    a REAL conversation took that same path first, so it inherited the same
-    flag. The result was that no conversation ever advanced a stop -- not even
-    when the conversation *was* the scheduled activity ("sizing up a brand-new
-    roommate"), which is how the #778 pair stayed on stop 0 for a whole run.
-    This sets the pre-pass's own ``on_plan`` flag rather than inventing a second
-    signal for it to consult. ``on_plan`` is read in exactly one place (that
-    pre-pass) and is re-stamped by every path that sets ``perform_until`` --
-    ``_settle_after_dead_talk`` and the decide-time perform branch -- so it is
-    one-shot by construction: a credit written here is consumed by the settle it
-    was earned at and cannot leak forward onto an unrelated stop.
+    latch-expiry pre-pass -- and (before #831) only for a settle at the
+    scheduled place. But a ``talk_to`` is an instantaneous command that routes
+    through ``_settle_after_dead_talk``, which sets ``credit_stop = False``
+    (#689, correctly: a *dead* talk completed nothing), and a talk that went on
+    to open a REAL conversation took that same path first, so it inherited the
+    same flag. The result was that no conversation ever advanced a stop -- not
+    even when the conversation *was* the scheduled activity ("sizing up a
+    brand-new roommate"), which is how the #778 pair stayed on stop 0 for a
+    whole run. This sets the pre-pass's own ``credit_stop`` flag rather than
+    inventing a second signal for it to consult. ``credit_stop`` is read in
+    exactly one place (that pre-pass) and is re-stamped by every path that sets
+    ``perform_until`` -- ``_settle_after_dead_talk`` and the decide-time
+    perform branch -- so it is one-shot by construction: a credit written here
+    is consumed by the settle it was earned at and cannot leak forward onto an
+    unrelated stop.
 
     #831: a completed activity credits its stop wherever it ran, and a
     conversation is no exception. The place gate this function used to apply
@@ -2162,7 +2165,7 @@ def _credit_stop_for_conversation(char, st) -> bool:
     """
     if not st.get("performing"):
         return False
-    st["on_plan"] = True
+    st["credit_stop"] = True
     return True
 
 

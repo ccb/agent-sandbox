@@ -432,7 +432,7 @@ def test_step_pins_conversing_agents_from_deciding_and_moving():
                 "reasoning": "",
                 "memories": [],
                 "stop_since": 0,
-                "on_plan": True,
+                "credit_stop": True,
             }
         )
     active: dict = {}
@@ -508,7 +508,7 @@ def test_step_perform_until_gate_holds_conversing_agent_pinned():
                 "reasoning": "",
                 "memories": [],
                 "stop_since": 0,
-                "on_plan": True,
+                "credit_stop": True,
             }
         )
     active: dict = {}
@@ -576,7 +576,7 @@ def test_step_holds_pair_through_playback_window_then_releases():
                 "reasoning": "",
                 "memories": [],
                 "stop_since": 0,
-                "on_plan": True,
+                "credit_stop": True,
             }
         )
     active: dict = {}
