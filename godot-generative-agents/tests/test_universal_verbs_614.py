@@ -447,7 +447,7 @@ def test_dropped_talk_request_is_remembered_and_bounded_793():
     # (b) the retry is bounded: settled, off-plan, so the pre-pass un-latches
     # without advancing the schedule pointer.
     assert state["Ada"]["performing"] is True
-    assert state["Ada"]["on_plan"] is False
+    assert state["Ada"]["credit_stop"] is False
     assert state["Ada"]["perform_until"] == 1 + DEAD_TALK_SETTLE_STEPS
 
 
