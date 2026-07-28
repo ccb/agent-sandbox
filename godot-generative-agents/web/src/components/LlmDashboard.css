@@ -447,23 +447,38 @@
   }
 }
 
-/* RunSocialCard (#819): the run's co-settled/conversation counters (#795). */
+/* RunSocialCard (#819): the run's co-settled/conversation counters (#795).
+   em-based like the rest of this file, so it scales with .agent-field's font. */
 .social-line {
-  margin: 0.25rem 0;
+  margin: 0.25em 0;
 }
 .social-quiet {
-  color: #8a5b00;
+  color: var(--color-warn);
 }
 .social-pairs {
   list-style: none;
-  margin: 0.25rem 0 0;
+  margin: 0.25em 0 0;
   padding: 0;
 }
 .social-pairs li {
   display: flex;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: 0.5em;
+}
+/* A pair key is a full "First Last + First Last"; truncate it inside the flex
+   row instead of shoving the count off the end (cf. .action-tally-count). */
+.social-pair-label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .social-pair-steps {
+  flex: none;
   font-variant-numeric: tabular-nums;
+}
+/* The "+N more" row when the busiest-pairs list is capped — so the cap isn't
+   silent under a big cast (#823). */
+.social-pairs-more {
+  color: var(--color-text-muted);
 }

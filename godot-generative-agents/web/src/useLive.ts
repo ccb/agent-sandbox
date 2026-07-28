@@ -27,10 +27,6 @@ const POLL_MS = 1000; // ~the loop's pace; a missed tick just arrives next poll
 const MAX_ROWS_PER_AGENT = 200; // plenty for a day (~55-60 calls); keeps re-renders cheap
 const MAX_EVENT_ROWS = 200; // world-level rows are rarer than calls; one shared cap
 
-// /usage re-poll cadence (#819): slow — the strip's exact totals ride every
-// feed record; this only freshens the run-scoped counters and social block.
-const USAGE_POLL_MS = 10_000;
-
 /** A stream record plus the client wall-clock ms it reached the page — the LLM
  * dashboard's recency signal (the wire record carries only a "HH:MM:SS" time). */
 export type ReceivedLlmCall = LlmCallRecord & { receivedAt: number };
@@ -65,7 +61,7 @@ export interface LiveState {
   connected: boolean; // the last poll succeeded
   live: boolean; // the handshake reported a live loop (GET /live enabled: true)
   meta: LiveMeta | null; // the world's replay-meta shape, from the handshake
-  usage: UsageSummary | null; // GET /usage — handshake read + a slow re-poll (#819)
+  usage: UsageSummary | null; // GET /usage seeds it; run counters + social ride the feed (#819)
   running: boolean;
   paused: boolean;
   step: number; // latest completed sim step seen on the feed
@@ -115,7 +111,12 @@ const IDLE: LiveState = {
  *   flicker at mock speeds — while a tick-spanning decide leaves its agent lit;
  * - the latest `frame` record (step + per-agent state, the live counterpart of
  *   `replay.frames[step]`);
- * - the latest `status` record (running / paused, from the run controls).
+ * - the latest `status` record (running / paused, from the run controls);
+ * - the run-scoped usage + social block (#819), which rides the `frame` record
+ *   (and the `reset` status record) as `run_usage`: merged over the handshake's
+ *   `/usage` snapshot so the run counters and the #795 social card refresh off
+ *   this one feed — no separate poll to drift out of lifecycle sync (a reset
+ *   clears them for free, the same walk that drops the dead run's rows).
  */
 export function applyFeedRecords(
   s: LiveState,
@@ -164,6 +165,11 @@ export function applyFeedRecords(
   const lastFrame = frames[frames.length - 1];
   const statuses = records.filter((r) => r.kind === "status");
   const lastStatus = statuses[statuses.length - 1];
+  // Run-scoped usage + social (#819): the newest frame carries it every tick,
+  // and a `reset` status carries a freshly-zeroed one so the counters drop the
+  // instant the reset lands (not a tick later). Merged over the handshake's
+  // /usage snapshot below, so the lifetime totals + budget it seeded survive.
+  const runUsage = lastFrame?.run_usage ?? lastStatus?.run_usage;
   // Skip the state update when nothing changed, so an idle (or paused)
   // backend doesn't re-render the panel once a second.
   if (
@@ -193,6 +199,9 @@ export function applyFeedRecords(
     step: lastFrame?.step ?? lastStatus?.step ?? s.step,
     running: lastStatus?.running ?? s.running,
     paused: lastStatus?.paused ?? s.paused,
+    // Merge the run-scoped subset over the handshake snapshot (keeping the
+    // lifetime totals + budget); if none rode this batch, leave usage as-is.
+    usage: runUsage && s.usage ? { ...s.usage, ...runUsage } : s.usage,
   };
 }
 
@@ -272,7 +281,6 @@ export function followLive(
 ): () => void {
   let cancelled = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let usageTimer: ReturnType<typeof setTimeout> | undefined;
   let ws: WebSocket | null = null;
   let cursor = 0;
   let bootId: string | null = null; // last-seen GET /live boot nonce (#578)
@@ -288,9 +296,11 @@ export function followLive(
     const res = await fetch(`${base}/live`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const hs = (await res.json()) as LiveStatusResponse;
-    // One /usage read alongside the handshake seeds the budget line; the
-    // slow pollUsage loop below keeps the run-scoped counters and the
-    // social block (#795/#819) fresh from then on.
+    // One /usage read alongside the handshake seeds the budget line + lifetime
+    // totals; the run-scoped counters and the #795 social block ride the feed's
+    // `run_usage` from then on (#819). Degrades to null on any non-ok/error —
+    // written below as `usage ?? s.usage` so a transient failure on a reconnect
+    // keeps the last good snapshot instead of blanking the strip + card.
     const usage = await fetch(`${base}/usage`)
       .then((r) => (r.ok ? (r.json() as Promise<UsageSummary>) : null))
       .catch(() => null);
@@ -323,7 +333,7 @@ export function followLive(
       connected: true,
       live: hs.enabled,
       meta: hs.meta,
-      usage,
+      usage: usage ?? s.usage,
       running: hs.running,
       paused: hs.paused,
       step: hs.step ?? 0,
@@ -437,29 +447,6 @@ export function followLive(
     };
   };
 
-  // The handshake's one-shot /usage read goes stale the moment the run-scoped
-  // counters (#526) and the social block (#795/#819) start moving, so re-read
-  // it on a slow cadence. Only a CHANGED payload lands in state: an identical
-  // body returns the same object, so React skips the re-render (the hook's
-  // usual no-churn discipline).
-  const pollUsage = async () => {
-    try {
-      const res = await fetch(`${base}/usage`);
-      if (res.ok) {
-        const fresh = (await res.json()) as UsageSummary;
-        if (cancelled) return;
-        setState((s) =>
-          JSON.stringify(s.usage) === JSON.stringify(fresh) ? s : { ...s, usage: fresh },
-        );
-      }
-    } catch {
-      // The feed poll owns connectivity signalling; a failed refresh just
-      // keeps the last snapshot.
-    }
-    if (!cancelled) usageTimer = setTimeout(pollUsage, USAGE_POLL_MS);
-  };
-  usageTimer = setTimeout(pollUsage, USAGE_POLL_MS);
-
   const connect = async () => {
     if (!wsUsable) {
       void poll();
@@ -480,7 +467,6 @@ export function followLive(
   return () => {
     cancelled = true;
     clearTimeout(timer);
-    clearTimeout(usageTimer);
     ws?.close();
   };
 }

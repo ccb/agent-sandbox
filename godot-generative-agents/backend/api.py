@@ -671,12 +671,23 @@ def create_app(
         if authorization != expected:
             raise HTTPException(status_code=401, detail="invalid or missing token")
 
+    def _reset_run_usage() -> dict:
+        """The stepper's fresh run_usage() to ride a `reset` status record
+        (#819), so a follower's run-scoped counters and the #795 social card
+        zero the instant the reset lands instead of trailing until the next
+        frame. Probed like the drains -- a stepper without run_usage() adds
+        nothing, and the reset record stays its old shape."""
+        run_usage = getattr(stepper, "run_usage", None)
+        return {"run_usage": run_usage()} if callable(run_usage) else {}
+
     def _publish_adoption(run_id: str) -> dict:
         """Emit the follower adoption signal (status record, reason 'reset',
         additive run_id) and return the route body. Shared by POST /runs and
         POST /runs/{id}/resume."""
         status = controller.status()
-        record = log.append("status", reason="reset", run_id=run_id, **status)
+        record = log.append(
+            "status", reason="reset", run_id=run_id, **status, **_reset_run_usage()
+        )
         return {**status, "cursor": record["cursor"], "run_id": run_id}
 
     @app.get("/health")
@@ -1142,7 +1153,9 @@ def create_app(
         rebuild in a worker thread -- it takes the app lock and may be slow."""
         ctl = _require_loop()
         await asyncio.get_running_loop().run_in_executor(None, ctl.reset)
-        record = log.append("status", reason="reset", **ctl.status())
+        record = log.append(
+            "status", reason="reset", **ctl.status(), **_reset_run_usage()
+        )
         return {**ctl.status(), "cursor": record["cursor"]}
 
     @app.post("/shutdown")

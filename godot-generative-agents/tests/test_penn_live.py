@@ -345,8 +345,16 @@ def test_run_usage_rebaselines_on_reset_and_run_rows_carry_run_cost(tmp_path):
     # test pins run_calls across ticks, not just at tick-free points.
     store = RunStore(tmp_path / "runs")
     stepper = PennStepper(num_steps=3, world=build_penn_world(), run_store=store)
-    # #795: no ticks yet, so no chance of a co-settled pair either.
-    no_social = {"co_settled_pair_steps": 0, "by_pair": {}, "conversations": 0}
+    # #795: no ticks yet, so no chance of a co-settled pair either. counted is
+    # False (mock brain, no llm_client — it never counts co-settling, #825) and
+    # resumed False (a fresh, reset-not-adopted stepper), #819.
+    no_social = {
+        "co_settled_pair_steps": 0,
+        "by_pair": {},
+        "conversations": 0,
+        "counted": False,
+        "resumed": False,
+    }
     assert stepper.run_usage() == {
         "run_calls": 0,
         "run_failed_calls": 0,

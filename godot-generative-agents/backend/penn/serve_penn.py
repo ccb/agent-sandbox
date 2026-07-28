@@ -1463,6 +1463,17 @@ class PennStepper:
                 "co_settled_pair_steps": self._co_settled_total,
                 "by_pair": self._by_pair_json(),
                 "conversations": self._conversations_total,
+                # #819/#825: whether a zero here means anything. `counted` is
+                # False under the mock brain (llm_client is None), which never
+                # counts co-settling at all -- so its permanent 0 is "not
+                # measured", not a drought. `resumed` is True when this process
+                # adopted a mid-day run, restarting the accumulators at 0 -- a
+                # zero then is "not fully observed", not "never happened". Both
+                # mirror the finish-warning gate below (which stays silent in
+                # exactly these two cases), so the dashboard can tell a real
+                # #795 drought from the two non-signals instead of guessing.
+                "counted": self.llm_client is not None,
+                "resumed": self._resumed,
             },
         }
 

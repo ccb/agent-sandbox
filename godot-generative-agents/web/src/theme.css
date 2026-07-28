@@ -22,6 +22,7 @@
   /* Accent */
   --color-accent: #2d6cdf; /* links, active nav item */
   --color-nav-text: #3a4150; /* nav item text */
+  --color-warn: #8a5b00; /* amber caption: paused badge, unresolved social zero */
 
   /* Shape */
   --radius-sm: 7px;
