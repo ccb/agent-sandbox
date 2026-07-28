@@ -155,6 +155,7 @@ const GifEncoder := preload("res://scripts/gif_encoder.gd")
 const ClipExport := preload("res://scripts/clip_export.gd")
 const LiveClipSpan := preload("res://scripts/live_clip_span.gd")
 const BubbleAnchor := preload("res://scripts/bubble_anchor.gd")
+const ConversationText := preload("res://scripts/conversation_text.gd")
 const ThinkingIndicator := preload("res://scripts/thinking_indicator.gd")
 const AgentFanout := preload("res://scripts/agent_fanout.gd")
 const LivePacer := preload("res://scripts/live_pacer.gd")
@@ -238,6 +239,7 @@ var _convo_lines := {}      # name -> the transcript [[speaker, line], ...] bein
 var _convo_start := {}      # name -> sim step (float) the exchange began playing
 var _convo_partner := {}    # name -> the other speaker's name, for the link
 var _bubble_idx := {}       # name -> transcript line currently in its bubble (-1 = none)
+var _expanded := {}         # name -> bool: bubble pinned open on the full transcript (click to toggle)
 var _links_node: Node2D     # parents one Line2D per active conversation pair
 var _link_lines := {}       # sorted "A\nB" pair key -> Line2D
 var _speech_style: StyleBoxFlat
@@ -1435,6 +1437,14 @@ func _spawn_agent(name: String, index: int) -> void:
 	bubble.visible = false
 	node.add_child(bubble)
 
+	# Click the bubble to expand it in place into the full conversation transcript
+	# (_on_bubble_input toggles _expanded[name]; _refresh_bubble renders it). A
+	# pointing-hand cursor advertises it. Clicking the SPRITE still tracks (its Area2D
+	# hit box is over the body, below this bubble), so the two gestures don't collide.
+	bubble.mouse_filter = Control.MOUSE_FILTER_STOP  # Label defaults to IGNORE; opt in to clicks
+	bubble.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	bubble.gui_input.connect(_on_bubble_input.bind(name))
+
 	# A wish "thought" marker (#622 ActionWish, surfaced #625): a distinct 💭
 	# bubble that flashes over the agent the moment they wish for an action the
 	# game doesn't have. Parked further above the nameplate than the dialogue
@@ -1555,6 +1565,23 @@ func _on_agent_input(
 	):
 		get_viewport().set_input_as_handled()
 		_panel.toggle_track(name)
+
+
+func _on_bubble_input(event: InputEvent, name: String) -> void:
+	# Left-click toggles this agent's bubble between one-line-at-a-time playback and
+	# the full conversation transcript expanded in place (see _refresh_bubble). No
+	# manual redraw needed: _process refreshes bubbles every frame, even while paused.
+	# Mark the click handled so it isn't also read as a map drag/pan.
+	if (
+		event is InputEventMouseButton
+		and event.pressed
+		and event.button_index == MOUSE_BUTTON_LEFT
+	):
+		get_viewport().set_input_as_handled()
+		var now_expanded: bool = not bool(_expanded.get(name, false))
+		_expanded[name] = now_expanded
+		if not now_expanded:
+			_bubble_idx[name] = -1  # force the collapsed line to re-render next frame
 
 
 func _tile_to_world(x: int, y: int) -> Vector2:
@@ -2381,11 +2408,12 @@ func _update_agent_speech(name: String, frame: Dictionary, step: int) -> void:
 		var lines: Array = []
 		for pair in chat:
 			if pair is Array and (pair as Array).size() >= 2:
-				lines.append([String(pair[0]), _clip(String(pair[1]))])
+				lines.append([String(pair[0]), String(pair[1])])  # full text; collapsed view clips at render
 		_convo_lines[name] = lines
 		_convo_start[name] = float(step)
 		_convo_partner[name] = _other_speaker(chat, name)
 		_bubble_idx[name] = -1
+		_expanded[name] = false  # a new exchange starts collapsed, never inheriting a stale expansion
 	_last_chat[name] = chat
 
 
@@ -2433,8 +2461,23 @@ func _refresh_bubble(name: String, fpos: float) -> void:
 	var bubble: Label = _agents[name]["bubble"]
 	var lines: Array = _convo_lines.get(name, [])
 	if lines.is_empty():
+		_expanded[name] = false  # nothing to expand; drop a stale flag
 		bubble.visible = false
 		return
+
+	# Expanded (clicked open): pin the whole transcript — both speakers, full text —
+	# left-aligned for readability, bottom-anchored so it grows upward and never
+	# covers the sprite. Stays open until clicked closed (or a new exchange resets
+	# it in _update_agent_speech). Skips the per-line playback + fade below.
+	if bool(_expanded.get(name, false)):
+		bubble.text = ConversationText.full_transcript(lines)
+		bubble.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		_anchor_bubble(bubble, BUBBLE_BOTTOM_GAP)
+		bubble.visible = true
+		bubble.modulate.a = 1.0
+		return
+
+	bubble.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER  # restore collapsed layout
 	var elapsed := fpos - float(_convo_start.get(name, 0.0))
 	var total := float(lines.size()) * DIALOGUE_LINE_STEPS
 	if elapsed < 0.0 or elapsed >= total:
@@ -2449,7 +2492,7 @@ func _refresh_bubble(name: String, fpos: float) -> void:
 
 	if _bubble_idx.get(name, -1) != idx:
 		_bubble_idx[name] = idx
-		bubble.text = String(pair[1])
+		bubble.text = _clip(String(pair[1]))  # transcript stores full text; clip the live line here
 	_anchor_bubble(bubble, BUBBLE_BOTTOM_GAP)  # re-anchor for this line's height
 	bubble.visible = true
 	# Ease in at the start of the line and out at its end, for a spoken beat.
