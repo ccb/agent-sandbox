@@ -273,7 +273,7 @@ func _render_config(data: Dictionary) -> void:
 	var run: Dictionary = data.get("run", {})
 	_initial = {
 		"brain": str(run.get("brain", "mock")),
-		"plan": str(run.get("plan_request", "auto")),
+		"plan": str(run.get("plan_request", run.get("plan", "auto"))),
 		"steps": int(run.get("steps", 0)),
 		"tick_seconds": float(run.get("tick_seconds", 0.0)),
 		# `max_cost` is null on a free brain; get()'s default only applies to a
@@ -366,7 +366,10 @@ func _render_config(data: Dictionary) -> void:
 		for p in _plans:
 			_plan_opt.add_item(str(p))
 		var pi := (_plans as Array).find(_initial.plan)
-		_plan_opt.select(pi if pi >= 0 else 0)
+		if pi < 0:
+			pi = 0
+			_initial.plan = str(_plans[0])  # so an untouched form stays untouched
+		_plan_opt.select(pi)
 		plan_row.add_child(_plan_opt)
 		_form_box.add_child(plan_row)
 		_plan_hint = Label.new()
@@ -374,9 +377,10 @@ func _render_config(data: Dictionary) -> void:
 		_plan_hint.add_theme_font_size_override("font_size", 12)
 		_form_box.add_child(_plan_hint)
 		# Both pickers re-render the hint; _render_config rebuilds these
-		# controls on every load, so the connects can't double up.
-		_plan_opt.item_selected.connect(_on_planner_inputs_changed)
-		_brain_opt.item_selected.connect(_on_planner_inputs_changed)
+		# controls on every load, so the connects can't double up. unbind(1)
+		# drops the item_selected index arg _update_plan_row doesn't take.
+		_plan_opt.item_selected.connect(_update_plan_row.unbind(1))
+		_brain_opt.item_selected.connect(_update_plan_row.unbind(1))
 		_update_plan_row()
 
 	_steps_spin = _spin_row("Steps", 1, 1000000, 1, float(_initial.steps))
@@ -415,10 +419,6 @@ func _selected_plan() -> String:
 	return str(_plans[_plan_opt.selected])
 
 
-func _on_planner_inputs_changed(_index: int) -> void:
-	_update_plan_row()
-
-
 # Keep the planner row consistent with the selected brain (#791): the `llm`
 # planner needs the llm brain (the server 400s the combination), so grey it
 # out under a free brain -- snapping a stranded selection back to auto --
@@ -432,14 +432,18 @@ func _update_plan_row() -> void:
 	if llm_idx >= 0:
 		_plan_opt.set_item_disabled(llm_idx, brain != "llm")
 		if brain != "llm" and _plan_opt.selected == llm_idx:
-			var auto_idx := (_plans as Array).find("auto")
-			_plan_opt.select(auto_idx if auto_idx >= 0 else 0)
+			# Snap the stranded llm selection to auto, but never land on the item
+			# we just disabled (llm) when there's no auto to fall back to.
+			var safe := (_plans as Array).find("auto")
+			if safe < 0:
+				safe = 1 if llm_idx == 0 else 0
+			_plan_opt.select(safe)
 	if _plan_hint != null:
 		var eff := ConfigBody.effective_plan(_selected_plan(), brain)
-		_plan_hint.text = (
-			"Day plan: model-authored (llm)"
-			if eff == "llm"
-			else "Day plan: authored schedule (schedule)"
+		_plan_hint.text = "Day plan: %s" % (
+			"model-authored (llm)" if eff == "llm"
+			else "authored schedule (schedule)" if eff == "schedule"
+			else eff
 		)
 
 
@@ -481,10 +485,13 @@ func _apply_seed(seed: Dictionary) -> void:
 			_brain_opt.select(bi)
 		else:
 			unmet.append("brain '%s' not offered here" % brain)
+	# Mirror the brain branch above: silently skip when this backend serves no
+	# planner row (_plan_opt null, pre-#790), and only warn when the row exists
+	# but doesn't offer the saved value.
 	var plan := ConfigBody.seed_plan(seed)
-	if plan != "":
+	if plan != "" and _plan_opt != null:
 		var pidx := (_plans as Array).find(plan)
-		if _plan_opt != null and pidx >= 0:
+		if pidx >= 0:
 			_plan_opt.select(pidx)
 			_update_plan_row()
 			if _selected_plan() != plan:
@@ -495,8 +502,6 @@ func _apply_seed(seed: Dictionary) -> void:
 					"planner '%s' needs the llm brain here -- kept '%s'" % [plan, _selected_plan()]
 				)
 		else:
-			# This backend has no planner row (pre-#790) or doesn't offer the
-			# saved value -- warn like a missing brain, don't silently drop.
 			unmet.append("planner '%s' not offered here" % plan)
 	var run: Variant = seed.get("run")
 	if typeof(run) == TYPE_DICTIONARY:

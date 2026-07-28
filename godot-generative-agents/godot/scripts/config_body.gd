@@ -36,9 +36,12 @@ static func build_post_body(state: Dictionary) -> Dictionary:
 		body["max_cost"] = float(state.get("max_cost", 0.0))
 	# The planner knob (#791): same only-send-changed rule as `brain`. The
 	# scene passes "" for both keys when the backend serves no `plans`
-	# vocabulary (pre-#790), so nothing rides in that case either.
-	if str(state.get("plan", "")) != str(state.get("initial_plan", "")):
-		body["plan"] = str(state.get("plan", ""))
+	# vocabulary (pre-#790), so nothing rides in that case either. The empty
+	# guard also keeps this helper independently safe -- an empty `plan` would
+	# 400 at the server, so it is never sent even against a mismatched initial.
+	var plan := str(state.get("plan", ""))
+	if plan != "" and plan != str(state.get("initial_plan", "")):
+		body["plan"] = plan
 	var edits: Dictionary = state.get("knob_edits", {})
 	if not edits.is_empty():
 		body["sim_config"] = merge_knobs(state.get("knobs_current", {}), edits)
@@ -76,9 +79,11 @@ static func seed_plan(seed: Dictionary) -> String:
 
 
 # The planner a selection will actually run (#791) -- the client-side mirror
-# of the server's _resolve_plan_mode auto rule ("auto" -> llm iff the llm
-# brain, else schedule). Cosmetic, for the hint label only: the server stays
-# the authority, and the applied echo's `plan` is what a saved run records.
+# of the server's serve_penn._resolve_plan_mode auto rule ("auto" -> llm iff
+# the llm brain, else schedule). KEEP THIS IN STEP with that function: if the
+# server's auto rule changes, this must change with it. Cosmetic, for the hint
+# label only: the server stays the authority, and the applied echo's `plan` is
+# what a saved run records.
 static func effective_plan(plan: String, brain: String) -> String:
 	if plan != "auto":
 		return plan

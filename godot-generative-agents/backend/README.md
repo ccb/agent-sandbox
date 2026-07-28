@@ -899,11 +899,16 @@ persona library adjacent to the world YAML (`personas`, with `in_default_cast`
 and the currently active `cast` ids), the #564 `SimulationConfig` knobs
 (`knobs.defaults` / `knobs.current`, key-carrying sections stripped), the
 advertised `brains` (`llm` appears only when the server env holds
-`ANTHROPIC_API_KEY` — keys never travel over HTTP), and the `run` controls
-(`brain`, `steps`, derived `stop_time`, `max_cost`, `tick_seconds`).
+`ANTHROPIC_API_KEY` — keys never travel over HTTP), the advertised day-`plans`
+vocabulary (`auto`/`schedule`/`llm`, #787), and the `run` controls
+(`brain`, `steps`, derived `stop_time`, `max_cost`, `tick_seconds`, the
+resolved `plan` the current brain would run, and `plan_request` — the RAW
+planner request, e.g. `auto`, that the setup dropdown defaults to so an
+untouched form keeps the session's request, #791).
 
-`POST /config` (any subset of `{cast, brain, sim_config, steps, tick_seconds,
-max_cost}`) applies the setup by rebuilding through the stepper's reset path
+`POST /config` (any subset of `{cast, brain, plan, sim_config, steps,
+tick_seconds, max_cost}` — `plan` is the day-planner request, #791) applies
+the setup by rebuilding through the stepper's reset path
 and echoes it back (`applied`), alongside the standard rebuild signal
 (`status` record, `reason: "reset"`, additive `run_id`). After the first
 `POST /resume` the gate closes: `status` reads `"locked"` and `POST /config`

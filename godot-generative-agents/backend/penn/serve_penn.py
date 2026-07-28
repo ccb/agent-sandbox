@@ -1605,9 +1605,12 @@ class PennStepper:
             "knobs": {"defaults": defaults, "current": current},
             "brains": brains,
             # The planner knob (#787). `plans` is the accepted vocabulary and
-            # `run.plan` the RESOLVED value the current brain would run, so the
-            # setup screen can show "llm" for an auto+llm-brain session without
-            # having to re-derive the auto rule client-side.
+            # `run.plan` the RESOLVED value the current brain would run. The
+            # setup screen now re-derives the auto rule client-side anyway
+            # (config_body.effective_plan) -- it has to, because the brain
+            # dropdown moves the resolved planner without a round-trip -- so
+            # `run.plan` here is just the initial resolved value, not the reason
+            # the client can avoid re-deriving.
             "plans": ["auto", "schedule", "llm"],
             "run": {
                 "brain": self._brain_name(),
