@@ -343,6 +343,14 @@ Measurement, so the next live run can see this without hand-reading frames:
 A `#760` batch-5 live run, compared against batch 4's Run B:
 
 * `arrived_then_departed` — 20 across the run today; expect it near 0.
+  **Superseded, 2026-07-28.** Batch 5 read 22, and re-deriving the *composition*
+  of the baseline 20 showed 17 of them were one agent oscillating inside a
+  single building (#849) — a mechanism this design never touched — against 3
+  genuine cross-building retargets, flat at 3 in batch 5. The combined counter
+  cannot arbitrate this design; #850 split it in `analyze_run.py`, and #826's
+  acceptance test is now a per-event ceiling on `abandoned_minutes` over the
+  cross-building class alone. Derive what a baseline number is *made of* before
+  promising to beat it.
 * `walking_share` — 29–37% for four of five agents today.
 * believability `plan_coherence` — 6.68, the run's floor dimension, with Priya
   the `weakest` agent at 7.86 (#781/#817).
