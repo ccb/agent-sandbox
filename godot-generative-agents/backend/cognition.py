@@ -1263,6 +1263,13 @@ def observe_and_decide(
        (:func:`_use_action_tools`) as the decide route below, so the
        deterministic mock never reads this line and the bake stays
        byte-identical.
+    6. **Walk cost + own recent actions** (#826): append what a walk to each
+       destination costs (:func:`walk_minutes_line`) and then this agent's own
+       last few actions (:func:`recent_actions_block`) -- both after the
+       retrieve above, like the #580 block, and gated on ``clock`` rather than
+       ``_use_action_tools`` (unlike #613's line, these are plain context the
+       mock's first-line read ignores either way), so the bake stays
+       byte-identical.
 
     Pass a ``retrieval`` (:class:`sim_config.RetrievalConfig`) to tune the
     retrieval scoring (weights / decay / how many memories surface); ``None``

@@ -21,9 +21,15 @@ sys.path.insert(0, str(_SIM_DIR))
 
 from backend.prompt_templates import render  # noqa: E402
 from backend.build_world import build_world  # noqa: E402
-from backend.cognition import attach_agents, walk_minutes_line  # noqa: E402
+from backend.cognition import (  # noqa: E402
+    ACTION_TAG,
+    attach_agents,
+    observe_and_decide,
+    walk_minutes_line,
+)
 from backend.sim_clock import SimClock  # noqa: E402
 from backend.world_map import WorldMap  # noqa: E402
+from text_adventure_games.llm_client import MockLlmClient, ToolCallResult  # noqa: E402
 
 START = datetime.datetime(2023, 2, 13, 8, 0, 0)
 UPENN = os.path.join(
@@ -150,6 +156,49 @@ def test_line_is_empty_when_the_character_has_no_tile():
     if hasattr(ada, "tile"):
         del ada.tile
     assert walk_minutes_line(game, ada, SimClock(START)) == ""
+
+
+# ------------------------------------ the decide-prompt order (#826 review)
+
+# Every other test in this file (and the wiring tests in
+# test_recent_actions_826.py) builds with world_map=None, so walk_minutes_line
+# is always "" there (its own `world_map is None` guard) -- none of them can
+# tell a correct call order from a dropped `walk_minutes_line` call or the two
+# #826 blocks swapped. This is the one test with a real tile-bearing map, so
+# the walk line actually renders and the documented order -- walk cost, then
+# own recent history, then retrieved memories -- has coverage.
+
+TRAVEL = ToolCallResult(
+    text=None,
+    tool_calls=[
+        {
+            "id": "call_1",
+            "name": "travel",
+            "arguments": {"reasoning": "coffee first", "destination": "Cafe"},
+        }
+    ],
+)
+
+
+def test_decide_prompt_orders_walk_before_recent_before_memories():
+    brain = MockLlmClient(tool_calls_responses=[TRAVEL])
+    personas = _personas()
+    game, chars = build_world(_FakeMap(), personas, LOCATIONS)
+    attach_agents(chars, personas, llm_client=brain)
+    ada = chars["Ada"]
+    ada.agent.memory.add_observation(
+        "I traveled to Cafe.", turn=300, importance=2.0, tags={ACTION_TAG}
+    )
+
+    command = observe_and_decide(game, ada, 360, clock=SimClock(START))
+
+    assert command == "travel to Cafe"
+    user = brain.tool_calls_log[0]["messages"][-1]["content"]
+    assert "Walking from here takes at least about:" in user
+    assert user.index("Walking from here takes at least about:") < user.index(
+        "Recently, you:"
+    )
+    assert user.index("Recently, you:") < user.index("Relevant memories:")
 
 
 # ------------------------------------------------------------- pinned wording
