@@ -2125,33 +2125,49 @@ def _credit_stop_for_conversation(char, st) -> bool:
 
     ``schedule.advance()`` fires from exactly one place -- ``run_simulation``'s
     latch-expiry pre-pass -- and (before #831) only for a settle at the
-    scheduled place. But a ``talk_to`` is an instantaneous command that routes
-    through ``_settle_after_dead_talk``, which sets ``credit_stop = False``
-    (#689, correctly: a *dead* talk completed nothing), and a talk that went on
-    to open a REAL conversation took that same path first, so it inherited the
-    same flag. The result was that no conversation ever advanced a stop -- not
-    even when the conversation *was* the scheduled activity ("sizing up a
-    brand-new roommate"), which is how the #778 pair stayed on stop 0 for a
-    whole run. This sets the pre-pass's own ``credit_stop`` flag rather than
-    inventing a second signal for it to consult. ``credit_stop`` is read in
-    exactly one place (that pre-pass) and is re-stamped by every path that sets
-    ``perform_until`` -- ``_settle_after_dead_talk`` and the decide-time
-    perform branch -- so it is one-shot by construction: a credit written here
-    is consumed by the settle it was earned at and cannot leak forward onto an
-    unrelated stop.
+    scheduled place. A *dropped* ``talk_to`` (no partner, busy, on cooldown) is
+    an instantaneous command that routes through ``settle_after_dead_talk``,
+    which sets ``credit_stop = False`` (#689, correctly: a *dead* talk
+    completed nothing). This sets the pre-pass's own ``credit_stop`` flag
+    rather than inventing a second signal for it to consult. ``credit_stop``
+    is read in exactly one place (that pre-pass) and is re-stamped by every
+    path that sets ``perform_until`` -- ``settle_after_dead_talk`` and the
+    decide-time perform branch -- so it is one-shot by construction: a credit
+    written here is consumed by the settle it was earned at and cannot leak
+    forward onto an unrelated stop.
 
-    #831: a completed activity credits its stop wherever it ran, and a
-    conversation is no exception. The place gate this function used to apply
-    was the same bug the perform-settle branch had, on the sibling path: an
-    agent whose scheduled activity was a conversation held somewhere else never
-    credited the stop either, and the pointer pinned it for the rest of the
-    run. Dropped, so both settle kinds now share one rule.
+    The only caller is the conversation-end loop in this module
+    (:func:`_advance_conversation`), and every agent that reaches it was
+    already latched by some settle -- :func:`maybe_converse`'s pairing
+    requires it. For an agent latched by a *perform*, ``credit_stop`` is
+    already ``True`` (the decide-time branch sets it unconditionally, #831),
+    so this call is a no-op there. The one case where dropping the place gate
+    actually changes the outcome is an agent latched by a **dead-talk
+    settle** (``credit_stop`` left ``False``) who then goes on to hold a real
+    conversation, wherever it happens -- that is the whole delta. That pin is
+    not permanent: an uncredited dead-talk settle still un-latches at its own
+    expiry (at most ``dead_talk_settle_steps``, default 30) whether or not it
+    credited, so only a *repeating* dropped-talk loop keeps the pointer stuck
+    -- the gap ``run_simulation.py``'s own ``ponytail:`` comment on this same
+    pre-pass leaves open. A ``talk_to`` that itself *opens* a real
+    conversation is still never credited here: #793 found that
+    ``run_simulation.py``'s ``is_talk`` check matches the engine's generic
+    ``talk`` verb, not Penn's own ``talk_to``, so an opened ``talk_to`` never
+    touches ``settle_after_dead_talk`` at all -- its initiator reaches
+    :func:`maybe_converse` merely ``conversing``, never ``performing``, and the
+    guard below rejects it.
 
-    ``performing`` is the SOLE guard left, and it is load-bearing: a
-    conversation started mid-walk by ``maybe_react`` (#370), which pins a
-    *walking* agent, must not mark a stop the agent never reached as done.
-    Every path that should credit still does: ``maybe_converse``'s own pairing
-    already requires both agents settled.
+    ``performing`` is the SOLE guard left, and it is load-bearing -- not
+    because a stop the agent never reached must not count (#831's own rule
+    says the opposite: an unreached stop IS creditable if the activity ran
+    somewhere), but because ``performing`` guarantees a ``perform_until``
+    exists for the pre-pass to consume this credit at. A conversation started
+    mid-walk by ``maybe_react`` (#370) pins a *walking* agent under
+    ``conversing``, never ``performing`` -- no ``perform_until`` is set for
+    it. Relaxing this guard to accept ``conversing`` would write a credit with
+    nowhere to be consumed until some unrelated LATER settle's pre-pass check
+    happened to pick it up -- exactly the forward leak the paragraph above
+    claims is impossible by construction.
 
     Deliberately does NOT write ``activity``. The scheduled activity is not
     necessarily what the agent did (under a real brain ``PerformPenn`` sets it

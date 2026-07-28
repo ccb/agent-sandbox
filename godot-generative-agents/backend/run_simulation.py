@@ -374,8 +374,13 @@ def step(
             # the mock, which never converses.
             #
             # ponytail: an agent frozen by repeated *blocked* actions still never
-            # advances here -- a blocked action never latches, so it never reaches
-            # this gate. Upgrade: a general stop deadline, still rejected (bake-
+            # advances here. Most blocked commands never latch at all, so they
+            # never reach this gate -- but a blocked TALK is the exception:
+            # `settle_after_dead_talk` (#689) latches it, and it DOES reach this
+            # gate, arriving with `credit_stop` already False. It un-latches
+            # without advancing and is free to repeat the same dropped talk next
+            # tick, so a REPEATING blocked-talk loop still never moves the
+            # pointer. Upgrade: a general stop deadline, still rejected (bake-
             # drift risk; see the design spec's "Rejected: a general stop
             # deadline"). #831 removed the place condition, not this one.
             credited = st.get("credit_stop", True)
@@ -621,10 +626,17 @@ def step(
                     # ran. This flag used to be the place match, so an agent that
                     # did the right thing somewhere else credited nothing and the
                     # pointer pinned a finished errand for hours. `matched` stays
-                    # the *place* signal -- it drives the emoji, the furniture
-                    # hint and the deviation revision below -- while the flag the
-                    # pre-pass reads is now "this settle earned the credit".
+                    # the *place* signal for its three other consumers below: the
+                    # emoji, the DEVIATED plan revision, and the unbounded-perform
+                    # ceiling (the `elif matched or clock is None` check) -- while
+                    # the flag the pre-pass reads is now "this settle earned the
+                    # credit".
                     matched = at_scheduled_stop(char)
+                    # Always True, never `matched`: this also re-stamps over a
+                    # False left by a dead-talk settle, which nothing else
+                    # clears. Delete this line and the first dead talk leaves the
+                    # flag False permanently -- the stop pointer would never
+                    # advance again for the rest of the run.
                     st["credit_stop"] = True
                     activity = char.get_property("activity") or "spending time"
                     if not matched:

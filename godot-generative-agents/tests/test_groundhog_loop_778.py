@@ -9,14 +9,15 @@ and threw every one away: the only consumer was `maybe_revise_plan`, and the
 default `plan_mode: "schedule"` wires `MockPlanner`, whose `revise()` is a no-op.
 The commitment now becomes a durable PLAN memory in the speaker's own stream.
 
-**C.** `schedule.advance()` only fires for a CREDITED settle, and a `talk_to`
-routes through `_settle_after_dead_talk`, which sets `credit_stop = False`
-(#689). So no conversation ever advanced a stop -- not even when the
-conversation WAS the scheduled activity. A real conversation now credits that
-stop wherever it was held (#831 dropped the place requirement here too), by
-setting the pre-pass's own `credit_stop` flag -- no second signal, and
-one-shot for free, since every path that sets `perform_until` re-stamps
-`credit_stop`.
+**C.** `schedule.advance()` only fires for a CREDITED settle, and a *dropped*
+`talk_to` routes through `settle_after_dead_talk`, which sets
+`credit_stop = False` (#689). Before #831 a real conversation held anywhere
+but the agent's own scheduled place was never credited either, so the pointer
+could sit on a stop the conversation had already completed. A real
+conversation now credits that stop wherever it was held (#831 dropped the
+place requirement here too), by setting the pre-pass's own `credit_stop` flag
+-- no second signal, and one-shot for free, since every path that sets
+`perform_until` re-stamps `credit_stop`.
 
 Fully offline (fake brains + fake planners). Run from the repo root::
 
@@ -263,9 +264,11 @@ def _pair_talking_in(place_name, *, performing=True):
         if ch.location is not None:
             ch.location.remove_character(ch)
         room.add_character(ch)
-    # credit_stop starts False, exactly as _settle_after_dead_talk (#689) leaves
-    # it after the talk_to that opened this conversation -- so each test below
-    # asserts the credit flipped that flag, not merely that it is set.
+    # credit_stop starts False here to simulate an agent latched by a #689
+    # dead-talk settle (settle_after_dead_talk) who then goes on to hold a REAL
+    # conversation -- the one case #831 actually changes the outcome for (see
+    # cognition._credit_stop_for_conversation). So each test below asserts the
+    # credit flipped that flag, not merely that it is set.
     state = {
         n: {
             "performing": performing,
@@ -287,17 +290,18 @@ def test_conversation_at_the_scheduled_place_credits_the_stop():
     assert happened == 1
     for name in order:
         # The flag the pre-pass reads to advance the schedule, flipped from the
-        # False that _settle_after_dead_talk left behind.
+        # False that settle_after_dead_talk left behind.
         assert state[name]["credit_stop"] is True
 
 
 def test_conversation_away_from_the_scheduled_place_still_credits():
     """#831: a chat in the Plaza is a deviation from the scheduled Cafe stop,
-    but the conversation still ran -- crediting nothing here was the same bug
-    the perform-settle branch had, on the sibling path (an agent whose
-    scheduled activity was a conversation held somewhere else never credited
-    its stop, so the pointer pinned it for the rest of the run). `performing`
-    is the only guard now, not place."""
+    but the conversation still ran. Crediting nothing here was the same bug
+    the perform-settle branch had on the sibling path -- but the practical
+    effect was narrower than "pinned for the rest of the run": an uncredited
+    settle still un-latches at its own expiry (`dead_talk_settle_steps`), so
+    only a *repeating* dropped-talk loop actually froze the pointer.
+    `performing` is the only guard now, not place."""
     game, chars, state, frame, order = _pair_talking_in("Plaza")
 
     happened = maybe_converse(game, chars, state, frame, 4, {}, order, clock=None)
@@ -448,8 +452,9 @@ def test_credit_at_the_last_stop_settles_in_place():
     That is deliberate -- the same end-of-day "stay put" rule an on-plan agent
     gets -- and load-bearing for the mock bake: un-latching here would make the
     mock re-decide at its last stop and drift every later frame. Pinned because
-    the credit is what newly routes a *conversing* agent onto this branch (before
-    #778 it took the deviation branch and un-latched)."""
+    the credit is what routes a *conversing* agent onto this branch at all
+    (before #778 introduced this credit, a conversing agent's settle expiry had
+    no way to see it had completed its last stop, and simply un-latched)."""
     game, chars, state, order, emoji = _pair_mid_dead_talk_settle()
     diego, st = chars["Diego Cruz"], state["Diego Cruz"]
     diego.agent.schedule.stop_index = 1  # the last of two stops: Library

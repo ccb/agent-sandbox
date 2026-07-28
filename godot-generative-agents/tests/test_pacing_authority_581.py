@@ -361,10 +361,10 @@ def test_a_deviation_credits_the_stop_and_fires_one_revision():
     assert RevisionTrigger(DEVIATED, 0).reason == "deviated"
 
 
-def test_credit_stop_perform_still_advances_the_pointer():
+def test_on_plan_perform_still_advances_the_pointer():
     # A two-stop schedule driven by the default mock: travel->perform stop 0,
-    # then the pointer advances to stop 1. This is the byte-identical baseline
-    # advance-by-match must preserve.
+    # then the pointer advances to stop 1. This is the byte-identical mock
+    # baseline the #831 credit rule must still preserve.
     persona = _persona(place="Cafe", activity="reading", steps=1)
     persona["schedule"].append(
         {"place": "Library", "activity": "studying", "emoji": "\U0001f4d6", "steps": 1}
