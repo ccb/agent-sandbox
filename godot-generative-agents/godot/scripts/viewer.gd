@@ -88,7 +88,9 @@ const MONTHS := [
 # no activity/goal bubbles) -- a visible bubble means "this agent is speaking right
 # now". A bubble is this wide (its text wraps and centres inside); position.x =
 # -half that centres it over the sprite.
-const BUBBLE_WIDTH := 210.0
+const BUBBLE_WIDTH := 210.0        # default/min bubble width; long text widens toward BUBBLE_MAX_WIDTH
+const BUBBLE_MAX_WIDTH := 380.0    # cap so a wide (expanded) bubble can't blanket neighbouring agents
+const BUBBLE_WIDE_AT := 350        # char count at which the box reaches BUBBLE_MAX_WIDTH (ramps from BUBBLE_MAX_CHARS)
 const BUBBLE_FONT_SIZE := 18
 # Each floating label is BOTTOM-anchored: its bottom edge is pinned this many px
 # above the sprite head and the box grows UPWARD as text wraps taller, so a long
@@ -155,7 +157,6 @@ const GifEncoder := preload("res://scripts/gif_encoder.gd")
 const ClipExport := preload("res://scripts/clip_export.gd")
 const LiveClipSpan := preload("res://scripts/live_clip_span.gd")
 const BubbleAnchor := preload("res://scripts/bubble_anchor.gd")
-const ConversationText := preload("res://scripts/conversation_text.gd")
 const ThinkingIndicator := preload("res://scripts/thinking_indicator.gd")
 const AgentFanout := preload("res://scripts/agent_fanout.gd")
 const LivePacer := preload("res://scripts/live_pacer.gd")
@@ -239,7 +240,7 @@ var _convo_lines := {}      # name -> the transcript [[speaker, line], ...] bein
 var _convo_start := {}      # name -> sim step (float) the exchange began playing
 var _convo_partner := {}    # name -> the other speaker's name, for the link
 var _bubble_idx := {}       # name -> transcript line currently in its bubble (-1 = none)
-var _expanded := {}         # name -> bool: bubble pinned open on the full transcript (click to toggle)
+var _expanded := {}         # name -> bool: render the current line in full instead of clipped (click to toggle; still hides off-turn)
 var _links_node: Node2D     # parents one Line2D per active conversation pair
 var _link_lines := {}       # sorted "A\nB" pair key -> Line2D
 var _speech_style: StyleBoxFlat
@@ -1568,9 +1569,11 @@ func _on_agent_input(
 
 
 func _on_bubble_input(event: InputEvent, name: String) -> void:
-	# Left-click toggles this agent's bubble between one-line-at-a-time playback and
-	# the full conversation transcript expanded in place (see _refresh_bubble). No
-	# manual redraw needed: _process refreshes bubbles every frame, even while paused.
+	# Left-click toggles this agent's bubble between the clipped one-line-at-a-time
+	# playback and the current line rendered in full (its whole utterance, in a box
+	# widened to fit — see _refresh_bubble). Either way the bubble still follows the
+	# dialogue: it hides on the partner's turns and when the exchange ends. No manual
+	# redraw needed: _process refreshes bubbles every frame, even while paused.
 	# Mark the click handled so it isn't also read as a map drag/pan.
 	if (
 		event is InputEventMouseButton
@@ -1578,10 +1581,8 @@ func _on_bubble_input(event: InputEvent, name: String) -> void:
 		and event.button_index == MOUSE_BUTTON_LEFT
 	):
 		get_viewport().set_input_as_handled()
-		var now_expanded: bool = not bool(_expanded.get(name, false))
-		_expanded[name] = now_expanded
-		if not now_expanded:
-			_bubble_idx[name] = -1  # force the collapsed line to re-render next frame
+		_expanded[name] = not bool(_expanded.get(name, false))
+		_bubble_idx[name] = -1  # re-render next frame: the line switches clipped<->full
 
 
 func _tile_to_world(x: int, y: int) -> Vector2:
@@ -2446,55 +2447,65 @@ func _anchor_bubble(label: Label, gap: float) -> void:
 	# Pin `label`'s BOTTOM edge `gap` px above the sprite head so it grows upward
 	# as its wrapped text gets taller, never covering the sprite. foot_lift matches
 	# _spawn_agent (constant across agents); the head sits at -(foot_lift + SPRITE_HALF_PX).
-	# get_minimum_size() forces the wrapped height to recompute now (vs .size.y,
-	# which can lag a frame after .text changes).
+	# fit_to_text shrink-wraps the box to the current text first -- without it a
+	# collapsed bubble keeps the tall box of the expanded line it grew to (a Label
+	# never self-shrinks) -- and returns the recomputed height for the anchor.
 	var foot_lift := SPRITE_HALF_PX - float(_tile_px)
 	var bottom_y := -(foot_lift + SPRITE_HALF_PX + gap)
-	label.position = BubbleAnchor.top_left(BUBBLE_WIDTH, bottom_y, label.get_minimum_size().y)
+	# Scale the box width to the amount of text so a long line reflows into a wider,
+	# shorter box instead of a tall column (capped at BUBBLE_MAX_WIDTH). Lines clipped
+	# to BUBBLE_MAX_CHARS stay at the min width, so normal playback never jitters --
+	# only the click-to-expand pin (the one text that exceeds the clip) actually widens.
+	var width := BubbleAnchor.width_for(
+		label.text.length(), BUBBLE_WIDTH, BUBBLE_MAX_WIDTH, BUBBLE_MAX_CHARS, BUBBLE_WIDE_AT)
+	label.custom_minimum_size = Vector2(width, 0.0)
+	# Center on the ACTUAL width (label.size.x after fit_to_text), not BUBBLE_WIDTH, or
+	# a widened bubble would render off-center from the sprite.
+	var height := BubbleAnchor.fit_to_text(label)
+	label.position = BubbleAnchor.top_left(label.size.x, bottom_y, height)
 
 
 func _refresh_bubble(name: String, fpos: float) -> void:
 	# Play this agent's conversation back one line at a time: show its bubble only
 	# during the slots where IT is the speaker (with that line's text), and hide it
 	# on the partner's turns and once the exchange is over -- so the dialogue reads
-	# as staggered turn-taking rather than both agents speaking at once.
+	# as staggered turn-taking rather than both agents speaking at once. A bubble
+	# clicked "expanded" follows this SAME timeline (it still vanishes on the partner's
+	# turn and at the end); expanding only renders the current line in full (the
+	# collapsed view clips it), at full opacity, in a box widened to fit.
 	var bubble: Label = _agents[name]["bubble"]
 	var lines: Array = _convo_lines.get(name, [])
 	if lines.is_empty():
-		_expanded[name] = false  # nothing to expand; drop a stale flag
+		_expanded[name] = false  # nothing to show; drop a stale expand flag
 		bubble.visible = false
 		return
 
-	# Expanded (clicked open): pin the whole transcript — both speakers, full text —
-	# left-aligned for readability, bottom-anchored so it grows upward and never
-	# covers the sprite. Stays open until clicked closed (or a new exchange resets
-	# it in _update_agent_speech). Skips the per-line playback + fade below.
-	if bool(_expanded.get(name, false)):
-		bubble.text = ConversationText.full_transcript(lines)
-		bubble.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		_anchor_bubble(bubble, BUBBLE_BOTTOM_GAP)
-		bubble.visible = true
-		bubble.modulate.a = 1.0
-		return
-
-	bubble.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER  # restore collapsed layout
+	bubble.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var elapsed := fpos - float(_convo_start.get(name, 0.0))
 	var total := float(lines.size()) * DIALOGUE_LINE_STEPS
 	if elapsed < 0.0 or elapsed >= total:
-		bubble.visible = false
+		bubble.visible = false  # exchange over -- expanded or not, the bubble disappears
 		return
 
 	var idx := int(elapsed / DIALOGUE_LINE_STEPS)  # whose turn it is right now
 	var pair: Array = lines[idx]
 	if String(pair[0]) != name:
-		bubble.visible = false  # the partner is speaking this turn
+		bubble.visible = false  # the partner is speaking this turn (an expanded bubble hides too)
 		return
 
+	# Set the text only when the shown line changes; _on_bubble_input clears _bubble_idx
+	# on a click so a toggle re-renders the SAME line clipped<->full. Expanded shows the
+	# whole utterance (collapsed clips at BUBBLE_MAX_CHARS); _anchor_bubble then fits the
+	# box to whichever it is.
+	var expanded := bool(_expanded.get(name, false))
 	if _bubble_idx.get(name, -1) != idx:
 		_bubble_idx[name] = idx
-		bubble.text = _clip(String(pair[1]))  # transcript stores full text; clip the live line here
-	_anchor_bubble(bubble, BUBBLE_BOTTOM_GAP)  # re-anchor for this line's height
+		bubble.text = String(pair[1]) if expanded else _clip(String(pair[1]))
+	_anchor_bubble(bubble, BUBBLE_BOTTOM_GAP)  # re-fit width + height to the current text
 	bubble.visible = true
+	if expanded:
+		bubble.modulate.a = 1.0  # pinned open: full opacity, no fade, easy to read
+		return
 	# Ease in at the start of the line and out at its end, for a spoken beat.
 	var within := elapsed - float(idx) * DIALOGUE_LINE_STEPS
 	var fade_in := clampf(within, 0.0, 1.0)
