@@ -463,8 +463,11 @@ class LLMPlanner:
         longer than the estimate, and re-asking on one would spend a call to make
         a fine plan worse.
 
-        Only the first offending anchor is reported: the later ones cascade from
-        it, and fixing the first re-flows everything after it anyway.
+        Only the first *offending* anchor is reported: the later ones cascade
+        from it, and fixing the first re-flows everything after it anyway. An
+        anchor the plan does meet is skipped, never a stopping point -- the
+        model tags each clock-pinned stop it has, and the earliest tag is
+        usually the window's opening hour, which is trivially on time.
         """
         # No clock means `minutes` were read as steps (see _minute_from_user),
         # so there is no wall clock to be late against.
@@ -487,27 +490,38 @@ class LLMPlanner:
                     # doesn't make it late, it makes it never happen -- and
                     # minutes_for_steps(None) would raise straight out of
                     # generate(), which attach_agents calls unguarded.
+                    # Named, not numbered: this list is post-validate_stops, so
+                    # an ordinal here can point at the wrong stop in the list
+                    # the model actually wrote.
                     return (
-                        f'\nThat does not work: stop {k + 1} ("{before.activity}" '
-                        f"at {before.place}) has no `minutes`, which means "
-                        f'staying there for the rest of the day, so "'
-                        f'{stop.activity}" at {stop.place} -- pinned to '
-                        f"{stop.start_hour:02d}:00 -- never happens. Give every "
-                        f"stop before it a duration in minutes.\n"
+                        f'\nThat does not work: the stop "{before.activity}" at '
+                        f"{before.place} has no `minutes`, which means staying "
+                        f'there for the rest of the day, so "{stop.activity}" '
+                        f"at {stop.place} -- pinned to {stop.start_hour:02d}:00 "
+                        f"-- never happens. Give every stop before it a "
+                        f"duration in minutes.\n"
                     )
                 dwell += self.clock.minutes_for_steps(before.steps)
                 if stops[k + 1].place != before.place:
                     walks += travel  # consecutive stops at one place: no walk
             arrival = opening_minute + dwell + walks
-            # Signed circular difference, so a window spanning midnight needs no
-            # special case of its own.
-            late = (arrival - stop.start_hour * 60 + 720) % 1440 - 720
+            anchor = stop.start_hour * 60
+            if anchor < opening_minute:
+                # That hour began before the run did, so it means tomorrow's.
+                # Rolling it forward keeps a window spanning midnight honest
+                # without a case of its own, and makes a run that opened
+                # mid-hour (08:30) read its own opening hour as far-early
+                # rather than 30 minutes late -- an anchor no re-ask can meet.
+                anchor += 1440
+            # Plain subtraction: a circular difference would wrap an overrun of
+            # more than 12 hours around into "early" and wave it through.
+            late = arrival - anchor
             if late <= _ANCHOR_TOLERANCE_MINUTES:
-                return ""
+                continue
             return (
                 f'\nThat does not work: "{stop.activity}" at {stop.place} is '
-                f"pinned to {stop.start_hour:02d}:00, but the {i} stop"
-                f"{'' if i == 1 else 's'} before it total {dwell} minutes and "
+                f"pinned to {stop.start_hour:02d}:00, but the stops before it "
+                f"total {dwell} minutes and "
                 f"the walks between them cost at least {walks} more, so you "
                 f"would only get there about "
                 f"{(arrival // 60) % 24:02d}:{arrival % 60:02d}. You have about "

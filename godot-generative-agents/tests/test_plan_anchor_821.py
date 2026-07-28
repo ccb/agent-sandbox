@@ -198,6 +198,62 @@ def test_an_hour_outside_the_run_window_is_left_alone():
     assert client.minute_calls == 1
 
 
+# The same real stops, but with the earlier ones tagged too -- MINUTE_TOOL tells
+# the model to copy start_hour "from your hourly plan", and HOURLY_TOOL requires
+# an hour on every block, so a plan tagging several stops is the expected shape.
+DIEGO_MANY_ANCHORS = [
+    {**DIEGO_LATE[0], "start_hour": 8},  # 08:00 exactly -- on time
+    {**DIEGO_LATE[1], "start_hour": 9},  # 09:04 vs 09:00 -- inside tolerance
+    DIEGO_LATE[2],
+    DIEGO_LATE[3],  # 10:48 vs 10:00 -- the one that matters
+]
+
+
+def test_an_on_time_anchor_does_not_hide_a_late_one_after_it():
+    """Stopping at the first *pinned* stop instead of the first *offending* one
+    defeats the fix on its own scenario: the earliest tag is normally the
+    window's opening hour, which is trivially on time."""
+    client = AnchorClient(DIEGO_MANY_ANCHORS, retry_stops=DIEGO_FIXED)
+    _plan(client)
+    assert client.minute_calls == 2, "the late 10:00 stop was hidden by the 08:00 one"
+    assert "pinned to 10:00" in client.last_minute_message
+
+
+def test_an_overrun_of_more_than_twelve_hours_is_still_late():
+    """A signed circular difference wraps a >12h overrun around into "early" and
+    waves through exactly the worst plans. Nothing bounds the model's `minutes`,
+    and over-long stops before an anchor are the failure #821 is about."""
+    client = AnchorClient(
+        [
+            {"place": "Meyerson Hall", "activity": "studio model", "minutes": 400},
+            {
+                "place": "Van Pelt — Kamin Gallery",
+                "activity": "reading",
+                "minutes": 400,
+            },
+            {"place": "Houston Hall", "activity": "lunch", "minutes": 100},
+            {"place": "Irvine Auditorium", "activity": "the lecture", "start_hour": 10},
+        ],
+        retry_stops=DIEGO_FIXED,
+    )
+    _plan(client)
+    assert client.minute_calls == 2, "a 14-hour overrun was read as early"
+    assert "00:12" in client.last_minute_message
+
+
+def test_a_run_opening_mid_hour_does_not_demand_the_impossible():
+    """`hour_starts` reports the hour *containing* step 0, so a run started at
+    08:30 (a supported --start) has hour 8 in its window while no stop can
+    begin before 08:30. Re-asking would bill a call for something unfixable."""
+    client = AnchorClient(
+        [{"place": "Irvine Auditorium", "activity": "a lecture", "start_hour": 8}]
+    )
+    _plan(
+        client, clock=SimClock(datetime.datetime(2026, 7, 26, 8, 30), sec_per_step=10)
+    )
+    assert client.minute_calls == 1
+
+
 def test_without_a_clock_nothing_is_checked():
     """No clock means `minutes` are read as steps, so there is no wall clock to
     be late against -- the pre-#821 behaviour, unchanged."""
