@@ -44,6 +44,7 @@ import argparse
 import collections
 import json
 import pathlib
+import re
 import sqlite3
 import sys
 import tempfile
@@ -219,6 +220,39 @@ def _arrived_then_departed(frames: list) -> dict:
                     counts[name] += 1
             previous[name] = (walking, act)
     return dict(sorted(counts.items()))
+
+
+_WALK_ACT = re.compile(r"^walking to (.+?) @ (.*)$")
+
+
+def _walk_target(act: str) -> tuple[str, str] | None:
+    """``(display name, building)`` for a walk-in-progress act, else ``None``.
+
+    A leg in progress paints ``walking to <display name> @
+    <world>:<building>:<place>``. Classifying a turn-around needs the
+    *building*, and the address is the only reliable source for it: a
+    sub-place's display name drops its building's qualifier, so ``Van Pelt --
+    Moelis Reading Room`` (address ``UPenn:Van Pelt Library:Moelis Family
+    Grand Reading Room``) shares no prefix with its own building's display
+    name, ``Van Pelt Library``. Reducing display names and comparing those is
+    what scored two of #826's baseline library-to-its-own-reading-room hops as
+    cross-campus retargets, and published the wrong number.
+
+    The addressless campus hub paints ``walking to Penn campus @ None`` -- it
+    is nowhere in particular, so its building is ``""``, which
+    ``_same_place`` treats as matching anything.
+    """
+    m = _WALK_ACT.match(act)
+    if not m:
+        return None
+    place, address = m.group(1), m.group(2)
+    parts = address.split(":")
+    return place, (parts[1] if address != "None" and len(parts) >= 3 else "")
+
+
+def _same_place(a: str, b: str) -> bool:
+    """Two walk targets naming one building. ``""`` -- the hub -- matches all."""
+    return not a or not b or a == b
 
 
 def summarise(run_id: str, runs_dir: pathlib.Path, usage: dict | None) -> dict:
@@ -551,6 +585,39 @@ def self_check() -> None:
     # An agent who never walks contributes nothing, and a missing agent entry is
     # tolerated (frames from a run that added a resident mid-way).
     assert _arrived_then_departed([{"Cy": {"act": "reading @ x"}}, {}]) == {}
+
+    # #850: the classifier primitive. Every comparison is on the ADDRESS -- see
+    # _walk_target for why display names cannot be reduced and compared, which
+    # is how the published batch-5 split was wrong the first time.
+    vp_room = (
+        "walking to Van Pelt — Moelis Reading Room @ "
+        "UPenn:Van Pelt Library:Moelis Family Grand Reading Room"
+    )
+    assert _walk_target(vp_room) == (
+        "Van Pelt — Moelis Reading Room",
+        "Van Pelt Library",
+    ), _walk_target(vp_room)
+    # THE TRAP: these two display names share no prefix, but they are one
+    # building. Reducing "Van Pelt — Moelis Reading Room" to "Van Pelt" and
+    # comparing it to "Van Pelt Library" scores this as a cross-campus retarget.
+    vp = "walking to Van Pelt Library @ UPenn:Van Pelt Library:lobby"
+    assert _walk_target(vp) == ("Van Pelt Library", "Van Pelt Library")
+    assert _same_place(_walk_target(vp_room)[1], _walk_target(vp)[1])
+    # The addressless campus hub is nowhere in particular: it matches anything.
+    hub = "walking to Penn campus @ None"
+    assert _walk_target(hub) == ("Penn campus", "")
+    assert _same_place("", "Houston Hall") and _same_place("Houston Hall", "")
+    # Two genuinely different buildings do not match.
+    assert not _same_place("Van Pelt Library", "Houston Hall")
+    # Not a walk at all, and an address this scanner does not recognise (fewer
+    # than three segments) -- the latter compares as "unknown", never as a
+    # match, so an unfamiliar world over-reports retargets rather than hiding
+    # oscillation.
+    assert _walk_target("reading @ UPenn:Van Pelt Library:lobby") is None
+    assert _walk_target("walking to Elsewhere @ flat-address") == (
+        "Elsewhere",
+        "",
+    ), _walk_target("walking to Elsewhere @ flat-address")
 
     print("self-check OK")
 
