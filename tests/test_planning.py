@@ -157,6 +157,28 @@ def test_stop_schedule_entry_carries_furniture():
     )
 
 
+def test_stop_schedule_entry_carries_start_hour():
+    # #821: a stop the planner pinned to a clock hour keeps that anchor across
+    # the plan-commit round-trip, so the arithmetic that has to land it on the
+    # hour has something to check itself against.
+    stop = Stop("Irvine Auditorium", "the guest lecture", "🎤", 60, start_hour=10)
+    entry = stop.to_schedule_entry()
+    assert entry["start_hour"] == 10
+    assert Stop.from_schedule_entry(entry) == stop  # rebuilt loss-free
+
+    # An unpinned stop emits NO `start_hour` key -- byte-identical to its
+    # authored spec, which is what keeps the mock bake unchanged.
+    bare = Stop("Johnson Park", "a walk").to_schedule_entry()
+    assert "start_hour" not in bare
+    assert Stop.from_schedule_entry(bare).start_hour is None
+
+    # Midnight is hour 0, which is falsy: a truthiness emit guard would drop it
+    # silently. to_schedule_entry tests `is not None` precisely for this.
+    midnight = Stop("Van Pelt Library", "an all-nighter", steps=60, start_hour=0)
+    assert midnight.to_schedule_entry()["start_hour"] == 0
+    assert Stop.from_schedule_entry(midnight.to_schedule_entry()) == midnight
+
+
 def test_dailyplan_primitive_round_trip_preserves_furniture():
     # #603: furniture survives DailyPlan serialization too (to_primitive stores
     # it via asdict; from_primitive's Stop(**s) reads it back).

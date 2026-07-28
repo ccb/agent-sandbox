@@ -1119,9 +1119,10 @@ class PennStepper:
             # stops against the world's full location set and bounds the day to
             # the run's clock window; both are inert for the mock planner.
             # Note: these ~3 planning calls/agent fire here at attach time,
-            # before the first tick()'s over_budget() gate -- a one-time 3N
-            # spend that can precede (not skip) the budget ceiling; the next
-            # tick catches it.
+            # before the first tick()'s over_budget() gate -- a one-time spend of
+            # up to 4N (#821 adds one corrective re-ask for an agent whose plan
+            # can't reach a stop it pinned to a clock hour) that can precede (not
+            # skip) the budget ceiling; the next tick catches it.
             planner_client=self.planner_client,
             location_names=frozenset(loc["name"] for loc in self.world.locations),
             clock=self.clock,
@@ -1478,6 +1479,17 @@ class PennStepper:
                 "co_settled_pair_steps": self._co_settled_total,
                 "by_pair": self._by_pair_json(),
                 "conversations": self._conversations_total,
+                # #819/#825: whether a zero here means anything. `counted` is
+                # False under the mock brain (llm_client is None), which never
+                # counts co-settling at all -- so its permanent 0 is "not
+                # measured", not a drought. `resumed` is True when this process
+                # adopted a mid-day run, restarting the accumulators at 0 -- a
+                # zero then is "not fully observed", not "never happened". Both
+                # mirror the finish-warning gate below (which stays silent in
+                # exactly these two cases), so the dashboard can tell a real
+                # #795 drought from the two non-signals instead of guessing.
+                "counted": self.llm_client is not None,
+                "resumed": self._resumed,
             },
         }
 
@@ -1499,6 +1511,10 @@ class PennStepper:
             # Same projection the bake uses (penn_world.persona_meta_entry): name/
             # emoji for the sprite + sidebar, persona/home/schedule for the State
             # Details inspector (issue #408), so live and baked meta stay identical.
+            # `schedule` here is the AUTHORED persona YAML the world was seeded
+            # from -- not the day the run executed (#824). Under the default
+            # --plan llm the planner's day replaces it and the two differ; the
+            # executed plan is the manifest's `daily_plans` (_store_manifest).
             "personas": [persona_meta_entry(p) for p in self.world.personas],
             # The t=0 seed social graph, already validated/normalized by
             # penn_world.relationships_meta at build time -- the same list the
@@ -1538,6 +1554,36 @@ class PennStepper:
         data.pop("embedding", None)
         return data
 
+    def _plans_for_manifest(self) -> dict:
+        """Each agent's ``DailyPlan``, as of this manifest write (#824).
+
+        ``planner_sources`` says *where* each day came from; this says *what it
+        is* -- the stops the step loop walks, serialized through the plan's own
+        ``to_primitive()`` (the #298 rule: one formatter, so the manifest, the
+        baked ``daily_plan.json`` and ``GET /agents/{name}/plan`` can't drift).
+
+        This is NOT ``personas[].schedule`` in the meta block above, which is
+        the authored persona YAML the world was seeded from. Under the default
+        ``--plan llm`` the planner writes a fresh day that never lands back in
+        ``world.personas``, so before this the run record showed the seed
+        schedule beside ``planner_sources: llm`` and read as if it were the
+        plan -- which cost #821 two wrong revisions.
+
+        **Which plan you get.** ``_store_manifest`` is stamped after
+        ``attach_agents`` (the t=0 generated day) and again at ``_finish_run``,
+        so a run that finished records the day the agent ENDED with. Read
+        ``revision`` to tell the two apart: 0 means the planner's day was never
+        touched, >0 means ``maybe_revise_plan`` rewrote the unstarted tail that
+        many times and this is no longer what the planner first produced. A run
+        killed before finish keeps the t=0 stamp (its row stays "running").
+        """
+        plans = {}
+        for name, char in self.chars.items():
+            plan = getattr(char.agent, "plan", None) if char.agent else None
+            if plan is not None:
+                plans[name] = plan.to_primitive()
+        return plans
+
     def _store_manifest(self) -> dict:
         """The manifest persisted to the store: the handshake meta() plus the
         provenance a re-run needs (#715). Kept OFF meta() itself so the live
@@ -1564,6 +1610,12 @@ class PennStepper:
             # Per-persona plan provenance (#787): {name: "llm"|"static"}. The
             # plan_mode above is the request; this is what each agent got.
             "planner_sources": self._planner_sources,
+            # What each agent actually planned (#824): {name:
+            # DailyPlan.to_primitive()}, carrying `revision` so a reader can
+            # tell a never-revised day from a replanned one. See
+            # _plans_for_manifest -- and note this, NOT `personas[].schedule`
+            # above, is the run's plan.
+            "daily_plans": self._plans_for_manifest(),
             # The step BUDGET this run was launched with -- not how many steps
             # it actually took (that is the row's `steps`). meta() deliberately
             # omits it, but a re-run needs it (#787): LLMPlanner bounds the day
@@ -1627,13 +1679,20 @@ class PennStepper:
             "knobs": {"defaults": defaults, "current": current},
             "brains": brains,
             # The planner knob (#787). `plans` is the accepted vocabulary and
-            # `run.plan` the RESOLVED value the current brain would run, so the
-            # setup screen can show "llm" for an auto+llm-brain session without
-            # having to re-derive the auto rule client-side.
+            # `run.plan` the RESOLVED value the current brain would run. The
+            # setup screen now re-derives the auto rule client-side anyway
+            # (config_body.effective_plan) -- it has to, because the brain
+            # dropdown moves the resolved planner without a round-trip -- so
+            # `run.plan` here is just the initial resolved value, not the reason
+            # the client can avoid re-deriving.
             "plans": ["auto", "schedule", "llm"],
             "run": {
                 "brain": self._brain_name(),
                 "plan": self.plan_mode,
+                # The RAW request (#791): "auto" until someone opts out. The
+                # setup screen defaults its dropdown to this, so an untouched
+                # dropdown truthfully means "keep the session's request".
+                "plan_request": self._plan_mode_flag,
                 "steps": self.num_steps,
                 "stop_time": self._stop_time(),
                 "max_cost": self.ledger.max_cost_usd,
@@ -1791,6 +1850,10 @@ class PennStepper:
             # The RESOLVED planner (#787), matching `brain` above -- what the
             # run will actually do, not the "auto" that was asked for.
             "plan": self.plan_mode,
+            # ...and the "auto" (or explicit value) that WAS asked for (#791),
+            # so a saved run's re-run seed reproduces the request rather than
+            # freezing the resolution.
+            "plan_request": self._plan_mode_flag,
             "sim_config": self._sim_config_for_manifest(),
             "run": {
                 "steps": self.num_steps,
@@ -2011,7 +2074,13 @@ class PennStepper:
                 f"compare."
             )
         if self.run_store is not None and self._run_id is not None:
-            self.run_store.update_run(self._run_id, status="finished")
+            # Re-stamp the manifest as well as the status: `daily_plans` (#824)
+            # is only final once the day is over, since maybe_revise_plan can
+            # rewrite an agent's unstarted tail at any tick. Everything else in
+            # the blob is build-time constant, so this changes nothing else.
+            self.run_store.update_run(
+                self._run_id, status="finished", manifest=self._store_manifest()
+            )
             self._write_run_record()
         self._run_finished = True
 

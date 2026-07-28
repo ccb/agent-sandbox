@@ -197,16 +197,23 @@ stalled agent is spottable at a glance, and the agent's own slice of the
 request log — under a run strip with **Start / Stop / Reset buttons** (the
 backend's resume/pause/reset controls, so you can drive the whole sim from
 this page and watch the calls instead of the Godot map), the exact run totals,
-the remaining budget (from one `GET /usage` read at connect), and the driving
-model. Agents seen on the stream but missing from the roster get their own
+the remaining budget, this run's **social opportunity** (co-settled pair-steps +
+conversations, #795/#819), and the driving model. The budget and social counters
+are seeded by one `GET /usage` read at connect and then ride the live feed's
+`run_usage` (below), so they move with the run and clear on reset without a
+second poll. Agents seen on the stream but missing from the roster get their own
 cells, and calls with no `actor` land in an *Unattributed* catch-all, so the
 dashboard works pointed at any live backend.
 
 How it works: [`src/useLive.ts`](src/useLive.ts) reads the `GET /live`
-handshake once (the world's replay-meta shape), then polls the backend's
-change feed (`GET /events?since=<cursor>`) and keeps the latest `frame` and
-`status` records plus every `engine` record whose payload is
-`kind: "llm_call"` — the wire contract is documented in
+handshake once (the world's replay-meta shape) plus one `GET /usage` for the
+opening budget/social snapshot, then polls the backend's change feed
+(`GET /events?since=<cursor>`) and keeps the latest `frame` and `status`
+records plus every `engine` record whose payload is `kind: "llm_call"`. The
+`frame` record (and the `reset` status record) also carries `run_usage` — the
+run-scoped call/cost counters and the #795 social block — which the reducer
+merges over the handshake snapshot, so those counters stay live off the one
+feed rather than a separate `/usage` poll. The wire contract is documented in
 [`backend/README.md`](../backend/README.md). The backend's CORS already
 allows any localhost origin, so the dev server needs no proxy.
 

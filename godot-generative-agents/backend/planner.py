@@ -155,9 +155,25 @@ MINUTE_TOOL = {
                                 "to get here is charged separately, on top of this."
                             ),
                         },
+                        # #821: the hourly level already pinned some stops to a
+                        # clock hour; without somewhere to put that hour it
+                        # survived into this level as prose only, and the
+                        # arithmetic that has to land the stop on it went
+                        # unchecked. Declared here so the model can hand the
+                        # anchor back and _anchor_correction can verify it.
+                        "start_hour": {
+                            "type": "integer",
+                            "description": (
+                                "Hour of day (0-23) this stop must BEGIN at, "
+                                "copied from your hourly plan. Set it only for a "
+                                "stop pinned to a clock time (a lecture, a "
+                                "meeting); omit it for everything else."
+                            ),
+                        },
                     },
-                    # emoji/minutes stay genuinely optional (missing minutes means
-                    # "stay put"), so this tool is best-effort, not OpenAI strict
+                    # emoji/minutes/start_hour stay genuinely optional (missing
+                    # minutes means "stay put", missing start_hour means "no fixed
+                    # time"), so this tool is best-effort, not OpenAI strict
                     # (#357) -- forcing every field required would change that
                     # meaning. additionalProperties:false still tightens
                     # validation; the arguments are type-checked either way.
@@ -204,6 +220,15 @@ def median_travel_minutes(world_map, addresses, clock) -> int | None:
     return clock.minutes_for_steps(median_tiles) or None
 
 
+# How far past its pinned hour a stop may be projected to start before the plan
+# is sent back for a fix (#821). A calibration knob, not a magic number: it sits
+# on top of a travel estimate that is deliberately a *lower* bound
+# (median_travel_minutes above), so the projection already errs early and this
+# only has to absorb the wobble. Raise it if real runs re-ask on plans that turn
+# out fine; lower it if late arrivals still get through.
+_ANCHOR_TOLERANCE_MINUTES = 15
+
+
 class LLMPlanner:
     """Generate and revise a day's plan with a real model (design doc §6-§9).
 
@@ -219,6 +244,14 @@ class LLMPlanner:
     dropped before it reaches the schedule -- never the parser. With no
     ``known_places`` given, validation is skipped (the caller passes the world's
     location names; tests may omit them).
+
+    The minute level is checked twice over, because a stop can be perfectly
+    well-formed and still wrong: :meth:`_anchor_correction` re-does the model's
+    clock arithmetic against the hour it pinned the stop to, and sends the plan
+    back once with the numbers when the stop provably can't be reached in time
+    (#821). Only ``generate`` runs that check -- ``revise`` shares the parsing but
+    not the premise, since a revised tail starts from wherever the agent has
+    actually got to, not from the window's opening time.
     """
 
     def __init__(
@@ -312,10 +345,9 @@ class LLMPlanner:
     ) -> list[HourBlock]:
         outline = "; ".join(f"{b.label}: {b.summary}" for b in day) or "(none)"
         hours_hint = ""
-        if self.clock is not None and self.num_steps is not None:
-            hours = [h for _, h in self.clock.hour_starts(self.num_steps)]
-            if hours:
-                hours_hint = f"Plan only these hours of the day: {hours}.\n"
+        hours = self._window_hours()
+        if hours:
+            hours_hint = f"Plan only these hours of the day: {hours}.\n"
         user = (
             f"{persona_text}\n{self._window_line()}{self._memory_line(mem)}"
             f"Your day outline: {outline}.\n"
@@ -352,7 +384,21 @@ class LLMPlanner:
             f"Your hourly plan: {plan}.\n{self._places_line()}"
             "Turn it into concrete stops."
         )
-        return self._minute_from_user(user)
+        stops = self._minute_from_user(user)
+        # #821: the model just did clock arithmetic in its head. Check it, and
+        # hand back the numbers if it doesn't work out. Deliberately after
+        # _minute_from_user, so the budget is spent on the stops that survived
+        # validate_stops rather than on ones already dropped.
+        correction = self._anchor_correction(stops)
+        if correction:
+            # ponytail: one corrective round, and the answer is taken as-is --
+            # re-checking it would mean looping against a paid call. If real runs
+            # show the retry missing too, re-check once more before squeezing the
+            # durations deterministically (planning.even_step_split is right
+            # there), but a silent squeeze invents stop lengths the model never
+            # chose, which is what #795 argued against.
+            stops = self._minute_from_user(user + correction) or stops
+        return stops
 
     def _minute_from_user(self, user: str) -> list[Stop]:
         result = self._call(user, MINUTE_TOOL)
@@ -387,11 +433,103 @@ class LLMPlanner:
                     activity=activity,
                     emoji=s.get("emoji"),
                     steps=steps,
+                    # #821: kept raw. _anchor_correction decides what counts as
+                    # a usable hour with one set-membership test, which also
+                    # rejects a bool, a 99 and a -1 -- so there is nothing to
+                    # guard here.
+                    start_hour=s.get("start_hour"),
                 )
             )
         if self.known_places:
             stops, _dropped = validate_stops(stops, self.known_places)
         return stops
+
+    def _anchor_correction(self, stops: list[Stop]) -> str:
+        """Say why a pinned stop can't be reached on time, or ``""`` if it can.
+
+        Stops execute back-to-back from the window's opening time, so a stop the
+        hourly level pinned to a clock hour is reachable only if the dwell before
+        it, plus the walks between, fits in the gap. That is arithmetic the model
+        was asked to do in its head (#795) and which nothing checked: in a live
+        run 96 minutes of stops plus three campus walks put a 10:00 lecture at
+        10:56, and the agent never arrived (#821).
+
+        Deliberately a *lower* bound on arrival. Travel is a median
+        (:func:`median_travel_minutes`), consecutive stops at the same place are
+        charged no walk at all, and the first walk -- home to the first stop -- is
+        not charged either, because a doorstep step is nothing like a
+        cross-campus one. So this reports only "late even optimistically", never
+        "early": an early projection carries no information when the real walk is
+        longer than the estimate, and re-asking on one would spend a call to make
+        a fine plan worse.
+
+        Only the first *offending* anchor is reported: the later ones cascade
+        from it, and fixing the first re-flows everything after it anyway. An
+        anchor the plan does meet is skipped, never a stopping point -- the
+        model tags each clock-pinned stop it has, and the earliest tag is
+        usually the window's opening hour, which is trivially on time.
+        """
+        # No clock means `minutes` were read as steps (see _minute_from_user),
+        # so there is no wall clock to be late against.
+        if self.clock is None or self.num_steps is None:
+            return ""
+        hours = set(self._window_hours())
+        travel = self.travel_minutes or 0  # None on the run_simulation path
+        opening = self.clock.time_at(0)
+        opening_minute = opening.hour * 60 + opening.minute
+        for i, stop in enumerate(stops):
+            # Unpinned (None), or pinned to an hour outside the run -- a model
+            # error a re-ask can't repair. One membership test also disposes of
+            # a bool, a 99 and a -1, so nothing here needs a type guard.
+            if stop.start_hour not in hours:
+                continue
+            dwell, walks = 0, 0
+            for k, before in enumerate(stops[:i]):
+                if before.steps is None:
+                    # "Stay for the rest of the day" before an anchored stop
+                    # doesn't make it late, it makes it never happen -- and
+                    # minutes_for_steps(None) would raise straight out of
+                    # generate(), which attach_agents calls unguarded.
+                    # Named, not numbered: this list is post-validate_stops, so
+                    # an ordinal here can point at the wrong stop in the list
+                    # the model actually wrote.
+                    return (
+                        f'\nThat does not work: the stop "{before.activity}" at '
+                        f"{before.place} has no `minutes`, which means staying "
+                        f'there for the rest of the day, so "{stop.activity}" '
+                        f"at {stop.place} -- pinned to {stop.start_hour:02d}:00 "
+                        f"-- never happens. Give every stop before it a "
+                        f"duration in minutes.\n"
+                    )
+                dwell += self.clock.minutes_for_steps(before.steps)
+                if stops[k + 1].place != before.place:
+                    walks += travel  # consecutive stops at one place: no walk
+            arrival = opening_minute + dwell + walks
+            anchor = stop.start_hour * 60
+            if anchor < opening_minute:
+                # That hour began before the run did, so it means tomorrow's.
+                # Rolling it forward keeps a window spanning midnight honest
+                # without a case of its own, and makes a run that opened
+                # mid-hour (08:30) read its own opening hour as far-early
+                # rather than 30 minutes late -- an anchor no re-ask can meet.
+                anchor += 1440
+            # Plain subtraction: a circular difference would wrap an overrun of
+            # more than 12 hours around into "early" and wave it through.
+            late = arrival - anchor
+            if late <= _ANCHOR_TOLERANCE_MINUTES:
+                continue
+            return (
+                f'\nThat does not work: "{stop.activity}" at {stop.place} is '
+                f"pinned to {stop.start_hour:02d}:00, but the stops before it "
+                f"total {dwell} minutes and "
+                f"the walks between them cost at least {walks} more, so you "
+                f"would only get there about "
+                f"{(arrival // 60) % 24:02d}:{arrival % 60:02d}. You have about "
+                f"{max(0, dwell - late)} minutes of stop time to spend before "
+                f"it. Redo the stops -- shorten them, or drop one -- and keep "
+                f"start_hour on the pinned stop.\n"
+            )
+        return ""
 
     # -- small seam helpers ---------------------------------------------------
 
@@ -427,6 +565,18 @@ class LLMPlanner:
         if not self.known_places:
             return ""
         return f"Known places: {', '.join(sorted(self.known_places))}.\n"
+
+    def _window_hours(self) -> list[int]:
+        """The hours of the day this run actually covers, or ``[]``.
+
+        One definition, two readers: the hourly prompt tells the model to plan
+        only these, and :meth:`_anchor_correction` refuses to act on a pinned
+        hour outside them. Empty unless both a clock and a run length were given
+        (tests may omit them), which is also the signal that there is no window
+        to check against."""
+        if self.clock is None or self.num_steps is None:
+            return []
+        return [h for _, h in self.clock.hour_starts(self.num_steps)]
 
     def _window_line(self) -> str:
         """Tell the model the clock window the run covers, so it plans only that.

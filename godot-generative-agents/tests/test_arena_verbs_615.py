@@ -316,9 +316,12 @@ def _spy_memory(char):
     seen = {}
     orig = char.agent.memory.add_observation
 
-    def spy(text, turn=0, importance=1.0):
-        seen["text"], seen["importance"] = text, importance
-        return orig(text, turn=turn, importance=importance)
+    # **kw, not an enumerated signature: `perceive` also calls add_observation
+    # with actor= and source_event_ids=, and enumerating the kwargs means every
+    # future one breaks this spy (as tags= already did once).
+    def spy(text, **kw):
+        seen["text"], seen["importance"] = text, kw.get("importance", 1.0)
+        return orig(text, **kw)
 
     char.agent.memory.add_observation = spy
     return seen
