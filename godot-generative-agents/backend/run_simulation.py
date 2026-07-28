@@ -33,6 +33,7 @@ from text_adventure_games.reporting import Channel, Message, default_renderer
 from text_adventure_games.usage import UsageLedger
 
 from .cognition import (
+    at_scheduled_stop,
     attach_agents,
     maybe_converse,
     maybe_react,
@@ -375,8 +376,9 @@ def step(
             # ponytail: only a performed activity or a conversation credits a
             # stop -- an agent frozen by repeated *blocked* actions still never
             # advances here. Upgrade: a general stop deadline, rejected for now
-            # (bake-drift risk, and stop_since re-anchors on any arrival so it
-            # wouldn't have fixed the reported agent; see the design spec's
+            # (bake-drift risk alone -- #826 changed stop_since to re-anchor
+            # only on arrival at the stop's own place, so the clock now does
+            # keep running for the reported agent; see the design spec's
             # "Rejected: a general stop deadline").
             if st.get("on_plan", True):
                 if char.agent.schedule.advance():
@@ -387,11 +389,23 @@ def step(
                     st["stop_since"] = step_idx
                 st["perform_until"] = None
             else:
-                # Deviation completed: keep the pointer, un-latch, re-anchor the
-                # elapsed clock so the next decision starts fresh.
+                # Deviation completed: keep the pointer, un-latch -- and keep the
+                # elapsed clock running too.
+                #
+                # #826: this used to re-anchor `stop_since` here. The pointer has
+                # NOT moved (that's the whole meaning of this branch), so
+                # restarting its clock claimed a stop had just become current
+                # when it had been current all along -- undoing, for any agent
+                # that actually *did* something off-plan, the arrival guard
+                # below. That is precisely the reported agent: Priya performed a
+                # coffee errand at the wrong place every time she got there, so
+                # her neglected 10-minute stop reported 0 min elapsed for 2 h
+                # 15 min. `settle_after_dead_talk` (#689) routes through here
+                # too, so a merely *dropped* talk -- at her own scheduled stop --
+                # also wiped it. Unreachable under the mock, which never
+                # deviates and never converses, so the bake is byte-identical.
                 st["performing"] = False
                 st["perform_until"] = None
-                st["stop_since"] = step_idx
 
         if not st["path"] and not st["performing"] and not st.get("conversing"):
             due.append(name)
@@ -582,10 +596,9 @@ def step(
                     # stop's furniture is for the wrong place, so drop it. The
                     # mock only ever travels to its scheduled stop, so it keeps
                     # the hint -> byte-identical.
-                    stop_place = getattr(char.agent.schedule, "destination", None)
                     furniture = (
                         getattr(char.agent.schedule, "furniture", None)
-                        if dest is not None and dest.name == stop_place
+                        if at_scheduled_stop(char)
                         else None
                     )
                     st["path"] = (
@@ -619,10 +632,7 @@ def step(
                     # activity at the right place is a believability matter for
                     # the #584 eval, not a pacing desync). A place mismatch is a
                     # deviation (handled by Task 4's advance gating + revision).
-                    stop_place = getattr(schedule, "destination", None)
-                    matched = (
-                        char.location is not None and char.location.name == stop_place
-                    )
+                    matched = at_scheduled_stop(char)
                     st["on_plan"] = matched
                     activity = char.get_property("activity") or "spending time"
                     if not matched:
@@ -682,10 +692,7 @@ def step(
                     # happens on exactly these drink commands) flips the health
                     # cue here rather than via a frame-time override.
                     schedule = char.agent.schedule
-                    stop_place = getattr(schedule, "destination", None)
-                    matched = (
-                        char.location is not None and char.location.name == stop_place
-                    )
+                    matched = at_scheduled_stop(char)
                     st["pron"] = _resting_pron(char, schedule, matched, name, emoji)
                     activity = char.get_property("activity") or "spending time"
                     where = char.location.tile_address if char.location else "?"
@@ -737,7 +744,18 @@ def step(
                 # "how long on this stop" counts time AT the stop --
                 # commensurate with the planned minutes, which budget the
                 # activity itself, not the walk there.
-                st["stop_since"] = step_idx
+                #
+                # #826: only when this arrival is AT the current stop's place.
+                # Re-anchoring on EVERY arrival meant `elapsed` was 0 on every
+                # decide that followed a walk, so the "you have been on this
+                # stop for N min" clause never rendered for a traveling agent --
+                # and an agent alternating between two errands could never see
+                # that its 10-minute coffee run had been going for two hours.
+                # The mock only ever travels to its scheduled stop, so this
+                # guard is always true under the mock and the bake is
+                # byte-identical.
+                if at_scheduled_stop(char):
+                    st["stop_since"] = step_idx
 
         frame[name] = {
             "movement": [int(st["tile"][0]), int(st["tile"][1])],
