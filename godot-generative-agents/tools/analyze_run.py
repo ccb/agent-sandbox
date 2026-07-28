@@ -350,6 +350,8 @@ def summarise(run_id: str, runs_dir: pathlib.Path, usage: dict | None) -> dict:
     sec_per_step = spm if spm_ok else 10
     turnarounds = _turnarounds(frames, sec_per_step, str(manifest.get("start") or ""))
     thrash = dict(sorted(collections.Counter(e["agent"] for e in turnarounds).items()))
+    retargets = [e for e in turnarounds if e["kind"] == "retarget"]
+    abandoned = [e["abandoned_minutes"] for e in retargets]
 
     out = {
         "run_id": run_id,
@@ -373,12 +375,22 @@ def summarise(run_id: str, runs_dir: pathlib.Path, usage: dict | None) -> dict:
         "walking_share": round(walking / agent_frames, 4) if agent_frames else 0.0,
         "sec_per_step": sec_per_step,
         "sec_per_step_source": "manifest.json" if spm_ok else "default (no manifest)",
-        # #826: arrivals that immediately departed again -- a walk segment
-        # followed by another walk with no arrival between. 20 across #760
-        # batch 4 (Priya 4, Mateo 16); expect ~0 once the decide seam tells an
-        # agent what it just did and what a walk costs.
+        # Arrivals that immediately departed again -- a walk segment followed
+        # by another walk with no arrival between. 20 across #760 batch 4
+        # (Priya 4, Mateo 16). #850: the combined total is NOT a criterion for
+        # either issue, because a fix to either mechanism moves it in either
+        # direction -- read the split below.
         "arrived_then_departed": thrash,
-        "arrived_then_departed_total": sum(thrash.values()),
+        "arrived_then_departed_total": len(turnarounds),
+        # #849: hops between a building and its own sub-places, or on and off
+        # the addressless campus hub.
+        "same_place_total": len(turnarounds) - len(retargets),
+        # #826: legs abandoned for a genuinely different building. Its
+        # acceptance test is a per-event ceiling on abandoned_minutes_max.
+        "retarget_total": len(retargets),
+        "retarget_abandoned_minutes_max": max(abandoned, default=0),
+        "retarget_abandoned_minutes_sum": sum(abandoned),
+        "turnarounds": turnarounds,
         # Halved: each conversation is seen once per participant.
         "conversations": conversations // 2 if conversations > 1 else conversations,
         "conversations_agent_sided": conversations,
@@ -462,6 +474,18 @@ def render(s: dict) -> str:
             )
             if s["arrived_then_departed"]
             else ""
+        ),
+        f"              {s['same_place_total']} same-place oscillation (#849)"
+        f"  |  {s['retarget_total']} cross-building retarget (#826),"
+        f" worst abandoned leg {s['retarget_abandoned_minutes_max']} min,"
+        f" {s['retarget_abandoned_minutes_sum']} min total",
+        *(
+            f"                {e['clock']}  {e['agent']}: {e['from']} -> {e['to']}"
+            f"  ({e['abandoned_minutes']} min abandoned)"
+            for e in sorted(
+                (t for t in s["turnarounds"] if t["kind"] == "retarget"),
+                key=lambda e: -e["abandoned_minutes"],
+            )[:10]
         ),
         f"  talk_to     {s['talk_to_share']:.1%} of {s['decision_count']} decisions"
         f"   ({s['talk_to_time_share']:.1%} of agent-time)",
@@ -735,6 +759,30 @@ def self_check() -> None:
             '{"sec_per_step": 10, "start": "2023-02-13 08:00:00"}', encoding="utf-8"
         )
         assert _load_manifest(run_dir)["sec_per_step"] == 10
+
+    # #850: the split has to survive summarise() -> render(), not just the
+    # classifier -- the #795 by_pair bug was in render() and a function-level
+    # assert missed it. Reuses the four-frame fixture above.
+    with tempfile.TemporaryDirectory() as tmp:
+        runs_dir = pathlib.Path(tmp)
+        run_dir = runs_dir / "run-split"
+        run_dir.mkdir()
+        (run_dir / "frames.jsonl").write_text(
+            "".join(json.dumps(f) + "\n" for f in split), encoding="utf-8"
+        )
+        (run_dir / "manifest.json").write_text(
+            '{"sec_per_step": 60, "start": "2023-02-13 08:00:00"}', encoding="utf-8"
+        )
+        s = summarise("run-split", runs_dir, usage=None)
+        assert s["arrived_then_departed_total"] == 4, s
+        assert s["same_place_total"] == 3, s
+        assert s["retarget_total"] == 1, s
+        assert s["retarget_abandoned_minutes_max"] == 3, s
+        assert s["retarget_abandoned_minutes_sum"] == 3, s
+        assert s["sec_per_step"] == 60 and s["sec_per_step_source"] == "manifest.json"
+        out = render(s)
+        assert "3 same-place oscillation (#849)  |  1 cross-building" in out, out
+        assert "08:03  Real: Van Pelt Library -> Houston Hall" in out, out
 
     print("self-check OK")
 
