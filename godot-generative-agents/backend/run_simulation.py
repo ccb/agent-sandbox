@@ -737,7 +737,19 @@ def step(
                 # "how long on this stop" counts time AT the stop --
                 # commensurate with the planned minutes, which budget the
                 # activity itself, not the walk there.
-                st["stop_since"] = step_idx
+                #
+                # #826: only when this arrival is AT the current stop's place.
+                # Re-anchoring on EVERY arrival meant `elapsed` was 0 on every
+                # decide that followed a walk, so the "you have been on this
+                # stop for N min" clause never rendered for a traveling agent --
+                # and an agent alternating between two errands could never see
+                # that its 10-minute coffee run had been going for two hours.
+                # The mock only ever travels to its scheduled stop, so this
+                # guard is always true under the mock and the bake is
+                # byte-identical.
+                stop_place = getattr(char.agent.schedule, "destination", None)
+                if char.location is not None and char.location.name == stop_place:
+                    st["stop_since"] = step_idx
 
         frame[name] = {
             "movement": [int(st["tile"][0]), int(st["tile"][1])],

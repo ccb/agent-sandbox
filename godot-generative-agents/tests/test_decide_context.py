@@ -329,6 +329,68 @@ def test_arrival_restamps_stop_since_so_elapsed_excludes_the_walk():
     assert "You have been on this stop" not in user  # walk time excluded
 
 
+def test_stop_since_survives_an_offplan_arrival():
+    # #826: arriving somewhere that is NOT the current stop's place must not
+    # re-anchor stop_since. It used to, on every arrival -- so `elapsed` was 0
+    # on every decide that followed a walk and the "you have been on this stop
+    # for N min" clause never rendered for a traveling agent. An agent
+    # alternating between two errands could then never see that its 10-minute
+    # coffee run had been running for two hours (the reported symptom).
+    class _TwoTileWalk:
+        def walk_path(self, start, address, furniture=None):
+            return [(0, 1), (0, 2)]
+
+    # Her stop is the Cafe; she travels to the Library instead -- a deviation.
+    library = ToolCallResult(
+        text=None,
+        tool_calls=[
+            {
+                "id": "call_1",
+                "name": "travel",
+                "arguments": {"reasoning": "browsing first", "destination": "Library"},
+            }
+        ],
+    )
+    brain = MockLlmClient(
+        tool_calls_responses=[library, _perform_call("reading a novel")]
+    )
+    personas = _personas()  # destination "Cafe", one Cafe stop
+    game, chars = build_world(None, personas, LOCATIONS)
+    attach_agents(chars, personas, llm_client=brain)
+    state = {
+        "Ada": {
+            "tile": (0, 0),
+            "path": [],
+            "pron": "\U0001f4d6",
+            "desc": "waking up",
+            "performing": False,
+            "perform_until": None,
+            "reasoning": "(waking up)",
+            "memories": [],
+            "chat": None,
+            "stop_since": 0,
+        }
+    }
+    common = dict(
+        order=["Ada"],
+        world_map=_TwoTileWalk(),
+        emoji={"Ada": "\U0001f4d6"},
+        clock=SimClock(START),
+    )
+
+    step(game, chars, state, 0, **common)  # decides travel to Library, 1st tile
+    step(game, chars, state, 1, **common)  # last tile popped: off-plan arrival
+    assert chars["Ada"].location.name == "Library"
+    assert state["Ada"]["stop_since"] == 0  # NOT re-anchored to step 1
+
+    # The payoff: because the clock kept running, a decide later in the day now
+    # renders the elapsed clause instead of dropping it. 400 steps at 10 s/step
+    # is 66 min, measured from the preserved stop_since of 0.
+    assert "You have been on this stop for 66 min." in decide_context_block(
+        chars["Ada"].agent, 400, SimClock(START), state["Ada"]["stop_since"]
+    )
+
+
 def test_live_mock_decide_request_carries_the_block():
     # The issue's acceptance, offline: a live decide request body shows time +
     # current stop (+ elapsed once nonzero). Under the mock brain the pacing
