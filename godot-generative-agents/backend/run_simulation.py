@@ -349,63 +349,52 @@ def step(
         ):
             maybe_revise_plan(char, RevisionTrigger(BEHIND_SCHEDULE, step_idx), clock)
 
-        # Has the current activity run its course? (#581) Advance the stop
-        # pointer ONLY if the completed activity happened at the scheduled place
-        # (on-plan). A deviation keeps the pointer -- the scheduled stop never
-        # ran, so advancing would silently skip it -- and just un-latches so the
-        # agent re-decides. The mock is always on-plan, so this is byte-identical.
+        # Has the current activity run its course? (#581) A completed activity
+        # credits the stop it was doing -- wherever it ran (#831). Only a
+        # dead-talk idle credits nothing, because it completed nothing.
         if (
             st["performing"]
             and st["perform_until"] is not None
             and step_idx >= st["perform_until"]
             and not st.get("conversing")
         ):
-            # #778: `on_plan` is now also set by
-            # cognition._credit_stop_for_conversation, so a real conversation
-            # held at the scheduled place advances the pointer exactly like a
-            # performed activity. Byte-identical for the mock, which never
-            # converses.
+            # #831: this used to require an ON-PLAN settle -- one at the scheduled
+            # stop's own place. An agent that did the right activity somewhere
+            # else never credited the stop, so the pointer pinned an errand it had
+            # finished, and `maybe_revise_plan` could not clear it either: its
+            # re-anchor guard keeps every stop up to and including `stop_index`
+            # (cognition.maybe_revise_plan), so the stale stop sat inside the
+            # protected prefix. Advancing is what hands the DEVIATED revision --
+            # already fired at deviation time -- a tail it is allowed to rewrite.
             #
-            # When advance() returns False (this was the last stop) `performing`
-            # stays True with `perform_until` None, so the agent settles at its
-            # final stop for the rest of the run. That is deliberate -- the same
-            # "stay put" end-of-day rule as the perform branch below -- and it is
-            # load-bearing for the mock bake: un-latching here would make the
-            # mock re-decide at its last stop and drift every later frame.
+            # #778: a real conversation held at the scheduled place credits the
+            # stop the same way (cognition._credit_stop_for_conversation), and
+            # `settle_after_dead_talk` (#689) is the one path that clears the
+            # flag. Byte-identical for the mock, which never converses.
             #
-            # ponytail: only a performed activity or a conversation credits a
-            # stop -- an agent frozen by repeated *blocked* actions still never
-            # advances here. Upgrade: a general stop deadline, rejected for now
-            # (bake-drift risk alone -- #826 changed stop_since to re-anchor
-            # only on arrival at the stop's own place, so the clock now does
-            # keep running for the reported agent; see the design spec's
-            # "Rejected: a general stop deadline").
-            if st.get("on_plan", True):
-                if char.agent.schedule.advance():
-                    st["performing"] = False
-                    # A new stop begins now: the decide-context block (#580)
-                    # measures "how long on this stop" from here (re-anchored
-                    # again on arrival if the stop needs a walk).
-                    st["stop_since"] = step_idx
-                st["perform_until"] = None
-            else:
-                # Deviation completed: keep the pointer, un-latch -- and keep the
-                # elapsed clock running too.
-                #
-                # #826: this used to re-anchor `stop_since` here. The pointer has
-                # NOT moved (that's the whole meaning of this branch), so
-                # restarting its clock claimed a stop had just become current
-                # when it had been current all along -- undoing, for any agent
-                # that actually *did* something off-plan, the arrival guard
-                # below. That is precisely the reported agent: Priya performed a
-                # coffee errand at the wrong place every time she got there, so
-                # her neglected 10-minute stop reported 0 min elapsed for 2 h
-                # 15 min. `settle_after_dead_talk` (#689) routes through here
-                # too, so a merely *dropped* talk -- at her own scheduled stop --
-                # also wiped it. Unreachable under the mock, which never
-                # deviates and never converses, so the bake is byte-identical.
+            # ponytail: an agent frozen by repeated *blocked* actions still never
+            # advances here -- a blocked action never latches, so it never reaches
+            # this gate. Upgrade: a general stop deadline, still rejected (bake-
+            # drift risk; see the design spec's "Rejected: a general stop
+            # deadline"). #831 removed the place condition, not this one.
+            credited = st.get("on_plan", True)
+            advanced = credited and char.agent.schedule.advance()
+            # Settling here for the rest of the run is the end-of-day rule, and
+            # the mock bake rests on it -- but it belongs to an agent that
+            # genuinely finished its LAST scheduled stop, not to one that
+            # wandered off after it. Everyone else un-latches and re-decides.
+            done_for_the_day = credited and not advanced and at_scheduled_stop(char)
+            if advanced:
+                # A new stop begins now: the decide-context block (#580) measures
+                # "how long on this stop" from here (re-anchored again on arrival
+                # if the stop needs a walk). Re-anchoring exactly when the pointer
+                # moves is the #826 invariant -- a clock that restarts while the
+                # pointer stands still claims a stop just became current when it
+                # had been current all along.
+                st["stop_since"] = step_idx
+            if not done_for_the_day:
                 st["performing"] = False
-                st["perform_until"] = None
+            st["perform_until"] = None
 
         if not st["path"] and not st["performing"] and not st.get("conversing"):
             due.append(name)
@@ -627,13 +616,15 @@ def step(
                     # the mock only ever emits perform, whose settle is unchanged.
                     st["performing"] = True
                     schedule = char.agent.schedule
-                    # Place-match is the pacing-relevant signal: standing at the
-                    # scheduled stop means this completed that stop (a different
-                    # activity at the right place is a believability matter for
-                    # the #584 eval, not a pacing desync). A place mismatch is a
-                    # deviation (handled by Task 4's advance gating + revision).
+                    # #831: a completed activity credits its stop wherever it
+                    # ran. This flag used to be the place match, so an agent that
+                    # did the right thing somewhere else credited nothing and the
+                    # pointer pinned a finished errand for hours. `matched` stays
+                    # the *place* signal -- it drives the emoji, the furniture
+                    # hint and the deviation revision below -- while the flag the
+                    # pre-pass reads is now "this settle earned the credit".
                     matched = at_scheduled_stop(char)
-                    st["on_plan"] = matched
+                    st["on_plan"] = True
                     activity = char.get_property("activity") or "spending time"
                     if not matched:
                         # Off-plan: let the planner rewrite the stale tail so the

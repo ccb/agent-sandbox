@@ -7,8 +7,9 @@ agent's duration, emoji, and stop-advance. Pins:
   reach the agent without leaking into the routed command string;
 * the step loop honors a model duration (clamped) and emoji, falling back to
   the schedule when absent -- so the mock bake stays byte-identical;
-* ``advance()`` fires only when the activity completed at the scheduled place;
-  a place deviation keeps the pointer and fires one cooldown-guarded revision;
+* ``advance()`` fires whenever a settled activity completed, wherever it ran
+  (#831); a place deviation credits the stop and fires one cooldown-guarded
+  revision, and only a dead-talk idle credits nothing;
 * new duration-bearing verbs settle like ``perform`` while the #300
   instantaneous verbs keep falling through.
 
@@ -256,7 +257,9 @@ def test_model_emoji_wins_and_deviation_falls_to_persona_default():
         clock=_clock(),
         cog=CognitionConfig(),
     )
-    assert state["Ada"]["on_plan"] is False
+    # The two meanings have separated (#831): the stop is credited because the
+    # activity ran, while the emoji still knows this was not the planned place.
+    assert state["Ada"]["on_plan"] is True
     assert state["Ada"]["pron"] == "\U0001f9d1"  # persona default, not the book
 
 
@@ -317,13 +320,21 @@ class RecordingPlanner:
         return plan
 
 
-def test_deviation_keeps_the_pointer_and_fires_one_revision():
-    # Ada scheduled Cafe (steps=2), but the brain performs at The Green (start)
-    # every tick => place deviation. The stop pointer must NOT advance, and
-    # exactly one DEVIATED revision fires within the cooldown window.
+def test_a_deviation_credits_the_stop_and_fires_one_revision():
+    # #831: Ada is scheduled Cafe (steps=2) then Library, but the brain performs
+    # at The Green (where she starts) every tick => a place deviation. The
+    # activity still ran, so the stop is credited and the pointer moves. Before
+    # #831 it did not, and the written plan kept naming an errand she had
+    # finished -- `maybe_revise_plan` could not clear it either, because its
+    # re-anchor guard keeps every stop up to and including `stop_index`, so the
+    # stale stop sat inside the protected prefix. Exactly one DEVIATED revision
+    # still fires (the cooldown suppresses the rest).
     from backend.run_simulation import DEVIATED
 
     persona = _persona(place="Cafe", activity="reading", steps=2)
+    persona["schedule"].append(
+        {"place": "Library", "activity": "studying", "emoji": "\U0001f4d6", "steps": 2}
+    )
     game, chars = build_world(None, [persona], LOCATIONS)
     brain = SequenceBrain([("perform", {"activity": "wandering"})] * 6)
     attach_agents(chars, [persona], llm_client=brain)
@@ -331,7 +342,7 @@ def test_deviation_keeps_the_pointer_and_fires_one_revision():
     ada.agent.planner = RecordingPlanner()  # swap in a recorder
     state = _state()
     clock = _clock()
-    for idx in range(5):  # perform(0), settle, complete@2, re-decide, ...
+    for idx in range(5):  # perform(0), settle, credit+advance@2, re-decide, ...
         step(
             game,
             chars,
@@ -343,8 +354,8 @@ def test_deviation_keeps_the_pointer_and_fires_one_revision():
             clock=clock,
             cog=CognitionConfig(),
         )
-    # Pointer never advanced past the un-executed scheduled stop.
-    assert ada.agent.schedule.stop_index == 0
+    # The activity ran, so its stop was credited -- pointer on the second stop.
+    assert ada.agent.schedule.stop_index == 1
     # Exactly one revision, tagged DEVIATED (cooldown suppressed the rest).
     assert ada.agent.planner.reasons == [DEVIATED]
     assert RevisionTrigger(DEVIATED, 0).reason == "deviated"
@@ -390,7 +401,11 @@ def test_off_plan_perform_without_duration_is_bounded_not_frozen():
     game, ada = _world(llm_client=brain, place="Cafe", steps=None)
     state = _state()
     _run_step(game, {"Ada": ada}, state, 0, _clock())
-    assert state["Ada"]["on_plan"] is False
+    # #831: on_plan now means "credited", not "matched place" -- this settle is
+    # still off-plan (Cafe scheduled, performed at The Green), it's just
+    # credited like any other completed activity. The subject here is the
+    # duration ceiling below, not on_plan.
+    assert state["Ada"]["on_plan"] is True
     # 90-minute ceiling at 10s/step = 540 steps, not None (frozen).
     assert state["Ada"]["perform_until"] == 0 + 540
 
@@ -404,3 +419,35 @@ def test_stray_duration_on_a_non_pacing_verb_is_ignored():
     command = observe_and_decide(game, ada, 0)
     assert command == "travel to Cafe"  # clean -- no "30" spliced in
     assert ada.agent.last_duration_minutes is None
+
+
+def test_a_deviation_at_the_last_stop_unlatches_instead_of_freezing():
+    # #831 corollary. Crediting an off-plan activity routes it through the same
+    # advance() that returns False at the final stop, and what follows is the
+    # deliberate "settle here for the rest of the run" rule the mock bake rests
+    # on. That rule belongs to an agent who genuinely reached its last stop; an
+    # agent that wandered off must re-decide, or one late deviation freezes it
+    # for the whole run. Ada has a single stop (Cafe) and performs at The Green.
+    persona = _persona(place="Cafe", activity="reading", steps=2)
+    game, chars = build_world(None, [persona], LOCATIONS)
+    brain = SequenceBrain([("perform", {"activity": "wandering"})] * 6)
+    attach_agents(chars, [persona], llm_client=brain)
+    ada = chars["Ada"]
+    state = _state()
+    clock = _clock()
+    for idx in range(4):  # perform(0), settle, expire@2 -> re-decide, settle
+        step(
+            game,
+            chars,
+            state,
+            idx,
+            order=["Ada"],
+            world_map=_StubMap(),
+            emoji={"Ada": "\U0001f4d6"},
+            clock=clock,
+            cog=CognitionConfig(),
+        )
+    assert ada.agent.schedule.stop_index == 0  # nothing to advance to
+    # The latch released at step 2 and the brain decided again: a fresh perform
+    # bounded at 2 + schedule.steps. A freeze leaves perform_until at None.
+    assert state["Ada"]["perform_until"] == 4

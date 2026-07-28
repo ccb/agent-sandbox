@@ -393,14 +393,15 @@ def test_stop_since_survives_an_offplan_arrival():
 
 
 def test_stop_since_survives_a_completed_offplan_activity():
-    # #826 review: surviving the off-plan *arrival* is not enough. Completing an
-    # off-plan activity ends in the "deviation completed" branch, which used to
-    # re-anchor stop_since -- so an agent that actually DID something at the
-    # wrong place had its neglected stop's clock reset anyway, which is exactly
-    # the reported agent (she performed a coffee errand every time she arrived).
-    # The pointer has not moved in this branch, so its clock must not restart.
-    # `settle_after_dead_talk` (#689) routes through here too, so this also
-    # covers a merely dropped talk wiping the clock.
+    # #826 review: surviving the off-plan *arrival* is not enough. A settle that
+    # expires without moving the pointer used to re-anchor stop_since anyway, so
+    # a neglected stop's clock was reset while it stood still. The pointer has not
+    # moved in this branch, so its clock must not restart.
+    #
+    # #831 narrowed who reaches it: a completed off-plan activity now credits its
+    # stop and advances, so the only settle left that credits nothing is
+    # `settle_after_dead_talk` (#689) -- a dropped talk, which is the state this
+    # test builds. The invariant under test is unchanged: no advance, no restart.
     personas = _personas()
     brain = MockLlmClient(tool_calls_responses=[_perform_call("reading a novel")])
     game, chars = build_world(None, personas, LOCATIONS)
@@ -411,7 +412,7 @@ def test_stop_since_survives_a_completed_offplan_activity():
             "path": [],
             "pron": "\U0001f4d6",
             "desc": "grabbing coffee",
-            # Mid-deviation: performing something off-plan that expires at 399.
+            # Settled by a dropped talk (#689), expiring at 399: credits nothing.
             "performing": True,
             "on_plan": False,
             "perform_until": 399,
