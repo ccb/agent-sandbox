@@ -73,6 +73,15 @@ def test_price_input_and_output_at_table_rates():
     assert price("claude-haiku-4-5", u2) == pytest.approx(5.0)
 
 
+def test_price_sonnet_5_is_registered_so_the_cost_cap_works():
+    # Sonnet 5 = $3/$15 per 1M tokens. Without a table entry it prices at $0,
+    # which silently disables the max_cost_usd kill-switch on a live run.
+    u_in = Usage("anthropic", "claude-sonnet-5", input_tokens=1_000_000)
+    assert price("claude-sonnet-5", u_in) == pytest.approx(3.0)
+    u_out = Usage("anthropic", "claude-sonnet-5", output_tokens=1_000_000)
+    assert price("claude-sonnet-5", u_out) == pytest.approx(15.0)
+
+
 def test_price_cache_write_and_read_multipliers():
     # Cache write = 1.25x input (5m) / 2x (1h); cache read = 0.10x input.
     write = Usage(

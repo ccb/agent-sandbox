@@ -876,6 +876,11 @@ class LlmConfig:
     # Tool-schema repair (#357): on a schema-violating tool reply, run one bounded
     # repair round feeding the error back. On by default; LLM_SCHEMA_REPAIR=0 off.
     schema_repair: bool = True
+    # Adaptive-thinking effort for Anthropic models on the 4.6+/5 request surface
+    # (Sonnet 5, Opus 4.6+, Fable): "low"|"medium"|"high"|"xhigh"|"max", or None
+    # for the provider default. Ignored by legacy models (Haiku 4.5) and the
+    # OpenAI/mock adapters, which have no effort knob. See AnthropicClient.
+    effort: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -1112,6 +1117,49 @@ class OpenAIClient:
 # LLM_MODEL / LlmConfig.model.
 _DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5"
 
+# Anthropic models on the 4.6+/5 request surface reject a non-default
+# ``temperature`` (400) and take adaptive thinking + ``output_config.effort``
+# in place of the old ``budget_tokens`` knob. Haiku 4.5 and older keep
+# ``temperature`` and have neither. Matched by id prefix so dated snapshots and
+# aliases both resolve.
+_ADAPTIVE_THINKING_PREFIXES = (
+    "claude-sonnet-5",
+    "claude-sonnet-4-6",
+    "claude-opus-4-6",
+    "claude-opus-4-7",
+    "claude-opus-4-8",
+    "claude-fable-5",
+    "claude-mythos-5",
+)
+
+# Adaptive thinking shares the ``max_tokens`` ceiling with the visible reply, so
+# a small decide budget (Agent.max_tokens defaults to 128) would be spent
+# entirely on thinking and truncate the tool call. Floor it when thinking is on.
+_THINKING_MAX_TOKENS_FLOOR = 4096
+
+
+def _uses_adaptive_thinking(model: str) -> bool:
+    """True for Anthropic models whose request surface is adaptive thinking +
+    effort rather than ``temperature`` (Sonnet 5, Opus 4.6+, Fable)."""
+    return any((model or "").startswith(p) for p in _ADAPTIVE_THINKING_PREFIXES)
+
+
+def _anthropic_request_shape(model, max_tokens, temperature, effort):
+    """Return ``(max_tokens, extra_kwargs)`` shaped for the model.
+
+    Legacy models (Haiku 4.5, older) keep ``temperature`` and their caller's
+    ``max_tokens`` unchanged. Adaptive-thinking models drop ``temperature``
+    (a non-default value 400s), add ``thinking={"type": "adaptive"}`` plus an
+    optional ``output_config.effort``, and get ``max_tokens`` floored so the
+    thinking never starves the reply.
+    """
+    if _uses_adaptive_thinking(model):
+        extra = {"thinking": {"type": "adaptive"}}
+        if effort:
+            extra["output_config"] = {"effort": effort}
+        return max(max_tokens, _THINKING_MAX_TOKENS_FLOOR), extra
+    return max_tokens, {"temperature": temperature}
+
 
 class AnthropicClient:
     """Wraps the ``anthropic`` Python SDK (lazy-imported)."""
@@ -1137,6 +1185,7 @@ class AnthropicClient:
         self._models_by_role = (
             dict(config.models_by_role) if config.models_by_role else None
         )
+        self._effort = config.effort
         self._verbose = config.verbose
         self._max_retries = config.max_retries
         self._timeout = config.timeout_sec
@@ -1159,11 +1208,14 @@ class AnthropicClient:
             if self._verbose:
                 print(json.dumps(messages, indent=2))
 
+            req_max_tokens, sampling = _anthropic_request_shape(
+                model, max_tokens, temperature, getattr(self, "_effort", None)
+            )
             kwargs = {
                 "model": model,
                 "messages": chat_messages,
-                "max_tokens": max_tokens,
-                "temperature": temperature,
+                "max_tokens": req_max_tokens,
+                **sampling,
             }
             if system_text:
                 kwargs["system"] = _cacheable_system(system_text)
@@ -1221,11 +1273,14 @@ class AnthropicClient:
                 system_text, chat_messages = _split_anthropic_messages(msgs)
                 if self._verbose:
                     print(json.dumps(msgs, indent=2))
+                req_max_tokens, sampling = _anthropic_request_shape(
+                    model, max_tokens, temperature, getattr(self, "_effort", None)
+                )
                 kwargs = {
                     "model": model,
                     "messages": chat_messages,
-                    "max_tokens": max_tokens,
-                    "temperature": temperature,
+                    "max_tokens": req_max_tokens,
+                    **sampling,
                     "tools": anthropic_tools,
                     "tool_choice": _anthropic_tool_choice(tool_choice),
                 }

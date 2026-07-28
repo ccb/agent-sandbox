@@ -243,7 +243,9 @@ def _resolve_plan_mode(flag: str, llm) -> str:
     return "llm" if _is_paid(llm) else "schedule"
 
 
-def resolve_llm(world_llm, brain, model=None, max_cost=None, model_for=None):
+def resolve_llm(
+    world_llm, brain, model=None, max_cost=None, model_for=None, effort=None
+):
     """Resolve one run's LLM settings: ``None`` for the mock brain, else a dict.
 
     ``--brain mock`` (the default) returns ``None`` -- no client is ever built,
@@ -276,6 +278,8 @@ def resolve_llm(world_llm, brain, model=None, max_cost=None, model_for=None):
         llm["model"] = model
     if max_cost is not None:
         llm["max_cost_usd"] = max_cost
+    if effort is not None:
+        llm["effort"] = effort
     # Per-role model tiering (#368): the YAML llm.models map, with --model-for
     # entries layered on top. Validated here so a typo'd role dies at startup
     # (for both config surfaces), not silently pays the default model.
@@ -827,6 +831,7 @@ class PennStepper:
                 provider="anthropic",
                 model=llm.get("model"),
                 models_by_role=llm.get("models"),
+                effort=llm.get("effort"),
             )
             self.llm_client = self._decide_client()
             self.reflector_client = self._role_client("reflect")
@@ -1730,7 +1735,15 @@ class PennStepper:
             if max_cost is not None and brain != "llm":
                 raise ValueError("max_cost needs the llm brain")
             try:
-                new_llm = resolve_llm(self.world.llm, brain, max_cost=max_cost)
+                # Carry the adaptive-thinking effort across a reset: the world
+                # YAML doesn't declare it (it comes from --effort at boot), so
+                # re-resolving from self.world.llm alone would drop it.
+                new_llm = resolve_llm(
+                    self.world.llm,
+                    brain,
+                    max_cost=max_cost,
+                    effort=(self.llm or {}).get("effort"),
+                )
                 if _is_paid(new_llm):
                     # create_llm_client imports anthropic lazily -- _init_brain
                     # is the first place that actually happens, which is AFTER
@@ -2716,6 +2729,15 @@ def _build_parser() -> argparse.ArgumentParser:
         help="override the llm: block's model for this run (--brain llm only)",
     )
     ap.add_argument(
+        "--effort",
+        choices=("low", "medium", "high", "xhigh", "max"),
+        default=None,
+        help="adaptive-thinking effort for the decide/converse/reflect brain "
+        "(--brain llm only): sends thinking + output_config.effort on Sonnet-5 / "
+        "Opus-4.6+ models (and drops the temperature they 400 on). Ignored by "
+        "Haiku, which has no effort knob. Unset = provider default (no thinking).",
+    )
+    ap.add_argument(
         "--max-cost",
         type=float,
         default=None,
@@ -2891,6 +2913,7 @@ def main() -> int:
         model=args.model,
         max_cost=args.max_cost,
         model_for=_parse_model_for(args.model_for),
+        effort=args.effort,
     )
     if _is_paid(llm):
         # The key exists (resolve_llm gates that); now prove the API accepts
