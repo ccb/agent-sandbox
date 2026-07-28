@@ -273,8 +273,8 @@ which is what the decision needs, is already right.
   unplanned place. A genuine defect (§3) but a separate one: it touches the
   advance gate the mock bake's byte-identity rests on, and `run_simulation.py`
   already carries a deliberate rejection of a general stop deadline. With F1
-  landed the model *sees* the staleness, and the A/B shows it acts on it. File as
-  a follow-up sub-issue of #760.
+  landed the model *sees* the staleness, and the A/B shows it acts on it. Filed
+  as **#831**, a sub-issue of #760.
 
 ## Testing
 
