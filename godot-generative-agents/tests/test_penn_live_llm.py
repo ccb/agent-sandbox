@@ -121,6 +121,29 @@ def test_llm_brain_threads_and_validates_the_tiering_map(monkeypatch):
     assert "models" not in resolve_llm({"models": {}}, "llm")
 
 
+def test_every_effort_level_survives_resolve_llm(monkeypatch):
+    """The five real levels are accepted; anything else dies at startup.
+
+    The tuple feeds the argparse `choices` AND resolve_llm's validator, so a
+    level missing from it is unreachable from every config surface at once --
+    which is how `xhigh` (real since Opus 4.7) was rejected by a server whose
+    own --help advertised the flag.
+
+    Pinned by name, NOT by iterating EFFORT_LEVELS: a loop over the tuple
+    asserts whatever the tuple happens to say and passes just as happily with
+    a level deleted. That tautology is the bug this test exists to catch, and
+    the first draft of it shipped exactly that way.
+    """
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    assert serve_penn.EFFORT_LEVELS == ("low", "medium", "high", "xhigh", "max")
+    world_llm = {"provider": "anthropic", "model": "claude-sonnet-5"}
+    for level in serve_penn.EFFORT_LEVELS:
+        assert resolve_llm(world_llm, "llm", effort=level)["effort"] == level
+    assert "effort" not in resolve_llm(world_llm, "llm")  # unset stays unset
+    with pytest.raises(SystemExit, match="nonsense"):
+        resolve_llm(world_llm, "llm", effort="nonsense")
+
+
 def test_parse_model_for_pairs():
     parse = serve_penn._parse_model_for
     assert parse(["plan=claude-sonnet-4-6", "score=claude-haiku-4-5"]) == {
