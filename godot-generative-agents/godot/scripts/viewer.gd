@@ -89,13 +89,16 @@ const MONTHS := [
 # now". A bubble is this wide (its text wraps and centres inside); position.x =
 # -half that centres it over the sprite.
 const BUBBLE_WIDTH := 210.0
-# Bubble text size, and how far the bubble's top sits above the nameplate.
 const BUBBLE_FONT_SIZE := 18
-const BUBBLE_Y_OFFSET := 78.0
-# The per-agent "thinking…" cue (#551) parks this much further up than the
-# speech bubble, so a mid-decision agent who is also mid-conversation shows
-# both without them overlapping.
-const THINK_Y_EXTRA := 30.0
+# Each floating label is BOTTOM-anchored: its bottom edge is pinned this many px
+# above the sprite head and the box grows UPWARD as text wraps taller, so a long
+# utterance never descends onto the sprite (see scripts/bubble_anchor.gd). The
+# three gaps stagger the labels (dialogue lowest, then thinking, then wish) so
+# the common co-occurring pair — a mid-decision agent who is also mid-conversation
+# — shows both without overlap; a very long line can still reach the tier above
+# on the rare step two are visible at once (tolerated, as before).
+const BUBBLE_BOTTOM_GAP := 80.0   # dialogue speech bubble
+const THINK_BOTTOM_GAP := 135.0   # "thinking…" cue, above a 2-line dialogue bubble
 # A conversation plays back as staggered turn-taking: each line is shown for this
 # many sim steps, by ONLY its speaker, before the reply takes over -- so a
 # back-and-forth reads as a real exchange, not both agents talking at once. Each
@@ -112,12 +115,12 @@ const BUBBLE_MAX_CHARS := 120
 const SPEECH_TEXT_COLOR := Color(0.10, 0.10, 0.12)
 
 # Wish bubble (#622 ActionWish, surfaced #625): a distinct 💭 marker shown over
-# the wishing agent, parked ABOVE the dialogue bubble's slot (BUBBLE_Y_OFFSET)
-# so the two never overlap on the rare step where both fire. Unlike the
-# dialogue bubble's staggered turn-taking playback, a wish is a single flash:
-# it fades in, holds, and fades out over WISH_FADE_STEPS sim steps once
-# triggered (see _update_agent_wish / _refresh_wish_bubble).
-const WISH_BUBBLE_Y_OFFSET := 140.0
+# the wishing agent, bottom-anchored a tier above the dialogue bubble's slot
+# (WISH_BOTTOM_GAP > BUBBLE_BOTTOM_GAP) so the two never overlap on the rare step
+# where both fire. Unlike the dialogue bubble's staggered turn-taking playback, a
+# wish is a single flash: it fades in, holds, and fades out over WISH_FADE_STEPS
+# sim steps once triggered (see _update_agent_wish / _refresh_wish_bubble).
+const WISH_BOTTOM_GAP := 175.0   # 💭 wish bubble, top tier
 const WISH_FADE_STEPS := 8.0
 const WISH_FADE_IN_STEPS := 1.0
 const WISH_FADE_OUT_STEPS := 2.0
@@ -151,6 +154,7 @@ const ActionTally := preload("res://scripts/action_tally.gd")
 const GifEncoder := preload("res://scripts/gif_encoder.gd")
 const ClipExport := preload("res://scripts/clip_export.gd")
 const LiveClipSpan := preload("res://scripts/live_clip_span.gd")
+const BubbleAnchor := preload("res://scripts/bubble_anchor.gd")
 const ThinkingIndicator := preload("res://scripts/thinking_indicator.gd")
 const AgentFanout := preload("res://scripts/agent_fanout.gd")
 const LivePacer := preload("res://scripts/live_pacer.gd")
@@ -1425,19 +1429,16 @@ func _spawn_agent(name: String, index: int) -> void:
 	bubble.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	bubble.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	bubble.custom_minimum_size = Vector2(BUBBLE_WIDTH, 0)
-	# Centre it over the sprite and park it above the nameplate (which sits at
-	# -(foot_lift + half + 50) after the feet-anchor lift); it grows downward but the
-	# clip keeps it short.
-	bubble.position = Vector2(
-		-BUBBLE_WIDTH / 2.0, -(foot_lift + SPRITE_HALF_PX + 50.0 + BUBBLE_Y_OFFSET)
-	)
+	# Bottom-anchored just above the nameplate; _refresh_bubble re-anchors from the
+	# current line's measured height each time it's shown, so it grows upward.
+	_anchor_bubble(bubble, BUBBLE_BOTTOM_GAP)
 	bubble.visible = false
 	node.add_child(bubble)
 
 	# A wish "thought" marker (#622 ActionWish, surfaced #625): a distinct 💭
 	# bubble that flashes over the agent the moment they wish for an action the
 	# game doesn't have. Parked further above the nameplate than the dialogue
-	# bubble (WISH_BUBBLE_Y_OFFSET > BUBBLE_Y_OFFSET) so the two never overlap;
+	# bubble (WISH_BOTTOM_GAP > BUBBLE_BOTTOM_GAP) so the two never overlap;
 	# _update_agent_wish triggers it, _refresh_wish_bubble fades it.
 	var wish_bubble := Label.new()
 	wish_bubble.add_theme_font_size_override("font_size", BUBBLE_FONT_SIZE)
@@ -1446,9 +1447,7 @@ func _spawn_agent(name: String, index: int) -> void:
 	wish_bubble.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	wish_bubble.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	wish_bubble.custom_minimum_size = Vector2(BUBBLE_WIDTH, 0)
-	wish_bubble.position = Vector2(
-		-BUBBLE_WIDTH / 2.0, -(foot_lift + SPRITE_HALF_PX + 50.0 + WISH_BUBBLE_Y_OFFSET)
-	)
+	_anchor_bubble(wish_bubble, WISH_BOTTOM_GAP)
 	wish_bubble.visible = false
 	node.add_child(wish_bubble)
 
@@ -1465,9 +1464,12 @@ func _spawn_agent(name: String, index: int) -> void:
 	think.add_theme_constant_override("outline_size", 4)
 	think.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	think.custom_minimum_size = Vector2(BUBBLE_WIDTH, 0)
-	think.position = Vector2(
-		-BUBBLE_WIDTH / 2.0, -(SPRITE_HALF_PX + 50.0 + BUBBLE_Y_OFFSET + THINK_Y_EXTRA)
-	)
+	# Seed one line of text so its measured height is valid from the first anchor,
+	# then bottom-anchor like the others (this also picks up foot_lift, which the
+	# old fixed offset omitted). Its text is a single line always, so its height —
+	# and thus its bottom-anchored position — is stable while it animates.
+	think.text = "thinking"
+	_anchor_bubble(think, THINK_BOTTOM_GAP)
 	think.visible = false
 	think.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	node.add_child(think)
@@ -2408,6 +2410,19 @@ func _refresh_deciding(name: String) -> void:
 		return
 	var think: Label = _agents[name]["think"]
 	think.visible = _deciding_state.is_deciding(name)
+	if think.visible:
+		_anchor_bubble(think, THINK_BOTTOM_GAP)
+
+
+func _anchor_bubble(label: Label, gap: float) -> void:
+	# Pin `label`'s BOTTOM edge `gap` px above the sprite head so it grows upward
+	# as its wrapped text gets taller, never covering the sprite. foot_lift matches
+	# _make_agent (constant across agents); the head sits at -(foot_lift + SPRITE_HALF_PX).
+	# get_minimum_size() forces the wrapped height to recompute now (vs .size.y,
+	# which can lag a frame after .text changes).
+	var foot_lift := SPRITE_HALF_PX - float(_tile_px)
+	var bottom_y := -(foot_lift + SPRITE_HALF_PX + gap)
+	label.position = BubbleAnchor.top_left(BUBBLE_WIDTH, bottom_y, label.get_minimum_size().y)
 
 
 func _refresh_bubble(name: String, fpos: float) -> void:
@@ -2435,6 +2450,7 @@ func _refresh_bubble(name: String, fpos: float) -> void:
 	if _bubble_idx.get(name, -1) != idx:
 		_bubble_idx[name] = idx
 		bubble.text = String(pair[1])
+	_anchor_bubble(bubble, BUBBLE_BOTTOM_GAP)  # re-anchor for this line's height
 	bubble.visible = true
 	# Ease in at the start of the line and out at its end, for a spoken beat.
 	var within := elapsed - float(idx) * DIALOGUE_LINE_STEPS
@@ -2472,6 +2488,7 @@ func _refresh_wish_bubble(name: String, fpos: float) -> void:
 		bubble.visible = false
 		return
 	bubble.text = String(_wish_text.get(name, ""))
+	_anchor_bubble(bubble, WISH_BOTTOM_GAP)  # re-anchor for this wish's height
 	bubble.visible = true
 	var fade_in := clampf(elapsed / WISH_FADE_IN_STEPS, 0.0, 1.0)
 	var fade_out := clampf((WISH_FADE_STEPS - elapsed) / WISH_FADE_OUT_STEPS, 0.0, 1.0)
