@@ -367,10 +367,11 @@ def step(
             # protected prefix. Advancing is what hands the DEVIATED revision --
             # already fired at deviation time -- a tail it is allowed to rewrite.
             #
-            # #778: a real conversation held at the scheduled place credits the
-            # stop the same way (cognition._credit_stop_for_conversation), and
-            # `settle_after_dead_talk` (#689) is the one path that clears the
-            # flag. Byte-identical for the mock, which never converses.
+            # #778: a real conversation credits the stop the same way
+            # (cognition._credit_stop_for_conversation, wherever it was held --
+            # #831 dropped its place check too), and `settle_after_dead_talk`
+            # (#689) is the one path that clears the flag. Byte-identical for
+            # the mock, which never converses.
             #
             # ponytail: an agent frozen by repeated *blocked* actions still never
             # advances here -- a blocked action never latches, so it never reaches

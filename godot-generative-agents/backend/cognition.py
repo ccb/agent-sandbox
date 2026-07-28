@@ -1129,12 +1129,14 @@ def at_scheduled_stop(char) -> bool:
     """Is ``char`` standing at the place its current schedule stop names?
 
     The one definition of "on plan" (#826 review): the furniture bias, the
-    perform settle's ``on_plan`` flag, the instantaneous-command emoji, the
-    arrival re-anchor and the conversation stop-credit all asked this same
-    question with their own inline copy, so a change to what "at the scheduled
-    stop" means (room-level addresses, a stop with no place) had five places to
-    miss. False when the agent is nowhere, or the stop names no place -- an
-    unplaced stop is not somewhere you can be standing.
+    perform settle's emoji/furniture signal, the instantaneous-command emoji
+    and the arrival re-anchor all ask this same question instead of keeping
+    their own inline copy, so a change to what "at the scheduled stop" means
+    (room-level addresses, a stop with no place) has one place to miss, not
+    several. (The conversation stop-credit used to be a fifth caller; #831
+    dropped its place check -- a completed settle credits its stop wherever it
+    ran, conversation or not.) False when the agent is nowhere, or the stop
+    names no place -- an unplaced stop is not somewhere you can be standing.
     """
     place = getattr(getattr(char.agent, "schedule", None), "destination", None)
     return bool(place) and char.location is not None and char.location.name == place
@@ -1990,9 +1992,9 @@ def settle_after_dead_talk(st: dict, step: int, steps: int) -> None:
     A talk is instantaneous (it never sets `performing`), so without this the
     agent is instantly `due` again every tick until the #86 pair cooldown
     expires -- a fully paid decide+score retry loop. `on_plan = False` is load
-    bearing: it routes this settle's expiry (the top-of-tick pre-pass) through
-    the "deviation completed" branch, which un-latches without calling
-    `schedule.advance()` -- a dead talk never completed a real schedule stop.
+    bearing: it makes this settle's expiry (the top-of-tick pre-pass) read
+    `credited = False`, which skips `schedule.advance()` and un-latches without
+    it -- a dead talk never completed a real schedule stop.
 
     Both dead-talk shapes settle here (#793). The engine's `talk` verb resolves
     empty or blocked inside :func:`run_simulation.step`, which calls this from
@@ -2116,8 +2118,8 @@ def _finish_conversation(a, b, convo_obj, step, cooldowns, clock) -> int:
 
 
 def _credit_stop_for_conversation(char, st) -> bool:
-    """A real conversation held AT the agent's scheduled place completes that
-    stop (issue #778).
+    """A real conversation held while settled completes the agent's current
+    scheduled stop (issue #778; place requirement dropped by #831).
 
     ``schedule.advance()`` fires from exactly one place -- ``run_simulation``'s
     latch-expiry pre-pass -- and only for an ON-PLAN settle. But a ``talk_to``
@@ -2135,15 +2137,18 @@ def _credit_stop_for_conversation(char, st) -> bool:
     one-shot by construction: a credit written here is consumed by the settle it
     was earned at and cannot leak forward onto an unrelated stop.
 
-    Place-match is the same rule the pre-pass already applies for ``on_plan``:
-    standing at the scheduled stop means this completed it. Any real
-    conversation there counts, social activity or not -- one authority, no new
-    concept.
+    #831: a completed activity credits its stop wherever it ran, and a
+    conversation is no exception. The place gate this function used to apply
+    was the same bug the perform-settle branch had, on the sibling path: an
+    agent whose scheduled activity was a conversation held somewhere else never
+    credited the stop either, and the pointer pinned it for the rest of the
+    run. Dropped, so both settle kinds now share one rule.
 
-    ``performing`` is required so a conversation started mid-walk by
-    ``maybe_react`` (#370), which pins a *walking* agent, cannot mark a stop the
-    agent never reached as done. Every path that should credit still does:
-    ``maybe_converse``'s own pairing already requires both agents settled.
+    ``performing`` is the SOLE guard left, and it is load-bearing: a
+    conversation started mid-walk by ``maybe_react`` (#370), which pins a
+    *walking* agent, must not mark a stop the agent never reached as done.
+    Every path that should credit still does: ``maybe_converse``'s own pairing
+    already requires both agents settled.
 
     Deliberately does NOT write ``activity``. The scheduled activity is not
     necessarily what the agent did (under a real brain ``PerformPenn`` sets it
@@ -2155,7 +2160,7 @@ def _credit_stop_for_conversation(char, st) -> bool:
 
     Returns whether the stop was credited (for tests; callers ignore it).
     """
-    if not st.get("performing") or not at_scheduled_stop(char):
+    if not st.get("performing"):
         return False
     st["on_plan"] = True
     return True
@@ -2207,10 +2212,11 @@ def _advance_conversation(
         state[ac.b]["conversing"] = True
         return False, 0
     if ac.convo.happened:
-        # #778: credit the scheduled stop this conversation just completed --
-        # BEFORE the outcome pass below, whose plan revision can rewrite the very
-        # schedule the place-match reads. (`replace_schedule` preserves the
-        # current stop by contract, so this is ordering hygiene, not a live bug.)
+        # #778: credit the scheduled stop this conversation just completed.
+        # #831 dropped the place check from `_credit_stop_for_conversation`, so
+        # this credit no longer reads the schedule at all -- doing it before
+        # the outcome pass below (whose plan revision can rewrite the
+        # schedule) is no longer load-bearing, just kept for its own sake.
         for nm in (ac.a, ac.b):
             _credit_stop_for_conversation(chars[nm], state[nm])
     delta = _finish_conversation(

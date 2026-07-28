@@ -9,13 +9,13 @@ and threw every one away: the only consumer was `maybe_revise_plan`, and the
 default `plan_mode: "schedule"` wires `MockPlanner`, whose `revise()` is a no-op.
 The commitment now becomes a durable PLAN memory in the speaker's own stream.
 
-**C.** `schedule.advance()` only fires for an ON-PLAN settle, and a `talk_to`
+**C.** `schedule.advance()` only fires for a CREDITED settle, and a `talk_to`
 routes through `_settle_after_dead_talk`, which sets `on_plan = False` (#689).
 So no conversation ever advanced a stop -- not even when the conversation WAS
-the scheduled activity. A real conversation held at the scheduled place now
-credits that stop, by setting the pre-pass's own `on_plan` flag -- no second
-signal, and one-shot for free, since every path that sets `perform_until`
-re-stamps `on_plan`.
+the scheduled activity. A real conversation now credits that stop wherever it
+was held (#831 dropped the place requirement here too), by setting the
+pre-pass's own `on_plan` flag -- no second signal, and one-shot for free,
+since every path that sets `perform_until` re-stamps `on_plan`.
 
 Fully offline (fake brains + fake planners). Run from the repo root::
 
@@ -285,16 +285,20 @@ def test_conversation_at_the_scheduled_place_credits_the_stop():
         assert state[name]["on_plan"] is True
 
 
-def test_conversation_away_from_the_scheduled_place_does_not_credit():
-    """A chat in the Plaza is a deviation, not the scheduled Cafe stop. Same
-    place-match rule the pre-pass already uses for on_plan."""
+def test_conversation_away_from_the_scheduled_place_still_credits():
+    """#831: a chat in the Plaza is a deviation from the scheduled Cafe stop,
+    but the conversation still ran -- crediting nothing here was the same bug
+    the perform-settle branch had, on the sibling path (an agent whose
+    scheduled activity was a conversation held somewhere else never credited
+    its stop, so the pointer pinned it for the rest of the run). `performing`
+    is the only guard now, not place."""
     game, chars, state, frame, order = _pair_talking_in("Plaza")
 
     happened = maybe_converse(game, chars, state, frame, 4, {}, order, clock=None)
 
     assert happened == 1  # they did talk...
     for name in order:
-        assert state[name]["on_plan"] is False  # ...but nothing was credited
+        assert state[name]["on_plan"] is True  # ...and it was credited
 
 
 def test_unsettled_agent_is_never_credited():
@@ -456,8 +460,9 @@ def test_credit_at_the_last_stop_settles_in_place():
 
 
 def test_uncredited_settle_expiry_does_not_advance():
-    """Pins today's behaviour: an uncredited dead-talk settle still routes
-    through the deviation branch and leaves the pointer alone (#689)."""
+    """Pins today's behaviour: an uncredited dead-talk settle still reads
+    `credited = False`, so the pre-pass skips `advance()` and un-latches
+    without moving the pointer (#689)."""
     game, chars, state, order, emoji = _pair_mid_dead_talk_settle()
 
     step(game, chars, state, 30, order=order, world_map=_StubMap(), emoji=emoji)
