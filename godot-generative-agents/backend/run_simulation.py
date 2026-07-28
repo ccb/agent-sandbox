@@ -375,8 +375,9 @@ def step(
             # ponytail: only a performed activity or a conversation credits a
             # stop -- an agent frozen by repeated *blocked* actions still never
             # advances here. Upgrade: a general stop deadline, rejected for now
-            # (bake-drift risk, and stop_since re-anchors on any arrival so it
-            # wouldn't have fixed the reported agent; see the design spec's
+            # (bake-drift risk alone -- #826 changed stop_since to re-anchor
+            # only on arrival at the stop's own place, so the clock now does
+            # keep running for the reported agent; see the design spec's
             # "Rejected: a general stop deadline").
             if st.get("on_plan", True):
                 if char.agent.schedule.advance():

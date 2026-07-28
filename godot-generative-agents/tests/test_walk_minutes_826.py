@@ -23,6 +23,7 @@ from backend.prompt_templates import render  # noqa: E402
 from backend.build_world import build_world  # noqa: E402
 from backend.cognition import (  # noqa: E402
     ACTION_TAG,
+    DECIDE_MAX_ENUM,
     attach_agents,
     observe_and_decide,
     walk_minutes_line,
@@ -156,6 +157,43 @@ def test_line_is_empty_when_the_character_has_no_tile():
     if hasattr(ada, "tile"):
         del ada.tile
     assert walk_minutes_line(game, ada, SimClock(START)) == ""
+
+
+class _ManyLocsGame:
+    """Minimal game double (#826 review, minor 3): N addressed locations, no
+    engine machinery needed -- walk_minutes_line only reads .locations."""
+
+    def __init__(self, n):
+        self.locations = {
+            f"Loc{i}": type("L", (), {"tile_address": f"T:Loc{i}:x"})()
+            for i in range(n)
+        }
+        self.world_map = self._LinearMap()
+
+    class _LinearMap:
+        """Every address's one tile sits at (i, 0), i taken from its name --
+        an exact, monotonic nearest-first order with no real map needed."""
+
+        def tiles_for(self, address):
+            i = int(address.split(":")[1].removeprefix("Loc"))
+            return {(i, 0)}
+
+        def tile_gap_from(self, tile, address):
+            x, _y = next(iter(self.tiles_for(address)))
+            return abs(tile[0] - x)
+
+
+def test_line_caps_at_decide_max_enum_nearest_first():
+    # action_tools_for's own destination enum falls back to free text past
+    # DECIDE_MAX_ENUM, so pricing every destination beyond that cap would grow
+    # this line unboundedly on a bigger world for no benefit -- keep only the
+    # DECIDE_MAX_ENUM nearest.
+    game = _ManyLocsGame(DECIDE_MAX_ENUM + 5)
+    char = type("C", (), {"tile": (0, 0)})()
+    got = walk_minutes_line(game, char, SimClock(START))
+    assert got.count(" min") == DECIDE_MAX_ENUM
+    assert f"Loc{DECIDE_MAX_ENUM - 1} " in got  # farthest destination that survives
+    assert f"Loc{DECIDE_MAX_ENUM} " not in got  # first one dropped by the cap
 
 
 # ------------------------------------ the decide-prompt order (#826 review)

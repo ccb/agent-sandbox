@@ -209,6 +209,11 @@ EVENT_IMPORTANCE = 4.0
 # serialization, the reflection filters, or the viewer has to learn about it.
 ACTION_TAG = "action"
 RECENT_ACTIONS_MAX = 3
+# #826 review (minor 6): most record text is a short authored reflection.prompty
+# sentence, but the `read` verb embeds an item's whole `read_text` -- authored
+# world data of arbitrary length that could carry a newline -- straight into the
+# memory. Latent today (no Penn location authors `read_text`), cheap to cap.
+RECENT_ACTION_TEXT_MAX = 200
 
 # Bounds on the scorer's retry loop (issue #759). The rescan deliberately has no
 # cursor, so a malformed reply is retried next tick -- but unbounded, a brain
@@ -1125,13 +1130,13 @@ def decide_context_block(agent, step: int, clock, stop_since: int = 0) -> str:
 
     Sim time of day, the plan's current stop, and how long the agent has been
     on it (``stop_since`` is the step the stop began -- stamped when the
-    schedule advances and re-anchored on arrival, so once the agent is at the
-    place ``elapsed`` counts time *at* the stop, commensurate with the planned
-    minutes) -- the always-relevant slice a live brain needs on every decision
-    without spending a ``read_plan`` tool round. Needs a clock (the bake and
-    the offline tests thread none, so their prompts are unchanged) and a
-    schedule (every attach_agents persona has one; a bare engine agent
-    yields "").
+    schedule advances and re-anchored on arrival at the stop's own place, so
+    once the agent is at the place ``elapsed`` counts time *at* the stop,
+    commensurate with the planned minutes) -- the always-relevant slice a
+    live brain needs on every decision without spending a ``read_plan`` tool
+    round. Needs a clock (the bake and the offline tests thread none, so
+    their prompts are unchanged) and a schedule (every attach_agents persona
+    has one; a bare engine agent yields "").
     """
     schedule = getattr(agent, "schedule", None)
     if clock is None or schedule is None:
@@ -1161,7 +1166,16 @@ def recent_actions_block(agent, step: int, clock) -> str:
 
     So this is a *guarantee*, not a bid: it bypasses retrieval scoring rather
     than fighting it. Record text is rendered verbatim -- these are the agent's
-    own memories, not prose to rewrite.
+    own memories, not prose to rewrite -- except for a defensive newline-collapse
+    and length cap (:data:`RECENT_ACTION_TEXT_MAX`): most verbs render a short
+    authored sentence, but the `read` verb embeds an item's whole `read_text`,
+    which is authored world data of arbitrary length and could carry a newline
+    that would deform this block's one-line-per-action shape.
+
+    A just-written record can also independently surface in the *retrieved*
+    memory block below this one (its recency score is a fresh 1.0) -- accepted,
+    harmless double-exposure rather than an oversight, since the two blocks
+    serve different jobs (a guarantee vs. a relevance bid).
 
     Needs a clock (the bake and the offline tests thread none, so their prompts
     are unchanged) and at least one tagged record.
@@ -1180,7 +1194,7 @@ def recent_actions_block(agent, step: int, clock) -> str:
         actions=[
             {
                 "minutes": clock.minutes_for_steps(max(0, step - record.created_turn)),
-                "text": record.text,
+                "text": record.text.replace("\n", " ")[:RECENT_ACTION_TEXT_MAX],
             }
             for record in records
         ],
@@ -1201,7 +1215,11 @@ def walk_minutes_line(game, char, clock) -> str:
     ``game.locations`` whose names :func:`action_tools_for` puts in its enum), so
     the prompt prices exactly what the model can choose -- including the place
     the agent is already standing in, at 0 min, which is a signal in its own
-    right.
+    right. Capped at :data:`DECIDE_MAX_ENUM`, nearest first, for the same reason
+    :func:`action_tools_for` caps its destination enum at that size: past it the
+    enum itself falls back to free text, so pricing every destination anyway
+    would grow this line unboundedly on a larger world for no benefit past the
+    cap the model can no longer see reflected in its own tool schema.
 
     ponytail: Chebyshev over precomputed bounding boxes ignores walls and
     under-reports about 2x on this campus (27 min to Houston Hall against a
@@ -1227,6 +1245,10 @@ def walk_minutes_line(game, char, clock) -> str:
     if not priced:
         return ""
     priced.sort()  # nearest first, then by name -- stable and deterministic
+    # #826 review (minor 3): cap to match action_tools_for's own enum cap --
+    # nearest-first is already the right truncation order, so this just keeps
+    # the destinations closest to the agent.
+    priced = priced[:DECIDE_MAX_ENUM]
     return render(
         "walk_minutes",
         destinations="; ".join(f"{name} {minutes} min" for minutes, name in priced),
@@ -2338,10 +2360,16 @@ def maybe_converse(
         # initiator can retry every tick), and BEFORE the first line: the
         # opener's partner-name retrieval surfaces this fresh topic memory.
         # That's the #614 topic-threading seam, dialogue-tier importance.
+        # #826 review: tagged like every other own-action write site (the
+        # #793 failure branch a few lines above already is, via
+        # remember_outcome) -- without this a talk that actually happened
+        # never appeared in the agent's own "Recently, you:" history, while a
+        # dropped one did.
         char.agent.memory.add_observation(
             render("reflection", verb="talk_to", person=target_name, topic=topic),
             turn=step,
             importance=convo.DEFAULT_CHAT_IMPORTANCE,
+            tags={ACTION_TAG},
         )
         ac = ActiveConversation(
             a=name,

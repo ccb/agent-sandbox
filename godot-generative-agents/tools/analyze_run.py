@@ -193,6 +193,16 @@ def _arrived_then_departed(frames: list) -> dict:
     is enough: the act line is "walking to <place> @ <address>" for the whole
     leg, so a change of act between two walking frames is a new leg.
 
+    Known under-count: a zero-tile travel to the place the agent already stands
+    sets `desc`/`act` to the same "walking to <place> @ <address>" string
+    (`run_simulation.py:591-597` builds it whether or not `path` comes back
+    empty), so the agent re-decides every tick with an UNCHANGED `act` and this
+    reads as one continuous leg, scoring 0 -- exactly what the design doc's
+    "+elapsed only" A/B arm produced. Not a false-"fixed" risk in practice: that
+    mode also drives `walking_share` toward 100%, the other validation number,
+    so a run with thrash near 0 and walking_share near 100% is this failure
+    mode, not a fix.
+
     Nothing here needs the cassette, so it works for any persisted run.
     """
     counts: collections.Counter = collections.Counter()
@@ -346,7 +356,17 @@ def render(s: dict) -> str:
     lines += [
         f"  walking     {s['walking_share']:.1%} of agent-frames",
         f"  thrash      {s['arrived_then_departed_total']} arrivals departed again"
-        + (f"  {s['arrived_then_departed']}" if s["arrived_then_departed"] else ""),
+        + (
+            "  "
+            + ", ".join(
+                f"{name}×{n}"
+                for name, n in sorted(
+                    s["arrived_then_departed"].items(), key=lambda kv: -kv[1]
+                )
+            )
+            if s["arrived_then_departed"]
+            else ""
+        ),
         f"  talk_to     {s['talk_to_share']:.1%} of {s['decision_count']} decisions"
         f"   ({s['talk_to_time_share']:.1%} of agent-time)",
         f"  verbs       {s['distinct_verbs']} distinct: "

@@ -318,6 +318,10 @@ run shows the rate falling.
 Paths are relative to `godot-generative-agents/`. Nothing in
 `text_adventure_games/` changes, so this is a Godot/geo-owned review (CLAUDE.md).
 
-Prompt cost: about +70 tokens per decide (three short lines plus one destination
-line), ~1,200 decides — negligible against a $10 run, and appended after the
-cached prefix (#822).
+Prompt cost, measured (`tiktoken`'s `cl100k_base` as a stand-in for the
+model's own tokenizer, since the "+70 tokens" here was a guess the #826 review
+caught): about +230 tokens per decide — roughly 60 for the "Recently, you:"
+block's up to three lines, and roughly 170 for the walk-minutes destination
+line, whose Penn rendering (`DECIDE_MAX_ENUM`-capped, same as the destination
+enum it mirrors) is about 592 characters today. ~1,200 decides — still
+negligible against a $10 run, and appended after the cached prefix (#822).

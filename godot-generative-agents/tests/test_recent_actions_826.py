@@ -20,12 +20,15 @@ _SIM_DIR = (
 )
 sys.path.insert(0, str(_SIM_DIR))
 
+from backend.actions import TalkTo  # noqa: E402
 from backend.prompt_templates import render  # noqa: E402
 from backend.build_world import build_world  # noqa: E402
 from backend.cognition import (  # noqa: E402
     ACTION_TAG,
+    RECENT_ACTION_TEXT_MAX,
     RECENT_ACTIONS_MAX,
     attach_agents,
+    maybe_converse,
     recent_actions_block,
     remember_outcome,
 )
@@ -107,6 +110,82 @@ def test_perceived_memories_are_not_tagged():
     assert ACTION_TAG not in ada.agent.memory.records[-1].tags
 
 
+def _bo_persona():
+    return {
+        "name": "Bo",
+        "home": "The Green",
+        "persona": "I am Bo, Ada's labmate.",
+        "emoji": "\U0001f9d1",
+        "start_tile": [0, 0],
+        "destination": "Cafe",
+        "activity": "reading a novel",
+        "schedule": [
+            {
+                "place": "Cafe",
+                "activity": "reading a novel",
+                "emoji": None,
+                "steps": None,
+            }
+        ],
+    }
+
+
+class _OneLineConvoBrain:
+    """Speaks one line, then ends the conversation. Same shape as
+    test_universal_verbs_614's ``_ScriptedConvoBrain`` -- the closest existing
+    talk_to harness -- trimmed to the single exchange this test needs."""
+
+    def __init__(self, line):
+        self._line = line
+        self.context: dict = {}
+
+    def call_tool(self, messages, tool, max_tokens=256, temperature=0.0):
+        if tool["name"] == "conversation_outcome":
+            return {"plans_changed": False}
+        if self._line is not None:
+            line, self._line = self._line, None
+            return {"utterance": line, "done": True}
+        return {}
+
+
+def test_a_completed_conversation_is_tagged_and_reaches_the_block():
+    # #826 review, Important 1: remember_outcome deliberately returns early for
+    # talk_to (Phase 1.5 of maybe_converse owns both branches), and its
+    # *failure* branch (a dropped request) routes back into
+    # remember_outcome(fail_reason=...) and IS tagged -- see
+    # test_a_blocked_attempt_is_tagged_too above. But the success branch's own
+    # add_observation, written the instant a requested conversation actually
+    # opens, was missing tags={ACTION_TAG}: a talk that really happened never
+    # showed up in "Recently, you:", while a dropped one did. Drive a real
+    # talk_to -> maybe_converse open (the pattern in test_universal_verbs_614's
+    # test_talk_to_memory_is_written_only_when_the_conversation_opens) rather
+    # than asserting on the add_observation call in isolation.
+    personas = [_personas()[0], _bo_persona()]
+    game, chars = build_world(None, personas, LOCATIONS)
+    game.parser.add_action(TalkTo)
+    brain = _OneLineConvoBrain("Hey Bo, quick question about the exam.")
+    attach_agents(chars, personas, llm_client=brain)
+    ada, bo = chars["Ada"], chars["Bo"]
+    cafe = game.locations["Cafe"]
+    for ch in (ada, bo):
+        if ch.location is not None:
+            ch.location.remove_character(ch)
+        cafe.add_character(ch)
+    order = ["Ada", "Bo"]
+    state = {n: {"performing": True, "path": [], "chat": None} for n in order}
+    frame = {n: {} for n in order}
+
+    assert game.parser.parse_command("talk_to Bo about the exam", actor=ada)
+    maybe_converse(game, chars, state, frame, 0, {}, order, active={})
+
+    record = next(r for r in ada.agent.memory.records if "talk to Bo" in r.text)
+    assert record.text == "I went to talk to Bo about the exam."
+    assert ACTION_TAG in record.tags
+
+    got = recent_actions_block(ada.agent, 0, SimClock(START))
+    assert "I went to talk to Bo about the exam." in got
+
+
 # ------------------------------------------------------------- the block unit
 
 
@@ -149,6 +228,22 @@ def test_block_caps_at_the_configured_count():
     assert len(got.splitlines()) == RECENT_ACTIONS_MAX + 1  # + the header line
     assert "I did thing 9." in got
     assert "I did thing 6." not in got
+
+
+def test_block_collapses_newlines_and_caps_length_in_record_text():
+    # #826 review, minor 6: reflection.prompty's `read` variant embeds an
+    # item's whole read_text verbatim -- authored world data of arbitrary
+    # length that may carry a newline, which would deform this block's
+    # one-line-per-action shape. Latent today (no Penn location authors
+    # read_text), cheap to guard against here rather than at every author.
+    _game, ada = _ada()
+    long_text = 'I read the flyer. It said: "' + ("x" * 300) + '\nmore"'
+    _act(ada.agent, long_text, 0)
+    got = recent_actions_block(ada.agent, 0, SimClock(START))
+    assert len(got.splitlines()) == 2  # header + exactly one action line
+    assert "\n" not in got.splitlines()[1]
+    action_line = got.splitlines()[1]
+    assert len(action_line) <= len(" - just now: ") + RECENT_ACTION_TEXT_MAX
 
 
 # ------------------------------------------------------------- pinned wording
