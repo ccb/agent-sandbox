@@ -442,6 +442,16 @@ def test_live_ts_usage_summary_mirrors_the_usage_route():
     _assert_ts_matches("UsageSummary", set(armed) | set(fallback))
 
 
+def test_live_ts_run_social_mirrors_the_stepper_social_block():
+    # The #795 social block is a NESTED object inside run_usage() -- the
+    # UsageSummary mirror above only checks that `social` is named, not its
+    # shape, so a field added inside it (counted/resumed, #819/#825) could reach
+    # the wire without live.ts naming it. That is exactly the drift #644 set out
+    # to catch, one level down: pin RunSocial against the real emitter too.
+    social = PennStepper(num_steps=2, world=build_penn_world()).run_usage()["social"]
+    _assert_ts_matches("RunSocial", set(social))
+
+
 def test_live_ts_llm_call_record_mirrors_the_monitor_row():
     # The llm_call feed row is the monitor's kept record -- a flattened
     # CallRecord.to_primitive() plus the printed row's extras -- with

@@ -5,6 +5,7 @@ import { ConversationFeed } from "./ConversationFeed";
 import { EventFeed } from "./EventFeed";
 import { LlmCallLog } from "./LlmCallLog";
 import { MostTakenActions } from "./MostTakenActions";
+import { RunSocialCard, SocialSummary, socialView } from "./RunSocialCard";
 import { SpritePreview } from "./SpritePreview";
 import "./AgentPanel.css"; // the llm-log row/pill styles LlmCallLog renders with
 import "./LlmDashboard.css";
@@ -192,6 +193,12 @@ export function LlmDashboard({
     newest?.cum_cost_usd ?? live.usage?.run_cost_usd ?? live.usage?.total_cost_usd ?? 0;
   const budget = live.usage?.max_cost_usd;
 
+  // The run's social glance for the strip (#795/#819): shaped by the same
+  // socialView the card uses, so the sentence + pluralisation live in one
+  // place. Hidden when the brain never counts co-settling (#825) — a permanent
+  // 0 there is noise, and the card below still explains why.
+  const socialStrip = socialView(live.usage?.social, live.step);
+
   // The current step's frame map for the conversation feed (#534): the live feed's
   // latest frame when following a live loop, else the baked frame at the
   // Godot-bridge step. Switches on live.live (like `personas` above), not persona
@@ -259,6 +266,17 @@ export function LlmDashboard({
                 {budget.toFixed(2)} budget left
               </span>
             )}
+            {socialStrip && socialStrip.note !== "uncounted" && (
+              <span
+                className="llm-strip-stat"
+                title="co-settled pair-steps · completed conversations (#795)"
+              >
+                <SocialSummary
+                  pairSteps={socialStrip.pairSteps}
+                  conversations={socialStrip.conversations}
+                />
+              </span>
+            )}
             {live.meta?.llm && <span className="llm-strip-model">{live.meta.llm.model}</span>}
           </>
         ) : (
@@ -277,6 +295,13 @@ export function LlmDashboard({
           baked replay's events through the cursor, or the live feed's
           game_event rows — so it renders in replay mode too, unlike EventFeed. */}
       <MostTakenActions replay={replay} live={live} replayStep={replayStep} />
+
+      {/* The run's social opportunity (#795/#819): live-only — replays carry
+          no /usage, and RunSocialCard hides itself when an older backend
+          serves no social block. */}
+      {live.enabled && (
+        <RunSocialCard social={live.usage?.social} step={live.step} connected={live.connected} />
+      )}
 
       {/* Run events (#644): the game_event/wish rows off the live feed — the
           same records the Godot HUD logs. Live-only: a baked replay has no

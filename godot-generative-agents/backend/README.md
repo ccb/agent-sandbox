@@ -702,8 +702,14 @@ advancing **on its own** while frontends follow along:
 
   `frame` is one sim step in the **replay frame schema** — the same per-agent
   dict a baked `penn_replay.json` carries, so live and baked viewers share one
-  contract. `status` marks run-state changes
-  (`started|paused|resumed|reset|finished|stopped`). `engine` wraps a
+  contract. A `frame` also carries `tick_ms` (the tick's wall time) and, when
+  the stepper reports it, `run_usage` — the run-scoped call/cost counters and
+  the #795 social block (`serve_penn.PennStepper.run_usage()`), so a dashboard's
+  run totals and social card ride this feed instead of a separate `/usage` poll
+  (#819). `status` marks run-state changes
+  (`started|paused|resumed|reset|finished|stopped`); the `reset` record carries
+  a freshly-zeroed `run_usage` too, so those counters drop the instant a rebuild
+  lands. `engine` wraps a
   [change-feed record](#the-events-change-feed) the stepper drained from the
   engine during that tick (steppers opt in by implementing `drain_events()`).
   `intervention` records a human write ([`POST /agents/{name}/say`](#post-agentsnamesay)
