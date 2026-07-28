@@ -333,6 +333,12 @@ def main() -> int:
             # server). The viewer's social-graph pop-up (#252) contrasts it with
             # the conversations that actually happen over the run.
             "relationships": pw.relationships,
+            # #780: the world's real place names, so the offline believability
+            # audit can tell an invented place from a real one without needing
+            # the world YAML. Additive + sorted: contract.py's policy is that
+            # additive optional meta fields do not bump SCHEMA_VERSION, and a
+            # sorted list keeps the bake byte-identical across hash seeds.
+            "locations": sorted(loc["name"] for loc in pw.locations),
         },
         "frames": [
             {name: replay_frame_entry(f[name]) for name in order} for f in frames

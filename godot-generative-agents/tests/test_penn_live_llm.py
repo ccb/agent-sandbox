@@ -41,6 +41,7 @@ import serve_penn  # noqa: E402
 from penn_world import build_penn_world  # noqa: E402
 from serve_penn import DEFAULT_LLM_MODEL, PennStepper, resolve_llm  # noqa: E402
 from text_adventure_games.memory import MemoryKind  # noqa: E402
+from text_adventure_games.planning import Stop, replace_tail  # noqa: E402
 from text_adventure_games.usage import UsageLedger, record_call  # noqa: E402
 from backend.planner import LLMPlanner, MockPlanner  # noqa: E402
 from backend.run_store import RunStore  # noqa: E402
@@ -295,7 +296,7 @@ class _ScriptedBrain:
                         "place": "Houston Hall",
                         "activity": "eating lunch",
                         "emoji": "\U0001f37d️",
-                        "steps": 10,
+                        "minutes": 10,
                     }
                 ]
             }
@@ -380,6 +381,164 @@ def _llm_stepper(
         run_store=run_store,
         **kwargs,
     )
+
+
+def test_run_usage_reports_the_social_block(monkeypatch):
+    stepper = _llm_stepper(monkeypatch, plan="llm")
+    # Drive the accumulators directly rather than hoping the scripted world
+    # happens to co-settle: this test is about the reporting shape -- the
+    # "A + B" key format, the busiest-pair ordering, and the total -- not
+    # about whether five scripted ticks produce an encounter. Task 6's tests
+    # already cover the counting itself.
+    stepper._co_settled_by_pair = {
+        ("Diego Torres", "Sofia Ramirez"): 248,
+        ("Professor Tanaka", "Sofia Ramirez"): 90,
+    }
+    stepper._co_settled_total = 338
+    stepper._conversations_total = 3
+    social = stepper.run_usage()["social"]
+    assert social["co_settled_pair_steps"] == 338
+    assert social["conversations"] == 3
+    # JSON-safe keys, busiest pair first.
+    assert list(social["by_pair"].items()) == [
+        ("Diego Torres + Sofia Ramirez", 248),
+        ("Professor Tanaka + Sofia Ramirez", 90),
+    ]
+
+
+def test_run_usage_social_block_starts_at_zero(monkeypatch):
+    stepper = _llm_stepper(monkeypatch, plan="llm")
+    assert stepper.run_usage()["social"] == {
+        "co_settled_pair_steps": 0,
+        "by_pair": {},
+        "conversations": 0,
+        # counted True (an llm brain DOES count co-settling) and resumed False
+        # (a fresh stepper), so a zero here is a real #795 signal — not the
+        # mock-brain/resumed non-signals the card must tell apart (#819/#825).
+        "counted": True,
+        "resumed": False,
+    }
+
+
+def test_a_socially_dead_run_warns_at_finish(monkeypatch, capsys):
+    stepper = _llm_stepper(monkeypatch, plan="llm")
+    stepper._co_settled_total = 0
+    stepper._step_idx = 1200  # a finished run, not an empty one
+    stepper._finish_run()
+    assert "no two agents were ever settled together" in capsys.readouterr().out
+
+
+def test_a_social_run_does_not_warn(monkeypatch, capsys):
+    stepper = _llm_stepper(monkeypatch, plan="llm")
+    stepper._co_settled_total = 12
+    stepper._step_idx = 1200  # a finished run, like the sibling test above --
+    # else _step_idx == 0 alone would suppress the warning and this test
+    # would pass for the wrong reason.
+    stepper._finish_run()
+    assert "no two agents were ever settled together" not in capsys.readouterr().out
+
+
+def test_a_socially_dead_mock_run_never_warns(capsys):
+    # The warning is real-brain-only (llm_client is not None): _llm_stepper
+    # always wires a (scripted) real-shaped brain regardless of plan_mode, so
+    # this needs a bare PennStepper with no llm dict at all -- the actual
+    # mock-brain path every offline test/bake runs, and never social in the
+    # sense #795 means, so warning there would just be noise.
+    stepper = PennStepper(num_steps=2, world=build_penn_world())
+    assert stepper.llm_client is None
+    stepper._co_settled_total = 0
+    stepper._step_idx = 1200
+    stepper._finish_run()
+    assert "no two agents were ever settled together" not in capsys.readouterr().out
+
+
+def test_a_resumed_run_does_not_false_alarm(monkeypatch, capsys):
+    # #795 review: _adopt_run restarts _co_settled_total at 0 for this
+    # process (unlike cost, which #543's _cost_base carries across resume) --
+    # reconstructing it from persisted frames is a bigger change than this
+    # task warrants. A resumed run must stay silent rather than false-alarm
+    # on a day that (for all this process knows) was perfectly social before
+    # the resume.
+    stepper = _llm_stepper(monkeypatch, plan="llm")
+    stepper._co_settled_total = 0
+    stepper._step_idx = 1200
+    stepper._resumed = True
+    stepper._finish_run()
+    assert "no two agents were ever settled together" not in capsys.readouterr().out
+
+
+def test_finish_run_only_warns_once(monkeypatch, capsys):
+    # #795 review: the live loop keeps calling _finish_run() on every tick of
+    # an already-finished day (and POST /resume on a finished run reaches it
+    # too) -- the warning must fire on the FIRST call only, not spam forever.
+    stepper = _llm_stepper(monkeypatch, plan="llm")
+    stepper._co_settled_total = 0
+    stepper._step_idx = 1200
+    stepper._finish_run()
+    stepper._finish_run()
+    stepper._finish_run()
+    assert (
+        capsys.readouterr().out.count("no two agents were ever settled together") == 1
+    )
+
+
+def test_tick_wires_social_info_into_the_accumulators(monkeypatch):
+    # #795 review: deleting `social_info=social_info` and the two accumulator
+    # lines from tick() still passes every other new test here -- three set
+    # the accumulators by hand, the fourth only asserts zeros. This is the
+    # one test that would catch it, by replacing step() itself and checking
+    # what tick() does with what step() reports back.
+    stepper = _llm_stepper(monkeypatch, plan="llm")
+
+    def fake_step(*args, **kwargs):
+        social_info = kwargs["social_info"]
+        social_info.update(co_settled=2, pairs=[("Diego Torres", "Sofia Ramirez")])
+        # A minimal valid per-persona raw frame -- tick() converts every
+        # entry via penn_world.replay_frame_entry right after the step()
+        # call, so an empty raw would KeyError before reaching the seam
+        # this test is actually about.
+        raw = {
+            name: {"movement": (0, 0), "description": "", "pronunciatio": ""}
+            for name in stepper.order
+        }
+        return raw, 2
+
+    monkeypatch.setattr(serve_penn, "step", fake_step)
+    stepper.tick()
+    assert stepper._co_settled_total == 2
+    assert stepper._co_settled_by_pair == {("Diego Torres", "Sofia Ramirez"): 1}
+    assert stepper._conversations_total == 2
+
+
+def test_public_events_are_seeded_to_everyone_but_the_host(monkeypatch):
+    from backend.cognition import EVENT_IMPORTANCE, _IMPORTANCE_LOCKED
+
+    stepper = _llm_stepper(monkeypatch, plan="llm")
+    announcement = "There's a guest lecture on gravitational waves"
+    seeded = {}
+    seeded_record = None
+    for name in stepper.order:
+        records = stepper.chars[name].agent.memory.records
+        seeded[name] = any(announcement in r.text for r in records)
+        if seeded_record is None:
+            seeded_record = next((r for r in records if announcement in r.text), None)
+    assert seeded["Professor Tanaka"] is False  # she has her own commitment
+    assert all(v for n, v in seeded.items() if n != "Professor Tanaka")
+    # #794-style lock: without it, #583's scorer would re-guess the authored
+    # 4.0 as 6-8 the moment a real brain drives the run -- silently, since no
+    # test exercised the metadata/tags the interface promises.
+    assert seeded_record.importance == EVENT_IMPORTANCE
+    assert seeded_record.metadata.get(_IMPORTANCE_LOCKED) is True
+    assert seeded_record.tags == {"seed", "event"}
+
+
+def test_public_events_are_not_seeded_without_an_llm_planner(monkeypatch):
+    """MockPlanner ignores memory entirely -- seeding there would only
+    perturb the bake. This is the guard for byte-identity."""
+    stepper = _llm_stepper(monkeypatch)  # default plan="schedule"
+    for name in stepper.order:
+        texts = [r.text for r in stepper.chars[name].agent.memory.records]
+        assert not any("open to anyone" in t for t in texts)
 
 
 def test_tiering_map_reaches_every_client_and_stamps_fixed_roles(monkeypatch):
@@ -558,6 +717,58 @@ def test_plan_auto_gives_a_paying_brain_a_model_authored_day(monkeypatch, tmp_pa
     manifest = store.get_run(stepper.run_id)["manifest"]
     assert manifest["plan_mode"] == "llm"
     assert manifest["planner_sources"] == {name: "llm" for name in stepper.order}
+
+
+def test_the_manifest_records_the_day_the_planner_authored(monkeypatch, tmp_path):
+    # #824: the manifest carried `planner_sources: llm` next to a
+    # `personas[].schedule` that is the authored YAML -- so the run record could
+    # not answer "what did this agent plan to do today?" and read as if the seed
+    # schedule were the answer. `daily_plans` is that answer.
+    store = RunStore(tmp_path / "runs")
+    stepper = _llm_stepper(monkeypatch, plan="llm", run_store=store)
+    manifest = store.get_run(stepper.run_id)["manifest"]
+    plans = manifest["daily_plans"]
+    # One entry per agent, and it IS the plan the step loop is walking -- the
+    # plan's own to_primitive(), so the manifest can't drift from the baked
+    # daily_plan.json or GET /agents/{name}/plan (the #298 rule).
+    assert set(plans) == set(stepper.order)
+    for name in stepper.order:
+        assert plans[name] == stepper.chars[name].agent.plan.to_primitive()
+    # THE assertion the issue is about: the recorded plan is not the seed
+    # schedule. _ScriptedBrain plans one Houston Hall lunch stop for everyone;
+    # no persona's authored day is that.
+    seeds = {p["name"]: p["schedule"] for p in manifest["personas"]}
+    for name in stepper.order:
+        stops = plans[name]["stops"]
+        assert [s["place"] for s in stops] == ["Houston Hall"]
+        assert stops != seeds[name]
+    # Stamped before any tick, so this is the t=0 day: revision 0 says the
+    # planner's plan has not been replanned (see the sibling test).
+    assert all(p["revision"] == 0 for p in plans.values())
+
+
+def test_the_manifest_plan_follows_a_mid_run_revision(monkeypatch, tmp_path):
+    # The other half of #824's trap: capture the plan only at attach time and
+    # you ship a field that LOOKS like the executed day but is the t=0 one --
+    # maybe_revise_plan rewrites the unstarted tail mid-run. _finish_run
+    # re-stamps, and `revision` is what tells a reader which one they have.
+    store = RunStore(tmp_path / "runs")
+    stepper = _llm_stepper(monkeypatch, plan="llm", run_store=store)
+    name = stepper.order[0]
+    plan = stepper.chars[name].agent.plan
+    revised = replace_tail(
+        plan, -1, [Stop(place="Van Pelt Library", activity="reading", steps=5)]
+    )
+    stepper.chars[name].agent.plan = revised
+    stepper._step_idx = 1200  # a finished day, not an empty one
+    stepper._finish_run()
+    plans = store.get_run(stepper.run_id)["manifest"]["daily_plans"]
+    assert plans[name] == revised.to_primitive()
+    assert plans[name]["revision"] == 1  # replanned -> not the planner's t=0 day
+    assert [s["place"] for s in plans[name]["stops"]] == ["Van Pelt Library"]
+    # Everyone else's stamp is untouched by the re-stamp.
+    for other in stepper.order[1:]:
+        assert plans[other]["revision"] == 0
 
 
 def test_plan_auto_leaves_the_free_brains_on_the_authored_day():

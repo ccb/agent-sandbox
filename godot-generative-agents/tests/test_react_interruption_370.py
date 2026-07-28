@@ -413,6 +413,28 @@ def test_pair_conversation_cooldown_blocks_consult():
     assert consults == 0 and brain.react_calls == []
 
 
+def test_escalated_pair_cooldown_also_blocks_a_greet():
+    """#803 applies on the react path too, since it reads the same pair cooldown:
+    a pair on their third conversation stays blocked at a step the plain window
+    has already cleared. Crossing paths again isn't news *sooner* just because
+    they keep re-meeting."""
+    brain = _ReactBrain(choice="greet")
+    game, chars, state, frame, order = _pair(brain)
+    # Two conversations held, the last ending at step 0 -> the third owes 2 x 90.
+    cooldowns = {frozenset(("Maria Lopez", "Ayesha Khan")): (0, 2)}
+    consults = maybe_react(
+        chars,
+        state,
+        100,  # 100 - 0 >= 90 would have passed the flat window
+        cooldowns,
+        order,
+        react_state={},
+        active={},
+        cooldown_steps=90,
+    )
+    assert consults == 0 and brain.react_calls == []
+
+
 def test_greeted_walkers_hold_through_playback_then_resume():
     """#673 on the react path: when a greet-started conversation ends, the
     playback hold keeps BOTH pinned walks paused for ``len(lines) *
@@ -562,7 +584,7 @@ def _full_state(tile, path, conversing=False):
         "memories": [],
         "chat": None,
         "stop_since": 0,
-        "on_plan": True,
+        "credit_stop": True,
         "conversing": conversing,
     }
 

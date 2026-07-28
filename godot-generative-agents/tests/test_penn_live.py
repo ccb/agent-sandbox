@@ -184,6 +184,7 @@ def test_stepper_meta_shape():
         "personas",
         "relationships",
         "llm",
+        "locations",
     }
     assert meta["vision_r"] == VISION_R
     assert len(meta["personas"]) == 3
@@ -344,11 +345,22 @@ def test_run_usage_rebaselines_on_reset_and_run_rows_carry_run_cost(tmp_path):
     # test pins run_calls across ticks, not just at tick-free points.
     store = RunStore(tmp_path / "runs")
     stepper = PennStepper(num_steps=3, world=build_penn_world(), run_store=store)
+    # #795: no ticks yet, so no chance of a co-settled pair either. counted is
+    # False (mock brain, no llm_client — it never counts co-settling, #825) and
+    # resumed False (a fresh, reset-not-adopted stepper), #819.
+    no_social = {
+        "co_settled_pair_steps": 0,
+        "by_pair": {},
+        "conversations": 0,
+        "counted": False,
+        "resumed": False,
+    }
     assert stepper.run_usage() == {
         "run_calls": 0,
         "run_failed_calls": 0,
         "run_cost_usd": 0.0,
         "run_by_actor": {},
+        "social": no_social,
     }
     _spend(stepper.ledger, 0.25)
     _spend(stepper.ledger, 0.05)
@@ -357,15 +369,19 @@ def test_run_usage_rebaselines_on_reset_and_run_rows_carry_run_cost(tmp_path):
         "run_failed_calls": 0,
         "run_cost_usd": 0.3,
         "run_by_actor": {"Diego Torres": 0.3},
+        "social": no_social,
     }
     stepper.tick()
     first = stepper.run_id
     # A mock tick appended $0 records, but run_calls/run_by_actor ignore them.
+    # The scripted world's first tick doesn't settle the cast together either
+    # (they're still walking to their first schedule stop).
     assert stepper.run_usage() == {
         "run_calls": 2,
         "run_failed_calls": 0,
         "run_cost_usd": pytest.approx(0.3),
         "run_by_actor": {"Diego Torres": pytest.approx(0.3)},
+        "social": no_social,
     }
     assert store.get_run(first)["cost"] == pytest.approx(0.3)
     lifetime_calls = stepper.ledger.summary()["calls"]  # spends + mock records
@@ -376,6 +392,7 @@ def test_run_usage_rebaselines_on_reset_and_run_rows_carry_run_cost(tmp_path):
         "run_failed_calls": 0,
         "run_cost_usd": 0.0,
         "run_by_actor": {},
+        "social": no_social,
     }
     # ...while the lifetime ledger keeps everything, so a tripped cost
     # ceiling stays tripped across the reset.
@@ -393,6 +410,7 @@ def test_run_usage_rebaselines_on_reset_and_run_rows_carry_run_cost(tmp_path):
         "run_failed_calls": 0,
         "run_cost_usd": 0.15,
         "run_by_actor": {"Diego Torres": 0.1, "Sofia Ramirez": 0.05},
+        "social": no_social,
     }
     stepper.tick()
     second = stepper.run_id
@@ -404,6 +422,7 @@ def test_run_usage_rebaselines_on_reset_and_run_rows_carry_run_cost(tmp_path):
         "run_failed_calls": 0,
         "run_cost_usd": 0.0,
         "run_by_actor": {},
+        "social": no_social,
     }
 
 
@@ -588,6 +607,9 @@ def test_stepper_resumes_a_persisted_run(tmp_path):
     )
     assert resumed.run_id == run_id
     assert resumed.step == 3
+    # #795: a resumed process didn't watch the pre-resume steps, so it must
+    # not claim a zero co-settled total means the day was ever social-dead.
+    assert resumed._resumed is True
     # Positions come back from the last stored frame...
     last = first3[-1]
     for name in resumed.order:

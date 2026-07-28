@@ -61,6 +61,7 @@ from backend.run_store import DEFAULT_RUNS_DIR, RunStore
 from backend.sim_clock import SimClock
 from backend.sim_config import CognitionConfig, SimulationConfig
 from backend.cognition import attach_agents
+from backend.planner import median_travel_minutes
 from scripted_brain import build_scripted_brains
 from penn_world import (
     DIALOGUE_FADE_STEPS,
@@ -1103,12 +1104,25 @@ class PennStepper:
             # stops against the world's full location set and bounds the day to
             # the run's clock window; both are inert for the mock planner.
             # Note: these ~3 planning calls/agent fire here at attach time,
-            # before the first tick()'s over_budget() gate -- a one-time 3N
-            # spend that can precede (not skip) the budget ceiling; the next
-            # tick catches it.
+            # before the first tick()'s over_budget() gate -- a one-time spend of
+            # up to 4N (#821 adds one corrective re-ask for an agent whose plan
+            # can't reach a stop it pinned to a clock hour) that can precede (not
+            # skip) the budget ceiling; the next tick catches it.
             planner_client=self.planner_client,
             location_names=frozenset(loc["name"] for loc in self.world.locations),
             clock=self.clock,
+            # #795: what a walk actually costs, so the planner can budget for it
+            # instead of guessing. Computed from this world's map, so a different
+            # campus gets a different number; None -> the clause is omitted.
+            travel_minutes=median_travel_minutes(
+                self.world.world_map,
+                [loc.get("address") for loc in self.world.locations],
+                self.clock,
+            ),
+            # #795: the world's announced happenings, seeded to every agent
+            # but the host -- only reaches memory under a real planner (see
+            # cognition.attach_agents), so this is inert under the mock brain.
+            events=self.world.events,
             out_planner_sources=planner_sources,
             extra_action_names=PENN_ACTION_VERBS,
         )
@@ -1186,6 +1200,17 @@ class PennStepper:
         # react pass's edge detector. Fresh per day/reset, like the two
         # conversation dicts above.
         self._react_state = {}
+        # #795: this run's social opportunity. Reset per day/reset, like the
+        # react and conversation state above. _adopt_run flips _resumed True
+        # below when this build is a resume, not a fresh day -- a resumed
+        # run's accumulators restart at 0 with this process (unlike cost,
+        # #543's _cost_base is NOT reconstructed for co-settlement here on
+        # purpose, see _adopt_run), so they cannot be trusted as "this day had
+        # no social opportunity" and the #795 finish warning must stay quiet.
+        self._co_settled_total = 0
+        self._co_settled_by_pair: dict[tuple[str, str], int] = {}
+        self._conversations_total = 0
+        self._resumed = False
         self.emoji = {p["name"]: p["emoji"] for p in self.world.personas}
         self.order = [p["name"] for p in self.world.personas]
         self.state = {}
@@ -1285,7 +1310,12 @@ class PennStepper:
         the ``_events_seen``/``_persist_events_seen`` cursors and the wish
         buffers (correct -- the new ``game.events``/``game.wishes`` start
         empty; the stored ``events.jsonl``/``wishes.jsonl`` are append-only
-        history).
+        history). The #795 co-settled accumulators are the same: this
+        process's ``_co_settled_total`` restarts at 0, not reconstructed from
+        the persisted frames (a bigger change than the counter warrants) --
+        ``_resumed`` records that this day is not fully observed by this
+        process, so ``_finish_run`` knows a zero total here would be a false
+        alarm, not evidence.
         """
         if row is None:
             row = self._resumable_row(run_id)
@@ -1293,6 +1323,7 @@ class PennStepper:
             frames = self.run_store.read_frames(run_id)
         self._run_id = run_id
         self._step_idx = len(frames)
+        self._resumed = True
         if frames:
             last = frames[-1]
             for name in self.order:
@@ -1365,6 +1396,17 @@ class PennStepper:
             6,
         )
 
+    def _by_pair_json(self) -> dict:
+        # THE `by_pair` shape, defined once (#795, mirrors _run_cost_usd
+        # above): JSON-safe "A + B" keys, busiest pair first. run_usage() and
+        # _write_run_record() both serve this -- one order, not two.
+        return {
+            f"{a} + {b}": n
+            for (a, b), n in sorted(
+                self._co_settled_by_pair.items(), key=lambda kv: -kv[1]
+            )
+        }
+
     def run_usage(self) -> dict:
         """This run's slice of the lifetime ledger (#526).
 
@@ -1411,6 +1453,29 @@ class PennStepper:
             "run_failed_calls": run_failed_calls,
             "run_cost_usd": self._run_cost_usd(),
             "run_by_actor": {a: round(c, 6) for a, c in run_by_actor.items()},
+            # #795: whether this run had any chance of being social. Zero here
+            # with a nonzero step count is the "structurally impossible"
+            # signature the issue reported -- surfaced rather than silent.
+            # ``conversations`` counts *completed* ones (what ``maybe_converse``
+            # returns as it ends them), so a conversation still mid-exchange at
+            # the run's last tick isn't here -- don't diff it against the
+            # viewer's live conversation feed and read an off-by-one.
+            "social": {
+                "co_settled_pair_steps": self._co_settled_total,
+                "by_pair": self._by_pair_json(),
+                "conversations": self._conversations_total,
+                # #819/#825: whether a zero here means anything. `counted` is
+                # False under the mock brain (llm_client is None), which never
+                # counts co-settling at all -- so its permanent 0 is "not
+                # measured", not a drought. `resumed` is True when this process
+                # adopted a mid-day run, restarting the accumulators at 0 -- a
+                # zero then is "not fully observed", not "never happened". Both
+                # mirror the finish-warning gate below (which stays silent in
+                # exactly these two cases), so the dashboard can tell a real
+                # #795 drought from the two non-signals instead of guessing.
+                "counted": self.llm_client is not None,
+                "resumed": self._resumed,
+            },
         }
 
     def meta(self) -> dict:
@@ -1431,12 +1496,20 @@ class PennStepper:
             # Same projection the bake uses (penn_world.persona_meta_entry): name/
             # emoji for the sprite + sidebar, persona/home/schedule for the State
             # Details inspector (issue #408), so live and baked meta stay identical.
+            # `schedule` here is the AUTHORED persona YAML the world was seeded
+            # from -- not the day the run executed (#824). Under the default
+            # --plan llm the planner's day replaces it and the two differ; the
+            # executed plan is the manifest's `daily_plans` (_store_manifest).
             "personas": [persona_meta_entry(p) for p in self.world.personas],
             # The t=0 seed social graph, already validated/normalized by
             # penn_world.relationships_meta at build time -- the same list the
             # bake writes, so the social-graph pop-up (#252) sees identical
             # seed edges live and baked.
             "relationships": self.world.relationships,
+            # #780: same sorted place list the bake writes, so baked and live
+            # meta cannot drift. Reads PennWorld.locations, as the planner's
+            # known_places already does.
+            "locations": sorted(loc["name"] for loc in self.world.locations),
             # What is driving the cast: None under the mock brain, else the
             # provider/model, so the viewer can say which model it is watching.
             "llm": (
@@ -1458,6 +1531,36 @@ class PennStepper:
         data.get("game", {}).pop("llm", None)
         data.pop("embedding", None)
         return data
+
+    def _plans_for_manifest(self) -> dict:
+        """Each agent's ``DailyPlan``, as of this manifest write (#824).
+
+        ``planner_sources`` says *where* each day came from; this says *what it
+        is* -- the stops the step loop walks, serialized through the plan's own
+        ``to_primitive()`` (the #298 rule: one formatter, so the manifest, the
+        baked ``daily_plan.json`` and ``GET /agents/{name}/plan`` can't drift).
+
+        This is NOT ``personas[].schedule`` in the meta block above, which is
+        the authored persona YAML the world was seeded from. Under the default
+        ``--plan llm`` the planner writes a fresh day that never lands back in
+        ``world.personas``, so before this the run record showed the seed
+        schedule beside ``planner_sources: llm`` and read as if it were the
+        plan -- which cost #821 two wrong revisions.
+
+        **Which plan you get.** ``_store_manifest`` is stamped after
+        ``attach_agents`` (the t=0 generated day) and again at ``_finish_run``,
+        so a run that finished records the day the agent ENDED with. Read
+        ``revision`` to tell the two apart: 0 means the planner's day was never
+        touched, >0 means ``maybe_revise_plan`` rewrote the unstarted tail that
+        many times and this is no longer what the planner first produced. A run
+        killed before finish keeps the t=0 stamp (its row stays "running").
+        """
+        plans = {}
+        for name, char in self.chars.items():
+            plan = getattr(char.agent, "plan", None) if char.agent else None
+            if plan is not None:
+                plans[name] = plan.to_primitive()
+        return plans
 
     def _store_manifest(self) -> dict:
         """The manifest persisted to the store: the handshake meta() plus the
@@ -1485,6 +1588,12 @@ class PennStepper:
             # Per-persona plan provenance (#787): {name: "llm"|"static"}. The
             # plan_mode above is the request; this is what each agent got.
             "planner_sources": self._planner_sources,
+            # What each agent actually planned (#824): {name:
+            # DailyPlan.to_primitive()}, carrying `revision` so a reader can
+            # tell a never-revised day from a replanned one. See
+            # _plans_for_manifest -- and note this, NOT `personas[].schedule`
+            # above, is the run's plan.
+            "daily_plans": self._plans_for_manifest(),
             # The step BUDGET this run was launched with -- not how many steps
             # it actually took (that is the row's `steps`). meta() deliberately
             # omits it, but a re-run needs it (#787): LLMPlanner bounds the day
@@ -1548,13 +1657,20 @@ class PennStepper:
             "knobs": {"defaults": defaults, "current": current},
             "brains": brains,
             # The planner knob (#787). `plans` is the accepted vocabulary and
-            # `run.plan` the RESOLVED value the current brain would run, so the
-            # setup screen can show "llm" for an auto+llm-brain session without
-            # having to re-derive the auto rule client-side.
+            # `run.plan` the RESOLVED value the current brain would run. The
+            # setup screen now re-derives the auto rule client-side anyway
+            # (config_body.effective_plan) -- it has to, because the brain
+            # dropdown moves the resolved planner without a round-trip -- so
+            # `run.plan` here is just the initial resolved value, not the reason
+            # the client can avoid re-deriving.
             "plans": ["auto", "schedule", "llm"],
             "run": {
                 "brain": self._brain_name(),
                 "plan": self.plan_mode,
+                # The RAW request (#791): "auto" until someone opts out. The
+                # setup screen defaults its dropdown to this, so an untouched
+                # dropdown truthfully means "keep the session's request".
+                "plan_request": self._plan_mode_flag,
                 "steps": self.num_steps,
                 "stop_time": self._stop_time(),
                 "max_cost": self.ledger.max_cost_usd,
@@ -1712,6 +1828,10 @@ class PennStepper:
             # The RESOLVED planner (#787), matching `brain` above -- what the
             # run will actually do, not the "auto" that was asked for.
             "plan": self.plan_mode,
+            # ...and the "auto" (or explicit value) that WAS asked for (#791),
+            # so a saved run's re-run seed reproduces the request rather than
+            # freezing the resolution.
+            "plan_request": self._plan_mode_flag,
             "sim_config": self._sim_config_for_manifest(),
             "run": {
                 "steps": self.num_steps,
@@ -1771,7 +1891,8 @@ class PennStepper:
         ):
             time.sleep(self.stall_seconds)
         decide_info = {}
-        raw, _chats = step(
+        social_info: dict = {}
+        raw, chats = step(
             self.game,
             self.chars,
             self.state,
@@ -1801,7 +1922,12 @@ class PennStepper:
             deciding_sink=(
                 self._deciding_sink if self.llm_client is not None else None
             ),
+            social_info=social_info,
         )
+        self._conversations_total += chats
+        for pair in social_info.get("pairs", ()):
+            self._co_settled_by_pair[pair] = self._co_settled_by_pair.get(pair, 0) + 1
+        self._co_settled_total += social_info.get("co_settled", 0)
         self.last_deciders = decide_info.get("deciders", 0)
         for name in decide_info.get("timeouts", ()):
             # Mirror the injector's FIRE print: the skipped decision must be
@@ -1891,20 +2017,50 @@ class PennStepper:
         self._persist_events_seen = len(self.game.events)
 
     def _finish_run(self) -> None:
-        # Idempotent: the live loop keeps ticking a finished day (every tick
-        # returns None) and only the first one flips the status. The tail
-        # flush catches events (and wishes, #622) logged after the final tick
-        # (#307).
+        # The tail flush catches events (and wishes, #622) logged after the
+        # final tick (#307) -- these stay outside the idempotence guard below
+        # since a straggler can land between two calls here (e.g. two
+        # already-finished ticks with a POST /world/event between them) and
+        # each is a cheap no-op without a store or new pending item anyway.
         self._persist_pending_events()
         self._persist_pending_wishes()
+        # Idempotent from here down: the live loop keeps ticking a finished
+        # day (every tick returns None) and repeated POST /resume calls on an
+        # already-finished run reach here too -- only the FIRST call may warn
+        # or touch the store, or a long-lived live loop would re-print the
+        # #795 warning below forever.
+        if self._run_finished:
+            return
+        # #795: a run that never gave two agents a moment together produced no
+        # conversation and could not have. Say so -- that silence is the whole
+        # complaint the issue opened with. A resumed run is excluded: its
+        # accumulators restart at 0 with this process (unlike cost, which
+        # #543's _cost_base carries across resume) rather than being
+        # reconstructed from persisted frames, so a zero here means "this
+        # process didn't see it", not "it never happened" -- printing would be
+        # a false alarm, and silence beats that.
         if (
-            self.run_store is not None
-            and self._run_id is not None
-            and not self._run_finished
+            self.llm_client is not None
+            and self._step_idx
+            and not self._co_settled_total
+            and not self._resumed
         ):
-            self.run_store.update_run(self._run_id, status="finished")
+            print(
+                f"  - WARNING no two agents were ever settled together in "
+                f"{self._step_idx} steps -- conversation was impossible this "
+                f"run (#795). Check the day plans: try --plan schedule to "
+                f"compare."
+            )
+        if self.run_store is not None and self._run_id is not None:
+            # Re-stamp the manifest as well as the status: `daily_plans` (#824)
+            # is only final once the day is over, since maybe_revise_plan can
+            # rewrite an agent's unstarted tail at any tick. Everything else in
+            # the blob is build-time constant, so this changes nothing else.
+            self.run_store.update_run(
+                self._run_id, status="finished", manifest=self._store_manifest()
+            )
             self._write_run_record()
-            self._run_finished = True
+        self._run_finished = True
 
     def _write_run_record(self) -> None:
         """Save the run's reproducibility recipe next to its frames (#715).
@@ -1923,7 +2079,13 @@ class PennStepper:
                 "sha256": file_sha256(self._cassette_path),
             },
             engine_version=self._engine_sha,
-            result={"steps": self._step_idx, "cost_usd": self._run_cost_usd()},
+            result={
+                "steps": self._step_idx,
+                "cost_usd": self._run_cost_usd(),
+                "co_settled_pair_steps": self._co_settled_total,
+                "by_pair": self._by_pair_json(),
+                "conversations": self._conversations_total,
+            },
         )
         record.save(str(self.run_store.root / self._run_id / "run.yaml"))
 

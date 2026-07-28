@@ -1,0 +1,10 @@
+game: penn
+seed: 42
+cassette:
+  path: cassette.jsonl
+  sha256: f07ff110005cbb76dcfd6bf0b5d01f7ac176cfa26c24a157c1a07bbfe0322f09
+engine_version: d655e139
+result:
+  steps: 977
+  cost_usd: 1.003473
+steps: []

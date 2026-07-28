@@ -16,7 +16,7 @@ schedule:
   # for coffee here (see the `meetings` block below), so this window stays long.
   steps: 150
 - place: Williams Hall
-  activity: giving a midday lecture
+  activity: giving a lecture
   emoji: 🗣️
   steps: 25
 - place: Van Pelt — Microtext Collection

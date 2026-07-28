@@ -256,6 +256,17 @@ class RecordingClient:
         """Delegate to the wrapped client."""
         return self._inner.preflight()
 
+    def register_schedule(self, name: str, schedule) -> None:
+        """Pass an optional scripted-brain schedule through the wrapper.
+
+        Schedule registration configures a client; it is not an LLM request, so
+        it deliberately writes nothing to the cassette. Real paid clients do
+        not expose this hook and remain a harmless no-op.
+        """
+        register = getattr(self._inner, "register_schedule", None)
+        if callable(register):
+            register(name, schedule)
+
     def close(self):
         if self._owns_writer:
             self._writer.close()

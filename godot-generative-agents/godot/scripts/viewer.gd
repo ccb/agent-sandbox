@@ -88,14 +88,19 @@ const MONTHS := [
 # no activity/goal bubbles) -- a visible bubble means "this agent is speaking right
 # now". A bubble is this wide (its text wraps and centres inside); position.x =
 # -half that centres it over the sprite.
-const BUBBLE_WIDTH := 210.0
-# Bubble text size, and how far the bubble's top sits above the nameplate.
+const BUBBLE_WIDTH := 210.0        # default/min bubble width; long text widens toward BUBBLE_MAX_WIDTH
+const BUBBLE_MAX_WIDTH := 380.0    # cap so a wide (expanded) bubble can't blanket neighbouring agents
+const BUBBLE_WIDE_AT := 350        # char count at which the box reaches BUBBLE_MAX_WIDTH (ramps from BUBBLE_MAX_CHARS)
 const BUBBLE_FONT_SIZE := 18
-const BUBBLE_Y_OFFSET := 78.0
-# The per-agent "thinking…" cue (#551) parks this much further up than the
-# speech bubble, so a mid-decision agent who is also mid-conversation shows
-# both without them overlapping.
-const THINK_Y_EXTRA := 30.0
+# Each floating label is BOTTOM-anchored: its bottom edge is pinned this many px
+# above the sprite head and the box grows UPWARD as text wraps taller, so a long
+# utterance never descends onto the sprite (see scripts/bubble_anchor.gd). The
+# three gaps stagger the labels (dialogue lowest, then thinking, then wish) so
+# the common co-occurring pair — a mid-decision agent who is also mid-conversation
+# — shows both without overlap; a very long line can still reach the tier above
+# on the rare step two are visible at once (tolerated, as before).
+const BUBBLE_BOTTOM_GAP := 80.0   # dialogue speech bubble
+const THINK_BOTTOM_GAP := 135.0   # "thinking…" cue, above a 2-line dialogue bubble
 # A conversation plays back as staggered turn-taking: each line is shown for this
 # many sim steps, by ONLY its speaker, before the reply takes over -- so a
 # back-and-forth reads as a real exchange, not both agents talking at once. Each
@@ -112,12 +117,12 @@ const BUBBLE_MAX_CHARS := 120
 const SPEECH_TEXT_COLOR := Color(0.10, 0.10, 0.12)
 
 # Wish bubble (#622 ActionWish, surfaced #625): a distinct 💭 marker shown over
-# the wishing agent, parked ABOVE the dialogue bubble's slot (BUBBLE_Y_OFFSET)
-# so the two never overlap on the rare step where both fire. Unlike the
-# dialogue bubble's staggered turn-taking playback, a wish is a single flash:
-# it fades in, holds, and fades out over WISH_FADE_STEPS sim steps once
-# triggered (see _update_agent_wish / _refresh_wish_bubble).
-const WISH_BUBBLE_Y_OFFSET := 140.0
+# the wishing agent, bottom-anchored a tier above the dialogue bubble's slot
+# (WISH_BOTTOM_GAP > BUBBLE_BOTTOM_GAP) so the two never overlap on the rare step
+# where both fire. Unlike the dialogue bubble's staggered turn-taking playback, a
+# wish is a single flash: it fades in, holds, and fades out over WISH_FADE_STEPS
+# sim steps once triggered (see _update_agent_wish / _refresh_wish_bubble).
+const WISH_BOTTOM_GAP := 175.0   # 💭 wish bubble, top tier
 const WISH_FADE_STEPS := 8.0
 const WISH_FADE_IN_STEPS := 1.0
 const WISH_FADE_OUT_STEPS := 2.0
@@ -151,6 +156,7 @@ const ActionTally := preload("res://scripts/action_tally.gd")
 const GifEncoder := preload("res://scripts/gif_encoder.gd")
 const ClipExport := preload("res://scripts/clip_export.gd")
 const LiveClipSpan := preload("res://scripts/live_clip_span.gd")
+const BubbleAnchor := preload("res://scripts/bubble_anchor.gd")
 const ThinkingIndicator := preload("res://scripts/thinking_indicator.gd")
 const AgentFanout := preload("res://scripts/agent_fanout.gd")
 const LivePacer := preload("res://scripts/live_pacer.gd")
@@ -234,6 +240,7 @@ var _convo_lines := {}      # name -> the transcript [[speaker, line], ...] bein
 var _convo_start := {}      # name -> sim step (float) the exchange began playing
 var _convo_partner := {}    # name -> the other speaker's name, for the link
 var _bubble_idx := {}       # name -> transcript line currently in its bubble (-1 = none)
+var _expanded := {}         # name -> bool: render the current line in full instead of clipped (click to toggle; still hides off-turn)
 var _links_node: Node2D     # parents one Line2D per active conversation pair
 var _link_lines := {}       # sorted "A\nB" pair key -> Line2D
 var _speech_style: StyleBoxFlat
@@ -1425,19 +1432,24 @@ func _spawn_agent(name: String, index: int) -> void:
 	bubble.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	bubble.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	bubble.custom_minimum_size = Vector2(BUBBLE_WIDTH, 0)
-	# Centre it over the sprite and park it above the nameplate (which sits at
-	# -(foot_lift + half + 50) after the feet-anchor lift); it grows downward but the
-	# clip keeps it short.
-	bubble.position = Vector2(
-		-BUBBLE_WIDTH / 2.0, -(foot_lift + SPRITE_HALF_PX + 50.0 + BUBBLE_Y_OFFSET)
-	)
+	# Bottom-anchored just above the nameplate; _refresh_bubble re-anchors from the
+	# current line's measured height each time it's shown, so it grows upward.
+	_anchor_bubble(bubble, BUBBLE_BOTTOM_GAP)
 	bubble.visible = false
 	node.add_child(bubble)
+
+	# Click the bubble to expand it in place into the full conversation transcript
+	# (_on_bubble_input toggles _expanded[name]; _refresh_bubble renders it). A
+	# pointing-hand cursor advertises it. Clicking the SPRITE still tracks (its Area2D
+	# hit box is over the body, below this bubble), so the two gestures don't collide.
+	bubble.mouse_filter = Control.MOUSE_FILTER_STOP  # Label defaults to IGNORE; opt in to clicks
+	bubble.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	bubble.gui_input.connect(_on_bubble_input.bind(name))
 
 	# A wish "thought" marker (#622 ActionWish, surfaced #625): a distinct 💭
 	# bubble that flashes over the agent the moment they wish for an action the
 	# game doesn't have. Parked further above the nameplate than the dialogue
-	# bubble (WISH_BUBBLE_Y_OFFSET > BUBBLE_Y_OFFSET) so the two never overlap;
+	# bubble (WISH_BOTTOM_GAP > BUBBLE_BOTTOM_GAP) so the two never overlap;
 	# _update_agent_wish triggers it, _refresh_wish_bubble fades it.
 	var wish_bubble := Label.new()
 	wish_bubble.add_theme_font_size_override("font_size", BUBBLE_FONT_SIZE)
@@ -1446,9 +1458,7 @@ func _spawn_agent(name: String, index: int) -> void:
 	wish_bubble.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	wish_bubble.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	wish_bubble.custom_minimum_size = Vector2(BUBBLE_WIDTH, 0)
-	wish_bubble.position = Vector2(
-		-BUBBLE_WIDTH / 2.0, -(foot_lift + SPRITE_HALF_PX + 50.0 + WISH_BUBBLE_Y_OFFSET)
-	)
+	_anchor_bubble(wish_bubble, WISH_BOTTOM_GAP)
 	wish_bubble.visible = false
 	node.add_child(wish_bubble)
 
@@ -1465,9 +1475,12 @@ func _spawn_agent(name: String, index: int) -> void:
 	think.add_theme_constant_override("outline_size", 4)
 	think.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	think.custom_minimum_size = Vector2(BUBBLE_WIDTH, 0)
-	think.position = Vector2(
-		-BUBBLE_WIDTH / 2.0, -(SPRITE_HALF_PX + 50.0 + BUBBLE_Y_OFFSET + THINK_Y_EXTRA)
-	)
+	# Seed one line of text so its measured height is valid from the first anchor,
+	# then bottom-anchor like the others (this also picks up foot_lift, which the
+	# old fixed offset omitted). Its text is a single line always, so its height —
+	# and thus its bottom-anchored position — is stable while it animates.
+	think.text = "thinking"
+	_anchor_bubble(think, THINK_BOTTOM_GAP)
 	think.visible = false
 	think.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	node.add_child(think)
@@ -1553,6 +1566,23 @@ func _on_agent_input(
 	):
 		get_viewport().set_input_as_handled()
 		_panel.toggle_track(name)
+
+
+func _on_bubble_input(event: InputEvent, name: String) -> void:
+	# Left-click toggles this agent's bubble between the clipped one-line-at-a-time
+	# playback and the current line rendered in full (its whole utterance, in a box
+	# widened to fit — see _refresh_bubble). Either way the bubble still follows the
+	# dialogue: it hides on the partner's turns and when the exchange ends. No manual
+	# redraw needed: _process refreshes bubbles every frame, even while paused.
+	# Mark the click handled so it isn't also read as a map drag/pan.
+	if (
+		event is InputEventMouseButton
+		and event.pressed
+		and event.button_index == MOUSE_BUTTON_LEFT
+	):
+		get_viewport().set_input_as_handled()
+		_expanded[name] = not bool(_expanded.get(name, false))
+		_bubble_idx[name] = -1  # re-render next frame: the line switches clipped<->full
 
 
 func _tile_to_world(x: int, y: int) -> Vector2:
@@ -2379,11 +2409,12 @@ func _update_agent_speech(name: String, frame: Dictionary, step: int) -> void:
 		var lines: Array = []
 		for pair in chat:
 			if pair is Array and (pair as Array).size() >= 2:
-				lines.append([String(pair[0]), _clip(String(pair[1]))])
+				lines.append([String(pair[0]), String(pair[1])])  # full text; collapsed view clips at render
 		_convo_lines[name] = lines
 		_convo_start[name] = float(step)
 		_convo_partner[name] = _other_speaker(chat, name)
 		_bubble_idx[name] = -1
+		_expanded[name] = false  # a new exchange starts collapsed, never inheriting a stale expansion
 	_last_chat[name] = chat
 
 
@@ -2408,34 +2439,73 @@ func _refresh_deciding(name: String) -> void:
 		return
 	var think: Label = _agents[name]["think"]
 	think.visible = _deciding_state.is_deciding(name)
+	if think.visible:
+		_anchor_bubble(think, THINK_BOTTOM_GAP)
+
+
+func _anchor_bubble(label: Label, gap: float) -> void:
+	# Pin `label`'s BOTTOM edge `gap` px above the sprite head so it grows upward
+	# as its wrapped text gets taller, never covering the sprite. foot_lift matches
+	# _spawn_agent (constant across agents); the head sits at -(foot_lift + SPRITE_HALF_PX).
+	# fit_to_text shrink-wraps the box to the current text first -- without it a
+	# collapsed bubble keeps the tall box of the expanded line it grew to (a Label
+	# never self-shrinks) -- and returns the recomputed height for the anchor.
+	var foot_lift := SPRITE_HALF_PX - float(_tile_px)
+	var bottom_y := -(foot_lift + SPRITE_HALF_PX + gap)
+	# Scale the box width to the amount of text so a long line reflows into a wider,
+	# shorter box instead of a tall column (capped at BUBBLE_MAX_WIDTH). Lines clipped
+	# to BUBBLE_MAX_CHARS stay at the min width, so normal playback never jitters --
+	# only the click-to-expand pin (the one text that exceeds the clip) actually widens.
+	var width := BubbleAnchor.width_for(
+		label.text.length(), BUBBLE_WIDTH, BUBBLE_MAX_WIDTH, BUBBLE_MAX_CHARS, BUBBLE_WIDE_AT)
+	label.custom_minimum_size = Vector2(width, 0.0)
+	# Center on the ACTUAL width (label.size.x after fit_to_text), not BUBBLE_WIDTH, or
+	# a widened bubble would render off-center from the sprite.
+	var height := BubbleAnchor.fit_to_text(label)
+	label.position = BubbleAnchor.top_left(label.size.x, bottom_y, height)
 
 
 func _refresh_bubble(name: String, fpos: float) -> void:
 	# Play this agent's conversation back one line at a time: show its bubble only
 	# during the slots where IT is the speaker (with that line's text), and hide it
 	# on the partner's turns and once the exchange is over -- so the dialogue reads
-	# as staggered turn-taking rather than both agents speaking at once.
+	# as staggered turn-taking rather than both agents speaking at once. A bubble
+	# clicked "expanded" follows this SAME timeline (it still vanishes on the partner's
+	# turn and at the end); expanding only renders the current line in full (the
+	# collapsed view clips it), at full opacity, in a box widened to fit.
 	var bubble: Label = _agents[name]["bubble"]
 	var lines: Array = _convo_lines.get(name, [])
 	if lines.is_empty():
+		_expanded[name] = false  # nothing to show; drop a stale expand flag
 		bubble.visible = false
 		return
+
+	bubble.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var elapsed := fpos - float(_convo_start.get(name, 0.0))
 	var total := float(lines.size()) * DIALOGUE_LINE_STEPS
 	if elapsed < 0.0 or elapsed >= total:
-		bubble.visible = false
+		bubble.visible = false  # exchange over -- expanded or not, the bubble disappears
 		return
 
 	var idx := int(elapsed / DIALOGUE_LINE_STEPS)  # whose turn it is right now
 	var pair: Array = lines[idx]
 	if String(pair[0]) != name:
-		bubble.visible = false  # the partner is speaking this turn
+		bubble.visible = false  # the partner is speaking this turn (an expanded bubble hides too)
 		return
 
+	# Set the text only when the shown line changes; _on_bubble_input clears _bubble_idx
+	# on a click so a toggle re-renders the SAME line clipped<->full. Expanded shows the
+	# whole utterance (collapsed clips at BUBBLE_MAX_CHARS); _anchor_bubble then fits the
+	# box to whichever it is.
+	var expanded := bool(_expanded.get(name, false))
 	if _bubble_idx.get(name, -1) != idx:
 		_bubble_idx[name] = idx
-		bubble.text = String(pair[1])
+		bubble.text = String(pair[1]) if expanded else _clip(String(pair[1]))
+	_anchor_bubble(bubble, BUBBLE_BOTTOM_GAP)  # re-fit width + height to the current text
 	bubble.visible = true
+	if expanded:
+		bubble.modulate.a = 1.0  # pinned open: full opacity, no fade, easy to read
+		return
 	# Ease in at the start of the line and out at its end, for a spoken beat.
 	var within := elapsed - float(idx) * DIALOGUE_LINE_STEPS
 	var fade_in := clampf(within, 0.0, 1.0)
@@ -2472,6 +2542,7 @@ func _refresh_wish_bubble(name: String, fpos: float) -> void:
 		bubble.visible = false
 		return
 	bubble.text = String(_wish_text.get(name, ""))
+	_anchor_bubble(bubble, WISH_BOTTOM_GAP)  # re-anchor for this wish's height
 	bubble.visible = true
 	var fade_in := clampf(elapsed / WISH_FADE_IN_STEPS, 0.0, 1.0)
 	var fade_out := clampf((WISH_FADE_STEPS - elapsed) / WISH_FADE_OUT_STEPS, 0.0, 1.0)

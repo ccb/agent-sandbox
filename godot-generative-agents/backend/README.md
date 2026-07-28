@@ -702,8 +702,14 @@ advancing **on its own** while frontends follow along:
 
   `frame` is one sim step in the **replay frame schema** — the same per-agent
   dict a baked `penn_replay.json` carries, so live and baked viewers share one
-  contract. `status` marks run-state changes
-  (`started|paused|resumed|reset|finished|stopped`). `engine` wraps a
+  contract. A `frame` also carries `tick_ms` (the tick's wall time) and, when
+  the stepper reports it, `run_usage` — the run-scoped call/cost counters and
+  the #795 social block (`serve_penn.PennStepper.run_usage()`), so a dashboard's
+  run totals and social card ride this feed instead of a separate `/usage` poll
+  (#819). `status` marks run-state changes
+  (`started|paused|resumed|reset|finished|stopped`); the `reset` record carries
+  a freshly-zeroed `run_usage` too, so those counters drop the instant a rebuild
+  lands. `engine` wraps a
   [change-feed record](#the-events-change-feed) the stepper drained from the
   engine during that tick (steppers opt in by implementing `drain_events()`).
   `intervention` records a human write ([`POST /agents/{name}/say`](#post-agentsnamesay)
@@ -899,11 +905,16 @@ persona library adjacent to the world YAML (`personas`, with `in_default_cast`
 and the currently active `cast` ids), the #564 `SimulationConfig` knobs
 (`knobs.defaults` / `knobs.current`, key-carrying sections stripped), the
 advertised `brains` (`llm` appears only when the server env holds
-`ANTHROPIC_API_KEY` — keys never travel over HTTP), and the `run` controls
-(`brain`, `steps`, derived `stop_time`, `max_cost`, `tick_seconds`).
+`ANTHROPIC_API_KEY` — keys never travel over HTTP), the advertised day-`plans`
+vocabulary (`auto`/`schedule`/`llm`, #787), and the `run` controls
+(`brain`, `steps`, derived `stop_time`, `max_cost`, `tick_seconds`, the
+resolved `plan` the current brain would run, and `plan_request` — the RAW
+planner request, e.g. `auto`, that the setup dropdown defaults to so an
+untouched form keeps the session's request, #791).
 
-`POST /config` (any subset of `{cast, brain, sim_config, steps, tick_seconds,
-max_cost}`) applies the setup by rebuilding through the stepper's reset path
+`POST /config` (any subset of `{cast, brain, plan, sim_config, steps,
+tick_seconds, max_cost}` — `plan` is the day-planner request, #791) applies
+the setup by rebuilding through the stepper's reset path
 and echoes it back (`applied`), alongside the standard rebuild signal
 (`status` record, `reason: "reset"`, additive `run_id`). After the first
 `POST /resume` the gate closes: `status` reads `"locked"` and `POST /config`
@@ -1356,10 +1367,10 @@ endpoints (`/runs`, above) serve the same history over HTTP.
 
 An **offline** eval over a finished run's exported artifacts — no live
 coupling, no new export fields. It reads a baked replay JSON *or* a RunStore
-run directory and writes a per-agent day-coherence report: four rubric
-dimensions (plan coherence, temporal sanity, social grounding, memory use),
-each scored 1–10 with cited step examples, plus a run-level summary — so
-cognition changes (#579) can be compared run-over-run.
+run directory and writes a per-agent day-coherence report: five rubric
+dimensions (plan coherence, temporal sanity, social grounding, world
+grounding, memory use), each scored 1–10 with cited step examples, plus a
+run-level summary — so cognition changes (#579) can be compared run-over-run.
 
 ```bash
 # a baked replay (regenerate it first — it's git-ignored):
@@ -1384,6 +1395,12 @@ any declined/malformed reply — including the free `LLM_PROVIDER=mock`
 provider, which declines every tool call — falls back to the heuristic, so a
 report always completes. `--format json` emits the raw report dict instead of
 markdown.
+
+The run summary also carries `weakest` (the lowest-scoring agent, name and
+score) and `loops` (participant pairs that kept re-running one conversation:
+their conversation count and mean novelty). Both render in the markdown report.
+A run mean over agents hides a broken pair behind a healthy majority, so read
+the floor and the flags, not just the mean (#781).
 
 ## Penn world matrix artifacts
 

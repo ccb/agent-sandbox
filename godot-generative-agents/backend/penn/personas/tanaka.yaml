@@ -4,16 +4,23 @@ home: Penn campus
 persona: I am Professor Tanaka, 47, a physicist at Penn. I am precise and warm with
   students, and happiest explaining the universe with a marker in hand.
 emoji: 🔬
-# Starts outside Irvine, where she is hosting an afternoon guest lecture, and stays
+# Starts outside Irvine, where she is hosting a morning guest lecture, and stays
 # long enough that Diego and Sofia arrive while she is still setting up.
 start_tile:
 - 180
 - 212
 schedule:
 - place: Irvine Auditorium
-  activity: setting up for an afternoon guest lecture
+  # The 10:00 start time lives here, not only in the world event (#795 post-run
+  # review): attach_agents deliberately never seeds the public-event
+  # announcement to its own host (her schedule already carries the
+  # commitment), so without the time in her own authored activity string she
+  # would never learn it while Diego and Sofia -- who DO get the announcement
+  # -- do. This string mirrors into her t=0 plan memory (attach_agents), so a
+  # real planner reads the same clock time on both sides of the lecture.
+  activity: setting up for the 10:00 guest lecture on gravitational waves
   emoji: 🔬
-  # Holds the hall all afternoon -- long enough that Sofia (who only drifts over
+  # Holds the hall all morning -- long enough that Sofia (who only drifts over
   # after a long spell in the gallery) arrives while she is still there (see
   # `meetings` below).
   steps: 800

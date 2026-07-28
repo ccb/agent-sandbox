@@ -176,6 +176,26 @@ a **gallery** of every snapshot taken this session, each captioned with its time
 click one to enlarge it (`←`/`→` to browse, `Esc` to close). Snapshots live in memory
 for the session — saving them to disk is a separate follow-up.
 
+**Analyzing a saved run offline.** `tools/analyze_run.py` (promoted from a
+batch-2 scratch script, #795) summarises one `runs/<id>/` directory: verbs,
+`talk_to` share, conversations, and co-settled pair-steps (two agents settled
+within earshot of each other, with a per-pair breakdown):
+
+```bash
+uv run python godot-generative-agents/tools/analyze_run.py <run-id>
+uv run python godot-generative-agents/tools/analyze_run.py <run-id> --json
+uv run python godot-generative-agents/tools/analyze_run.py --self-check
+```
+
+Co-settled prefers the count `run.yaml`'s `result:` block already carries
+(the backend's own tally) and only falls back to approximating it from
+`frames.jsonl` for runs saved before that counter existed — frames alone
+can't tell settled from merely-idle, so the fallback can over-report. Either
+way the output states which source it used. Like the sibling
+`most_common_actions.py` / `most_wanted_actions.py`, it's stdlib-only and
+reads a run without importing the engine, so it stays runnable against an
+archived run long after the code that wrote it has moved on.
+
 ### Live mode — follow a running sim (issue #263)
 
 The same scene can **follow a live simulation over real HTTP + WebSocket**

@@ -21,6 +21,7 @@ to a file, and the live server (``penn.serve_penn``) drives ``step`` tick-by-tic
 
 import concurrent.futures
 
+from text_adventure_games.conversation import can_converse
 from text_adventure_games.planning import (
     ACTION_FAILED,
     BEHIND_SCHEDULE,
@@ -32,6 +33,7 @@ from text_adventure_games.reporting import Channel, Message, default_renderer
 from text_adventure_games.usage import UsageLedger
 
 from .cognition import (
+    at_scheduled_stop,
     attach_agents,
     maybe_converse,
     maybe_react,
@@ -42,6 +44,7 @@ from .cognition import (
     remember_decide_timeout,
     remember_outcome,
     score_new_memories,
+    settle_after_dead_talk,
 )
 from backend.drives import accrue_thirst
 from .sim_clock import SimClock
@@ -145,21 +148,6 @@ def _model_duration_steps(agent, clock, cog) -> int | None:
     return _minutes_to_steps(minutes, clock)
 
 
-def _settle_after_dead_talk(st: dict, step_idx: int, cog: "CognitionConfig") -> None:
-    """Brief settle after a decide-level talk that produced no real
-    conversation (issue #689): a talk is instantaneous (never sets
-    `performing`), so without this the agent is instantly `due` again every
-    tick until the #86 pair cooldown expires -- a fully paid decide+score
-    retry loop. `on_plan = False` is load-bearing: it routes this settle's
-    expiry (the top-of-tick pre-pass) through the "deviation completed"
-    branch, which un-latches without calling `schedule.advance()` -- a dead
-    talk never completed a real schedule stop.
-    """
-    st["performing"] = True
-    st["on_plan"] = False
-    st["perform_until"] = step_idx + cog.dead_talk_settle_steps
-
-
 def _settles_in_place(game, command: str) -> bool:
     """Did this command's verb opt into the #581 pacing slots? Those verbs
     (perform, study, and any future #446 verb whose ``ARGUMENTS_SCHEMA``
@@ -179,6 +167,57 @@ def _decision_trace(agent, command: str, ok: bool) -> list:
     consults = list(getattr(agent, "last_trace", None) or [])
     verb = command.split(" ", 1)[0] if command else ""
     return consults + [{"kind": "action", "tool": verb, "ok": ok}]
+
+
+def count_co_settled(game, chars, state, order) -> list[tuple[str, str]]:
+    """Pairs that could actually have talked to each other this step (#795).
+
+    Both halves are the real gates :func:`cognition.maybe_converse` applies:
+
+    * **settled** -- ``(performing or conversing) and not path``. A talk_to-
+      opened conversation (:func:`cognition._advance_conversation`) never sets
+      ``performing`` -- it pins ``conversing`` instead, and the agent was
+      already idle (``not path``) the instant it decided to talk -- so
+      ``performing`` alone missed every conversing pair that started that way
+      and undercounted a run that plainly had conversation in it (#795 review:
+      a real 77-step talk between two settled agents scored 0). An idle agent
+      (neither flag set) still does not count;
+    * **within earshot** -- :func:`conversation.can_converse`, the exact
+      predicate :func:`conversation.find_conversation_pairs` uses, so this
+      goes through the game's ``audience_for`` seam. That matters on Penn:
+      ``penn_world`` overrides ``audience_for`` with
+      ``perceivable_locations`` + ``can_perceive`` (Chebyshev ``vision_r``),
+      because "Penn campus" is one outdoor hub Location spanning the whole
+      map. A plain ``location is location`` test would score two agents idling
+      hundreds of tiles apart as a co-settled pair-step -- letting a still-dead
+      run report healthy opportunity and suppress the zero-warning. This is the
+      number that decides whether #795 is fixed, so it has to mean what it says.
+
+    Deliberately *not* applied: cooldowns, the conversing pin, and busy-ness.
+    This measures the **opportunity** to talk, not eligibility to start a new
+    conversation right now, so a pair mid-conversation or on cooldown still
+    counts. That is what makes the count comparable across runs (#795's
+    399-vs-0 table).
+
+    A ``None`` location never pairs: two agents who are nowhere are not
+    together. (``can_converse`` would also reject them, via the default
+    ``audience_for``; the filter keeps them out of the O(n^2) scan and out of
+    an override's way.) Same budget :func:`maybe_react`'s proximity scan
+    already pays.
+    """
+    settled = [
+        name
+        for name in order
+        if (state[name]["performing"] or state[name].get("conversing"))
+        and not state[name]["path"]
+        and chars[name].location is not None
+    ]
+    return [
+        (a, b)
+        for i, a in enumerate(settled)
+        for b in settled[i + 1 :]
+        if can_converse(game, chars[a], chars[b])
+    ]
 
 
 def step(
@@ -202,6 +241,7 @@ def step(
     decide_pending: dict | None = None,
     decide_info: dict | None = None,
     deciding_sink=None,
+    social_info: dict | None = None,
 ) -> tuple[dict, int]:
     """Run exactly one 10-second tick and return ``(frame, chats_this_step)``.
 
@@ -309,50 +349,73 @@ def step(
         ):
             maybe_revise_plan(char, RevisionTrigger(BEHIND_SCHEDULE, step_idx), clock)
 
-        # Has the current activity run its course? (#581) Advance the stop
-        # pointer ONLY if the completed activity happened at the scheduled place
-        # (on-plan). A deviation keeps the pointer -- the scheduled stop never
-        # ran, so advancing would silently skip it -- and just un-latches so the
-        # agent re-decides. The mock is always on-plan, so this is byte-identical.
+        # Has the current activity run its course? (#581) A completed activity
+        # credits the stop it was doing -- wherever it ran (#831). Only a
+        # dead-talk idle credits nothing, because it completed nothing.
         if (
             st["performing"]
             and st["perform_until"] is not None
             and step_idx >= st["perform_until"]
             and not st.get("conversing")
         ):
-            # #778: `on_plan` is now also set by
-            # cognition._credit_stop_for_conversation, so a real conversation
-            # held at the scheduled place advances the pointer exactly like a
-            # performed activity. Byte-identical for the mock, which never
-            # converses.
+            # #831: this used to require an ON-PLAN settle -- one at the scheduled
+            # stop's own place. An agent that did the right activity somewhere
+            # else never credited the stop, so the pointer pinned an errand it had
+            # finished, and `maybe_revise_plan` could not clear it either: its
+            # re-anchor guard keeps every stop up to and including `stop_index`
+            # (cognition.maybe_revise_plan), so the stale stop sat inside the
+            # protected prefix. Advancing is what hands the DEVIATED revision --
+            # already fired at deviation time -- a tail it is allowed to rewrite.
             #
-            # When advance() returns False (this was the last stop) `performing`
-            # stays True with `perform_until` None, so the agent settles at its
-            # final stop for the rest of the run. That is deliberate -- the same
-            # "stay put" end-of-day rule as the perform branch below -- and it is
-            # load-bearing for the mock bake: un-latching here would make the
-            # mock re-decide at its last stop and drift every later frame.
+            # #778: a real conversation credits the stop the same way
+            # (cognition._credit_stop_for_conversation, wherever it was held --
+            # #831 dropped its place check too), and `settle_after_dead_talk`
+            # (#689) is the one path that clears the flag. Byte-identical for
+            # the mock, which never converses.
             #
-            # ponytail: only a performed activity or a conversation credits a
-            # stop -- an agent frozen by repeated *blocked* actions still never
-            # advances here. Upgrade: a general stop deadline, rejected for now
-            # (bake-drift risk, and stop_since re-anchors on any arrival so it
-            # wouldn't have fixed the reported agent; see the design spec's
-            # "Rejected: a general stop deadline").
-            if st.get("on_plan", True):
-                if char.agent.schedule.advance():
-                    st["performing"] = False
-                    # A new stop begins now: the decide-context block (#580)
-                    # measures "how long on this stop" from here (re-anchored
-                    # again on arrival if the stop needs a walk).
-                    st["stop_since"] = step_idx
-                st["perform_until"] = None
-            else:
-                # Deviation completed: keep the pointer, un-latch, re-anchor the
-                # elapsed clock so the next decision starts fresh.
-                st["performing"] = False
-                st["perform_until"] = None
+            # ponytail: an agent frozen by repeated *blocked* actions still never
+            # advances here. Most blocked commands never latch at all, so they
+            # never reach this gate -- but a blocked TALK is the exception:
+            # `settle_after_dead_talk` (#689) latches it, and it DOES reach this
+            # gate, arriving with `credit_stop` already False. It un-latches
+            # without advancing and is free to repeat the same dropped talk next
+            # tick, so a REPEATING blocked-talk loop still never moves the
+            # pointer. Upgrade: a general stop deadline, still rejected (bake-
+            # drift risk; see the design spec's "Rejected: a general stop
+            # deadline"). The narrower #838 clock gate below is the safe upgrade:
+            # it only holds the pointer when the next stop explicitly declares a
+            # start_hour; it does not invent a deadline for ordinary authored
+            # stops. #831 removed the place condition, not this one.
+            credited = st.get("credit_stop", True)
+            current_hour = clock.hour_at(step_idx) if clock is not None else None
+            advanced = credited and char.agent.schedule.advance(current_hour)
+            # advance() also returns False while an explicitly anchored next
+            # stop is not due. That is not end-of-day: un-latch so the agent can
+            # settle again, then retry the pointer when its next activity ends.
+            waiting_for_anchor = (
+                credited and not advanced and char.agent.schedule.has_next
+            )
+            # Settling here for the rest of the run is the end-of-day rule, and
+            # the mock bake rests on it -- but it belongs to an agent that
+            # genuinely finished its LAST scheduled stop, not to one that
+            # wandered off after it. Everyone else un-latches and re-decides.
+            done_for_the_day = (
+                credited
+                and not advanced
+                and not waiting_for_anchor
+                and at_scheduled_stop(char)
+            )
+            if advanced:
+                # A new stop begins now: the decide-context block (#580) measures
+                # "how long on this stop" from here (re-anchored again on arrival
+                # if the stop needs a walk). Re-anchoring exactly when the pointer
+                # moves is the #826 invariant -- a clock that restarts while the
+                # pointer stands still claims a stop just became current when it
+                # had been current all along.
                 st["stop_since"] = step_idx
+            if not done_for_the_day:
+                st["performing"] = False
+            st["perform_until"] = None
 
         if not st["path"] and not st["performing"] and not st.get("conversing"):
             due.append(name)
@@ -543,10 +606,9 @@ def step(
                     # stop's furniture is for the wrong place, so drop it. The
                     # mock only ever travels to its scheduled stop, so it keeps
                     # the hint -> byte-identical.
-                    stop_place = getattr(char.agent.schedule, "destination", None)
                     furniture = (
                         getattr(char.agent.schedule, "furniture", None)
-                        if dest is not None and dest.name == stop_place
+                        if at_scheduled_stop(char)
                         else None
                     )
                     st["path"] = (
@@ -575,16 +637,22 @@ def step(
                     # the mock only ever emits perform, whose settle is unchanged.
                     st["performing"] = True
                     schedule = char.agent.schedule
-                    # Place-match is the pacing-relevant signal: standing at the
-                    # scheduled stop means this completed that stop (a different
-                    # activity at the right place is a believability matter for
-                    # the #584 eval, not a pacing desync). A place mismatch is a
-                    # deviation (handled by Task 4's advance gating + revision).
-                    stop_place = getattr(schedule, "destination", None)
-                    matched = (
-                        char.location is not None and char.location.name == stop_place
-                    )
-                    st["on_plan"] = matched
+                    # #831: a completed activity credits its stop wherever it
+                    # ran. This flag used to be the place match, so an agent that
+                    # did the right thing somewhere else credited nothing and the
+                    # pointer pinned a finished errand for hours. `matched` stays
+                    # the *place* signal for its three other consumers below: the
+                    # emoji, the DEVIATED plan revision, and the unbounded-perform
+                    # ceiling (the `elif matched or clock is None` check) -- while
+                    # the flag the pre-pass reads is now "this settle earned the
+                    # credit".
+                    matched = at_scheduled_stop(char)
+                    # Always True, never `matched`: this also re-stamps over a
+                    # False left by a dead-talk settle, which nothing else
+                    # clears. Delete this line and the first dead talk leaves the
+                    # flag False permanently -- the stop pointer would never
+                    # advance again for the rest of the run.
+                    st["credit_stop"] = True
                     activity = char.get_property("activity") or "spending time"
                     if not matched:
                         # Off-plan: let the planner rewrite the stale tail so the
@@ -643,16 +711,13 @@ def step(
                     # happens on exactly these drink commands) flips the health
                     # cue here rather than via a frame-time override.
                     schedule = char.agent.schedule
-                    stop_place = getattr(schedule, "destination", None)
-                    matched = (
-                        char.location is not None and char.location.name == stop_place
-                    )
+                    matched = at_scheduled_stop(char)
                     st["pron"] = _resting_pron(char, schedule, matched, name, emoji)
                     activity = char.get_property("activity") or "spending time"
                     where = char.location.tile_address if char.location else "?"
                     st["desc"] = f"{activity} @ {where}"
                     if is_talk:
-                        _settle_after_dead_talk(st, step_idx, cog)
+                        settle_after_dead_talk(st, step_idx, cog.dead_talk_settle_steps)
             elif command:
                 # The agent chose a command but it failed the precondition gate.
                 reason = getattr(game.parser, "last_fail_message", "") or command
@@ -681,7 +746,7 @@ def step(
                 if is_talk:
                     # #689: a blocked talk (no co-located target this tick) is
                     # just as retry-prone as an empty one -- settle here too.
-                    _settle_after_dead_talk(st, step_idx, cog)
+                    settle_after_dead_talk(st, step_idx, cog.dead_talk_settle_steps)
 
         # Advance one tile along any active walk -- unless pinned mid-walk by
         # a react-started conversation (#370). Inert before #370: a
@@ -698,7 +763,18 @@ def step(
                 # "how long on this stop" counts time AT the stop --
                 # commensurate with the planned minutes, which budget the
                 # activity itself, not the walk there.
-                st["stop_since"] = step_idx
+                #
+                # #826: only when this arrival is AT the current stop's place.
+                # Re-anchoring on EVERY arrival meant `elapsed` was 0 on every
+                # decide that followed a walk, so the "you have been on this
+                # stop for N min" clause never rendered for a traveling agent --
+                # and an agent alternating between two errands could never see
+                # that its 10-minute coffee run had been going for two hours.
+                # The mock only ever travels to its scheduled stop, so this
+                # guard is always true under the mock and the bake is
+                # byte-identical.
+                if at_scheduled_stop(char):
+                    st["stop_since"] = step_idx
 
         frame[name] = {
             "movement": [int(st["tile"][0]), int(st["tile"][1])],
@@ -717,7 +793,7 @@ def step(
             "memories": st["memories"],
             # .get(): some state dicts (PennStepper's own init, and test
             # fixtures built before #359) don't carry this key -- same
-            # tolerance already given "on_plan" elsewhere in this file.
+            # tolerance already given "credit_stop" elsewhere in this file.
             "trace": st.get("trace", []),
         }
 
@@ -727,6 +803,11 @@ def step(
     # brain, so the default replay is unchanged.
     chats_this_step = 0
     if conversation_enabled:
+        # #795: count the opportunity to talk BEFORE any conversation machinery
+        # runs this tick, so the metric is independent of cooldowns and pins.
+        if social_info is not None:
+            pairs = count_co_settled(game, chars, state, order)
+            social_info.update(co_settled=len(pairs), pairs=pairs)
         # React-or-continue (#370): BEFORE the conversation pass, so a greet's
         # first line is spoken this same tick by maybe_converse's advance
         # phase. Off by default (cog.react_enabled) -> byte-identical.
@@ -755,6 +836,7 @@ def step(
             cooldown_steps=cog.conversation_cooldown_steps,
             max_exchanges=cog.conversation_max_exchanges,
             line_playback_steps=cog.conversation_line_playback_steps,
+            dead_talk_settle_steps=cog.dead_talk_settle_steps,
             clock=clock,
             active=active_conversations,
         )
@@ -903,6 +985,14 @@ def simulate(
     cog = cognition if cognition is not None else CognitionConfig()
 
     game, chars = build_world_fn(world_map)
+    # KNOWN GAP (#795): attach_agents also takes `events` (the world's public
+    # noticeboard, seeded at t=0) and `travel_minutes` (the map-derived
+    # cross-campus walk cost handed to the planner), and simulate() threads
+    # neither -- so a real planner driven through simulate() gets a plan with no
+    # shared anchor and no travel budget. Nothing does that today: the live path
+    # (penn.serve_penn) calls attach_agents directly and passes both, and the
+    # bake is mock-only, where both are inert. Add the two pass-throughs the day
+    # a `--plan llm` caller comes through simulate().
     attach_agents(
         chars,
         personas,
@@ -951,11 +1041,13 @@ def simulate(
             # The step the agent's current schedule stop began (walking there
             # counts) -- feeds the decide-context block (#580).
             "stop_since": 0,
-            # Did the last settle happen at the scheduled place? (#581) The
-            # pre-pass only advances the stop pointer when this is True; a
-            # deviation keeps the pointer. Defaults True so a never-performed
-            # agent's first advance is safe.
-            "on_plan": True,
+            # Did the last settle earn this stop's credit? (#581, #831) The
+            # pre-pass only advances the stop pointer when this is True. Any
+            # completed activity earns it, wherever it ran; only a dead-talk idle
+            # (cognition.settle_after_dead_talk) clears it, having completed
+            # nothing. Defaults True so a never-performed agent's first advance
+            # is safe.
+            "credit_stop": True,
             # Pinned while a multi-tick conversation runs (issue #371): step()'s
             # pre-pass skips schedule-advance/decision/movement for a conversing
             # agent, so the meeting isn't interrupted. Stays set through the

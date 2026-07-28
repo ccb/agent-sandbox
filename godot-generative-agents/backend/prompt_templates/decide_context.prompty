@@ -26,9 +26,14 @@ inputs:
   elapsed:
     type: integer
     description: >
-      Minutes the agent has been on this stop so far, re-anchored on arrival
-      so it counts time AT the stop (commensurate with the planned minutes).
-      The sentence is dropped at 0 -- the stop just began.
+      Minutes this stop has been the agent's current one, re-anchored on
+      arrival at the stop's own place so the walk there is excluded (leaving
+      it commensurate with the planned minutes). NOT "time spent at the
+      place": an agent that wanders off-plan never arrives, so the clock
+      keeps running on the stop it is neglecting -- which is the point
+      (#826). Hence "this has been your current stop", not "you have been
+      here", which would be false for exactly that agent. The sentence is
+      dropped at 0 -- the stop just became current.
 sample:
   time: Monday 12:05 PM
   place: Houston Hall
@@ -37,4 +42,4 @@ sample:
   elapsed: 15
 ---
 Right now it is {{ time }}.
-Your plan's current stop: {{ activity }} at {{ place }}{% if minutes %} (planned ~{{ minutes }} min){% endif %}.{% if elapsed %} You have been on this stop for {{ elapsed }} min.{% endif %}
+Your plan's current stop: {{ activity }} at {{ place }}{% if minutes %} (planned ~{{ minutes }} min){% endif %}.{% if elapsed %} This has been your current stop for {{ elapsed }} min.{% endif %}

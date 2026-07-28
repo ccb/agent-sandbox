@@ -10,7 +10,7 @@ It is read-only and offline: point it at a baked replay JSON (what
 ``generate_penn_replay.py`` writes) or at a #304 RunStore run directory
 (``runs/<run_id>/``). No live coupling, no new export fields.
 
-Four rubric dimensions, each scored 1-10 with cited step examples:
+Five rubric dimensions, each scored 1-10 with cited step examples:
 
 * **plan coherence** -- did the agent's actions match its plan (or deviate
   visibly), in the plan's order?
@@ -18,6 +18,8 @@ Four rubric dimensions, each scored 1-10 with cited step examples:
   should, without frame-to-frame thrash?
 * **social grounding** -- do conversation lines reference real shared context
   (both participants' streams), between agents actually standing together?
+* **world grounding** -- does the agent avoid claiming first-hand experience
+  of (or inviting someone to) a place that doesn't exist in this world?
 * **memory use** -- were the memories retrieved for a decision relevant to
   the action taken?
 
@@ -165,6 +167,7 @@ class AgentEvidence:
     vision_r: float
     start_dt: datetime.datetime | None
     sec_per_step: int
+    world_places: list[str] = field(default_factory=list)  # meta.locations (#780)
 
     def time_at(self, step: int) -> str:
         """The sim wall-clock at *step* (``HH:MM``), or the bare step number
@@ -209,9 +212,12 @@ def _conversations_in(frames: list[dict]) -> list[Conversation]:
     are the agents carrying it.
 
     This leans on the viewer contract that a window's transcript is repainted
-    *identically* frame to frame. A producer that instead accumulated lines
-    per frame would key each growth as a new window and overcount -- if that
-    contract ever changes, this grouping must change with it.
+    *identically* frame to frame. A producer that instead accumulates lines
+    per frame keys each growth as a new window here -- ``build_evidence``
+    merges those growth windows back together right after calling this
+    (:func:`_merge_growth_windows`, #799), so callers never see the
+    fragmentation even though this function's own grouping stays
+    identical-payload keying.
     """
     conversations: list[Conversation] = []
     open_convs: dict[str, Conversation] = {}  # transcript key -> in-progress window
@@ -242,6 +248,65 @@ def _conversations_in(frames: list[dict]) -> list[Conversation]:
     return conversations
 
 
+def _merge_growth_windows(conversations: list[Conversation]) -> list[Conversation]:
+    """Collapse one live conversation's per-tick growth into a single window.
+
+    ``_conversations_in`` groups frames by *identical* chat payload, and warns
+    in its own docstring that a producer accumulating lines per frame "would
+    key each growth as a new window and overcount". The multi-tick producer
+    (#371) does exactly that -- one Dana/Casey meeting registered as 23
+    windows -- which both fragments window context and would score the same
+    line many times over.
+
+    Starting no later than one step after the open window's end AND one
+    transcript a prefix of the other means the same meeting growing
+    tick-by-tick; the longer transcript wins. The prefix check matters: two
+    windows that merely overlap in time but carry unrelated transcripts are a
+    different conversation, not a growth, and must not be collapsed into one --
+    doing so would silently discard whichever transcript lost, along with any
+    confabulation inside it.
+
+    "The open window" is tracked **per participant set**, not as the single last
+    window appended. The producer keys its ``active`` map by pair frozenset, so
+    two pairs can be talking at the same time; their growth fragments then
+    interleave in ``(start, end)`` order, and comparing each one against the
+    previous window overall would hand every A--B fragment a C--D window to fail
+    the participants check against -- restoring the whole #799 overcount exactly
+    when conversations overlap, which on a campus of fifteen is often. Keying by
+    participants makes the old equality check redundant; the adjacency and prefix
+    guards still keep a pair's genuinely *separate* later meeting apart, since it
+    starts long after the earlier window's end.
+
+    Called centrally from ``build_evidence``, right after ``_conversations_in``,
+    so every dimension -- ``social_grounding``, ``world_grounding``, and the LLM
+    judge's ``evidence_text`` -- reads the same merged ``AgentEvidence.conversations``
+    (#799). It started out local to ``_world_grounding`` alone, deferred because
+    fixing it centrally would move already-published ``social_grounding`` scores;
+    that review has since happened.
+    """
+    merged: list[Conversation] = []
+    open_window: dict[frozenset[str], Conversation] = {}
+    for conv in sorted(conversations, key=lambda c: (c.start, c.end)):
+        key = frozenset(conv.participants)
+        prev = open_window.get(key)
+        if prev is not None and conv.start <= prev.end + 1:
+            short, long_ = sorted((conv.transcript, prev.transcript), key=len)
+            if long_[: len(short)] == short:  # a growth of the open window
+                prev.end = max(prev.end, conv.end)
+                if len(conv.transcript) > len(prev.transcript):
+                    prev.transcript = list(conv.transcript)
+                continue
+        window = Conversation(
+            start=conv.start,
+            end=conv.end,
+            participants=list(conv.participants),
+            transcript=list(conv.transcript),
+        )
+        merged.append(window)
+        open_window[key] = window
+    return merged
+
+
 def build_evidence(replay: dict) -> dict[str, AgentEvidence]:
     """Digest *replay* into one :class:`AgentEvidence` per persona."""
     meta = replay.get("meta", {})
@@ -251,7 +316,8 @@ def build_evidence(replay: dict) -> dict[str, AgentEvidence]:
     start_dt = _parse_start(meta)
     sec_per_step = int(meta.get("sec_per_step", 10))
     vision_r = float(meta.get("vision_r", 8))
-    conversations = _conversations_in(frames)
+    conversations = _merge_growth_windows(_conversations_in(frames))
+    world_places = sorted(meta.get("locations") or [])
 
     evidence: dict[str, AgentEvidence] = {}
     for spec in personas:
@@ -285,12 +351,13 @@ def build_evidence(replay: dict) -> dict[str, AgentEvidence]:
             vision_r=vision_r,
             start_dt=start_dt,
             sec_per_step=sec_per_step,
+            world_places=world_places,
         )
     return evidence
 
 
 # ---------------------------------------------------------------------------
-# Scores and the rubric's four dimensions
+# Scores and the rubric's five dimensions
 # ---------------------------------------------------------------------------
 
 # The rubric, in report order. Every judge scores exactly these.
@@ -298,8 +365,20 @@ DIMENSIONS = (
     "plan_coherence",
     "temporal_sanity",
     "social_grounding",
+    "world_grounding",
     "memory_use",
 )
+
+# A silent agent this co-located had someone to talk to and did not. Below it,
+# social grounding stays n/a -- solitude is not a social failure (#781).
+SILENT_COLOCATION_FLOOR = 0.10
+
+# A pair that met this often and said this little that was new was re-running one
+# conversation, not having several (#778, flagged for #781). On the #760 batch-1
+# runs these catch both loop pairs (0.44, 0.54) and neither healthy pair
+# (0.72, 0.84). A false positive costs a line of report text, not a score.
+REPEAT_LOOP_MIN_CONVERSATIONS = 3
+REPEAT_LOOP_MAX_NOVELTY = 0.60
 
 
 @dataclass
@@ -358,6 +437,81 @@ _STOPWORDS = {
 }
 
 
+# Common nouns for places a campus agent might invent (issue #780). Case is
+# useless here: the real confabulations -- "boathouse", "the river", "athletic
+# complex" -- were all lowercase. A hit is only a candidate: it is discarded
+# when it falls inside a real location name, so "Kamin Gallery" and "Reception
+# Hall" don't false-positive.
+# ponytail: naive gazetteer; the LLM judge is the backstop when it misses.
+_PLACE_NOUNS = frozenset(
+    """annex arena bar boathouse bridge cafe center centre complex courtyard
+    creek dorm field garden gallery gym lab market museum park pool quad rink
+    restaurant river shop stadium station store studio theater theatre trail
+    track""".split()
+)
+
+# Phrases that turn naming a place into a checkable claim: having been there,
+# or inviting someone to go. Taken from the actual #780 transcript rather than
+# invented. Bare mentions are allowed -- see the spec's non-goal.
+_EXPERIENCE_CUES = (
+    "been there",
+    "check it out",
+    "come by",
+    "down there",
+    "i went",
+    "made it down",
+    "make it down",
+    "meet me",
+    "minute walk",
+    "shots of",
+    "show me",
+    "swing by",
+    "totally went",
+    "walk if you",
+    "went to",
+)
+
+
+def _names_only_real_places(text: str, real: str, world_places: list[str]) -> bool:
+    """Does this one line name a place that exists here, and none that doesn't?
+
+    Cue matching in :meth:`HeuristicJudge._world_grounding` is window-scoped, so a
+    partner's *allowed* off-map backstory makes every cue-carrying line in the
+    window attributable -- including "meet me at the Cafe", where the Cafe is real
+    (issue #807). A line that grounds itself is exempt -- even when its cue is
+    corroborating something off-map named elsewhere in the window, which is a
+    real recall ceiling (#807); the LLM judge is the backstop for what that lets
+    through.
+
+    Two ways to name a real place, and both are needed. A gazetteer noun that
+    resolves real covers "cafe"; a ``meta.locations`` name appearing verbatim
+    covers "Van Pelt Library", which the common-noun gazetteer does not carry. The
+    shipped Penn world matches exactly one gazetteer noun ("gallery", via Van Pelt
+    -- Kamin Gallery), so the noun check alone would exempt almost nothing there.
+
+    Two guards, one each. A line naming *any* off-map noun returns False at once,
+    so "the Library, then the boathouse" still scores. A line naming no place at
+    all satisfies neither half of the return below, so Casey's "Oh yeah, I totally
+    went!" stays eligible -- that is the corroborator catch.
+    """
+    low = text.lower()
+    words = {word for word in re.findall(r"[a-z]+", low) if word in _PLACE_NOUNS}
+    if any(word not in real for word in words):
+        return False
+    # A boundary check, not a bare substring: a one-word world place ("Bar")
+    # would otherwise match inside "barely". Lookaround, not `\b`: `\b` matches a
+    # transition, so it needs a word character on exactly one side -- after a name
+    # ending in punctuation ("Reading Room (2F)") it demands that the *next*
+    # character be one, and a trailing space fails it. `(?!\w)` asks only that no
+    # word character follows, which is what we actually mean. The place-noun check
+    # above can stay a plain `in real` test because it compares whole words
+    # against the joined name list.
+    return bool(words) or any(
+        re.search(rf"(?<!\w){re.escape(place.lower())}(?!\w)", low)
+        for place in world_places
+    )
+
+
 def _content_words(text: str) -> set[str]:
     """The meaningful lowercase words of *text* (4+ letters, minus stopwords).
 
@@ -379,6 +533,74 @@ def _longest_nondecreasing(values: list[int]) -> int:
             if values[j] <= values[i]:
                 best[i] = max(best[i], best[j] + 1)
     return max(best)
+
+
+def _decisions_in(retrievals: list[dict]) -> list[dict]:
+    """Collapse repainted retrieval frames into one entry per decision.
+
+    A frame carries the act and the memories retrieval surfaced for it, and the
+    producer repaints both unchanged for every step the activity runs. Scoring
+    each repaint counted one match once per step -- 1200 frames of Diego's #760
+    batch-1 run are 14 decisions -- which handed a monotonous day a perfect
+    memory-use score (#781).
+
+    Same collapse ``_segments_for`` does for acts and ``_merge_growth_windows``
+    (#799) does for conversations.
+    """
+    decisions: list[dict] = []
+    previous = None
+    for r in retrievals:
+        key = (r["act"], json.dumps(r["memories"], sort_keys=True))
+        if key != previous:
+            decisions.append(r)
+            previous = key
+    return decisions
+
+
+def _repeat_loops(evidence: dict[str, AgentEvidence]) -> list[dict]:
+    """Participant pairs that kept re-running the same conversation.
+
+    The run mean cannot express "two of these five agents were stuck in a
+    groundhog-day loop" -- it averages them in with the healthy majority. So
+    name the pathology instead of trying to compress it into a score (#781).
+
+    Novelty per window is the fraction of its content words the pair had not
+    already used; a pair whose mean falls below
+    :data:`REPEAT_LOOP_MAX_NOVELTY` over at least
+    :data:`REPEAT_LOOP_MIN_CONVERSATIONS` windows is flagged.
+    """
+    windows: dict[frozenset[str], dict[tuple[int, int], Conversation]] = {}
+    for ev in evidence.values():
+        for conv in ev.conversations:
+            # Every window appears in each participant's evidence -- key by span
+            # so a pair's shared conversation is counted once.
+            pair = frozenset(conv.participants)
+            windows.setdefault(pair, {})[(conv.start, conv.end)] = conv
+
+    loops: list[dict] = []
+    for pair, spans in windows.items():
+        ordered = [spans[k] for k in sorted(spans)]
+        if len(ordered) < REPEAT_LOOP_MIN_CONVERSATIONS:
+            continue
+        said_before: set[str] = set()
+        novelties = []
+        for conv in ordered:
+            words = _content_words(
+                " ".join(line[1] for line in conv.transcript if len(line) == 2)
+            )
+            novelties.append(len(words - said_before) / len(words) if words else 1.0)
+            said_before |= words
+        mean_novelty = sum(novelties) / len(novelties)
+        if mean_novelty < REPEAT_LOOP_MAX_NOVELTY:
+            loops.append(
+                {
+                    "participants": sorted(pair),
+                    "conversations": len(ordered),
+                    "mean_novelty": round(mean_novelty, 2),
+                }
+            )
+    loops.sort(key=lambda loop: (loop["mean_novelty"], loop["participants"]))
+    return loops
 
 
 # ---------------------------------------------------------------------------
@@ -406,6 +628,7 @@ class HeuristicJudge:
             "plan_coherence": self._plan_coherence(ev),
             "temporal_sanity": self._temporal_sanity(ev),
             "social_grounding": self._social_grounding(ev, evidence_by_name),
+            "world_grounding": self._world_grounding(ev),
             "memory_use": self._memory_use(ev),
         }
 
@@ -430,28 +653,39 @@ class HeuristicJudge:
     # -- dimension 1: plan coherence -----------------------------------------
 
     def _plan_coherence(self, ev: AgentEvidence) -> DimScore:
-        """Did the agent do what its plan says, in the plan's order?
+        """Did the agent get through its plan, in the plan's order?
 
-        *coverage*: the fraction of the day (step-weighted) spent in segments
-        that match some schedule stop. *order*: of the matched segments, the
-        fraction that appear in schedule order (longest non-decreasing run of
-        stop indices). A shuffled day keeps coverage but destroys order; a
-        swapped plan destroys coverage.
+        *progress*: how far through the schedule the day actually got -- the
+        longest in-order run of DISTINCT matched stops, over the number of
+        stops. *order*: of every matched segment, the fraction that appears in
+        schedule order (longest non-decreasing run of stop indices).
+
+        The two multiply, so a day has to both advance and stay in sequence.
+        Progress alone would miss a shuffled day -- a scrambled run reaches the
+        same stops, just not in that sequence, which only *order* sees.
+
+        Progress replaces the old *coverage* term, which asked whether a segment
+        matched **some** stop. That read 100% for every one of the 23 agents in
+        the #760 batch-1 runs: the act text carries its "@ Building:Room"
+        address, and the address always shares a word with the stop it belongs
+        to, so coverage discriminated nothing and an agent parked on the
+        "spending time" placeholder for 977 steps scored a perfect 10 (#781).
         """
         if not ev.segments or not ev.schedule:
             return DimScore(None, note="no schedule or no frames to compare")
         matches = self._match_segments(ev)
-        total = sum(seg.steps for seg in ev.segments)
-        on_plan = sum(
-            seg.steps for seg, m in zip(ev.segments, matches) if m is not None
-        )
-        coverage = on_plan / total if total else 0.0
         matched_order = [m for m in matches if m is not None]
-        order = (
-            _longest_nondecreasing(matched_order) / len(matched_order)
-            if matched_order
-            else 0.0
-        )
+        if not matched_order:
+            return DimScore(
+                _scale(0.0), [], "the day never reached a single planned stop"
+            )
+        reached: list[int] = []
+        for m in matched_order:
+            if m not in reached:
+                reached.append(m)
+        stops_reached = _longest_nondecreasing(reached)
+        progress = min(1.0, stops_reached / len(ev.schedule))
+        order = _longest_nondecreasing(matched_order) / len(matched_order)
         evidence = []
         for seg, m in zip(ev.segments, matches):
             if m is not None and len(evidence) < 2:
@@ -469,10 +703,10 @@ class HeuristicJudge:
                 )
                 break
         return DimScore(
-            _scale(0.5 * coverage + 0.5 * order),
+            _scale(progress * order),
             evidence,
-            f"{coverage:.0%} of the day on a planned stop; "
-            f"{order:.0%} of matched segments in plan order",
+            f"reached {stops_reached} of {len(ev.schedule)} planned stops "
+            f"in order; {order:.0%} of matched segments in plan order",
         )
 
     # -- dimension 2: temporal sanity ----------------------------------------
@@ -554,14 +788,45 @@ class HeuristicJudge:
 
         Per conversation: were the participants actually standing together
         (within vision_r) while it played; does each speaker actually belong
-        to it; and do its lines reference context found in BOTH participants'
-        memory streams (not confabulation)?
+        to it; do its lines reference context found in BOTH participants'
+        memory streams (not confabulation); and does it say anything the pair
+        has not already said (#781)?
         """
         if not ev.conversations:
-            return DimScore(None, note="no conversations observed for this agent")
+            near = sum(
+                1
+                for step in range(ev.n_steps)
+                if any(
+                    step < len(other.positions)
+                    and (ev.positions[step][0] - other.positions[step][0]) ** 2
+                    + (ev.positions[step][1] - other.positions[step][1]) ** 2
+                    <= ev.vision_r**2
+                    for name, other in evidence_by_name.items()
+                    if name != ev.name
+                )
+            )
+            fraction = near / ev.n_steps if ev.n_steps else 0.0
+            if fraction < SILENT_COLOCATION_FLOOR:
+                return DimScore(None, note="no conversations observed for this agent")
+            # Scored, not skipped: an n/a drops out of every mean, so never
+            # speaking used to be free -- R4's silent Wesley Okafor was the
+            # top-scoring agent in the whole #760 batch-1 (#781). Flat, because
+            # the dimension has nothing to grade; the note carries what happened.
+            return DimScore(
+                _scale(0.0),
+                [
+                    f"within sight of another agent for {near} of "
+                    f"{ev.n_steps} steps without ever speaking"
+                ],
+                f"never spoke, though within sight of another agent for "
+                f"{fraction:.0%} of the run",
+            )
         scores = []
         evidence = []
-        for conv in ev.conversations:
+        # Per-pair vocabulary so far, for the novelty term below. Windows are
+        # already start-ordered; sorting says so rather than relying on it.
+        spoken: dict[frozenset[str], set[str]] = {}
+        for conv in sorted(ev.conversations, key=lambda c: (c.start, c.end)):
             others = [p for p in conv.participants if p in evidence_by_name]
             # Co-location: every pair within vision_r on each window step.
             together = 0
@@ -611,13 +876,29 @@ class HeuristicJudge:
                     )
             grounding = grounded / substantive if substantive else 1.0
 
-            scores.append(0.4 * coloc + 0.4 * grounding + 0.2 * valid)
+            # Novelty: how much of this window is new to this pair. A pair
+            # re-running the same conversation scored a perfect 10 before --
+            # every re-run is co-located, valid, and grounded in streams that by
+            # then contain everything they have already said (#781). It decays
+            # monotonically across the #778 loops (1.00 -> 0.04) and stays high
+            # for pairs whose conversations actually go somewhere.
+            pair = frozenset(conv.participants)
+            said_before = spoken.get(pair, set())
+            window_words = _content_words(" ".join(text for _, text in lines))
+            novelty = (
+                len(window_words - said_before) / len(window_words)
+                if window_words
+                else 1.0
+            )
+            spoken[pair] = said_before | window_words
+
+            scores.append(0.3 * coloc + 0.3 * grounding + 0.1 * valid + 0.3 * novelty)
             evidence.append(
                 f"steps {conv.start}-{conv.end} ({ev.time_at(conv.start)}): "
                 f"conversation between {', '.join(conv.participants)} -- "
                 f"co-located {coloc:.0%} of the window, "
                 f"{grounded}/{substantive} substantive lines grounded in both "
-                f"streams"
+                f"streams, {novelty:.0%} of its words new to this pair"
             )
         return DimScore(
             _scale(sum(scores) / len(scores)),
@@ -625,20 +906,148 @@ class HeuristicJudge:
             f"{len(ev.conversations)} conversation(s) checked",
         )
 
-    # -- dimension 4: memory use ----------------------------------------------
+    # -- dimension 4: world grounding -----------------------------------------
+
+    def _world_grounding(self, ev: AgentEvidence) -> DimScore:
+        """Does the agent talk about places that actually exist (issue #780)?
+
+        Naming an off-map place is allowed -- a rower may talk about her
+        boathouse. What is not allowed is claiming first-hand experience of it
+        or inviting someone to meet there, so only cue-carrying lines score.
+
+        Cues are matched **per window, not per line**: the worst line in the
+        run that motivated this ("Oh yeah, I totally went! The light was
+        perfect down there") names no place at all, and is only attributable
+        because the partner named the boathouse earlier in the same window.
+
+        Window scoping costs precision, so a line that names a real place and no
+        off-map one is exempt (#807): "meet me at the Cafe" is not a claim about
+        my partner's boathouse just because she mentioned it in the same window.
+        """
+        if not ev.conversations:
+            return DimScore(None, note="no conversations observed for this agent")
+        if not ev.world_places:
+            return DimScore(
+                None, note="replay carries no meta.locations (baked before #780)"
+            )
+        real = " | ".join(ev.world_places).lower()
+        scores: list[float] = []
+        evidence: list[str] = []
+        for conv in ev.conversations:
+            lines = [line for line in conv.transcript if len(line) == 2]
+            # Every place-noun word this window names at all, and which of
+            # those are off-map. Tracking *both* (not just the off-map ones)
+            # is what lets the evidence say what the classifier saw: "cafe,
+            # gym -- all real" reads differently from "saw nothing", even
+            # though both currently score 10.0 -- and a real Penn world where
+            # "Franklin Field" kills "field" or "Pottruck Gym" kills "gym" (the
+            # substring check is deliberate, see module docstring) needs that
+            # distinction visible, or a blinded gazetteer is invisible too.
+            seen = sorted(
+                {
+                    word
+                    for _, text in lines
+                    for word in re.findall(r"[a-z]+", text.lower())
+                    if word in _PLACE_NOUNS
+                }
+            )
+            invented = [word for word in seen if word not in real]
+            mine = [(sp, tx) for sp, tx in lines if sp == ev.name]
+            if not mine:
+                continue
+            # A partition, not a filter: a line the #807 exemption dropped is a
+            # *third* outcome, and the summary below asserts something false
+            # about the window unless it can see them (#809).
+            claimed: list[tuple[str, str]] = []
+            exempted: list[tuple[str, str]] = []
+            for sp, tx in mine:
+                if not invented or not any(
+                    cue in tx.lower() for cue in _EXPERIENCE_CUES
+                ):
+                    continue
+                bucket = (
+                    exempted
+                    if _names_only_real_places(tx, real, ev.world_places)
+                    else claimed
+                )
+                bucket.append((sp, tx))
+            scores.append(1.0 - len(claimed) / len(mine))
+            for sp, tx in claimed[:3]:
+                # Name the cue phrase(s) that turned this line into a claim:
+                # it is real signal, and it makes two claims in one window read
+                # distinctly instead of emitting the same string twice. Cues
+                # are a fixed vocabulary with no place nouns in it, so quoting
+                # them cannot smuggle a raw place name back into the evidence
+                # and mask a place-classification assertion (see #780 I2).
+                cues = ", ".join(c for c in _EXPERIENCE_CUES if c in tx.lower())
+                evidence.append(
+                    f"steps {conv.start}-{conv.end} ({ev.time_at(conv.start)}): "
+                    f'{sp} claims first-hand experience ("{cues}") in a window '
+                    f"that names {', '.join(invented)} -- not in this world"
+                )
+            if exempted:
+                # An exempted line is not "nobody claimed anything", so it must
+                # not fall through to the branch below, which says exactly that
+                # (#809). Report what happened instead: the cue, the off-map
+                # place the window scoping attached it to, and why it wasn't
+                # scored. Cues and `invented` only, same #780 I2 rule as above.
+                for sp, tx in exempted[:3]:
+                    cues = ", ".join(c for c in _EXPERIENCE_CUES if c in tx.lower())
+                    evidence.append(
+                        f"steps {conv.start}-{conv.end} ({ev.time_at(conv.start)}): "
+                        f'{sp} uses a first-hand cue ("{cues}") in a window that '
+                        f"names {', '.join(invented)} -- not scored: the line "
+                        f"names a real place and no off-map one"
+                    )
+            elif invented and not claimed:
+                evidence.append(
+                    f"steps {conv.start}-{conv.end}: mentions {', '.join(invented)} "
+                    f"(not in this world) without claiming to have been there -- "
+                    f"allowed, not scored"
+                )
+            elif not claimed:
+                # No claim was flagged here -- but say what the classifier
+                # actually saw, so a gazetteer that silently missed everything
+                # doesn't read the same as a genuinely clean day. (When a claim
+                # WAS flagged, the per-line findings above already name what was
+                # seen, so this summary would only repeat them.) Reaching this
+                # branch means `invented` is empty -- a non-empty `invented`
+                # with no claim took one of the branches above -- so the verdict
+                # is just "nothing" vs "all real".
+                verdict = (
+                    f"place words seen: {', '.join(seen)} -- all real"
+                    if seen
+                    else "no place words seen"
+                )
+                evidence.append(
+                    f"steps {conv.start}-{conv.end} ({ev.time_at(conv.start)}): "
+                    f"{verdict}; {len(mine)} line(s) of {ev.name} checked"
+                )
+        if not scores:
+            return DimScore(None, note="this agent said nothing in any window")
+        return DimScore(
+            _scale(sum(scores) / len(scores)),
+            evidence,
+            f"{len(scores)} conversation window(s) checked against "
+            f"{len(ev.world_places)} real place(s)",
+        )
+
+    # -- dimension 5: memory use ----------------------------------------------
 
     def _memory_use(self, ev: AgentEvidence) -> DimScore:
         """Were the memories retrieved for each decision relevant to it?
 
         A decision frame carries the memories retrieval surfaced for it; a
         relevant retrieval shares a content word with the action taken (or
-        the reasoning given for it).
+        the reasoning given for it). Counted once per *decision*, not once per
+        frame -- see :func:`_decisions_in` (#781).
         """
-        if not ev.retrievals:
+        decisions = _decisions_in(ev.retrievals)
+        if not decisions:
             return DimScore(None, note="no decision frames carry retrieved memories")
         relevant = 0
         evidence = []
-        for r in ev.retrievals:
+        for r in decisions:
             decision_words = _content_words(f"{r['act']} {r.get('reasoning') or ''}")
             hit = None
             for mem in r["memories"]:
@@ -658,11 +1067,11 @@ class HeuristicJudge:
                     f"{len(r['memories'])} retrieved memories relate to "
                     f"'{r['act']}'"
                 )
-        fraction = relevant / len(ev.retrievals)
+        fraction = relevant / len(decisions)
         return DimScore(
             _scale(fraction),
             evidence,
-            f"{relevant}/{len(ev.retrievals)} decisions used a relevant memory",
+            f"{relevant}/{len(decisions)} decisions used a relevant memory",
         )
 
 
@@ -706,7 +1115,18 @@ def audit(
         )
         for dim in DIMENSIONS
     }
-    overall = _mean([a["overall"] for a in agents.values() if a["overall"] is not None])
+    scored = {
+        name: a["overall"] for name, a in agents.items() if a["overall"] is not None
+    }
+    overall = _mean(list(scored.values()))
+    # The floor beside the mean: a run mean over agents lets a broken pair hide
+    # behind a healthy majority, which is how #760's groundhog-day run outscored
+    # the healthiest one (#781).
+    weakest = (
+        {"name": min(scored, key=lambda n: scored[n]), "score": min(scored.values())}
+        if scored
+        else None
+    )
     return {
         "run": {
             "source": source,
@@ -716,7 +1136,12 @@ def audit(
         },
         "judge": judge_info(judge),
         "agents": agents,
-        "summary": {"overall": overall, "by_dimension": by_dimension},
+        "summary": {
+            "overall": overall,
+            "weakest": weakest,
+            "loops": _repeat_loops(evidence),
+            "by_dimension": by_dimension,
+        },
     }
 
 
@@ -752,7 +1177,7 @@ _DIM_SCHEMA = {
 BELIEVABILITY_TOOL = {
     "name": "grade_believability",
     "description": (
-        "Grade one agent's recorded day on the four believability dimensions, "
+        "Grade one agent's recorded day on the five believability dimensions, "
         "1-10 each, with step-cited evidence."
     ),
     "parameters": {
@@ -792,6 +1217,10 @@ def evidence_text(ev: AgentEvidence, evidence_by_name: dict[str, AgentEvidence])
         lines.append(
             f"Sim day starts {ev.start_dt}; one step is {ev.sec_per_step}s; "
             f"{ev.n_steps} steps recorded."
+        )
+    if ev.world_places:
+        lines.append(
+            "Places that exist in this world: " + ", ".join(ev.world_places) + "."
         )
 
     lines += ["", "Schedule (the plan the day was generated from):"]
@@ -1001,6 +1430,19 @@ def render_markdown(report: dict) -> str:
             f"| {_label(dim)} | {_fmt_score(report['summary']['by_dimension'][dim])} |"
         )
     lines.append(f"| **Overall** | **{_fmt_score(report['summary']['overall'])}** |")
+    weakest = report["summary"].get("weakest")
+    if weakest:
+        lines.append(
+            f"| Weakest agent | {weakest['name']} ({_fmt_score(weakest['score'])}) |"
+        )
+    for loop in report["summary"].get("loops") or []:
+        lines += [
+            "",
+            f"> **Repeat-conversation loop** -- "
+            f"{' <-> '.join(loop['participants'])}: "
+            f"{loop['conversations']} conversations, mean novelty "
+            f"{loop['mean_novelty']:.2f}",
+        ]
     for name, agent in report["agents"].items():
         lines += ["", f"## {name}", "", f"Overall: **{_fmt_score(agent['overall'])}**"]
         for dim in DIMENSIONS:
