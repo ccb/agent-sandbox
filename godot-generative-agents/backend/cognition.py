@@ -2399,8 +2399,18 @@ def maybe_converse(
         # state[target_name], exactly as the old or-chain short-circuited.
         if name in busy or key in active:
             reason = "I was already in a conversation."
-        elif target is None or target.location is not char.location:
-            reason = "they were not there."
+        elif target is None or not convo.can_converse(game, char, target):
+            # Proximity gate (#835): NOT `target.location is char.location`.
+            # A Penn building interior -- or the whole outdoor hub -- is one
+            # ~2000-tile engine Location, so sharing a Location says nothing
+            # about how far apart two agents stand; the old identity check
+            # paired residents tens of tiles apart (or in different visual
+            # buildings) into a conversation that renders as stretching across
+            # the map. Route through the same `can_converse` (audience_for ->
+            # can_perceive, Chebyshev tile_gap <= vision_r) the auto-pairing
+            # scan below already uses, so this explicit opener and the
+            # automatic path agree on who is close enough to talk to.
+            reason = "they were not close enough to talk to."
         elif target_name in busy or state[target_name].get("conversing"):
             reason = "they were already talking with someone else."
         elif state[target_name]["path"]:
