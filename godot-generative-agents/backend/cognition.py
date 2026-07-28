@@ -1334,6 +1334,18 @@ def observe_and_decide(
         nearby = nearby_affordances_line(game, char)
         if nearby:
             base = f"{base}\n\n{nearby}"
+    # #826: what a walk costs, and what this agent itself just did. Both are
+    # appended AFTER the retrieve above (like the #580 block), so neither can
+    # shift which memories surface -- frames embed that list. Clock-gated, so
+    # the bake's prompts are unchanged; NOT gated on _use_action_tools, because
+    # (unlike the #613 affordances line, which advertises verbs) these two are
+    # plain context that the mock's first-line read ignores either way.
+    walk = walk_minutes_line(game, char, clock)
+    if walk:
+        base = f"{base}\n\n{walk}"
+    recent = recent_actions_block(agent, step, clock)
+    if recent:
+        base = f"{base}\n\n{recent}"
     observation = format_observation_with_memories(base, relevant)
     agent.last_observation = observation
     # Per-action tools (issue #485): a real supplied brain picks between typed

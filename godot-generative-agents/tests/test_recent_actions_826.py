@@ -168,3 +168,80 @@ def test_render_pins_the_block():
         " - 67 min ago: I am grabbing a quick coffee with maya.\n"
         " - just now: I studied genetics for 30 minutes."
     )
+
+
+# ------------------------------------------------- the decide-prompt wiring
+
+from backend.cognition import memories_for_frame, observe_and_decide  # noqa: E402
+from text_adventure_games.llm_client import (  # noqa: E402
+    MockLlmClient,
+    ToolCallResult,
+)
+
+TRAVEL = ToolCallResult(
+    text=None,
+    tool_calls=[
+        {
+            "id": "call_1",
+            "name": "travel",
+            "arguments": {"reasoning": "coffee first", "destination": "Cafe"},
+        }
+    ],
+)
+
+
+def _ada_with_brain(brain):
+    personas = _personas()
+    game, chars = build_world(None, personas, LOCATIONS)
+    attach_agents(chars, personas, llm_client=brain)
+    return game, chars["Ada"]
+
+
+def test_decide_prompt_carries_the_block_before_the_memories():
+    brain = MockLlmClient(tool_calls_responses=[TRAVEL])
+    game, ada = _ada_with_brain(brain)
+    _act(ada.agent, "I traveled to Cafe.", 300)
+
+    command = observe_and_decide(game, ada, 360, clock=SimClock(START))
+
+    assert command == "travel to Cafe"
+    user = brain.tool_calls_log[0]["messages"][-1]["content"]
+    assert "Recently, you:\n - 10 min ago: I traveled to Cafe." in user
+    # Own history first, then what retrieval surfaced.
+    assert user.index("Recently, you:") < user.index("Relevant memories:")
+    # The first non-empty line is still the location: the deterministic mock's
+    # first-line read is untouched.
+    first = next(line for line in user.splitlines() if line.strip())
+    assert "Recently" not in first
+
+
+def test_no_clock_means_no_block_in_the_prompt():
+    brain = MockLlmClient(tool_calls_responses=[TRAVEL])
+    game, ada = _ada_with_brain(brain)
+    _act(ada.agent, "I traveled to Cafe.", 300)
+
+    observe_and_decide(game, ada, 360)  # the pre-#826 call shape
+
+    user = brain.tool_calls_log[0]["messages"][-1]["content"]
+    assert "Recently, you:" not in user
+
+
+def test_the_block_does_not_shift_which_memories_surface():
+    # The two frame-visible outputs of a decide -- the command and the retrieved
+    # memories -- must be identical with and without a clock. Retrieval must keep
+    # querying the PLAIN environment text; frames embed the retrieved list, so a
+    # shifted query would change the mock bake.
+    brain1 = MockLlmClient(tool_calls_responses=[TRAVEL])
+    game1, ada1 = _ada_with_brain(brain1)
+    _act(ada1.agent, "I traveled to Cafe.", 300)
+    plain = observe_and_decide(game1, ada1, 360)
+
+    brain2 = MockLlmClient(tool_calls_responses=[TRAVEL])
+    game2, ada2 = _ada_with_brain(brain2)
+    _act(ada2.agent, "I traveled to Cafe.", 300)
+    clocked = observe_and_decide(game2, ada2, 360, clock=SimClock(START))
+
+    assert plain == clocked == "travel to Cafe"
+    assert memories_for_frame(ada1.agent.last_retrieved) == memories_for_frame(
+        ada2.agent.last_retrieved
+    )
