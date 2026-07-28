@@ -5,6 +5,7 @@ root::
     uv run pytest godot-generative-agents/tests/test_scripted_brain.py -v
 """
 
+import json
 import sys
 from pathlib import Path
 
@@ -294,6 +295,48 @@ def test_attach_agents_is_a_noop_for_a_client_without_register_schedule():
 
 
 from serve_penn import PennStepper  # noqa: E402
+
+
+def test_persisted_scripted_stepper_registers_schedules_through_recording(
+    tmp_path,
+):
+    from backend.run_store import RunStore
+    from penn_world import build_penn_world
+    from text_adventure_games.recording import RecordingClient
+
+    stepper = PennStepper(
+        num_steps=5,
+        world=build_penn_world(),
+        llm=serve_penn.SCRIPTED,
+        run_store=RunStore(tmp_path / "runs"),
+        seed=0,
+        decide_workers=0,
+    )
+    raw = stepper._raw_llm_client
+
+    assert isinstance(stepper.llm_client, RecordingClient)
+    assert isinstance(raw, ScriptedPennBrain)
+    assert set(raw._schedules) == set(stepper.chars)
+    for name, char in stepper.chars.items():
+        assert raw._schedules[name] is char.agent.schedule
+
+    stepper.tick()
+    cassette = (
+        (tmp_path / "runs" / stepper._run_id / "cassette.jsonl")
+        .read_text()
+        .splitlines()
+    )
+    decisions = [
+        call
+        for line in cassette
+        if (entry := json.loads(line)).get("method") == "call_tools"
+        for call in (entry.get("response") or {}).get("tool_calls", [])
+        if call.get("name") in {"travel", "perform"}
+    ]
+    assert decisions
+    assert all(
+        call.get("arguments", {}).get("reasoning") != "no plan" for call in decisions
+    )
 
 
 def test_stepper_under_scripted_wires_the_scripted_brains():
