@@ -762,6 +762,15 @@ def persona_meta_entry(spec):
     ``{place, activity, emoji, steps}`` stops (``steps=None`` => stays put for the
     rest of the day). ``vision_r`` is deliberately NOT here: Penn personas don't
     override it, so it stays a single top-level ``meta`` global.
+
+    ``schedule`` is the **authored seed YAML**, never the day a run executed
+    (#824). It is what the world was built from, so it is correct for the
+    inspector and identical live and baked -- but a real planner (``--plan
+    llm``, the live default) returns a ``DailyPlan`` that never writes back
+    into ``world.personas``, so on such a run this schedule is NOT what the
+    agent did. The executed plan is the run manifest's ``daily_plans``
+    (``serve_penn.PennStepper._plans_for_manifest``) or, live, ``GET
+    /agents/{name}/plan``.
     """
     return {
         "name": spec["name"],
