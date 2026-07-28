@@ -209,18 +209,26 @@ Van Pelt Library 1 min; … College Hall 17 min; Houston Hall 27 min; …
 ```
 
 Chebyshev tile gap from the character's current tile to each destination's
-**nearest** known tile, nearest first, destinations with no tiles dropped, `""`
-with no map or no clock.
+footprint, nearest first, destinations with no tiles dropped, `""` with no map or
+no clock.
 
-The shared piece with `planner.median_travel_minutes` is only the
-tile-to-tile Chebyshev step; **the anchor rule differs and must not be
-unified.** The planner anchors each address on `min(tiles)` — an arbitrary but
-deterministic pick, since it has no vantage point — and
-`test_median_travel_minutes_is_a_chebyshev_lower_bound` pins the number that
-produces. The decide line has a vantage point (the agent's tile) and anchors on
-the *nearest* tile of each address. So extract
-`chebyshev_minutes(clock, a, b) -> int | None` into `planner.py`, have both
-callers pick their own anchors, and leave the planner's result unchanged.
+The arithmetic already has a home: `WorldMap.tile_gap(addr_a, addr_b)`
+(`backend/world_map.py:126`) is the same Chebyshev over precomputed
+`address_bbox` boxes, used by the #82 perception radius. Add its
+point-source sibling beside it — `tile_gap_from(tile, address)`, the identical
+formula with a degenerate 1×1 source box — and call that. Two reasons to anchor
+on the agent's *tile* rather than its location's address: an agent standing on
+the "Penn campus" hub has no address at all (the hub's is `None`), and that is
+precisely a travel-decision point, so an address-to-address gap would render no
+line exactly where it is most useful; and the bboxes are precomputed, so this
+stays O(destinations) with no per-tile scan.
+
+**`planner.py` is not touched.** `median_travel_minutes` does its own pairwise
+Chebyshev anchored on `min(tiles)` — an arbitrary but deterministic pick, since
+it has no vantage point — and `test_median_travel_minutes_is_a_chebyshev_lower_bound`
+pins the number that produces. Unifying the two would either change the
+planner's number or force an anchor parameter through both. Leaving it alone is
+smaller and safer than extracting a shared helper.
 
 The place the agent is standing in **is** listed, at 0 min: that "you are
 already here" line is a signal in its own right, and it is what the A/B's
@@ -264,7 +272,9 @@ Offline and deterministic:
    newest-first ordering, the 3-record cap, untagged records excluded, and `""`
    with no clock and with no tagged records.
 2. `test_walk_minutes_line` — a small fake map: assert nearest-first ordering,
-   the minutes, tile-less destinations dropped, and `""` with no map.
+   the minutes, tile-less destinations dropped, and `""` with no map. Plus
+   `test_tile_gap_from` against `tile_gap`'s own fixture: a source tile inside a
+   footprint reads 0, and the existing `tile_gap` numbers are unchanged.
 3. `test_stop_since_survives_an_offplan_arrival` — the regression. Arrive at a
    place that is not the stop's place: `stop_since` unchanged, elapsed clause
    renders. Arrive at the stop's place: `stop_since` re-anchors, clause drops.
@@ -301,7 +311,7 @@ run shows the rate falling.
 | `backend/prompt_templates/walk_minutes.prompty` | new |
 | `backend/prompt_templates/README.md` | usage table |
 | `backend/run_simulation.py` | the `stop_since` arrival gate |
-| `backend/planner.py` | extract the shared Chebyshev step |
+| `backend/world_map.py` | `tile_gap_from`, beside the existing `tile_gap` |
 | `tools/analyze_run.py` | `arrived_then_departed` |
 | `tests/` | the four test groups above |
 
