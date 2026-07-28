@@ -203,6 +203,13 @@ _IMPORTANCE_ATTEMPTS = "importance_score_attempts"
 # memory) -- it should inform the day without outranking an obligation.
 EVENT_IMPORTANCE = 4.0
 
+# #826: the tag marking a memory as this agent's OWN action, and how many of
+# them the decide prompt shows. Reuses the `tags` field AgentMemory.perceive
+# already uses for {"presence"} -- no new MemoryKind, so nothing in
+# serialization, the reflection filters, or the viewer has to learn about it.
+ACTION_TAG = "action"
+RECENT_ACTIONS_MAX = 3
+
 # Bounds on the scorer's retry loop (issue #759). The rescan deliberately has no
 # cursor, so a malformed reply is retried next tick -- but unbounded, a brain
 # that keeps failing (or one that never answers score_memories) would re-send an
@@ -1140,6 +1147,46 @@ def decide_context_block(agent, step: int, clock, stop_since: int = 0) -> str:
     )
 
 
+def recent_actions_block(agent, step: int, clock) -> str:
+    """The agent's own last few actions, newest first (issue #826), or ``""``.
+
+    Retrieval cannot be relied on to surface these. ``retrieve(touch=True)`` --
+    the decision-time path -- resets ``last_accessed_turn`` on every hit, so an
+    importance-8.0 commitment memory (#778) scores recency 1.0 for the rest of
+    the run, while this agent's own importance-2.0 outcome records decay as
+    ``0.95**n``: across a 344-step (57-minute) walk, to ``3e-8``. In #760 batch 4
+    that left an agent reading six intention memories and no record of anything
+    it had done, so it re-formed the same intention at every arrival and spent
+    2 h 15 min walking between two errands it believed it had finished.
+
+    So this is a *guarantee*, not a bid: it bypasses retrieval scoring rather
+    than fighting it. Record text is rendered verbatim -- these are the agent's
+    own memories, not prose to rewrite.
+
+    Needs a clock (the bake and the offline tests thread none, so their prompts
+    are unchanged) and at least one tagged record.
+    """
+    if clock is None:
+        return ""
+    records = [
+        record
+        for record in reversed(getattr(agent.memory, "records", []))
+        if ACTION_TAG in record.tags
+    ][:RECENT_ACTIONS_MAX]
+    if not records:
+        return ""
+    return render(
+        "recent_actions",
+        actions=[
+            {
+                "minutes": clock.minutes_for_steps(max(0, step - record.created_turn)),
+                "text": record.text,
+            }
+            for record in records
+        ],
+    )
+
+
 def observe_and_decide(
     game, char, step: int, retrieval=None, *, clock=None, stop_since=0
 ):
@@ -1655,7 +1702,7 @@ def remember_outcome(
     # in live runs.
     if fail_reason is not None:
         text = render("reflection", failed=True, command=command, reason=fail_reason)
-        agent.memory.add_observation(text, turn=step, importance=3.0)
+        agent.memory.add_observation(text, turn=step, importance=3.0, tags={ACTION_TAG})
         return
 
     # The #300 water arc marks the sicken/recover *transition* with one-shot
@@ -1771,7 +1818,9 @@ def remember_outcome(
     else:
         text = render("reflection", verb=verb, command=command)
         importance = 1.0
-    record = agent.memory.add_observation(text, turn=step, importance=importance)
+    record = agent.memory.add_observation(
+        text, turn=step, importance=importance, tags={ACTION_TAG}
+    )
     # #583: the sick/recovered drink outcome is event knowledge the model can't
     # derive from text (the #300 water arc's ground-truth 8.0/5.0), so lock it --
     # score_new_memories skips locked records rather than re-guessing them.
@@ -1800,7 +1849,9 @@ def remember_decide_timeout(char, step: int) -> None:
     """
     place = char.location.name if char.location is not None else ""
     text = render("reflection", timed_out=True, place=place)
-    char.agent.memory.add_observation(text, turn=step, importance=3.0)
+    char.agent.memory.add_observation(
+        text, turn=step, importance=3.0, tags={ACTION_TAG}
+    )
 
 
 def settle_after_dead_talk(st: dict, step: int, steps: int) -> None:

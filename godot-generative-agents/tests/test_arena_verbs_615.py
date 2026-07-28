@@ -316,9 +316,9 @@ def _spy_memory(char):
     seen = {}
     orig = char.agent.memory.add_observation
 
-    def spy(text, turn=0, importance=1.0):
+    def spy(text, turn=0, importance=1.0, tags=None):
         seen["text"], seen["importance"] = text, importance
-        return orig(text, turn=turn, importance=importance)
+        return orig(text, turn=turn, importance=importance, tags=tags)
 
     char.agent.memory.add_observation = spy
     return seen
