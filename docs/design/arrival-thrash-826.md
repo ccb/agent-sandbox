@@ -161,11 +161,23 @@ wrong.
 
 ### F2 — the "Recently, you:" block (load-bearing)
 
-**Marking.** `remember_outcome` (both write sites — success and the #636 failure
-branch) and `remember_decide_timeout` pass `tags={"action"}`. This reuses the
-`tags` field `AgentMemory.perceive` already uses for `{"presence"}`: no new
-`MemoryKind`, no serialization change, no DB migration, no reflection-filter
-change.
+**Marking.** Four write sites pass `tags={"action"}`: both in `remember_outcome`
+(success and the #636 failure branch), `remember_decide_timeout`, and the
+completed-conversation record `maybe_converse` writes itself. That last one is
+easy to miss and was — `remember_outcome` returns early for `talk_to` because
+"phase 1.5 of `maybe_converse` owns both branches", so the *failure* branch
+routes back through `remember_outcome` and gets tagged while the *success* path
+writes its own record. Untagged, a dropped talk would appear in the block and a
+conversation that actually happened would not, in a social sim whose motivating
+trace is "grab coffee *with Maya*".
+
+Nothing else is tagged: the relationship note, the commitment plan, the #370
+encounter and the viewer intervention are perceptions or intentions, not the
+agent's own actions.
+
+This reuses the `tags` field `AgentMemory.perceive` already uses for
+`{"presence"}`: no new `MemoryKind`, no serialization change, no DB migration,
+no reflection-filter change.
 
 **Rendering.** New `cognition.recent_actions_block(agent, step, clock)` walks
 `agent.memory.records` backwards, takes the newest 3 records tagged `"action"`,
@@ -306,7 +318,7 @@ run shows the rate falling.
 
 | file | change |
 |---|---|
-| `backend/cognition.py` | `recent_actions_block`, `walk_minutes_line`, two calls in `observe_and_decide`, `tags={"action"}` at three write sites |
+| `backend/cognition.py` | `recent_actions_block`, `walk_minutes_line`, two calls in `observe_and_decide`, `tags={"action"}` at four write sites |
 | `backend/prompt_templates/recent_actions.prompty` | new |
 | `backend/prompt_templates/walk_minutes.prompty` | new |
 | `backend/prompt_templates/README.md` | usage table |
