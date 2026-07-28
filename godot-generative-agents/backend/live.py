@@ -286,6 +286,14 @@ class LiveRunController:
             wishes = list(drain_w()) if drain_w is not None else []
             drain_dec = getattr(self._stepper, "drain_deciding", None)
             deciding = list(drain_dec()) if drain_dec is not None else []
+            # Run-scoped usage + social block (#819), probed like the drains
+            # above: a stepper that reports per-run usage rides it on every
+            # frame so the dashboard's run counters and #795 social card stay
+            # live off the one feed, with no second polling loop. Steppers
+            # without run_usage() (the demo/scripted stand-ins) publish frames
+            # exactly as before.
+            run_usage_fn = getattr(self._stepper, "run_usage", None)
+            run_usage = run_usage_fn() if callable(run_usage_fn) else None
         return {
             "generation": generation,
             "step": step,
@@ -294,6 +302,7 @@ class LiveRunController:
             "deciders": deciders,
             "wishes": wishes,
             "deciding": deciding,
+            "run_usage": run_usage,
         }
 
     def pause(self) -> None:
@@ -414,6 +423,11 @@ async def run_loop(
             extra = (
                 {} if result["deciders"] is None else {"deciders": result["deciders"]}
             )
+            # Run-scoped usage + social (#819) rides the frame when the stepper
+            # reports it, so the run counters and the #795 social card refresh
+            # every tick off the same feed rather than a separate /usage poll.
+            if result.get("run_usage") is not None:
+                extra["run_usage"] = result["run_usage"]
             log.append(
                 "frame",
                 step=result["step"],

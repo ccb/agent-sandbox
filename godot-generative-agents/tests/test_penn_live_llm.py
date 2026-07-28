@@ -411,6 +411,11 @@ def test_run_usage_social_block_starts_at_zero(monkeypatch):
         "co_settled_pair_steps": 0,
         "by_pair": {},
         "conversations": 0,
+        # counted True (an llm brain DOES count co-settling) and resumed False
+        # (a fresh stepper), so a zero here is a real #795 signal — not the
+        # mock-brain/resumed non-signals the card must tell apart (#819/#825).
+        "counted": True,
+        "resumed": False,
     }
 
 

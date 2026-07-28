@@ -70,6 +70,12 @@ export interface FeedRecord {
   agent?: string;
   state?: string;
   elapsed_ms?: number;
+  // Run-scoped usage + social (#819): a `frame` record (and the `reset` status
+  // record) carries the stepper's run_usage() so the run counters and the #795
+  // social card ride the one feed — no separate /usage poll. A subset of
+  // UsageSummary (the run_* fields + `social`); absent on steppers/records that
+  // don't report it.
+  run_usage?: Partial<UsageSummary>;
 }
 
 // The GET /events?since=N response envelope.
@@ -111,6 +117,15 @@ export interface RunSocial {
   co_settled_pair_steps: number;
   by_pair: Record<string, number>;
   conversations: number;
+  // #819/#825: whether a zero above is meaningful. `counted` is false under the
+  // mock brain, which never counts co-settling — its permanent 0 is "not
+  // measured", not a drought. `resumed` is true when this process adopted a
+  // mid-day run, restarting the accumulators at 0 — its 0 is "not fully
+  // observed". Both mirror the backend's #795 finish-warning gate, so the card
+  // can tell a real drought from those two non-signals. Optional: a backend
+  // predating the fields omits them and the card falls back to soft wording.
+  counted?: boolean;
+  resumed?: boolean;
 }
 
 // GET /usage — the run ledger's summary (tokens and dollars, #264).
