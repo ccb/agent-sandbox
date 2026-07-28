@@ -382,14 +382,29 @@ def step(
             # tick, so a REPEATING blocked-talk loop still never moves the
             # pointer. Upgrade: a general stop deadline, still rejected (bake-
             # drift risk; see the design spec's "Rejected: a general stop
-            # deadline"). #831 removed the place condition, not this one.
+            # deadline"). The narrower #838 clock gate below is the safe upgrade:
+            # it only holds the pointer when the next stop explicitly declares a
+            # start_hour; it does not invent a deadline for ordinary authored
+            # stops. #831 removed the place condition, not this one.
             credited = st.get("credit_stop", True)
-            advanced = credited and char.agent.schedule.advance()
+            current_hour = clock.hour_at(step_idx) if clock is not None else None
+            advanced = credited and char.agent.schedule.advance(current_hour)
+            # advance() also returns False while an explicitly anchored next
+            # stop is not due. That is not end-of-day: un-latch so the agent can
+            # settle again, then retry the pointer when its next activity ends.
+            waiting_for_anchor = (
+                credited and not advanced and char.agent.schedule.has_next
+            )
             # Settling here for the rest of the run is the end-of-day rule, and
             # the mock bake rests on it -- but it belongs to an agent that
             # genuinely finished its LAST scheduled stop, not to one that
             # wandered off after it. Everyone else un-latches and re-decides.
-            done_for_the_day = credited and not advanced and at_scheduled_stop(char)
+            done_for_the_day = (
+                credited
+                and not advanced
+                and not waiting_for_anchor
+                and at_scheduled_stop(char)
+            )
             if advanced:
                 # A new stop begins now: the decide-context block (#580) measures
                 # "how long on this stop" from here (re-anchored again on arrival
