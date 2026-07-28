@@ -620,6 +620,9 @@ def test_real_brain_is_wired_and_the_injector_stands_down(monkeypatch):
     assert stepper.meta()["llm"] == {
         "provider": "anthropic",
         "model": "claude-haiku-4-5",
+        # None, not absent: the run's provenance should say "no thinking depth
+        # was requested" rather than leave a reader guessing which it was (#845).
+        "effort": None,
     }
     # The ledger is armed with the config's ceiling and shared by every client.
     assert stepper.ledger.max_cost_usd == 5.0
