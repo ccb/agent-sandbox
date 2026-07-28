@@ -195,8 +195,8 @@ def _arrived_then_departed(frames: list) -> dict:
 
     Known under-count: a zero-tile travel to the place the agent already stands
     sets `desc`/`act` to the same "walking to <place> @ <address>" string
-    (`run_simulation.py:591-597` builds it whether or not `path` comes back
-    empty), so the agent re-decides every tick with an UNCHANGED `act` and this
+    (`run_simulation.step`'s travel branch builds it whether or not `path` comes
+    back empty), so the agent re-decides every tick with an UNCHANGED `act` and this
     reads as one continuous leg, scoring 0 -- exactly what the design doc's
     "+elapsed only" A/B arm produced. Not a false-"fixed" risk in practice: that
     mode also drives `walking_share` toward 100%, the other validation number,

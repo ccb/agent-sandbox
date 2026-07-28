@@ -230,18 +230,40 @@ def test_block_caps_at_the_configured_count():
     assert "I did thing 6." not in got
 
 
-def test_block_collapses_newlines_and_caps_length_in_record_text():
+def test_block_keeps_only_the_newest_of_each_repeated_action():
+    # #826 review: #636 writes a failure memory every tick a gate blocks the
+    # SAME re-picked action, and deliberately does not dedupe at write time. Un-
+    # deduped here, the agent most likely to be stuck -- exactly this block's
+    # target -- would spend all three slots on identical failure lines and lose
+    # the history that shows it is stuck in the first place.
+    _game, ada = _ada()
+    _act(ada.agent, "I traveled to Cafe.", 0)
+    _act(ada.agent, "I am grabbing coffee.", 60)
+    for turn in (120, 180, 240):
+        _act(ada.agent, 'I tried "get latte" but it didn\'t work: not here.', turn)
+    got = recent_actions_block(ada.agent, 360, SimClock(START))
+    assert got == (
+        "Recently, you:\n"
+        ' - 20 min ago: I tried "get latte" but it didn\'t work: not here.\n'
+        " - 50 min ago: I am grabbing coffee.\n"
+        " - 60 min ago: I traveled to Cafe."
+    )
+
+
+def test_block_collapses_whitespace_and_caps_length_in_record_text():
     # #826 review, minor 6: reflection.prompty's `read` variant embeds an
     # item's whole read_text verbatim -- authored world data of arbitrary
     # length that may carry a newline, which would deform this block's
     # one-line-per-action shape. Latent today (no Penn location authors
     # read_text), cheap to guard against here rather than at every author.
     _game, ada = _ada()
-    long_text = 'I read the flyer. It said: "' + ("x" * 300) + '\nmore"'
+    # \r\n and a tab, not just \n: authored data carries every whitespace class,
+    # and a bare \r breaks a rendered line just as a newline does.
+    long_text = 'I read the flyer. It said: "' + ("x" * 300) + '\r\n\tmore"'
     _act(ada.agent, long_text, 0)
     got = recent_actions_block(ada.agent, 0, SimClock(START))
     assert len(got.splitlines()) == 2  # header + exactly one action line
-    assert "\n" not in got.splitlines()[1]
+    assert not (set("\r\n\t") & set(got.splitlines()[1]))
     action_line = got.splitlines()[1]
     assert len(action_line) <= len(" - just now: ") + RECENT_ACTION_TEXT_MAX
 

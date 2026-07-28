@@ -115,7 +115,7 @@ def test_block_reads_the_clock_and_current_stop():
     assert decide_context_block(ada.agent, 12, SimClock(START), 6) == (
         "Right now it is Monday 08:02 AM.\n"
         "Your plan's current stop: reading a novel at Cafe. "
-        "You have been on this stop for 1 min."
+        "This has been your current stop for 1 min."
     )
 
 
@@ -133,7 +133,7 @@ def test_decide_prompt_carries_the_block_after_the_environment_text():
     assert (
         "Right now it is Monday 08:02 AM.\n"
         "Your plan's current stop: reading a novel at Cafe. "
-        "You have been on this stop for 1 min."
+        "This has been your current stop for 1 min."
     ) in user
     # The first non-empty line is still the location: the deterministic mock's
     # first-line read (ScheduleMockClient._current_location) is untouched.
@@ -181,7 +181,7 @@ def test_render_pins_the_full_block():
     ) == (
         "Right now it is Monday 12:05 PM.\n"
         "Your plan's current stop: eating lunch at Houston Hall (planned ~40 min). "
-        "You have been on this stop for 15 min."
+        "This has been your current stop for 15 min."
     )
 
 
@@ -276,7 +276,7 @@ def test_step_restamps_stop_since_when_the_schedule_advances():
     assert state["Ada"]["stop_since"] == 1
     user = brain.tool_calls_log[1]["messages"][-1]["content"]
     assert "people-watching at The Green" in user
-    assert "You have been on this stop" not in user  # elapsed 0: just advanced
+    assert "This has been your current stop" not in user  # elapsed 0: just advanced
 
 
 def test_arrival_restamps_stop_since_so_elapsed_excludes_the_walk():
@@ -326,14 +326,14 @@ def test_arrival_restamps_stop_since_so_elapsed_excludes_the_walk():
     step(game, chars, state, 2, **common)  # arrival decide: perform
     user = brain.tool_calls_log[1]["messages"][-1]["content"]
     assert "reading a novel at Cafe" in user
-    assert "You have been on this stop" not in user  # walk time excluded
+    assert "This has been your current stop" not in user  # walk time excluded
 
 
 def test_stop_since_survives_an_offplan_arrival():
     # #826: arriving somewhere that is NOT the current stop's place must not
     # re-anchor stop_since. It used to, on every arrival -- so `elapsed` was 0
-    # on every decide that followed a walk and the "you have been on this stop
-    # for N min" clause never rendered for a traveling agent. An agent
+    # on every decide that followed a walk and the "this has been your current
+    # stop for N min" clause never rendered for a traveling agent. An agent
     # alternating between two errands could then never see that its 10-minute
     # coffee run had been running for two hours (the reported symptom).
     class _TwoTileWalk:
@@ -386,9 +386,55 @@ def test_stop_since_survives_an_offplan_arrival():
     # The payoff: because the clock kept running, a decide later in the day now
     # renders the elapsed clause instead of dropping it. 400 steps at 10 s/step
     # is 66 min, measured from the preserved stop_since of 0.
-    assert "You have been on this stop for 66 min." in decide_context_block(
+    assert "This has been your current stop for 66 min." in decide_context_block(
         chars["Ada"].agent, 400, SimClock(START), state["Ada"]["stop_since"]
     )
+
+
+def test_stop_since_survives_a_completed_offplan_activity():
+    # #826 review: surviving the off-plan *arrival* is not enough. Completing an
+    # off-plan activity ends in the "deviation completed" branch, which used to
+    # re-anchor stop_since -- so an agent that actually DID something at the
+    # wrong place had its neglected stop's clock reset anyway, which is exactly
+    # the reported agent (she performed a coffee errand every time she arrived).
+    # The pointer has not moved in this branch, so its clock must not restart.
+    # `settle_after_dead_talk` (#689) routes through here too, so this also
+    # covers a merely dropped talk wiping the clock.
+    personas = _personas()
+    brain = MockLlmClient(tool_calls_responses=[_perform_call("reading a novel")])
+    game, chars = build_world(None, personas, LOCATIONS)
+    attach_agents(chars, personas, llm_client=brain)
+    state = {
+        "Ada": {
+            "tile": (0, 0),
+            "path": [],
+            "pron": "\U0001f4d6",
+            "desc": "grabbing coffee",
+            # Mid-deviation: performing something off-plan that expires at 399.
+            "performing": True,
+            "on_plan": False,
+            "perform_until": 399,
+            "reasoning": "(deviating)",
+            "memories": [],
+            "chat": None,
+            "stop_since": 0,
+        }
+    }
+    common = dict(
+        order=["Ada"],
+        world_map=None,
+        emoji={"Ada": "\U0001f4d6"},
+        clock=SimClock(START),
+    )
+
+    step(game, chars, state, 400, **common)  # the pre-pass expires the deviation
+
+    assert state["Ada"]["performing"] is True  # re-decided into a new perform
+    assert state["Ada"]["stop_since"] == 0  # NOT re-anchored to step 400
+    # The payoff, in the prompt the agent actually got: 400 steps at 10 s/step
+    # is 66 min of neglect, and it now says so.
+    user = brain.tool_calls_log[0]["messages"][-1]["content"]
+    assert "This has been your current stop for 66 min." in user
 
 
 def test_live_mock_decide_request_carries_the_block():

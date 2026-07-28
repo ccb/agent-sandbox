@@ -136,25 +136,55 @@ money, so it is not a test.
 Three signals at the decide seam, all in the Penn cognition layer. Nothing in
 `text_adventure_games/` changes; retrieval scoring is not touched.
 
-### F1 — fix the elapsed clock (a bug, ~4 lines)
+### F1 — fix the elapsed clock (a bug)
 
-`backend/run_simulation.py`, the arrival branch: re-anchor only when the arrival
-is at the stop's own place.
+`stop_since` is re-anchored in three places. Two of them were wrong, and the
+review found the second only after the first was fixed — so this is the whole
+rule, not the arrival branch alone: **re-anchor when, and only when, the stop
+pointer actually moves or the agent reaches the stop's own place.**
 
-```python
-if not st["path"]:
-    stop_place = getattr(char.agent.schedule, "destination", None)
-    if char.location is not None and char.location.name == stop_place:
-        st["stop_since"] = step_idx
-```
+1. *The schedule advances* — a genuinely new stop. Correct already.
+2. *Arrival* (`backend/run_simulation.py`, the walk branch) — re-anchor only
+   when the arrival is at the stop's own place, so the walk there is excluded
+   but an off-plan arrival cannot erase the clock:
 
-This restores the docstring's stated intent — `elapsed` counts time *at* the
-stop — and stops an off-plan arrival erasing the clock. The mock brain only ever
-travels to its scheduled stop, so the guard is always true under the mock and the
-bundled bake stays byte-identical.
+   ```python
+   if not st["path"]:
+       if at_scheduled_stop(char):
+           st["stop_since"] = step_idx
+   ```
 
-Under this rule Priya's 18:41 prompt would have read "You have been on this stop
-for 57 min" against "(planned ~10 min)", and her 19:38 prompt "114 min". At
+3. *"Deviation completed"* — the pre-pass branch that un-latches an off-plan
+   `perform` without advancing the pointer. It re-anchored unconditionally.
+   Deleting that line is the rest of the fix: the pointer has not moved (that is
+   the branch's whole meaning), so restarting its clock claims a stop just
+   became current when it has been current all along.
+
+Point 3 matters as much as point 2, because point 2 alone only helps an agent
+that wanders off-plan and never settles. Priya *performed* a coffee errand every
+time she arrived, so her clock was reset on the way out regardless. `#689`'s
+`settle_after_dead_talk` routes through the same branch, so a merely **dropped
+talk — at her own scheduled stop** — also wiped it.
+
+Both are unreachable under the mock, which never deviates and never converses,
+so the bundled bake stays byte-identical.
+
+`at_scheduled_stop(char)` is the shared predicate: the furniture bias, the
+perform settle's `on_plan` flag, the instantaneous-command emoji, this arrival
+gate and `_credit_stop_for_conversation` each carried their own inline copy of
+"is this character standing where its stop says", so the next change to what
+that means had five places to miss.
+
+**The sentence has to change too.** `elapsed` no longer means "time spent at the
+place" — for an agent that never arrives, nothing re-anchors and the clock runs
+on the stop it is neglecting, which is exactly the signal #826 needs. But
+"You have been on this stop for 114 min" then asserts 114 minutes at a library
+the agent has never entered: the same class of first-person falsehood as #812.
+The template now reads **"This has been your current stop for N min."** — true
+whether or not the agent ever showed up.
+
+Under this rule Priya's 18:41 prompt would have read "This has been your current
+stop for 57 min" against "(planned ~10 min)", and her 19:38 prompt "114 min". At
 17:44 it still reads 0 — correct, and honest: leaving Houston Hall at 17:44 was
 a reasonable decision. The fix speaks up on exactly the two decisions that were
 wrong.
@@ -314,16 +344,26 @@ A `#760` batch-5 live run, compared against batch 4's Run B:
 The prompt-level A/B is evidence the added context changes the decision; only a
 run shows the rate falling.
 
+**This invalidates existing cassettes.** `recording.request_key` hashes the whole
+request, so every decide observation that gained the walk-minutes line, the
+"Recently, you:" block or the reworded elapsed sentence misses on replay — the
+#715 re-run bridge, `--resume`, and #734's Re-run button all re-run pre-#826
+runs from scratch rather than byte-identically. Inherent to any prompt change
+(#580, #613 and #795 each did the same) and not worth versioning cassettes over,
+but batch 4's recordings are what the A/B above was built on, so it is worth
+saying out loud rather than discovering at the next re-run.
+
 ## Files touched
 
 | file | change |
 |---|---|
-| `backend/cognition.py` | `recent_actions_block`, `walk_minutes_line`, two calls in `observe_and_decide`, `tags={"action"}` at four write sites |
+| `backend/cognition.py` | `recent_actions_block`, `walk_minutes_line`, `at_scheduled_stop`, two calls in `observe_and_decide`, `tags={"action"}` at four write sites |
 | `backend/prompt_templates/recent_actions.prompty` | new |
 | `backend/prompt_templates/walk_minutes.prompty` | new |
+| `backend/prompt_templates/decide_context.prompty` | the elapsed sentence, reworded (F1) |
 | `backend/prompt_templates/README.md` | usage table |
-| `backend/run_simulation.py` | the `stop_since` arrival gate |
-| `backend/world_map.py` | `tile_gap_from`, beside the existing `tile_gap` |
+| `backend/run_simulation.py` | both `stop_since` gates, and four inline predicates folded into `at_scheduled_stop` |
+| `backend/world_map.py` | `tile_gap_from`, sharing `tile_gap`'s `_box_gap` |
 | `tools/analyze_run.py` | `arrived_then_departed` |
 | `tests/` | the four test groups above |
 

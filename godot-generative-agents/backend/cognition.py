@@ -1125,18 +1125,39 @@ def nearby_affordances_line(game, char) -> str:
     return render("nearby_affordances", arenas="; ".join(fragments))
 
 
+def at_scheduled_stop(char) -> bool:
+    """Is ``char`` standing at the place its current schedule stop names?
+
+    The one definition of "on plan" (#826 review): the furniture bias, the
+    perform settle's ``on_plan`` flag, the instantaneous-command emoji, the
+    arrival re-anchor and the conversation stop-credit all asked this same
+    question with their own inline copy, so a change to what "at the scheduled
+    stop" means (room-level addresses, a stop with no place) had five places to
+    miss. False when the agent is nowhere, or the stop names no place -- an
+    unplaced stop is not somewhere you can be standing.
+    """
+    place = getattr(getattr(char.agent, "schedule", None), "destination", None)
+    return bool(place) and char.location is not None and char.location.name == place
+
+
 def decide_context_block(agent, step: int, clock, stop_since: int = 0) -> str:
     """Render the always-on decide context (issue #580), or ``""``.
 
-    Sim time of day, the plan's current stop, and how long the agent has been
-    on it (``stop_since`` is the step the stop began -- stamped when the
-    schedule advances and re-anchored on arrival at the stop's own place, so
-    once the agent is at the place ``elapsed`` counts time *at* the stop,
-    commensurate with the planned minutes) -- the always-relevant slice a
+    Sim time of day, the plan's current stop, and how long that stop has been
+    the current one (``stop_since`` is the step it became current -- stamped
+    when the schedule advances, and re-anchored on arrival at the stop's own
+    place so the walk there is excluded) -- the always-relevant slice a
     live brain needs on every decision without spending a ``read_plan`` tool
     round. Needs a clock (the bake and the offline tests thread none, so
     their prompts are unchanged) and a schedule (every attach_agents persona
     has one; a bare engine agent yields "").
+
+    ``elapsed`` is deliberately *not* "time spent at the place". An agent that
+    wanders off-plan never arrives, so nothing re-anchors and the clock keeps
+    running on the stop it is neglecting -- which is the whole point for #826,
+    where a 10-minute coffee run stayed current for 2 h 15 min. The template
+    says "this has been your current stop", not "you have been here", because
+    for that agent the second sentence would be false.
     """
     schedule = getattr(agent, "schedule", None)
     if clock is None or schedule is None:
@@ -1182,23 +1203,35 @@ def recent_actions_block(agent, step: int, clock) -> str:
     """
     if clock is None:
         return ""
-    records = [
-        record
-        for record in reversed(getattr(agent.memory, "records", []))
-        if ACTION_TAG in record.tags
-    ][:RECENT_ACTIONS_MAX]
-    if not records:
-        return ""
-    return render(
-        "recent_actions",
-        actions=[
+    actions = []
+    seen = set()
+    for record in reversed(getattr(agent.memory, "records", [])):
+        if ACTION_TAG not in record.tags:
+            continue
+        # Collapse arbitrary whitespace, not just "\n": `read` embeds an item's
+        # whole authored `read_text`, and a stray \r or tab would deform this
+        # block's one-line-per-action shape just as badly as a newline.
+        text = " ".join(record.text.split())[:RECENT_ACTION_TEXT_MAX]
+        # Keep only the most recent of each distinct action. #636 writes a
+        # failure memory every tick a gate blocks the *same* re-picked action,
+        # and by design does not dedupe at write time -- so without this the
+        # agent most likely to be stuck (exactly #826's target) spends its whole
+        # block on three identical "I tried X but it didn't work" lines, with
+        # its actual history evicted. Same for a burst of instantaneous verbs.
+        if text in seen:
+            continue
+        seen.add(text)
+        actions.append(
             {
                 "minutes": clock.minutes_for_steps(max(0, step - record.created_turn)),
-                "text": record.text.replace("\n", " ")[:RECENT_ACTION_TEXT_MAX],
+                "text": text,
             }
-            for record in records
-        ],
-    )
+        )
+        if len(actions) == RECENT_ACTIONS_MAX:
+            break
+    if not actions:
+        return ""
+    return render("recent_actions", actions=actions)
 
 
 def walk_minutes_line(game, char, clock) -> str:
@@ -1212,10 +1245,14 @@ def walk_minutes_line(game, char, clock) -> str:
     equivalent.
 
     Scoped to the destinations the ``travel`` tool actually offers (the same
-    ``game.locations`` whose names :func:`action_tools_for` puts in its enum), so
-    the prompt prices exactly what the model can choose -- including the place
-    the agent is already standing in, at 0 min, which is a signal in its own
-    right. Capped at :data:`DECIDE_MAX_ENUM`, nearest first, for the same reason
+    ``game.locations`` whose names :func:`action_tools_for` puts in its enum) --
+    including the place the agent is already standing in, at 0 min, which is a
+    signal in its own right. Two gaps between this list and that enum, both
+    benign: a location with no ``tile_address`` (Penn's ``Penn campus`` hub) is
+    selectable but cannot be priced, and past :data:`DECIDE_MAX_ENUM` the enum
+    falls back to free text while this line stays capped. Neither hides a price
+    the agent would otherwise have seen -- an unmapped place has no distance to
+    report. Capped at :data:`DECIDE_MAX_ENUM`, nearest first, for the same reason
     :func:`action_tools_for` caps its destination enum at that size: past it the
     enum itself falls back to free text, so pricing every destination anyway
     would grow this line unboundedly on a larger world for no benefit past the
@@ -1240,18 +1277,24 @@ def walk_minutes_line(game, char, clock) -> str:
         address = getattr(location, "tile_address", None)
         if not address or not world_map.tiles_for(address):
             continue
-        gap = world_map.tile_gap_from(tuple(tile), address)
-        priced.append((clock.minutes_for_steps(gap), name))
+        priced.append((world_map.tile_gap_from(tuple(tile), address), name))
     if not priced:
         return ""
-    priced.sort()  # nearest first, then by name -- stable and deterministic
+    # Sort on the raw tile gap, not the rendered minutes: minutes_for_steps
+    # floors, so at 10 s/step everything within 5 tiles renders "0 min" and
+    # sorting on that would order a whole bucket alphabetically ("Loc10" before
+    # "Loc6") while calling itself nearest-first. Name breaks true ties, so the
+    # order stays deterministic.
+    priced.sort()
     # #826 review (minor 3): cap to match action_tools_for's own enum cap --
     # nearest-first is already the right truncation order, so this just keeps
     # the destinations closest to the agent.
     priced = priced[:DECIDE_MAX_ENUM]
     return render(
         "walk_minutes",
-        destinations="; ".join(f"{name} {minutes} min" for minutes, name in priced),
+        destinations="; ".join(
+            f"{name} {clock.minutes_for_steps(gap)} min" for gap, name in priced
+        ),
     )
 
 
@@ -2112,11 +2155,7 @@ def _credit_stop_for_conversation(char, st) -> bool:
 
     Returns whether the stop was credited (for tests; callers ignore it).
     """
-    if not st.get("performing"):
-        return False
-    schedule = char.agent.schedule
-    place = getattr(schedule, "destination", None)
-    if not place or char.location is None or char.location.name != place:
+    if not st.get("performing") or not at_scheduled_stop(char):
         return False
     st["on_plan"] = True
     return True

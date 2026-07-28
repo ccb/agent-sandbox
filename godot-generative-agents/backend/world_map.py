@@ -135,8 +135,17 @@ class WorldMap:
         rectangular arenas and slightly generous for irregular footprints."""
         if addr_a == addr_b:
             return 0
-        a = self.address_bbox.get(addr_a)
-        b = self.address_bbox.get(addr_b)
+        return self._box_gap(
+            self.address_bbox.get(addr_a), self.address_bbox.get(addr_b)
+        )
+
+    def _box_gap(self, a, b) -> int:
+        """Chebyshev gap between two ``(x0, y0, x1, y1)`` boxes; the one formula.
+
+        Returns a large sentinel when either box is ``None`` (no footprint), so
+        an unmapped place never reads as nearby. Shared so #82's perception
+        radius and #826's walk pricing cannot drift apart.
+        """
         if a is None or b is None:
             return self.width + self.height  # unknown footprint -> never nearby
         ax0, ay0, ax1, ay1 = a
@@ -148,11 +157,12 @@ class WorldMap:
     def tile_gap_from(self, tile: tuple[int, int], address: str) -> int:
         """Chebyshev gap, in tiles, from one ``tile`` to ``address``'s footprint.
 
-        :meth:`tile_gap`'s point-source sibling (issue #826): the same formula
-        with a degenerate 1x1 source box, so it reads the same precomputed
-        ``address_bbox`` and stays O(1) per destination. 0 when the tile is
-        inside the footprint; the same large sentinel as ``tile_gap`` when the
-        address has no tiles, so an unmapped place never reads as nearby.
+        :meth:`tile_gap`'s point-source sibling (issue #826): literally the same
+        :meth:`_box_gap` with a degenerate 1x1 source box, so it reads the same
+        precomputed ``address_bbox`` and stays O(1) per destination. 0 when the
+        tile is inside the footprint; the same large sentinel as ``tile_gap``
+        when the address has no tiles, so an unmapped place never reads as
+        nearby.
 
         Anchored on a tile rather than an address because the caller
         (``cognition.walk_minutes_line``) prices a walk for an agent that may be
