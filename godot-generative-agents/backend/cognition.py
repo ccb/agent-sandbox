@@ -358,13 +358,37 @@ class ScheduleMockClient(MockReActClient):
         (#559). Read at travel time by run_simulation to bias walk_path."""
         return self._stop.get("furniture")
 
-    def advance(self) -> bool:
-        """Move to the next scheduled stop. Returns ``False`` if none remain."""
-        if self.stop_index + 1 < len(self.schedule):
-            self.stop_index += 1
-            self._commands_used = 0
-            return True
-        return False
+    @property
+    def has_next(self) -> bool:
+        """Whether another scheduled stop remains after the current one."""
+        return self.stop_index + 1 < len(self.schedule)
+
+    def advance(self, current_hour: int | None = None) -> bool:
+        """Move to the next due stop.
+
+        ``start_hour`` pins an upcoming stop to a clock hour (#838). When the
+        caller supplies ``current_hour``, do not let a completed activity run
+        the schedule ahead of that anchor. Omitting the hour preserves the
+        clockless/mock behavior, including the committed bake path whose stops
+        carry no anchors.
+
+        Returns ``False`` both when no stop remains and when the next stop is
+        not due; callers that distinguish those states can inspect
+        :attr:`has_next`.
+        """
+        if not self.has_next:
+            return False
+        next_stop = self.schedule[self.stop_index + 1]
+        start_hour = next_stop.get("start_hour")
+        if (
+            current_hour is not None
+            and start_hour is not None
+            and current_hour < start_hour
+        ):
+            return False
+        self.stop_index += 1
+        self._commands_used = 0
+        return True
 
     def replace_schedule(self, schedule: list[dict]) -> None:
         """Swap in a revised schedule, keeping the current ``stop_index``.
