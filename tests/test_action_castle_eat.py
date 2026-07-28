@@ -14,7 +14,9 @@ from text_adventure_games.adventures.action_castle import (
     Unlock_Door,
     Read_Runes,
 )
-
+from text_adventure_games.reporting import CaptureRenderer
+from tests.test_action_castle_2 import _said
+from text_adventure_games import clock
 DEAFULT_EXERCISE_COST = 15
 DEFAULT_PER_TURN_DEDUCTION = 1
 
@@ -161,22 +163,60 @@ def test_excercise_fails_when_not_at_gym(tiny_game):
 #   get + eat the poisoned_apple, then assert the player's "is_dead" property
 #   is True. (This comes from consume.Eat.apply_effects via super() -- your
 #   Eat override doesn't need to implement poison itself, it inherits it.)
+def test_eating_poisoned_apple_kills_player(tiny_game):
+    player = tiny_game.player
+    tiny_game.do_command("get the poisoned apple")
+    result = tiny_game.do_command("eat poisoned apple")
+    if result:
+        assert player.get_property("is_dead") == True
+    else: False
 
 # TODO: test_show_energy_reports_current_value
 #   Check_energy's apply_effects calls self.parser.ok(f"{energy} is your
 #   energy level") -- you'll need a CaptureRenderer (see test_scenarios.py or
 #   test_action_castle_2.py for the pattern) to assert on the printed text,
 #   since "show energy" only reports a value, it doesn't return one.
+def test_show_energy_reports_current_valyue(tiny_game):
+    player = tiny_game.player
+    energy = player.get_property("energy")
+    fresh = CaptureRenderer()
+    tiny_game.parser.set_renderer(fresh)
+    result = tiny_game.do_command("show energy")
+    assert result == True
+    assert _said(fresh,f"{energy} is your energy level")
 
 # TODO: test_set_energy_resets_to_50
 #   Set energy to something else first (e.g. player.set_property("energy", 5)),
 #   then do_command("energy mode"), then assert energy == 50.
 
+def test_set_energy_rests_to_50(tiny_game):
+    player = tiny_game.player
+   
+    tiny_game.do_command("get apple")
+    tiny_game.do_command("eat apple")
+    energy = player.get_property("energy")
+    assert energy == 70
+    
+    tiny_game.do_command("energy mode")
+    energy_after = player.get_property("energy")
+    assert energy_after == 50
+
 # TODO: test_excercise_fails_when_energy_at_or_below_10
 #   check_preconditions requires energy > 10. Set energy to 10 (or less)
 #   before moving to the gym, then assert "excercise" fails and energy is
 #   unchanged.
+def test_excercise_fails_when_energy_at_or_below_10(tiny_game):
+    player = tiny_game.player
+    player.set_property("energy",10)
+    tiny_game.do_command("go east")
+    result = tiny_game.do_command("excercise")
+    assert result == False
 
 # TODO: test_item_removed_from_inventory_after_eating
 #   get + eat any food item, then assert it's no longer in
 #   tiny_game.player.inventory.
+def test_item_removed_from_inventory_after_eating(tiny_game):
+    player = tiny_game.player
+    tiny_game.do_command('get apple')
+    tiny_game.do_command("eat apple")
+    assert "apple" not in player.inventory

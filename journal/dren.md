@@ -13,6 +13,31 @@ on top; copy the template block each working day.
 **Next:**
 - ...
 -->
+## 2026-07-24
+**Focus:** Git branching workflow, plus time-based energy decay
+
+**Done today:**
+- Practiced the branch → commit → push → PR workflow, incl. resolving a real
+  merge conflict against `main` (backend restructuring).
+- Filled in the 5 `TODO` test stubs left in `test_action_castle_eat.py` from
+  yesterday; fixed 2 real bugs surfaced while getting them passing (a
+  non-callable-`Character` typo, wrong `is_in_inventory` usage). All 10 pass.
+- Wired a `GameClock` into `ActionCastle` (fixed a couple bugs along the way;
+  also caught and restored some accidentally-deleted block serialization code).
+- Implemented exponential energy decay via `triggers.py`'s `every(n)`:
+  `Energy(t hours) = 100 * 0.9085^t`, converted to a per-turn multiplier —
+  verified 100 -> ~10 after 24 in-game hours.
+- Added a death trigger for energy <= 0.
+
+**Blockers / questions:**
+- Decay broke 4 exact-value assertions in `test_action_castle_energy.py`
+  (assumed zero decay) — left as TODOs in `action_castle.py`.
+- Energy is now a `float`; display formatting needs rounding.
+
+**Next:**
+- Fix the 4 broken energy tests (account for decay, `pytest.approx`).
+- Decide on display rounding and whether NPCs should decay too.
+
 ## 2026-07-23
 **Focus:** Energy/food system, scoped to Action Castle only
 

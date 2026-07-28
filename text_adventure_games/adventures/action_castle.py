@@ -1,7 +1,14 @@
 from text_adventure_games import games, things, actions, blocks
 from text_adventure_games.npc import make_hybrid_behavior
-#import consume in order to override eat 
+
+# import consume in order to override eat
 from text_adventure_games.actions import consume
+from text_adventure_games import clock
+
+# sleep decay factor
+SLEEP_CONSTANT = 0.9805
+DECAY_FACTOR = 30
+SLEEP_RECOVERY_RATE = 1.12
 
 
 class ActionCastle(games.Game):
@@ -11,8 +18,11 @@ class ActionCastle(games.Game):
         player: things.Character,
         characters=None,
         custom_actions=None,
+        time_config=None,
     ):
-        super().__init__(start_at, player, characters, custom_actions)
+        super().__init__(
+            start_at, player, characters, custom_actions, time_config=time_config
+        )
 
     def is_won(self) -> bool:
         """
@@ -31,66 +41,118 @@ class ActionCastle(games.Game):
 
 
 # Actions
-#check energy action added to check in game energy
-class Set_energy(actions.Action):
-    ACTION_NAME  = "energy mode"
+class SleepGate:
+    """Mixed in first so its __call__ intercepts before any subclass's own
+    check_preconditions runs -- blocks every Action Castle action while the
+    acting character is asleep (is_sleeping)."""
+
+    def __call__(self):
+        character = getattr(self, "character", None) or getattr(self, "proposer", None)
+        if character is not None and character.get_property("is_sleeping"):
+            self._preconditions_passed = False
+            self.parser.fail(
+                f"{character.name.capitalize()} is asleep and cannot do that."
+            )
+            return
+        return super().__call__()
+
+
+# check energy action added to check in game energy
+class Set_energy(SleepGate, actions.Action):
+    ACTION_NAME = "energy mode"
     ACTION_DESCRIPTION = "test out energy"
     ACTION_ALIASES = ["em"]
     FREE_ACTION = True
 
-    def __init__(self, game,command, actor=None):
-        super().__init__(game, actor = actor)
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
         self.character = self.acting_character(command=command)
-    
+
     def check_preconditions(self):
         if not self.was_matched(self.character):
             return False
         return True
-    
+
     def apply_effects(self):
         char = self.character
-        char.set_property("energy",50)
+        char.set_property("energy", 50)
         energy = char.get_property("energy")
         self.parser.ok(f"{energy} is your energy level")
 
-#check energy action added to check in game energy
-class Check_energy(actions.Action):
-    ACTION_NAME  = "show energy"
+
+# check energy action added to check in game energy
+class Check_energy(SleepGate, actions.Action):
+    ACTION_NAME = "show energy"
     ACTION_DESCRIPTION = "check how energetic you are"
-    ACTION_ALIASES = ["satiated","hungry"]
+    ACTION_ALIASES = ["satiated", "hungry"]
     FREE_ACTION = True
 
-    def __init__(self, game,command, actor=None):
-        super().__init__(game, actor = actor)
-        self.character = self.acting_character(command=command) # why need command? what is command?
-    
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.character = self.acting_character(command=command)
+
     def check_preconditions(self):
         if not self.was_matched(self.character):
             return False
         return True
-    
+
     def apply_effects(self):
         char = self.character
         energy = char.get_property("energy")
         self.parser.ok(f"{energy} is your energy level")
 
-#override main eat method
-class Eat(consume.Eat):
+
+class Sleep(actions.Action):
+    ACTION_NAME = "sleep"
+    ACTION_DESCRIPTION = "Sleep to reset energy"
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.character = self.acting_character(command=command)
+
+    def check_preconditions(self):
+        if not self.was_matched(self.character):
+            return False
+        if self.character.get_property("energy") > 10:
+            self.parser.fail(
+                f"{self.character.name.capitalize()} isn't tired enough to sleep."
+            )
+            return False
+        if self.game.clock.minutes_elapsed(self.game.turn) < 720:
+            self.parser.fail("It isn't late enough to sleep yet.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.character.set_property("is_sleeping", True)
+        self.character.set_property("slept_at", self.game.turn)
+        self.parser.ok(f"{self.character.name.capitalize()} falls asleep.")
+        # Fast-forward straight through the night: end_turn() (not do_command)
+        # so this doesn't re-enter the parser/journal -- the recovery_per_turn
+        # trigger does the actual waking (clears is_sleeping) each pass.
+        while (
+            self.character.get_property("is_sleeping") and not self.game.is_game_over()
+        ):
+            self.game.end_turn()
+
+
+# override main eat method
+class Eat(SleepGate, consume.Eat):
     def __init__(self, game, command, actor=None):
         super().__init__(game, command, actor)
         self.character = self.acting_character(command=command)
+
     def check_preconditions(self):
         return super().check_preconditions()
+
     def apply_effects(self):
         energy_level = self.item.get_property("energy_value")
-        curr_energy = self.character.get_property("energy") 
+        curr_energy = self.character.get_property("energy")
         self.character.set_property("energy", min(100, curr_energy + energy_level))
         super().apply_effects()
-        
-        
-    
 
-class Unlock_Door(actions.Action):
+
+class Unlock_Door(SleepGate, actions.Action):
     ACTION_NAME = "unlock door"
     ACTION_DESCRIPTION = "Unlock a door with a key"
     ACTION_ALIASES = []
@@ -140,7 +202,7 @@ class Unlock_Door(actions.Action):
         self.parser.ok(description)
 
 
-class Read_Runes(actions.Action):
+class Read_Runes(SleepGate, actions.Action):
     """
     Reading the runes on the candle with strange runes on it will banish the
     ghost from the dungeon, and cause it to drop the crown.
@@ -187,7 +249,7 @@ class Read_Runes(actions.Action):
             "Nothing happens. Perhaps if you light the candle first?",
         ):
             return False
-        #add condition - needs to be well nourshed to read
+        # add condition - needs to be well nourshed to read
         return True
 
     def apply_effects(self):
@@ -216,12 +278,12 @@ class Read_Runes(actions.Action):
         self.parser.ok(description)
         # remove the ghost from the scene
         self.ghost.location.remove_character(self.ghost)
-        #this action costs 5 energy points
+        # this action costs 5 energy points
         curr_energy = self.character.get_property("energy")
-        self.character.set_property("energy",curr_energy - 5)
+        self.character.set_property("energy", curr_energy - 5)
 
 
-class Propose(actions.Action):
+class Propose(SleepGate, actions.Action):
     """
     Mawwige is whut bwings us togevveh today.
     """
@@ -311,7 +373,7 @@ class Propose(actions.Action):
             self.propositioned.set_property("is_royal", True)
 
 
-class Wear_Crown(actions.Wear):
+class Wear_Crown(SleepGate, actions.Wear):
     """Wearing the crown crowns the wearer, gated on royalty.
 
     Composes on top of the generic ``Wear`` action: the parent already
@@ -341,7 +403,7 @@ class Wear_Crown(actions.Wear):
         )
 
 
-class Sit_On_Throne(actions.Action):
+class Sit_On_Throne(SleepGate, actions.Action):
     ACTION_NAME = "sit on throne"
     ACTION_DESCRIPTION = "Sit on the throne, if you are the crowned monarch."
     ACTION_ALIASES = []
@@ -508,7 +570,7 @@ class Door_Block(blocks.Block):
 ## NPC Actions
 
 
-class Growl(actions.Action):
+class Growl(SleepGate, actions.Action):
     ACTION_NAME = "growl"
     ACTION_DESCRIPTION = "Growl menacingly at someone"
     ACTION_ALIASES = []
@@ -533,7 +595,7 @@ class Growl(actions.Action):
         self.parser.npc_ok(description)
 
 
-class Snarl(actions.Action):
+class Snarl(SleepGate, actions.Action):
     ACTION_NAME = "snarl"
     ACTION_DESCRIPTION = "Snarl and bare teeth at someone"
     ACTION_ALIASES = []
@@ -558,7 +620,7 @@ class Snarl(actions.Action):
         self.parser.npc_ok(description)
 
 
-class Pound_Fists(actions.Action):
+class Pound_Fists(SleepGate, actions.Action):
     ACTION_NAME = "pound fists"
     ACTION_DESCRIPTION = "Pound fists on the ground in rage"
     ACTION_ALIASES = []
@@ -578,7 +640,7 @@ class Pound_Fists(actions.Action):
         self.parser.npc_ok(description)
 
 
-class Warn(actions.Action):
+class Warn(SleepGate, actions.Action):
     ACTION_NAME = "warn"
     ACTION_DESCRIPTION = "Issue a verbal warning to someone"
     ACTION_ALIASES = []
@@ -603,7 +665,7 @@ class Warn(actions.Action):
         self.parser.npc_ok(description)
 
 
-class Threaten(actions.Action):
+class Threaten(SleepGate, actions.Action):
     ACTION_NAME = "threaten"
     ACTION_DESCRIPTION = "Make a threatening gesture or statement"
     ACTION_ALIASES = []
@@ -628,7 +690,7 @@ class Threaten(actions.Action):
         self.parser.npc_ok(description)
 
 
-class Haunt(actions.Action):
+class Haunt(SleepGate, actions.Action):
     """The ghost makes a chilling threat to warn the living away."""
 
     ACTION_NAME = "haunt"
@@ -661,7 +723,7 @@ class Haunt(actions.Action):
         self.parser.npc_ok(description)
 
 
-class Ghost_Touch(actions.Action):
+class Ghost_Touch(SleepGate, actions.Action):
     """The ghost plunges its spectral hand into the target, killing them."""
 
     ACTION_NAME = "ghost touch"
@@ -774,13 +836,13 @@ def make_ghost_behavior():
 
 
 def build_game(llm_client=None, embedding_client=None) -> ActionCastle:
+    # set up clock and time
+    gameClock = clock.GameClock(8, 0, 15, periods=clock.DEFAULT_PERIODS)
+
     # Locations
     cottage = things.Location("Cottage", "You are standing in a small cottage.")
-    #Test 1 - Eat in action castle - Testing eat food in garden
-    garden = things.Location(
-            "Garden", 
-           " You are standing on a garden full of food"
-    )
+    # Test 1 - Eat in action castle - Testing eat food in garden
+    garden = things.Location("Garden", " You are standing on a garden full of food")
     garden_path = things.Location(
         "Garden Path",
         "You are standing on a lush garden path. There is a cottage here.",
@@ -825,7 +887,7 @@ def build_game(llm_client=None, embedding_client=None) -> ActionCastle:
 
     # Map of Locations
     cottage.add_connection("out", garden_path)
-    garden_path.add_connection("east",garden) # garden full of food
+    garden_path.add_connection("east", garden)  # garden full of food
     garden_path.add_connection("south", fishing_pond)
     garden_path.add_connection("north", winding_path)
     winding_path.add_connection("up", top_of_tree)
@@ -863,15 +925,19 @@ def build_game(llm_client=None, embedding_client=None) -> ActionCastle:
     )
     branch.add_command_hint("break branch")
     # add some food in the garden
-   
-    #food nr 1 bread
-    bread = things.Item("bread", "a delicious loaf of broad", "It would go so well with some fish")
-    bread.set_property("edible",True)
-    bread.set_property("energy_value",20)
-    #food nr 2 tuna
-    tuna = things.Item("tuna","a delicous tin of tuna", "It would go well with some bread")
-    tuna.set_property("edible",True)
-    tuna.set_property("energy_value",40)
+
+    # food nr 1 bread
+    bread = things.Item(
+        "bread", "a delicious loaf of broad", "It would go so well with some fish"
+    )
+    bread.set_property("edible", True)
+    bread.set_property("energy_value", 20)
+    # food nr 2 tuna
+    tuna = things.Item(
+        "tuna", "a delicous tin of tuna", "It would go well with some bread"
+    )
+    tuna.set_property("edible", True)
+    tuna.set_property("energy_value", 40)
 
     candle = things.Item(
         "candle",
@@ -1037,6 +1103,8 @@ def build_game(llm_client=None, embedding_client=None) -> ActionCastle:
         persona="I am on an adventure.",
     )
     player.set_property("character_type", "human")
+    player.set_property("tired", SLEEP_CONSTANT)  # set sleep constant to tired level
+    player.set_property("energy", 50)  # multiply it by energy
 
     # Player's lamp
     lamp = things.Item("lamp", "a lamp", "A LAMP.")
@@ -1062,9 +1130,82 @@ def build_game(llm_client=None, embedding_client=None) -> ActionCastle:
         Ghost_Touch,
         Check_energy,
         Set_energy,
-        Eat
+        Eat,
+        Sleep,
     ]
-    game = ActionCastle(cottage, player, characters, custom_actions)
+    game = ActionCastle(cottage, player, characters, custom_actions, gameClock)
+
+    # add triger energy below one player is dead
+    def is_energy_below_zero(game):
+        player = game.player
+        return player.get_property("energy") <= 0
+
+    def set_player_dead(game):
+        player = game.player
+        player.set_property("is_dead", True)
+
+    game.add_trigger(
+        "energy_under_zero_death",
+        is_energy_below_zero,
+        set_player_dead,
+        repeatable=False,
+    )
+
+    def has_half_an_hour_passed(game):
+        return game.clock.minutes_elapsed(game.turn) % 30 == 0
+
+    # use a linear decay for sleepiness
+    def exponential_decay_energy(game):
+        player = game.player
+        energy = player.get_property("energy")
+        tired = player.get_property("tired") * SLEEP_CONSTANT
+        player.set_property("tired", tired)
+        player.set_property("energy", energy * tired)
+
+    ## add triger to decrease energy every turn
+    # def deduct_energy_every_turn(game):
+    # player = game.player
+    # curr_energy = player.get_property("energy")
+    # player.set_property("energy", curr_energy - 1)
+
+    def is_the_player_sleeping(game):
+        return game.player.get_property("is_sleeping")
+
+    def should_decay_energy(game):
+        return has_half_an_hour_passed(game) and not is_the_player_sleeping(game)
+
+    def has_slept_8_hours(game):
+        slept_at = game.player.get_property("slept_at")
+        if not slept_at:
+            return False
+        minutes_asleep = game.clock.minutes_elapsed(
+            game.turn
+        ) - game.clock.minutes_elapsed(slept_at)
+        return minutes_asleep >= 8 * 60
+
+    def recover_and_wake_up(game):
+        curr_energy = game.player.get_property("energy")
+        if has_half_an_hour_passed(game):
+            game.player.set_property(
+                "energy", min(100, curr_energy * SLEEP_RECOVERY_RATE)
+            )
+        if has_slept_8_hours(game):
+            game.player.set_property("is_sleeping", False)
+            game.player.set_property("tired", SLEEP_CONSTANT)
+
+    game.add_trigger(
+        "energy_consumed_per_turn",
+        should_decay_energy,
+        exponential_decay_energy,
+        repeatable=True,
+    )
+    game.add_trigger(
+        "recovery_per_turn",
+        is_the_player_sleeping,
+        recover_and_wake_up,
+        repeatable=True,
+    )
+
     return game
 
 

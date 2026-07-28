@@ -15,20 +15,28 @@ TO_GARDEN = ["out", "east"]  # Cottage -> Garden Path -> Garden
 
 def test_eat_bread_restores_energy():
     game = build_game()
-    play(game, TO_GARDEN + ["get bread", "eat bread"])
-    assert prop(game, "The player", "energy") == 20
+    play(game, TO_GARDEN + ["get bread"])
+    game.player.set_property("energy", 50)
+    game.turn = 0  # land the eat on a turn the energy-decay trigger skips
+    play(game, ["eat bread"])
+    assert prop(game, "The player", "energy") == 70
 
 
 def test_eat_tuna_restores_energy():
     game = build_game()
-    play(game, TO_GARDEN + ["get tuna", "eat tuna"])
-    assert prop(game, "The player", "energy") == 40
+    play(game, TO_GARDEN + ["get tuna"])
+    game.player.set_property("energy", 50)
+    game.turn = 0
+    play(game, ["eat tuna"])
+    assert prop(game, "The player", "energy") == 90
 
 
 def test_energy_is_capped_at_100():
     game = build_game()
+    play(game, TO_GARDEN + ["get bread"])
     game.player.set_property("energy", 90)
-    play(game, TO_GARDEN + ["get bread", "eat bread"])  # 90 + 20 would be 110
+    game.turn = 0
+    play(game, ["eat bread"])  # 90 + 20 would be 110
     assert prop(game, "The player", "energy") == 100
 
 
