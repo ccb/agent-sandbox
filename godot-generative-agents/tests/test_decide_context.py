@@ -24,6 +24,7 @@ sys.path.insert(0, str(_SIM_DIR))
 from backend.prompt_templates import render  # noqa: E402
 from backend.build_world import build_world  # noqa: E402
 from backend.cognition import (  # noqa: E402
+    at_scheduled_stop,
     attach_agents,
     decide_context_block,
     memories_for_frame,
@@ -435,6 +436,120 @@ def test_stop_since_survives_a_completed_offplan_activity():
     # is 66 min of neglect, and it now says so.
     user = brain.tool_calls_log[0]["messages"][-1]["content"]
     assert "This has been your current stop for 66 min." in user
+
+
+# ------------------------------------------- the shared at-scheduled-stop test
+#
+# @0frankie on PR #830: at_scheduled_stop is now a shared predicate five call
+# sites depend on, so pin its contract directly rather than only through the
+# behaviours that consume it.
+
+
+def _place(game, char, dest):
+    if char.location is not None:
+        char.location.remove_character(char)
+    game.locations[dest].add_character(char)
+
+
+def test_at_scheduled_stop_is_true_only_standing_at_the_stops_own_place():
+    game, ada = _world()  # her one stop is the Cafe
+    _place(game, ada, "Cafe")
+    assert at_scheduled_stop(ada) is True
+
+    _place(game, ada, "Library")
+    assert at_scheduled_stop(ada) is False
+
+
+def test_at_scheduled_stop_is_false_without_a_place_or_a_location():
+    game, ada = _world()
+    _place(game, ada, "Cafe")
+
+    # An unplaced stop is not somewhere you can be standing, even though the
+    # agent is somewhere. `bool(place)` covers both None and "".
+    ada.agent.schedule.schedule[0]["place"] = None
+    assert at_scheduled_stop(ada) is False
+    ada.agent.schedule.schedule[0]["place"] = "Cafe"
+
+    # Nowhere at all: char.location is None until the world places a character,
+    # and `_resting_pron`'s callers reach this predicate before that happens.
+    ada.location.remove_character(ada)
+    assert ada.location is None
+    assert at_scheduled_stop(ada) is False
+
+
+def test_at_scheduled_stop_is_false_for_an_agent_with_no_schedule():
+    game, ada = _world()
+    _place(game, ada, "Cafe")
+    ada.agent.schedule = None
+    assert at_scheduled_stop(ada) is False
+
+
+def test_an_offplan_travel_drops_the_furniture_hint():
+    # The consequence @0frankie flagged, pinned at the call site rather than
+    # only on the predicate. The furniture bias is dropped off-plan because the
+    # scheduled stop's furniture is for the wrong place -- and that call site
+    # reads `char.location` via at_scheduled_stop, relying on the engine having
+    # already moved the character to its destination at parse time. A predicate
+    # unit test cannot see that invariant break; this can. The mock bake only
+    # ever exercises the on-plan half (it never deviates), so without this the
+    # off-plan half had no coverage at all.
+    class _RecordingWalk:
+        def __init__(self):
+            self.calls = []
+
+        def walk_path(self, start, address, furniture=None):
+            self.calls.append((address, furniture))
+            return [(0, 1)]
+
+    def _travel_to(place):
+        return ToolCallResult(
+            text=None,
+            tool_calls=[
+                {
+                    "id": "call_1",
+                    "name": "travel",
+                    "arguments": {"reasoning": "going", "destination": place},
+                }
+            ],
+        )
+
+    personas = _personas()
+    personas[0]["schedule"][0]["furniture"] = "T:Cafe:counter:armchair"
+    brain = MockLlmClient(
+        tool_calls_responses=[_travel_to("Library"), _travel_to("Cafe")]
+    )
+    game, chars = build_world(None, personas, LOCATIONS)
+    attach_agents(chars, personas, llm_client=brain)
+    walker = _RecordingWalk()
+    state = {
+        "Ada": {
+            "tile": (0, 0),
+            "path": [],
+            "pron": "\U0001f4d6",
+            "desc": "waking up",
+            "performing": False,
+            "perform_until": None,
+            "reasoning": "(waking up)",
+            "memories": [],
+            "chat": None,
+            "stop_since": 0,
+        }
+    }
+    common = dict(
+        order=["Ada"],
+        world_map=walker,
+        emoji={"Ada": "\U0001f4d6"},
+        clock=SimClock(START),
+    )
+
+    step(game, chars, state, 0, **common)  # off-plan: travels to the Library
+    state["Ada"]["path"] = []  # clear the walk so she is due to decide again
+    step(game, chars, state, 1, **common)  # on-plan: travels to the Cafe
+
+    assert walker.calls == [
+        ("T:Library:desks", None),  # off-plan -> hint dropped
+        ("T:Cafe:counter", "T:Cafe:counter:armchair"),  # on-plan -> hint kept
+    ]
 
 
 def test_live_mock_decide_request_carries_the_block():
