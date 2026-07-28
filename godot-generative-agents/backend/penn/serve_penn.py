@@ -1104,9 +1104,10 @@ class PennStepper:
             # stops against the world's full location set and bounds the day to
             # the run's clock window; both are inert for the mock planner.
             # Note: these ~3 planning calls/agent fire here at attach time,
-            # before the first tick()'s over_budget() gate -- a one-time 3N
-            # spend that can precede (not skip) the budget ceiling; the next
-            # tick catches it.
+            # before the first tick()'s over_budget() gate -- a one-time spend of
+            # up to 4N (#821 adds one corrective re-ask for an agent whose plan
+            # can't reach a stop it pinned to a clock hour) that can precede (not
+            # skip) the budget ceiling; the next tick catches it.
             planner_client=self.planner_client,
             location_names=frozenset(loc["name"] for loc in self.world.locations),
             clock=self.clock,
