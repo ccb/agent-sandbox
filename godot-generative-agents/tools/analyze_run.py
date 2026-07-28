@@ -183,6 +183,34 @@ def _load_run_record(run_id: str, runs_dir: pathlib.Path) -> dict:
     return {"result": result} if result else {}
 
 
+def _arrived_then_departed(frames: list) -> dict:
+    """Per agent, how many walks ended in another walk rather than an arrival.
+
+    The #826 signature: `run_simulation.step` only asks an agent to decide once
+    its tile path is empty, so a destination change always sits on an arrival
+    boundary -- and a walk segment followed *immediately* by another walk segment
+    means the agent got there and turned straight around. Reading frames alone
+    is enough: the act line is "walking to <place> @ <address>" for the whole
+    leg, so a change of act between two walking frames is a new leg.
+
+    Nothing here needs the cassette, so it works for any persisted run.
+    """
+    counts: collections.Counter = collections.Counter()
+    previous: dict = {}
+    for frame in frames:
+        for name, a in frame.items():
+            act = str((a or {}).get("act") or "")
+            walking = act.startswith("walking to ")
+            was_walking, was_act = previous.get(name, (False, ""))
+            if walking and act != was_act:
+                # A new leg began. It is a turn-around only if the frame before
+                # it was itself a walk (no arrival happened in between).
+                if was_walking:
+                    counts[name] += 1
+            previous[name] = (walking, act)
+    return dict(sorted(counts.items()))
+
+
 def summarise(run_id: str, runs_dir: pathlib.Path, usage: dict | None) -> dict:
     run_dir = runs_dir / run_id
     frames, steps = read_frames(run_dir / "frames.jsonl")
@@ -218,6 +246,8 @@ def summarise(run_id: str, runs_dir: pathlib.Path, usage: dict | None) -> dict:
         co_settled, by_pair = _co_settled_from_frames(frames)
         co_settled_source = "frames (approximate: idle counts as settled)"
 
+    thrash = _arrived_then_departed(frames)
+
     out = {
         "run_id": run_id,
         "steps": steps,
@@ -238,6 +268,12 @@ def summarise(run_id: str, runs_dir: pathlib.Path, usage: dict | None) -> dict:
             round(verbs.get("talk_to", 0) / total_verbs, 4) if total_verbs else 0.0
         ),
         "walking_share": round(walking / agent_frames, 4) if agent_frames else 0.0,
+        # #826: arrivals that immediately departed again -- a walk segment
+        # followed by another walk with no arrival between. 20 across #760
+        # batch 4 (Priya 4, Mateo 16); expect ~0 once the decide seam tells an
+        # agent what it just did and what a walk costs.
+        "arrived_then_departed": thrash,
+        "arrived_then_departed_total": sum(thrash.values()),
         # Halved: each conversation is seen once per participant.
         "conversations": conversations // 2 if conversations > 1 else conversations,
         "conversations_agent_sided": conversations,
@@ -309,6 +345,8 @@ def render(s: dict) -> str:
         )
     lines += [
         f"  walking     {s['walking_share']:.1%} of agent-frames",
+        f"  thrash      {s['arrived_then_departed_total']} arrivals departed again"
+        + (f"  {s['arrived_then_departed']}" if s["arrived_then_departed"] else ""),
         f"  talk_to     {s['talk_to_share']:.1%} of {s['decision_count']} decisions"
         f"   ({s['talk_to_time_share']:.1%} of agent-time)",
         f"  verbs       {s['distinct_verbs']} distinct: "
@@ -466,6 +504,33 @@ def self_check() -> None:
                 encoding="utf-8",
             )
             assert _load_run_record("run-weird", runs_dir) == {}, weird
+
+    # #826: an arrival that departed again is a walk segment followed by another
+    # walk segment. Ada walks, arrives and settles (not a turn-around); Bo walks,
+    # then walks somewhere else with no frame between (one turn-around).
+    frames = [
+        {
+            "Ada": {"act": "walking to Cafe @ T:Cafe:counter"},
+            "Bo": {"act": "walking to Cafe @ T:Cafe:counter"},
+        },
+        {
+            "Ada": {"act": "walking to Cafe @ T:Cafe:counter"},
+            "Bo": {"act": "walking to Library @ T:Library:desks"},
+        },
+        {
+            "Ada": {"act": "reading @ T:Cafe:counter"},
+            "Bo": {"act": "walking to Library @ T:Library:desks"},
+        },
+        {
+            "Ada": {"act": "walking to Library @ T:Library:desks"},
+            "Bo": {"act": "reading @ T:Library:desks"},
+        },
+    ]
+    got = _arrived_then_departed(frames)
+    assert got == {"Bo": 1}, got
+    # An agent who never walks contributes nothing, and a missing agent entry is
+    # tolerated (frames from a run that added a resident mid-way).
+    assert _arrived_then_departed([{"Cy": {"act": "reading @ x"}}, {}]) == {}
 
     print("self-check OK")
 
