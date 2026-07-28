@@ -272,6 +272,14 @@ invisible to the loop — it just finds different stops waiting when it advances
 > (that would desync the on-screen activity from the schedule). It edits only what
 > comes after. This keeps memory, the replay, and the schedule consistent.
 
+An immediate conversation commitment is the narrow event-boundary exception to
+the current stop's **duration**, not its contents (#829). A completed
+conversation may expire a settled activity latch after committing the
+commitment as the first unstarted stop. The current stop remains unchanged in
+the protected prefix, playback finishes before movement resumes, and the normal
+schedule pre-pass advances exactly once. See
+[`immediate-conversation-commitments-829.md`](immediate-conversation-commitments-829.md).
+
 ---
 
 ## 9. The brain split — mock vs real LLM (determinism) `[port]`

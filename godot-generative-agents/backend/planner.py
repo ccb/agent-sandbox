@@ -22,6 +22,8 @@ Two implementations are planned, mirroring the brain split in
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from text_adventure_games.planning import (
     DailyPlan,
     DayBlock,
@@ -187,6 +189,36 @@ MINUTE_TOOL = {
     },
 }
 
+# Immediate conversation commitments (#829) need a stronger response contract
+# than the ordinary "revised full list": the model names the one stop that must
+# execute next and returns only the later tail. LLMPlanner then preserves the
+# executed/current prefix itself instead of asking the model to reproduce it.
+_MINUTE_STOP_SCHEMA = MINUTE_TOOL["parameters"]["properties"]["stops"]["items"]
+IMMEDIATE_REVISION_TOOL = {
+    "name": "immediate_plan_revision",
+    "description": (
+        "Turn a commitment that starts as soon as the conversation ends into "
+        "the next concrete stop, followed by any later stops. Return only the "
+        "unstarted tail; do not repeat completed or current stops."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "next_stop": _MINUTE_STOP_SCHEMA,
+            "later_stops": {
+                "type": "array",
+                "description": (
+                    "Optional stops after next_stop, in execution order. Do not "
+                    "include completed/current stops."
+                ),
+                "items": _MINUTE_STOP_SCHEMA,
+            },
+        },
+        "required": ["next_stop", "later_stops"],
+        "additionalProperties": False,
+    },
+}
+
 
 def median_travel_minutes(world_map, addresses, clock) -> int | None:
     """Median pairwise walk cost between *addresses*, in in-game minutes (#795).
@@ -303,7 +335,11 @@ class LLMPlanner:
         reason = getattr(trigger, "reason", "") or ""
         detail = getattr(trigger, "detail", "") or ""
         step = getattr(trigger, "step", 0)
+        urgency = getattr(trigger, "urgency", "normal") or "normal"
+        current_stop_index = getattr(trigger, "current_stop_index", None)
         mem = self._memory_block(memory, detail or "what changed", turn=step)
+        if urgency == "immediate" and isinstance(current_stop_index, int):
+            return self._revise_immediate(plan, detail, current_stop_index, reason, mem)
         current = "; ".join(f"{s.place}: {s.activity}" for s in plan.stops) or "(none)"
         user = (
             f"Your plan so far: {current}.\n"
@@ -316,6 +352,56 @@ class LLMPlanner:
         stops = self._minute_from_user(user)
         if not stops:
             return plan  # nothing usable -> signal "no change" to the loop
+        return DailyPlan(
+            day=plan.day, hours=plan.hours, stops=stops, revision=plan.revision + 1
+        )
+
+    def _revise_immediate(
+        self,
+        plan: DailyPlan,
+        commitment: str,
+        current_stop_index: int,
+        reason: str,
+        mem: str,
+    ) -> DailyPlan:
+        """Put a binding conversation commitment first in the unstarted tail.
+
+        The tool returns ``next_stop`` separately from ``later_stops`` so its
+        semantic role is machine-readable. The protected prefix comes from the
+        existing plan, never from model output; cognition re-applies the same
+        guard when committing it.
+        """
+        if not (-1 <= current_stop_index < len(plan.stops)):
+            return plan
+        labelled = []
+        for index, stop in enumerate(plan.stops):
+            if index < current_stop_index:
+                status = "completed"
+            elif index == current_stop_index:
+                status = "current"
+            else:
+                status = "upcoming"
+            labelled.append(f"{index}. {status}: {stop.activity} at {stop.place}")
+        plan_text = "\n".join(labelled) or "(no stops)"
+        user = (
+            f"Your plan and its real execution position:\n{plan_text}\n"
+            f"Something changed -- {reason}: {commitment}.\n"
+            f"{self._memory_line(mem)}"
+            f"{self._places_line()}"
+            "This commitment is immediate: it starts as soon as the "
+            "conversation ends. Turn it into `next_stop`. Return only what "
+            "remains after the current stop in `later_stops`; do not repeat "
+            "completed or current stops. `next_stop` must not carry a future "
+            "start hour."
+        )
+        tail = self._immediate_tail_from_user(user)
+        if not tail:
+            return plan
+        # #838 gates schedule advancement on start_hour. An immediate stop is
+        # due now by definition, so a model-supplied future anchor must not
+        # recreate #829 at the next seam.
+        tail[0] = replace(tail[0], start_hour=None)
+        stops = plan.stops[: current_stop_index + 1] + tail
         return DailyPlan(
             day=plan.day, hours=plan.hours, stops=stops, revision=plan.revision + 1
         )
@@ -402,12 +488,31 @@ class LLMPlanner:
 
     def _minute_from_user(self, user: str) -> list[Stop]:
         result = self._call(user, MINUTE_TOOL)
+        return self._stops_from_entries(result.get("stops") or [])
+
+    def _immediate_tail_from_user(self, user: str) -> list[Stop]:
+        result = self._call(user, IMMEDIATE_REVISION_TOOL)
+        next_stop = result.get("next_stop")
+        if not isinstance(next_stop, dict):
+            return []
+        first = self._stops_from_entries([next_stop])
+        if not first:
+            return []
+        later = result.get("later_stops")
+        if not isinstance(later, list):
+            later = []
+        return first + self._stops_from_entries(later)
+
+    def _stops_from_entries(self, entries) -> list[Stop]:
+        """Parse and validate minute-shaped stop dictionaries."""
         stops = []
         # Validated upstream (#357): place/activity are strings, emoji is a
         # string-or-null, minutes an int-or-null. The one remaining check is the
         # *semantic* one -- a non-positive or null duration means "stay put"
         # -- which the schema can't express (OpenAI strict mode drops `minimum`).
-        for s in result.get("stops") or []:
+        for s in entries:
+            if not isinstance(s, dict):
+                continue
             place, activity = s.get("place"), s.get("activity")
             if not (place and activity):
                 continue

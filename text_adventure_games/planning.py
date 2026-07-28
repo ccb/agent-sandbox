@@ -216,13 +216,22 @@ class RevisionTrigger:
 
     ``reason`` is one of the module constants above; ``step`` is the sim step it
     fired on; ``detail`` is free text for context (e.g. the failed command or the
-    parser's failure message). A :class:`Planner` reads this to decide whether and
-    how to rewrite the plan's tail; a mock planner ignores it.
+    parser's failure message). ``current_stop_index`` is the schedule driver's
+    ground-truth boundary between the protected prefix and the unstarted tail;
+    ``urgency`` lets a narrow event such as an immediate conversation commitment
+    require the first tail stop to run next (#829). A :class:`Planner` reads this
+    to decide whether and how to rewrite the plan's tail; a mock planner ignores
+    it.
+
+    Both newer fields have inert defaults so existing engine callers and custom
+    planners keep their old behavior.
     """
 
     reason: str
     step: int
     detail: str = ""
+    current_stop_index: int | None = None
+    urgency: str = "normal"
 
 
 # ---------------------------------------------------------------------------
