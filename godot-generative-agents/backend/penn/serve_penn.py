@@ -1617,13 +1617,20 @@ class PennStepper:
             "knobs": {"defaults": defaults, "current": current},
             "brains": brains,
             # The planner knob (#787). `plans` is the accepted vocabulary and
-            # `run.plan` the RESOLVED value the current brain would run, so the
-            # setup screen can show "llm" for an auto+llm-brain session without
-            # having to re-derive the auto rule client-side.
+            # `run.plan` the RESOLVED value the current brain would run. The
+            # setup screen now re-derives the auto rule client-side anyway
+            # (config_body.effective_plan) -- it has to, because the brain
+            # dropdown moves the resolved planner without a round-trip -- so
+            # `run.plan` here is just the initial resolved value, not the reason
+            # the client can avoid re-deriving.
             "plans": ["auto", "schedule", "llm"],
             "run": {
                 "brain": self._brain_name(),
                 "plan": self.plan_mode,
+                # The RAW request (#791): "auto" until someone opts out. The
+                # setup screen defaults its dropdown to this, so an untouched
+                # dropdown truthfully means "keep the session's request".
+                "plan_request": self._plan_mode_flag,
                 "steps": self.num_steps,
                 "stop_time": self._stop_time(),
                 "max_cost": self.ledger.max_cost_usd,
@@ -1781,6 +1788,10 @@ class PennStepper:
             # The RESOLVED planner (#787), matching `brain` above -- what the
             # run will actually do, not the "auto" that was asked for.
             "plan": self.plan_mode,
+            # ...and the "auto" (or explicit value) that WAS asked for (#791),
+            # so a saved run's re-run seed reproduces the request rather than
+            # freezing the resolution.
+            "plan_request": self._plan_mode_flag,
             "sim_config": self._sim_config_for_manifest(),
             "run": {
                 "steps": self.num_steps,

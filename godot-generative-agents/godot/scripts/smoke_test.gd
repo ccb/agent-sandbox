@@ -217,6 +217,10 @@ func _rerun_seed() -> Dictionary:
 	return {
 		"cast": ["diego"],
 		"brain": "scripted",
+		# The saved planner REQUEST (#791): the seed reproduces what was asked
+		# ("schedule"), not the resolved value. A non-llm planner under the
+		# scripted brain, so _update_plan_row won't snap it away.
+		"plan_request": "schedule",
 		"sim_config": {
 			"game": {"agent": {"temperature": 1.1}},
 			"cognition": {"vision_r": 3},
@@ -245,7 +249,14 @@ func _fake_config() -> Dictionary:
 			},
 		},
 		"brains": ["mock", "scripted", "llm"],
-		"run": {"brain": "mock", "steps": 1080, "tick_seconds": 0.1, "max_cost": null},
+		# The day-planner surface (#791): `plans` is the vocabulary, run.plan the
+		# resolved value (auto under the mock brain -> schedule), plan_request the
+		# raw ask the dropdown defaults to.
+		"plans": ["auto", "schedule", "llm"],
+		"run": {
+			"brain": "mock", "steps": 1080, "tick_seconds": 0.1, "max_cost": null,
+			"plan": "schedule", "plan_request": "auto",
+		},
 	}
 
 
@@ -263,6 +274,18 @@ func _check_seed_prefill(inst: Node) -> int:
 		fails += 1
 	if inst._brains[inst._brain_opt.selected] != "scripted":
 		printerr("  simulation_setup seed: brain not selected from seed")
+		fails += 1
+	# The planner row (#791) drives the real scene wiring, not just the pure
+	# helpers: the seed's plan_request ("schedule") must land on the dropdown and
+	# the hint must reflect the resolved planner it will run.
+	if inst._plan_opt == null:
+		printerr("  simulation_setup seed: no planner row built (plans not read?)")
+		fails += 1
+	elif inst._selected_plan() != "schedule":
+		printerr("  simulation_setup seed: planner not selected from seed (%s)" % inst._selected_plan())
+		fails += 1
+	elif not ("schedule" in inst._plan_hint.text):
+		printerr("  simulation_setup seed: plan hint doesn't reflect the planner (%s)" % inst._plan_hint.text)
 		fails += 1
 	var edits: Dictionary = inst._knob_edits()
 	if not is_equal_approx(edits.get("game", {}).get("agent", {}).get("temperature", -1.0), 1.1):

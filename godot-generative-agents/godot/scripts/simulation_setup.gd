@@ -50,15 +50,18 @@ var _start_btn: Button = null
 var _persona_checks: Array = []  # [{id, cb}]
 var _knob_rows: Array = []       # [{section, key, kind, spin, initial}]
 var _brain_opt: OptionButton = null
+var _plan_opt: OptionButton = null
+var _plan_hint: Label = null
 var _steps_spin: SpinBox = null
 var _tick_spin: SpinBox = null
 var _cost_spin: SpinBox = null
 
 # Server state captured from GET /config, needed to build the POST body.
 var _brains: Array = []
+var _plans: Array = []
 var _knobs_current: Dictionary = {}
 var _knobs_defaults: Dictionary = {}
-var _initial := {"brain": "mock", "steps": 0, "tick_seconds": 0.0, "max_cost": 0.0}
+var _initial := {"brain": "mock", "plan": "auto", "steps": 0, "tick_seconds": 0.0, "max_cost": 0.0}
 
 
 func _ready() -> void:
@@ -91,7 +94,7 @@ func _build_shell() -> void:
 	add_child(center)
 
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(560, 0)
+	panel.custom_minimum_size = Vector2(820, 0)
 	center.add_child(panel)
 
 	var margin := MarginContainer.new()
@@ -122,6 +125,9 @@ func _build_shell() -> void:
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(0, 360)
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# Clamp content to the viewport width so wrapping blurbs wrap (a horizontal
+	# scrollbar would instead let a row grow sideways and never break a line).
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	col.add_child(scroll)
 	_form_box = VBoxContainer.new()
 	_form_box.add_theme_constant_override("separation", 6)
@@ -172,6 +178,8 @@ func _set_busy(busy: bool) -> void:
 		p.cb.disabled = busy
 	if _brain_opt != null:
 		_brain_opt.disabled = busy
+	if _plan_opt != null:
+		_plan_opt.disabled = busy
 	if _steps_spin != null:
 		_steps_spin.editable = not busy
 	if _tick_spin != null:
@@ -261,12 +269,14 @@ func _on_http_completed(
 
 func _render_config(data: Dictionary) -> void:
 	_brains = data.get("brains", [])
+	_plans = data.get("plans", [])
 	var knobs: Dictionary = data.get("knobs", {})
 	_knobs_current = knobs.get("current", {})
 	_knobs_defaults = knobs.get("defaults", {})
 	var run: Dictionary = data.get("run", {})
 	_initial = {
 		"brain": str(run.get("brain", "mock")),
+		"plan": str(run.get("plan_request", run.get("plan", "auto"))),
 		"steps": int(run.get("steps", 0)),
 		"tick_seconds": float(run.get("tick_seconds", 0.0)),
 		# `max_cost` is null on a free brain; get()'s default only applies to a
@@ -285,17 +295,29 @@ func _render_config(data: Dictionary) -> void:
 	for entry in data.get("personas", []):
 		if typeof(entry) != TYPE_DICTIONARY:
 			continue
+		# One card per persona: a PanelContainer (the theme's tan box) holding the
+		# name checkbox -- centred vertically -- beside the blurb, which wraps to
+		# as many lines as it needs instead of truncating, so the card grows to
+		# fit the full self-description (#791 review).
+		var card := PanelContainer.new()
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		card.add_child(row)
 		var cb := CheckBox.new()
-		var pname := str(entry.get("name", entry.get("id", "?")))
-		var blurb := str(entry.get("blurb", ""))
-		if blurb.length() > 70:
-			blurb = blurb.substr(0, 70) + "…"
-		if blurb != "":
-			cb.text = "%s -- %s" % [pname, blurb]
-		else:
-			cb.text = pname
+		cb.text = str(entry.get("name", entry.get("id", "?")))
 		cb.button_pressed = str(entry.get("id", "")) in cast
-		_form_box.add_child(cb)
+		cb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(cb)
+		var blurb := str(entry.get("blurb", ""))
+		if blurb != "":
+			var desc := Label.new()
+			desc.text = blurb
+			desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			desc.add_theme_color_override("font_color", HINT_COLOR)
+			desc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			desc.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			row.add_child(desc)
+		_form_box.add_child(card)
 		_persona_checks.append({"id": str(entry.get("id", "")), "cb": cb})
 
 	# --- Sim knobs ---
@@ -339,6 +361,43 @@ func _render_config(data: Dictionary) -> void:
 	brain_row.add_child(_brain_opt)
 	_form_box.add_child(brain_row)
 
+	# The planner row (#791): which day planner the run will use. Populated
+	# from GET /config's `plans` vocabulary and defaulting to the ASKED-FOR
+	# value (run.plan_request) -- never the resolved run.plan -- so an
+	# untouched dropdown truthfully means "keep the session's request" under
+	# build_post_body's only-send-changed contract. Feature-detected: a
+	# pre-#790 backend serves no `plans`, so it gets no row (and Start sends
+	# no plan field at all).
+	_plan_opt = null
+	_plan_hint = null
+	if not _plans.is_empty():
+		var plan_row := HBoxContainer.new()
+		plan_row.add_theme_constant_override("separation", 8)
+		var plan_cap := Label.new()
+		plan_cap.text = "Planner"
+		plan_cap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		plan_row.add_child(plan_cap)
+		_plan_opt = OptionButton.new()
+		for p in _plans:
+			_plan_opt.add_item(str(p))
+		var pi := (_plans as Array).find(_initial.plan)
+		if pi < 0:
+			pi = 0
+			_initial.plan = str(_plans[0])  # so an untouched form stays untouched
+		_plan_opt.select(pi)
+		plan_row.add_child(_plan_opt)
+		_form_box.add_child(plan_row)
+		_plan_hint = Label.new()
+		_plan_hint.add_theme_color_override("font_color", HINT_COLOR)
+		_plan_hint.add_theme_font_size_override("font_size", 12)
+		_form_box.add_child(_plan_hint)
+		# Both pickers re-render the hint; _render_config rebuilds these
+		# controls on every load, so the connects can't double up. unbind(1)
+		# drops the item_selected index arg _update_plan_row doesn't take.
+		_plan_opt.item_selected.connect(_update_plan_row.unbind(1))
+		_brain_opt.item_selected.connect(_update_plan_row.unbind(1))
+		_update_plan_row()
+
 	_steps_spin = _spin_row("Steps", 1, 1000000, 1, float(_initial.steps))
 	# Floor > 0: POST /config's tick_seconds is Field(gt=0), so a 0 would 422.
 	# step 0.05 (not 0.1): a SpinBox snaps to `min + round((v-min)/step)*step`, and
@@ -361,6 +420,46 @@ func _render_config(data: Dictionary) -> void:
 	if not _seed.is_empty():
 		_apply_seed(_seed)
 		_seed = {}  # consumed once (#734): a re-render starts from server values
+
+
+func _selected_brain() -> String:
+	if _brain_opt == null or _brain_opt.selected < 0:
+		return str(_initial.brain)
+	return str(_brains[_brain_opt.selected])
+
+
+func _selected_plan() -> String:
+	if _plan_opt == null or _plan_opt.selected < 0:
+		return str(_initial.plan)
+	return str(_plans[_plan_opt.selected])
+
+
+# Keep the planner row consistent with the selected brain (#791): the `llm`
+# planner needs the llm brain (the server 400s the combination), so grey it
+# out under a free brain -- snapping a stranded selection back to auto --
+# then re-render the hint with the planner this selection will actually run.
+# The hint is cosmetic; the server's validation stays the backstop.
+func _update_plan_row() -> void:
+	if _plan_opt == null:
+		return
+	var brain := _selected_brain()
+	var llm_idx := (_plans as Array).find("llm")
+	if llm_idx >= 0:
+		_plan_opt.set_item_disabled(llm_idx, brain != "llm")
+		if brain != "llm" and _plan_opt.selected == llm_idx:
+			# Snap the stranded llm selection to auto, but never land on the item
+			# we just disabled (llm) when there's no auto to fall back to.
+			var safe := (_plans as Array).find("auto")
+			if safe < 0:
+				safe = 1 if llm_idx == 0 else 0
+			_plan_opt.select(safe)
+	if _plan_hint != null:
+		var eff := ConfigBody.effective_plan(_selected_plan(), brain)
+		_plan_hint.text = "Day plan: %s" % (
+			"model-authored (llm)" if eff == "llm"
+			else "authored schedule (schedule)" if eff == "schedule"
+			else eff
+		)
 
 
 func _apply_seed(seed: Dictionary) -> void:
@@ -401,6 +500,24 @@ func _apply_seed(seed: Dictionary) -> void:
 			_brain_opt.select(bi)
 		else:
 			unmet.append("brain '%s' not offered here" % brain)
+	# Mirror the brain branch above: silently skip when this backend serves no
+	# planner row (_plan_opt null, pre-#790), and only warn when the row exists
+	# but doesn't offer the saved value.
+	var plan := ConfigBody.seed_plan(seed)
+	if plan != "" and _plan_opt != null:
+		var pidx := (_plans as Array).find(plan)
+		if pidx >= 0:
+			_plan_opt.select(pidx)
+			_update_plan_row()
+			if _selected_plan() != plan:
+				# _update_plan_row can snap a stranded llm selection back to
+				# auto (llm needs the llm brain) -- warn instead of silently
+				# keeping something other than what the seed asked for.
+				unmet.append(
+					"planner '%s' needs the llm brain here -- kept '%s'" % [plan, _selected_plan()]
+				)
+		else:
+			unmet.append("planner '%s' not offered here" % plan)
 	var run: Variant = seed.get("run")
 	if typeof(run) == TYPE_DICTIONARY:
 		var r := run as Dictionary
@@ -410,6 +527,12 @@ func _apply_seed(seed: Dictionary) -> void:
 			_seed_spin(_tick_spin, float(r["tick_seconds"]), "tick seconds", unmet)
 		if r.get("max_cost") != null and _cost_spin != null:
 			_seed_spin(_cost_spin, float(r["max_cost"]), "cost budget", unmet)
+	# select() emits no item_selected signal, so a brain-seeded selection above
+	# (or a config block saved between #734 and #787 that carries a brain but
+	# no plan/plan_request, skipping the plan branch entirely) would otherwise
+	# leave the row and hint stale against the brain that actually got picked.
+	# A safe no-op when _plan_opt is null (no planner row on this backend).
+	_update_plan_row()
 	if unmet.is_empty():
 		_set_status("Pre-filled from a saved run. Adjust anything, then Start.", false)
 	else:
@@ -508,11 +631,13 @@ func _on_start_pressed() -> void:
 	if cast.is_empty():
 		_set_status("Pick at least one persona for the cast.", true)
 		return
-	var brain := str(_brains[_brain_opt.selected]) if _brain_opt.selected >= 0 else str(_initial.brain)
+	var brain := _selected_brain()
 	var body: Dictionary = ConfigBody.build_post_body({
 		"cast": cast,
 		"brain": brain,
 		"initial_brain": _initial.brain,
+		"plan": _selected_plan() if _plan_opt != null else "",
+		"initial_plan": str(_initial.plan) if _plan_opt != null else "",
 		"steps": int(_steps_spin.value),
 		"initial_steps": int(_initial.steps),
 		"tick": float(_tick_spin.value),
