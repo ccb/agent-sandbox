@@ -535,6 +535,23 @@ def _longest_nondecreasing(values: list[int]) -> int:
     return max(best)
 
 
+def _longest_increasing(values: list[int]) -> int:
+    """Length of the longest strictly increasing subsequence.
+
+    Unlike deduplicating before measuring progress, this preserves a later
+    in-order visit when the same stop was visited out of sequence earlier.
+    O(n^2), fine for a day's worth of segments.
+    """
+    if not values:
+        return 0
+    best = [1] * len(values)
+    for i in range(1, len(values)):
+        for j in range(i):
+            if values[j] < values[i]:
+                best[i] = max(best[i], best[j] + 1)
+    return max(best)
+
+
 def _decisions_in(retrievals: list[dict]) -> list[dict]:
     """Collapse repainted retrieval frames into one entry per decision.
 
@@ -656,9 +673,9 @@ class HeuristicJudge:
         """Did the agent get through its plan, in the plan's order?
 
         *progress*: how far through the schedule the day actually got -- the
-        longest in-order run of DISTINCT matched stops, over the number of
-        stops. *order*: of every matched segment, the fraction that appears in
-        schedule order (longest non-decreasing run of stop indices).
+        longest strictly increasing subsequence of matched stops, over the
+        number of stops. *order*: of every matched segment, the fraction that
+        appears in schedule order (longest non-decreasing run of stop indices).
 
         The two multiply, so a day has to both advance and stay in sequence.
         Progress alone would miss a shuffled day -- a scrambled run reaches the
@@ -679,11 +696,7 @@ class HeuristicJudge:
             return DimScore(
                 _scale(0.0), [], "the day never reached a single planned stop"
             )
-        reached: list[int] = []
-        for m in matched_order:
-            if m not in reached:
-                reached.append(m)
-        stops_reached = _longest_nondecreasing(reached)
+        stops_reached = _longest_increasing(matched_order)
         progress = min(1.0, stops_reached / len(ev.schedule))
         order = _longest_nondecreasing(matched_order) / len(matched_order)
         evidence = []

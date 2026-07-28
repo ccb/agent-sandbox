@@ -353,6 +353,26 @@ def test_plan_coherence_penalises_a_day_that_never_advances():
     assert "reached 1 of 2 planned stops" in stalled.note
 
 
+def test_plan_progress_preserves_later_in_order_visits():
+    """An early visit must not hide a later complete in-order sequence."""
+    judge = HeuristicJudge()
+    ev = build_evidence(make_replay())["Ada"]
+    ev.schedule.append(
+        {
+            "place": "Gym",
+            "activity": "lifting weights",
+            "emoji": "s",
+            "steps": None,
+        }
+    )
+    judge._match_segments = lambda _ev: [2, 0, 1, 2]
+
+    result = judge._plan_coherence(ev)
+
+    assert result.score == 7.8
+    assert "reached 3 of 3 planned stops in order" in result.note
+
+
 # ------------------------------------------------------------ memory use
 
 
