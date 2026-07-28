@@ -2137,9 +2137,12 @@ def _credit_stop_for_conversation(char, st) -> bool:
     forward onto an unrelated stop.
 
     The only caller is the conversation-end loop in this module
-    (:func:`_advance_conversation`), and every agent that reaches it was
-    already latched by some settle -- :func:`maybe_converse`'s pairing
-    requires it. For an agent latched by a *perform*, ``credit_stop`` is
+    (:func:`_advance_conversation`) -- but not every path there arrives
+    already latched. Phase 2's proximity pairing (:func:`maybe_converse`)
+    requires ``performing`` for both agents before it opens a conversation at
+    all, so those are latched by construction; the talk_to-initiator and
+    ``maybe_react`` paths below are not, which is exactly why the guard here
+    rejects them. For an agent latched by a *perform*, ``credit_stop`` is
     already ``True`` (the decide-time branch sets it unconditionally, #831),
     so this call is a no-op there. The one case where dropping the place gate
     actually changes the outcome is an agent latched by a **dead-talk
@@ -2164,10 +2167,13 @@ def _credit_stop_for_conversation(char, st) -> bool:
     exists for the pre-pass to consume this credit at. A conversation started
     mid-walk by ``maybe_react`` (#370) pins a *walking* agent under
     ``conversing``, never ``performing`` -- no ``perform_until`` is set for
-    it. Relaxing this guard to accept ``conversing`` would write a credit with
-    nowhere to be consumed until some unrelated LATER settle's pre-pass check
-    happened to pick it up -- exactly the forward leak the paragraph above
-    claims is impossible by construction.
+    it, so the pre-pass has nothing to fire on. Relaxing this guard to accept
+    ``conversing`` would not leak the credit forward onto a later stop: the
+    next settle that DOES set ``perform_until`` (``settle_after_dead_talk`` or
+    the decide-time perform branch) re-stamps ``credit_stop`` unconditionally
+    first, the same one-shot guarantee this docstring relies on above. It
+    would just be a wasted write with no ``perform_until`` for the pre-pass to
+    ever consume it at -- pointless, not hazardous.
 
     Deliberately does NOT write ``activity``. The scheduled activity is not
     necessarily what the agent did (under a real brain ``PerformPenn`` sets it
