@@ -94,7 +94,7 @@ func _build_shell() -> void:
 	add_child(center)
 
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(560, 0)
+	panel.custom_minimum_size = Vector2(820, 0)
 	center.add_child(panel)
 
 	var margin := MarginContainer.new()
@@ -125,6 +125,9 @@ func _build_shell() -> void:
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(0, 360)
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# Clamp content to the viewport width so wrapping blurbs wrap (a horizontal
+	# scrollbar would instead let a row grow sideways and never break a line).
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	col.add_child(scroll)
 	_form_box = VBoxContainer.new()
 	_form_box.add_theme_constant_override("separation", 6)
@@ -292,17 +295,29 @@ func _render_config(data: Dictionary) -> void:
 	for entry in data.get("personas", []):
 		if typeof(entry) != TYPE_DICTIONARY:
 			continue
+		# One card per persona: a PanelContainer (the theme's tan box) holding the
+		# name checkbox -- centred vertically -- beside the blurb, which wraps to
+		# as many lines as it needs instead of truncating, so the card grows to
+		# fit the full self-description (#791 review).
+		var card := PanelContainer.new()
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		card.add_child(row)
 		var cb := CheckBox.new()
-		var pname := str(entry.get("name", entry.get("id", "?")))
-		var blurb := str(entry.get("blurb", ""))
-		if blurb.length() > 70:
-			blurb = blurb.substr(0, 70) + "…"
-		if blurb != "":
-			cb.text = "%s -- %s" % [pname, blurb]
-		else:
-			cb.text = pname
+		cb.text = str(entry.get("name", entry.get("id", "?")))
 		cb.button_pressed = str(entry.get("id", "")) in cast
-		_form_box.add_child(cb)
+		cb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(cb)
+		var blurb := str(entry.get("blurb", ""))
+		if blurb != "":
+			var desc := Label.new()
+			desc.text = blurb
+			desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			desc.add_theme_color_override("font_color", HINT_COLOR)
+			desc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			desc.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			row.add_child(desc)
+		_form_box.add_child(card)
 		_persona_checks.append({"id": str(entry.get("id", "")), "cb": cb})
 
 	# --- Sim knobs ---
