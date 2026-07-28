@@ -485,18 +485,84 @@ def test_talk_request_that_opens_with_nothing_still_settles_793():
     assert state["Ada"]["perform_until"] == 0 + DEAD_TALK_SETTLE_STEPS
 
 
-def test_opened_talk_request_is_neither_a_failure_nor_a_settle_793():
-    # Guards the happy path against the fix: a conversation that really opens
-    # writes the intent memory (asserted above), no failure record, and leaves
-    # the pair pinned by `conversing` rather than by a dead-talk settle.
+def test_opened_talk_request_is_not_a_dead_talk_settle_793_837():
+    # A conversation that really opens writes the intent memory (asserted
+    # above), no failure record, and never receives the DEAD-talk retry settle.
+    # Since #837 its initiator does receive a completed one-shot latch so the
+    # schedule credit has a consumption site after the conversation releases.
     brain = _ScriptedConvoBrain(["About that demo...", "Sure, let's sync."])
     game, chars, state, frame, order = _request_setup(brain)
+    state["Ada"]["performing"] = False
     assert game.parser.parse_command("talk_to Bo", actor=chars["Ada"])
     maybe_converse(game, chars, state, frame, 0, {}, order, active={})
     texts = [r.text for r in chars["Ada"].agent.memory.retrieve(query="Bo", turn=0)]
     assert not [t for t in texts if t.startswith("I tried to")]
-    assert state["Ada"].get("perform_until") is None  # never settled
+    assert state["Ada"]["performing"] is True
+    assert state["Ada"]["credit_stop"] is True
+    assert state["Ada"]["perform_until"] == 0
     assert state["Ada"]["conversing"] is True
+    # The target did not choose talk_to and was already performing; its own
+    # activity latch is left intact.
+    assert state["Bo"].get("perform_until") is None
+
+
+def test_talk_request_credit_advances_schedule_after_release_837():
+    """The successful opener's latch reaches the real schedule pre-pass.
+
+    This is the regression from #837 end to end: the first line earns a
+    one-shot latch, the playback hold delays it, and the first tick after
+    release advances the pointer rather than leaving the conversation stop
+    current forever.
+    """
+    brain = _ScriptedConvoBrain(["Hi Bo!"])  # one real line, then playback hold
+    game, chars, state, frame, order = _request_setup(brain)
+    ada = chars["Ada"]
+    ada.agent.schedule.schedule.append(
+        {"place": "Plaza", "activity": "walking", "emoji": None, "steps": 5}
+    )
+    state["Ada"]["performing"] = False
+    assert game.parser.parse_command("talk_to Bo", actor=ada)
+
+    active: dict = {}
+    assert maybe_converse(game, chars, state, frame, 0, {}, order, active=active) == 1
+    assert ada.agent.schedule.stop_index == 0
+    assert state["Ada"]["conversing"] is True
+
+    # Release the completed exchange after its viewer playback hold. The
+    # schedule pre-pass has not run yet, so the pointer must still be at stop 0.
+    hold_until = next(iter(active.values())).hold_until
+    assert hold_until is not None
+    maybe_converse(game, chars, state, frame, hold_until, {}, order, active=active)
+    assert not active
+    assert state["Ada"]["conversing"] is False
+    assert ada.agent.schedule.stop_index == 0
+
+    # Fill the display state step() reads. A one-tile path keeps Ada out of the
+    # decision phase after the pre-pass; it is immaterial to credit consumption.
+    state["Ada"].update(
+        {
+            "tile": (0, 0),
+            "path": [(0, 0)],
+            "pron": "\U0001f9d1",
+            "desc": "talking",
+            "reasoning": "(r)",
+            "memories": [],
+            "trace": [],
+            "stop_since": 0,
+        }
+    )
+    step(
+        game,
+        chars,
+        state,
+        hold_until + 1,
+        order=["Ada"],
+        world_map=None,
+        emoji={"Ada": "\U0001f9d1"},
+    )
+
+    assert ada.agent.schedule.stop_index == 1
+    assert state["Ada"]["perform_until"] is None
 
 
 # ---------------------------------------- proximity is tiles, not rooms (#835)

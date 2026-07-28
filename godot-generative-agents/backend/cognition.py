@@ -2035,6 +2035,33 @@ def settle_after_dead_talk(st: dict, step: int, steps: int) -> None:
     st["perform_until"] = step + steps
 
 
+def settle_after_opened_talk(st: dict, step: int) -> bool:
+    """Give a successful ``talk_to`` initiator a consumable stop credit (#837).
+
+    Penn's explicit ``talk_to`` is instantaneous at the action seam: when its
+    deferred request opens, the initiator is ``conversing`` but not
+    ``performing`` and has no ``perform_until``.  Merely setting
+    ``credit_stop`` there would therefore do nothing -- the schedule-advance
+    pre-pass only consumes credits from an expired activity latch.
+
+    Once the first real line exists, turn that initiator into a completed
+    one-shot activity.  ``conversing`` keeps the latch pinned through the
+    multi-tick exchange and its viewer playback hold; after release, the next
+    pre-pass consumes it through the same path as ``perform``.  An initiator
+    that was already performing keeps its existing duration, whose expiry is
+    already a valid consumption site.
+
+    Empty opens do not call this helper and remain dead talks, settled by
+    :func:`settle_after_dead_talk` with ``credit_stop = False``.
+    """
+    if st.get("performing"):
+        return False
+    st["performing"] = True
+    st["credit_stop"] = True
+    st["perform_until"] = step
+    return True
+
+
 @dataclass
 class ActiveConversation:
     """A conversation in progress across ticks (issue #371).
@@ -2155,49 +2182,35 @@ def _credit_stop_for_conversation(char, st) -> bool:
     completed nothing). This sets the pre-pass's own ``credit_stop`` flag
     rather than inventing a second signal for it to consult. ``credit_stop``
     is read in exactly one place (that pre-pass) and is re-stamped by every
-    path that sets ``perform_until`` -- ``settle_after_dead_talk`` and the
-    decide-time perform branch -- so it is one-shot by construction: a credit
-    written here is consumed by the settle it was earned at and cannot leak
-    forward onto an unrelated stop.
+    path that sets ``perform_until`` -- ``settle_after_dead_talk``,
+    ``settle_after_opened_talk``, and the decide-time perform branch -- so it
+    is one-shot by construction: a credit written here is consumed by the
+    settle it was earned at and cannot leak forward onto an unrelated stop.
 
     The only caller is the conversation-end loop in this module
-    (:func:`_advance_conversation`) -- but not every path there arrives
-    already latched. Phase 2's proximity pairing (:func:`maybe_converse`)
-    requires ``performing`` for both agents before it opens a conversation at
-    all, so those are latched by construction; the talk_to-initiator and
-    ``maybe_react`` paths below are not, which is exactly why the guard here
-    rejects them. For an agent latched by a *perform*, ``credit_stop`` is
-    already ``True`` (the decide-time branch sets it unconditionally, #831),
-    so this call is a no-op there. The one case where dropping the place gate
-    actually changes the outcome is an agent latched by a **dead-talk
-    settle** (``credit_stop`` left ``False``) who then goes on to hold a real
-    conversation, wherever it happens -- that is the whole delta. That pin is
-    not permanent: an uncredited dead-talk settle still un-latches at its own
-    expiry (at most ``dead_talk_settle_steps``, default 30) whether or not it
-    credited, so only a *repeating* dropped-talk loop keeps the pointer stuck
-    -- the gap ``run_simulation.py``'s own ``ponytail:`` comment on this same
-    pre-pass leaves open. A ``talk_to`` that itself *opens* a real
-    conversation is still never credited here: #793 found that
-    ``run_simulation.py``'s ``is_talk`` check matches the engine's generic
-    ``talk`` verb, not Penn's own ``talk_to``, so an opened ``talk_to`` never
-    touches ``settle_after_dead_talk`` at all -- its initiator reaches
-    :func:`maybe_converse` merely ``conversing``, never ``performing``, and the
-    guard below rejects it.
+    (:func:`_advance_conversation`). Phase 2's proximity pairing
+    (:func:`maybe_converse`) requires ``performing`` for both agents before it
+    opens a conversation, so those participants are latched by construction.
+    Since #837, phase 1.5 gives a successful ``talk_to`` initiator its own
+    completed latch through :func:`settle_after_opened_talk` as soon as the
+    first real line exists. The partner is credited only if it was already
+    performing; a conversation started mid-walk by ``maybe_react`` remains
+    uncredited because walking alone establishes no activity latch.
+
+    For an agent latched by a *perform*, ``credit_stop`` is already ``True``
+    (the decide-time branch sets it unconditionally, #831), so this call is a
+    no-op there. The case where #831's dropped place gate changes the outcome
+    is an agent latched by a **dead-talk settle** (``credit_stop`` left
+    ``False``) who then holds a real conversation, wherever it happens.
 
     ``performing`` is the SOLE guard left, and it is load-bearing -- not
     because a stop the agent never reached must not count (#831's own rule
     says the opposite: an unreached stop IS creditable if the activity ran
     somewhere), but because ``performing`` guarantees a ``perform_until``
-    exists for the pre-pass to consume this credit at. A conversation started
-    mid-walk by ``maybe_react`` (#370) pins a *walking* agent under
-    ``conversing``, never ``performing`` -- no ``perform_until`` is set for
-    it, so the pre-pass has nothing to fire on. Relaxing this guard to accept
-    ``conversing`` would not leak the credit forward onto a later stop: the
-    next settle that DOES set ``perform_until`` (``settle_after_dead_talk`` or
-    the decide-time perform branch) re-stamps ``credit_stop`` unconditionally
-    first, the same one-shot guarantee this docstring relies on above. It
-    would just be a wasted write with no ``perform_until`` for the pre-pass to
-    ever consume it at -- pointless, not hazardous.
+    exists for the pre-pass to consume this credit at. Relaxing this guard to
+    accept ``conversing`` would still be a wasted write for reactive
+    mid-walk conversations, which have no ``perform_until``. The explicit
+    opener instead establishes the missing consumption site narrowly.
 
     Deliberately does NOT write ``activity``. The scheduled activity is not
     necessarily what the agent did (under a real brain ``PerformPenn`` sets it
@@ -2498,6 +2511,13 @@ def maybe_converse(
             clock,
             line_playback_steps,
         )
+        if ac.convo.happened:
+            # #837: unlike proximity pairing, an explicit talk_to opener was
+            # never performing, so the conversation-end credit had no
+            # perform_until for the pre-pass to consume. The first real line
+            # proves this was not a dead talk; give only its initiator the
+            # completed one-shot latch. `conversing` holds it until release.
+            settle_after_opened_talk(state[name], step)
         completed += delta
         if ended:
             del active[key]
