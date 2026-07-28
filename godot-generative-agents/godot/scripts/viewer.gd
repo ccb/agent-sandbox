@@ -2417,7 +2417,7 @@ func _refresh_deciding(name: String) -> void:
 func _anchor_bubble(label: Label, gap: float) -> void:
 	# Pin `label`'s BOTTOM edge `gap` px above the sprite head so it grows upward
 	# as its wrapped text gets taller, never covering the sprite. foot_lift matches
-	# _make_agent (constant across agents); the head sits at -(foot_lift + SPRITE_HALF_PX).
+	# _spawn_agent (constant across agents); the head sits at -(foot_lift + SPRITE_HALF_PX).
 	# get_minimum_size() forces the wrapped height to recompute now (vs .size.y,
 	# which can lag a frame after .text changes).
 	var foot_lift := SPRITE_HALF_PX - float(_tile_px)
