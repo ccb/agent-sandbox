@@ -17,6 +17,10 @@ and played by the Godot viewer) is::
         "personas": [                    # penn_world.persona_meta_entry
           {"name", "emoji", "persona", "home",
            "schedule": [{"place", "activity", "emoji", "steps"}]}
+                                         #   `schedule` is the AUTHORED seed
+                                         #   YAML, not the day a run executed
+                                         #   (#824) -- see the manifest's
+                                         #   `daily_plans` for that
         ],
         "relationships": [               # penn_world.relationships_meta
           {"a", "b", "kind", "closeness", "description"}
