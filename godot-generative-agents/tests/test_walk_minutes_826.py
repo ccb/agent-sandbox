@@ -1,0 +1,165 @@
+"""What a walk costs, in the decide prompt (issue #826).
+
+Penn legs are long -- Van Pelt to Houston Hall is ~57 sim-minutes -- but the
+exits list prices every destination the same, so an agent forms "quick coffee
+run" intentions that are two-hour round trips. This line prices them.
+
+Fully offline. Run from the repo root::
+
+    uv run pytest godot-generative-agents/tests/test_walk_minutes_826.py -v
+"""
+
+import datetime
+import os
+import sys
+from pathlib import Path
+
+_SIM_DIR = (
+    Path(__file__).resolve().parents[2] / "godot-generative-agents" / "backend" / "penn"
+)
+sys.path.insert(0, str(_SIM_DIR))
+
+from backend.prompt_templates import render  # noqa: E402
+from backend.build_world import build_world  # noqa: E402
+from backend.cognition import attach_agents, walk_minutes_line  # noqa: E402
+from backend.sim_clock import SimClock  # noqa: E402
+from backend.world_map import WorldMap  # noqa: E402
+
+START = datetime.datetime(2023, 2, 13, 8, 0, 0)
+UPENN = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "backend", "penn", "the_upenn"
+)
+
+LOCATIONS = [
+    {
+        "name": "The Green",
+        "description": "the central lawn",
+        "address": None,
+        "hub": True,
+    },
+    {"name": "Cafe", "description": "a coffee shop", "address": "T:Cafe:counter"},
+    {"name": "Library", "description": "a small library", "address": "T:Library:desks"},
+]
+
+
+def _personas():
+    return [
+        {
+            "name": "Ada",
+            "home": "The Green",
+            "persona": "I am Ada, a curious first-year.",
+            "emoji": "\U0001f4d6",
+            "start_tile": [0, 0],
+            "destination": "Cafe",
+            "activity": "reading a novel",
+            "schedule": [
+                {
+                    "place": "Cafe",
+                    "activity": "reading a novel",
+                    "emoji": "\U0001f4d6",
+                    "steps": None,
+                }
+            ],
+        }
+    ]
+
+
+class _FakeMap:
+    """Two priced addresses and one label-only address, at known distances."""
+
+    width = 100
+    height = 100
+
+    def tiles_for(self, address):
+        return {
+            "T:Cafe:counter": {(0, 30)},
+            "T:Library:desks": {(0, 6)},
+        }.get(address, set())
+
+    def tile_gap_from(self, tile, address):
+        tiles = self.tiles_for(address)
+        if not tiles:
+            return self.width + self.height
+        return min(max(abs(tile[0] - t[0]), abs(tile[1] - t[1])) for t in tiles)
+
+    def tile_gap(self, addr_a, addr_b):
+        # Not what these tests exercise, but TiledGame.perceivable_locations
+        # calls it whenever an agent perceives -- answer "never nearby" rather
+        # than AttributeError if a later test in this file perceives.
+        return self.width + self.height
+
+
+def _ada(world_map):
+    personas = _personas()
+    game, chars = build_world(world_map, personas, LOCATIONS)
+    attach_agents(chars, personas)
+    return game, chars["Ada"]
+
+
+# ------------------------------------------------------ the WorldMap primitive
+
+
+def test_tile_gap_from_matches_tile_gap_semantics_on_the_real_map():
+    wm = WorldMap(UPENN)
+    address = "UPenn:Houston Hall:lobby"
+    tiles = wm.tiles_for(address)
+    assert tiles, "expected the Houston Hall lobby to resolve on the real map"
+    # A tile inside the footprint is zero away from it.
+    assert wm.tile_gap_from(next(iter(tiles)), address) == 0
+    # An unknown address gets tile_gap's own large sentinel, so it never reads
+    # as nearby.
+    assert wm.tile_gap_from((0, 0), "UPenn:Nowhere:void") == wm.width + wm.height
+    # And it agrees with tile_gap when the source tile IS the other footprint:
+    # never larger than the box-to-box gap (a point box is inside the source box).
+    other = "UPenn:Van Pelt Library:lobby"
+    if wm.tiles_for(other):
+        box_gap = wm.tile_gap(other, address)
+        point_gaps = [wm.tile_gap_from(t, address) for t in wm.tiles_for(other)]
+        assert min(point_gaps) <= box_gap
+
+
+# ----------------------------------------------------------------- the line
+
+
+def test_line_is_empty_without_a_map_or_a_clock():
+    game, ada = _ada(None)
+    assert walk_minutes_line(game, ada, SimClock(START)) == ""
+    game2, ada2 = _ada(_FakeMap())
+    assert walk_minutes_line(game2, ada2, None) == ""
+
+
+def test_line_prices_destinations_nearest_first_and_drops_unmapped_ones():
+    game, ada = _ada(_FakeMap())
+    ada.tile = (0, 0)
+    # Library is 6 tiles away (1 min at 10 s/step), Cafe 30 tiles (5 min).
+    # The Green has address None -- no tiles -- so it is dropped.
+    assert walk_minutes_line(game, ada, SimClock(START)) == (
+        "Walking from here takes at least about: Library 1 min; Cafe 5 min."
+    )
+
+
+def test_line_lists_the_place_the_agent_is_standing_in_at_zero():
+    game, ada = _ada(_FakeMap())
+    ada.tile = (0, 6)  # standing on the Library's tile
+    got = walk_minutes_line(game, ada, SimClock(START))
+    assert got.startswith("Walking from here takes at least about: Library 0 min;")
+
+
+def test_line_is_empty_when_the_character_has_no_tile():
+    game, ada = _ada(_FakeMap())
+    if hasattr(ada, "tile"):
+        del ada.tile
+    assert walk_minutes_line(game, ada, SimClock(START)) == ""
+
+
+# ------------------------------------------------------------- pinned wording
+
+
+def test_render_pins_the_line():
+    assert render(
+        "walk_minutes",
+        destinations="Van Pelt — Moelis Reading Room 0 min; Houston Hall 27 min",
+    ) == (
+        "Walking from here takes at least about: "
+        "Van Pelt — Moelis Reading Room 0 min; Houston Hall 27 min."
+    )

@@ -1187,6 +1187,52 @@ def recent_actions_block(agent, step: int, clock) -> str:
     )
 
 
+def walk_minutes_line(game, char, clock) -> str:
+    """Price every travel destination from where *char* stands (#826), or ``""``.
+
+    Penn legs are long -- Van Pelt to Houston Hall is ~57 sim-minutes -- but the
+    observation's exits list prices a 0-minute in-building hop identically to a
+    cross-campus leg, so an agent forms "quick coffee run" intentions that are
+    two-hour round trips. The planner gets a travel budget
+    (``planner.median_travel_minutes``, #795); this is the per-tick decide's
+    equivalent.
+
+    Scoped to the destinations the ``travel`` tool actually offers (the same
+    ``game.locations`` whose names :func:`action_tools_for` puts in its enum), so
+    the prompt prices exactly what the model can choose -- including the place
+    the agent is already standing in, at 0 min, which is a signal in its own
+    right.
+
+    ponytail: Chebyshev over precomputed bounding boxes ignores walls and
+    under-reports about 2x on this campus (27 min to Houston Hall against a
+    measured 58), hence the template's "at least about". Two accurate
+    alternatives were measured and rejected: the real pathfinder costs ~20 s per
+    decide (18 A* runs over a 245x279 grid, and it must not go through the
+    patched walk_path, whose rendezvous routing is stateful round-robin), and a
+    precomputed BFS distance matrix costs ~18 s per world build -- boot time is
+    what overran drive_run.sh's readiness gate in #760 batch 4. Upgrade to the
+    matrix if the under-report ever changes a decision.
+    """
+    world_map = getattr(game, "world_map", None)
+    tile = getattr(char, "tile", None)
+    if world_map is None or clock is None or tile is None:
+        return ""
+    priced = []
+    for name, location in game.locations.items():
+        address = getattr(location, "tile_address", None)
+        if not address or not world_map.tiles_for(address):
+            continue
+        gap = world_map.tile_gap_from(tuple(tile), address)
+        priced.append((clock.minutes_for_steps(gap), name))
+    if not priced:
+        return ""
+    priced.sort()  # nearest first, then by name -- stable and deterministic
+    return render(
+        "walk_minutes",
+        destinations="; ".join(f"{name} {minutes} min" for minutes, name in priced),
+    )
+
+
 def observe_and_decide(
     game, char, step: int, retrieval=None, *, clock=None, stop_since=0
 ):

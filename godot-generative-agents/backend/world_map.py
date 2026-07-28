@@ -145,6 +145,27 @@ class WorldMap:
         dy = max(ay0 - by1, by0 - ay1, 0)
         return max(dx, dy)
 
+    def tile_gap_from(self, tile: tuple[int, int], address: str) -> int:
+        """Chebyshev gap, in tiles, from one ``tile`` to ``address``'s footprint.
+
+        :meth:`tile_gap`'s point-source sibling (issue #826): the same formula
+        with a degenerate 1x1 source box, so it reads the same precomputed
+        ``address_bbox`` and stays O(1) per destination. 0 when the tile is
+        inside the footprint; the same large sentinel as ``tile_gap`` when the
+        address has no tiles, so an unmapped place never reads as nearby.
+
+        Anchored on a tile rather than an address because the caller
+        (``cognition.walk_minutes_line``) prices a walk for an agent that may be
+        standing on the campus hub, whose address is ``None`` -- and that is
+        exactly a travel-decision point.
+        """
+        box = self.address_bbox.get(address)
+        if box is None:
+            return self.width + self.height  # unknown footprint -> never nearby
+        x0, y0, x1, y1 = box
+        x, y = tile
+        return max(max(x0 - x, x - x1, 0), max(y0 - y, y - y1, 0))
+
     def is_blocked(self, tile: tuple[int, int]) -> bool:
         x, y = tile
         return self.collision[y][x] == 1
