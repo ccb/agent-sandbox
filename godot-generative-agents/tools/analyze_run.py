@@ -290,6 +290,28 @@ def _turnarounds(frames: list, sec_per_step: int = 10, start: str = "") -> list[
     return events
 
 
+def _walk_stretches(frames: list, sec_per_step: int = 10) -> tuple[dict, dict]:
+    """Per agent: the longest unbroken walk, and how long it was still walking at the end.
+
+    Replaces `walk_legs.py`, the batch-5 scratch script, which existed for one
+    number: the baseline run ended with Priya Nair having walked 135 unbroken
+    minutes and arrived nowhere. ``_turnarounds`` cannot see that -- a leg
+    that is never abandoned is not a turn-around -- so the two are
+    complementary readings of the same #826 failure and belong in one summary.
+    """
+    current: collections.Counter = collections.Counter()
+    longest: collections.Counter = collections.Counter()
+    for frame in frames:
+        for name, a in frame.items():
+            walking = str((a or {}).get("act") or "").startswith("walking to ")
+            current[name] = current[name] + 1 if walking else 0
+            longest[name] = max(longest[name], current[name])
+    return (
+        {n: longest[n] * sec_per_step // 60 for n in sorted(longest)},
+        {n: current[n] * sec_per_step // 60 for n in sorted(current)},
+    )
+
+
 def _load_manifest(run_dir: pathlib.Path) -> dict:
     """The run's manifest.json, or ``{}``.
 
@@ -352,6 +374,7 @@ def summarise(run_id: str, runs_dir: pathlib.Path, usage: dict | None) -> dict:
     thrash = dict(sorted(collections.Counter(e["agent"] for e in turnarounds).items()))
     retargets = [e for e in turnarounds if e["kind"] == "retarget"]
     abandoned = [e["abandoned_minutes"] for e in retargets]
+    longest_walk, still_walking = _walk_stretches(frames, sec_per_step)
 
     out = {
         "run_id": run_id,
@@ -391,6 +414,11 @@ def summarise(run_id: str, runs_dir: pathlib.Path, usage: dict | None) -> dict:
         "retarget_abandoned_minutes_max": max(abandoned, default=0),
         "retarget_abandoned_minutes_sum": sum(abandoned),
         "turnarounds": turnarounds,
+        # #826's other half, from the retired walk_legs.py: a leg nobody ever
+        # abandons is invisible to the counts above, and the baseline run
+        # ended with an agent 135 unbroken minutes into one.
+        "longest_walk_minutes": longest_walk,
+        "still_walking_at_end_minutes": still_walking,
         # Halved: each conversation is seen once per participant.
         "conversations": conversations // 2 if conversations > 1 else conversations,
         "conversations_agent_sided": conversations,
@@ -460,9 +488,19 @@ def render(s: dict) -> str:
         lines.append(
             f"  persisted   status={p['status']} cost=${p['cost']:.4f} steps={p['steps']}"
         )
+    still = {n: m for n, m in s["still_walking_at_end_minutes"].items() if m}
     lines += [
         f"  walking     {s['walking_share']:.1%} of agent-frames"
         f"   ({s['sec_per_step']}s per step, {s['sec_per_step_source']})",
+        "  legs        longest unbroken walk "
+        + ", ".join(
+            f"{name} {m} min"
+            for name, m in sorted(
+                s["longest_walk_minutes"].items(), key=lambda kv: -kv[1]
+            )[:3]
+        ),
+        "              still walking when the run ended: "
+        + (", ".join(f"{n} {m} min" for n, m in sorted(still.items())) or "nobody"),
         f"  thrash      {s['arrived_then_departed_total']} arrivals departed again"
         + (
             "  "
@@ -783,6 +821,14 @@ def self_check() -> None:
         out = render(s)
         assert "3 same-place oscillation (#849)  |  1 cross-building" in out, out
         assert "08:03  Real: Van Pelt Library -> Houston Hall" in out, out
+
+    # #850: the walk_legs.py numbers, folded in. "Real" walks all 4 frames
+    # (longest 4, still walking 4 at the end); "Arrives" walks 2, sits, then
+    # walks 1, so its longest is 2 and it ends walking 1; "Sits" never walks.
+    longest, still = _walk_stretches(split, sec_per_step=60)
+    assert longest["Real"] == 4 and still["Real"] == 4, (longest, still)
+    assert longest["Arrives"] == 2 and still["Arrives"] == 1, (longest, still)
+    assert longest["Sits"] == 0 and still["Sits"] == 0, (longest, still)
 
     print("self-check OK")
 
