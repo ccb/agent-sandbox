@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import datetime
 import json
 import pathlib
 import re
@@ -184,44 +185,6 @@ def _load_run_record(run_id: str, runs_dir: pathlib.Path) -> dict:
     return {"result": result} if result else {}
 
 
-def _arrived_then_departed(frames: list) -> dict:
-    """Per agent, how many walks ended in another walk rather than an arrival.
-
-    The #826 signature: `run_simulation.step` only asks an agent to decide once
-    its tile path is empty, so a destination change always sits on an arrival
-    boundary -- and a walk segment followed *immediately* by another walk segment
-    means the agent got there and turned straight around. Reading frames alone
-    is enough: the act line is "walking to <place> @ <address>" for the whole
-    leg, so a change of act between two walking frames is a new leg.
-
-    Known under-count: a zero-tile travel to the place the agent already stands
-    sets `desc`/`act` to the same "walking to <place> @ <address>" string
-    (`run_simulation.step`'s travel branch builds it whether or not `path` comes
-    back empty), so the agent re-decides every tick with an UNCHANGED `act` and this
-    reads as one continuous leg, scoring 0 -- exactly what the design doc's
-    "+elapsed only" A/B arm produced. Not a false-"fixed" risk in practice: that
-    mode also drives `walking_share` toward 100%, the other validation number,
-    so a run with thrash near 0 and walking_share near 100% is this failure
-    mode, not a fix.
-
-    Nothing here needs the cassette, so it works for any persisted run.
-    """
-    counts: collections.Counter = collections.Counter()
-    previous: dict = {}
-    for frame in frames:
-        for name, a in frame.items():
-            act = str((a or {}).get("act") or "")
-            walking = act.startswith("walking to ")
-            was_walking, was_act = previous.get(name, (False, ""))
-            if walking and act != was_act:
-                # A new leg began. It is a turn-around only if the frame before
-                # it was itself a walk (no arrival happened in between).
-                if was_walking:
-                    counts[name] += 1
-            previous[name] = (walking, act)
-    return dict(sorted(counts.items()))
-
-
 _WALK_ACT = re.compile(r"^walking to (.+?) @ (.*)$")
 
 
@@ -253,6 +216,78 @@ def _walk_target(act: str) -> tuple[str, str] | None:
 def _same_place(a: str, b: str) -> bool:
     """Two walk targets naming one building. ``""`` -- the hub -- matches all."""
     return not a or not b or a == b
+
+
+def _turnarounds(frames: list, sec_per_step: int = 10, start: str = "") -> list[dict]:
+    """Every arrival that departed again, split by kind (#850).
+
+    The #826 signature: `run_simulation.step` only asks an agent to decide once
+    its tile path is empty, so a destination change always sits on an arrival
+    boundary -- and a walk segment followed *immediately* by another walk
+    segment means the agent got there and turned straight around. Reading
+    frames alone is enough: the act line is "walking to <place> @ <address>"
+    for the whole leg, so a change of act between two walking frames is a new
+    leg.
+
+    Combining the two kinds into one count (what this did before #850) makes a
+    number no fix can be judged by -- #760 batch 5 measured 17 of the
+    baseline's 20 as one agent oscillating inside a single building (#849),
+    while the cross-building retargeting #826 is about sat flat at 3:
+
+    * ``same_place`` -- the two destinations share a building, or one is the
+      campus hub. #849.
+    * ``retarget`` -- the agent abandoned a leg to a genuinely different
+      building. #826. ``abandoned_minutes`` is how long it had been walking the
+      leg it gave up on, which is the cost of the event and #826's acceptance
+      measure.
+
+    Known under-count, and #850 asked for a second look at it: a zero-tile
+    travel to the place the agent already stands sets `desc`/`act` to the same
+    "walking to <place> @ <address>" string (`run_simulation.step`'s travel
+    branch builds it whether or not `path` comes back empty), so the agent
+    re-decides every tick with an UNCHANGED `act` and this reads as one
+    continuous leg, scoring 0. The split narrows the blast radius rather than
+    fixing it: a zero-tile travel targets the place the agent is standing in,
+    so an invisible one can only ever be a ``same_place`` hit -- the
+    ``retarget`` count #826 now rests on is not exposed to it. Detecting them
+    at all needs the cassette's travel decisions, not frames. And the old
+    warning still holds for the combined number: a run with thrash near 0 and
+    `walking_share` near 100% is this failure mode, not a fix.
+
+    frames.jsonl carries no clock, so ``sec_per_step``/``start`` (from
+    manifest.json) are what turn steps into sim-minutes and wall-clock.
+    """
+    started = datetime.datetime.fromisoformat(start) if start else None
+    events: list[dict] = []
+    previous: dict = {}  # agent -> (its act, the step that act began)
+    for step, frame in enumerate(frames):
+        for name, a in frame.items():
+            act = str((a or {}).get("act") or "")
+            was_act, began = previous.get(name, ("", step))
+            if act == was_act:
+                continue
+            previous[name] = (act, step)
+            old, new = _walk_target(was_act), _walk_target(act)
+            if not (old and new):
+                continue  # not two back-to-back legs: an arrival came between
+            events.append(
+                {
+                    "agent": name,
+                    "step": step,
+                    "clock": (
+                        (
+                            started + datetime.timedelta(seconds=step * sec_per_step)
+                        ).strftime("%H:%M")
+                        if started
+                        else ""
+                    ),
+                    "kind": "same_place" if _same_place(old[1], new[1]) else "retarget",
+                    "from": old[0],
+                    "to": new[0],
+                    "abandoned_minutes": (step - began) * sec_per_step // 60,
+                }
+            )
+    return events
 
 
 def summarise(run_id: str, runs_dir: pathlib.Path, usage: dict | None) -> dict:
@@ -290,7 +325,8 @@ def summarise(run_id: str, runs_dir: pathlib.Path, usage: dict | None) -> dict:
         co_settled, by_pair = _co_settled_from_frames(frames)
         co_settled_source = "frames (approximate: idle counts as settled)"
 
-    thrash = _arrived_then_departed(frames)
+    turnarounds = _turnarounds(frames)
+    thrash = dict(sorted(collections.Counter(e["agent"] for e in turnarounds).items()))
 
     out = {
         "run_id": run_id,
@@ -580,11 +616,11 @@ def self_check() -> None:
             "Bo": {"act": "reading @ T:Library:desks"},
         },
     ]
-    got = _arrived_then_departed(frames)
-    assert got == {"Bo": 1}, got
+    got = _turnarounds(frames)
+    assert [(e["agent"], e["kind"]) for e in got] == [("Bo", "retarget")], got
     # An agent who never walks contributes nothing, and a missing agent entry is
     # tolerated (frames from a run that added a resident mid-way).
-    assert _arrived_then_departed([{"Cy": {"act": "reading @ x"}}, {}]) == {}
+    assert _turnarounds([{"Cy": {"act": "reading @ x"}}, {}]) == []
 
     # #850: the classifier primitive. Every comparison is on the ADDRESS -- see
     # _walk_target for why display names cannot be reduced and compared, which
@@ -618,6 +654,48 @@ def self_check() -> None:
         "Elsewhere",
         "",
     ), _walk_target("walking to Elsewhere @ flat-address")
+
+    # #850: the two kinds, on the real act strings the Penn runs emit.
+    hh = "walking to Houston Hall @ UPenn:Houston Hall:lobby"
+    hh_pool = (
+        "walking to Houston Hall — Billiard Room @ UPenn:Houston Hall:Billiard Room"
+    )
+    ch = "walking to College Hall @ UPenn:College Hall:lobby"
+    sat = "reading @ UPenn:Van Pelt Library:lobby"
+
+    def frame(**acts):
+        return {name: {"act": act} for name, act in acts.items()}
+
+    # 60 s/step keeps the arithmetic readable: one frame is one sim-minute.
+    split = [
+        frame(Osc=hh, Trap=vp_room, Hub=hub, Real=vp, Arrives=vp, Sits=sat),
+        frame(Osc=hh, Trap=vp_room, Hub=hub, Real=vp, Arrives=vp, Sits=sat),
+        frame(Osc=hh, Trap=vp_room, Hub=hub, Real=vp, Arrives=sat, Sits=sat),
+        frame(Osc=hh_pool, Trap=vp, Hub=ch, Real=hh, Arrives=hh, Sits=sat),
+    ]
+    events = _turnarounds(split, sec_per_step=60, start="2023-02-13 08:00:00")
+    by_agent = {e["agent"]: e for e in events}
+    assert len(events) == 4, events
+    # Same building via its own sub-place; via the em-dash display name that
+    # does NOT prefix-match its building; and via the addressless hub.
+    assert by_agent["Osc"]["kind"] == "same_place", by_agent["Osc"]
+    assert by_agent["Trap"]["kind"] == "same_place", by_agent["Trap"]
+    assert by_agent["Hub"]["kind"] == "same_place", by_agent["Hub"]
+    # A genuinely different building, and only that one.
+    assert by_agent["Real"]["kind"] == "retarget", by_agent["Real"]
+    assert by_agent["Real"]["from"] == "Van Pelt Library", by_agent["Real"]
+    assert by_agent["Real"]["to"] == "Houston Hall", by_agent["Real"]
+    # The leg ran steps 0-3, so three minutes were thrown away; the clock is
+    # the moment it was abandoned, 08:00 + 3 steps of 60 s.
+    assert by_agent["Real"]["abandoned_minutes"] == 3, by_agent["Real"]
+    assert by_agent["Real"]["clock"] == "08:03", by_agent["Real"]
+    # An agent that ARRIVED between its two legs is not a turn-around, and one
+    # that never walks contributes nothing.
+    assert "Arrives" not in by_agent and "Sits" not in by_agent, by_agent
+    # No start -> no clock string, and the 10 s/step default floors the same
+    # 3-step leg to 0 min rather than fabricating 3.
+    assert _turnarounds(split)[0]["clock"] == ""
+    assert {e["abandoned_minutes"] for e in _turnarounds(split)} == {0}
 
     print("self-check OK")
 
