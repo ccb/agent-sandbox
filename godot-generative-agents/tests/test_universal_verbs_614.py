@@ -29,7 +29,11 @@ from backend.cognition import (  # noqa: E402
 from backend.prompt_templates import render  # noqa: E402
 from backend.run_simulation import step  # noqa: E402
 from backend.sim_config import CognitionConfig  # noqa: E402
-from penn_world import PENN_ACTION_VERBS, PENN_EXTRA_ACTIONS  # noqa: E402
+from penn_world import (  # noqa: E402
+    PENN_ACTION_VERBS,
+    PENN_EXTRA_ACTIONS,
+    _gate_conversations_by_perception,
+)
 from text_adventure_games import conversation as convo  # noqa: E402
 from text_adventure_games.llm_client import ToolCallResult  # noqa: E402
 
@@ -493,6 +497,58 @@ def test_opened_talk_request_is_neither_a_failure_nor_a_settle_793():
     assert not [t for t in texts if t.startswith("I tried to")]
     assert state["Ada"].get("perform_until") is None  # never settled
     assert state["Ada"]["conversing"] is True
+
+
+# ---------------------------------------- proximity is tiles, not rooms (#835)
+
+
+def _colocate_at_tiles(chars, ada_tile, bo_tile, vision_r=8):
+    """Put Ada/Bo out of (or in) tile range within their shared Location, and
+    install the Penn perception gate the live sim wires in (build_world alone
+    leaves audience_for room-based, so can_converse would ignore tiles)."""
+    for n in ("Ada", "Bo"):
+        chars[n].vision_r = vision_r
+    chars["Ada"].tile = ada_tile
+    chars["Bo"].tile = bo_tile
+
+
+def test_talk_request_dropped_when_target_is_out_of_tile_range_835():
+    # Ada and Bo share one engine Location (the hub) but stand 50 tiles apart --
+    # a Penn building interior / the outdoor hub is one ~2000-tile address, so
+    # room identity is not proximity. The opener must gate on the same tile
+    # metric the auto-pairing scan uses, or it pairs them into a conversation
+    # that renders as stretching across the map (#835). The parse gate is still
+    # room-based, so the request is issued and it's THIS gate that must drop it.
+    brain = _ScriptedConvoBrain(["Hey, over here!"])
+    game, chars, state, frame, order = _request_setup(brain)
+    _gate_conversations_by_perception((game, chars))
+    _colocate_at_tiles(chars, (0, 0), (50, 50))
+    assert game.parser.parse_command("talk_to Bo", actor=chars["Ada"])
+    completed = maybe_converse(game, chars, state, frame, 0, {}, order, active={})
+    assert completed == 0
+    assert frame["Ada"].get("chat") is None
+    # Not a silent drop: the #793 failure memory names the reason and the retry
+    # is bounded by a dead-talk settle.
+    texts = [r.text for r in chars["Ada"].agent.memory.retrieve(query="Bo", turn=0)]
+    assert (
+        'I tried to "talk_to Bo" but it didn\'t work: they were not close'
+        " enough to talk to." in texts
+    )
+    assert state["Ada"]["perform_until"] == 0 + DEAD_TALK_SETTLE_STEPS
+
+
+def test_talk_request_opens_when_target_is_within_tile_range_835():
+    # The same setup and gate, but 3 tiles apart (within vision_r=8): the
+    # conversation opens, so the gate isn't just always-closed -- it's the tile
+    # distance that decides, exactly as it does for the automatic pair scan.
+    brain = _ScriptedConvoBrain(["Hey, over here!"])
+    game, chars, state, frame, order = _request_setup(brain)
+    _gate_conversations_by_perception((game, chars))
+    _colocate_at_tiles(chars, (0, 0), (3, 3))
+    assert game.parser.parse_command("talk_to Bo", actor=chars["Ada"])
+    maybe_converse(game, chars, state, frame, 0, {}, order, active={})
+    assert frame["Ada"]["chat"] == [["Ada", "Hey, over here!"]]  # opened
+    assert state["Ada"]["conversing"] and state["Bo"]["conversing"]
 
 
 def test_talk_to_target_match_skips_the_verb_token():
