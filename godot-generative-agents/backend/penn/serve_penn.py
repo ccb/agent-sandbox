@@ -109,6 +109,11 @@ TIER_ROLES = frozenset(
     {"decide", "plan", "reflect", "converse", "outcome", "score", "react"}
 )
 
+# Thinking-depth levels for models that support it (--effort / llm.effort).
+# Ordered cheapest-first; unset means "send no thinking config at all", which
+# keeps every existing run's request payload exactly as it was.
+EFFORT_LEVELS = ("low", "medium", "high", "max")
+
 # Mid-run brain-outage threshold (#745): after this many CONSECUTIVE failed
 # real-brain calls (error rows in the ledger with no genuine answer between
 # them), the next tick() raises BrainOutage instead of burning more paid,
@@ -243,7 +248,9 @@ def _resolve_plan_mode(flag: str, llm) -> str:
     return "llm" if _is_paid(llm) else "schedule"
 
 
-def resolve_llm(world_llm, brain, model=None, max_cost=None, model_for=None):
+def resolve_llm(
+    world_llm, brain, model=None, max_cost=None, model_for=None, effort=None
+):
     """Resolve one run's LLM settings: ``None`` for the mock brain, else a dict.
 
     ``--brain mock`` (the default) returns ``None`` -- no client is ever built,
@@ -276,6 +283,13 @@ def resolve_llm(world_llm, brain, model=None, max_cost=None, model_for=None):
         llm["model"] = model
     if max_cost is not None:
         llm["max_cost_usd"] = max_cost
+    if effort is not None:
+        llm["effort"] = effort
+    if llm.get("effort") not in (None, *EFFORT_LEVELS):
+        raise SystemExit(
+            f"unknown effort {llm['effort']!r}: valid levels are "
+            f"{', '.join(EFFORT_LEVELS)}"
+        )
     # Per-role model tiering (#368): the YAML llm.models map, with --model-for
     # entries layered on top. Validated here so a typo'd role dies at startup
     # (for both config surfaces), not silently pays the default model.
@@ -827,6 +841,7 @@ class PennStepper:
                 provider="anthropic",
                 model=llm.get("model"),
                 models_by_role=llm.get("models"),
+                effort=llm.get("effort"),
             )
             self.llm_client = self._decide_client()
             self.reflector_client = self._role_client("reflect")
@@ -1513,7 +1528,14 @@ class PennStepper:
             # What is driving the cast: None under the mock brain, else the
             # provider/model, so the viewer can say which model it is watching.
             "llm": (
-                {"provider": self.llm["provider"], "model": self.llm["model"]}
+                {
+                    "provider": self.llm["provider"],
+                    "model": self.llm["model"],
+                    # Thinking depth is part of "which brain was this?" -- two
+                    # runs on the same model at different effort are different
+                    # experiments, so the manifest has to tell them apart.
+                    "effort": self.llm.get("effort"),
+                }
                 if _is_paid(self.llm)
                 else None
             ),
@@ -2716,6 +2738,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="override the llm: block's model for this run (--brain llm only)",
     )
     ap.add_argument(
+        "--effort",
+        choices=EFFORT_LEVELS,
+        default=None,
+        help="thinking depth for models that support it (--brain llm only). "
+        "Unset sends no thinking config, exactly as before. Note current "
+        "models charge thinking as output tokens, so raising this raises cost",
+    )
+    ap.add_argument(
         "--max-cost",
         type=float,
         default=None,
@@ -2891,6 +2921,7 @@ def main() -> int:
         model=args.model,
         max_cost=args.max_cost,
         model_for=_parse_model_for(args.model_for),
+        effort=args.effort,
     )
     if _is_paid(llm):
         # The key exists (resolve_llm gates that); now prove the API accepts

@@ -1,0 +1,10 @@
+# Persisted run output is large and regenerable -- a single 12-hour run is ~86MB
+# of frames.jsonl, and `git add -A` while a run is still writing will happily
+# sweep it in (#760 batch 4 did exactly that, twice). Runs are referenced by id
+# in the #760 write-ups and reproduced with `serve_penn.py --re-run <RUN_ID>`,
+# so the directory itself does not belong in the history.
+#
+# This does NOT untrack the handful of small run dirs already committed on main
+# -- .gitignore has no effect on tracked files. To commit a new one deliberately,
+# `git add -f`.
+run-*/
