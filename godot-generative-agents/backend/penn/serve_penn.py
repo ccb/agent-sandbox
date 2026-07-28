@@ -1485,6 +1485,10 @@ class PennStepper:
             # Same projection the bake uses (penn_world.persona_meta_entry): name/
             # emoji for the sprite + sidebar, persona/home/schedule for the State
             # Details inspector (issue #408), so live and baked meta stay identical.
+            # `schedule` here is the AUTHORED persona YAML the world was seeded
+            # from -- not the day the run executed (#824). Under the default
+            # --plan llm the planner's day replaces it and the two differ; the
+            # executed plan is the manifest's `daily_plans` (_store_manifest).
             "personas": [persona_meta_entry(p) for p in self.world.personas],
             # The t=0 seed social graph, already validated/normalized by
             # penn_world.relationships_meta at build time -- the same list the
@@ -1517,6 +1521,36 @@ class PennStepper:
         data.pop("embedding", None)
         return data
 
+    def _plans_for_manifest(self) -> dict:
+        """Each agent's ``DailyPlan``, as of this manifest write (#824).
+
+        ``planner_sources`` says *where* each day came from; this says *what it
+        is* -- the stops the step loop walks, serialized through the plan's own
+        ``to_primitive()`` (the #298 rule: one formatter, so the manifest, the
+        baked ``daily_plan.json`` and ``GET /agents/{name}/plan`` can't drift).
+
+        This is NOT ``personas[].schedule`` in the meta block above, which is
+        the authored persona YAML the world was seeded from. Under the default
+        ``--plan llm`` the planner writes a fresh day that never lands back in
+        ``world.personas``, so before this the run record showed the seed
+        schedule beside ``planner_sources: llm`` and read as if it were the
+        plan -- which cost #821 two wrong revisions.
+
+        **Which plan you get.** ``_store_manifest`` is stamped after
+        ``attach_agents`` (the t=0 generated day) and again at ``_finish_run``,
+        so a run that finished records the day the agent ENDED with. Read
+        ``revision`` to tell the two apart: 0 means the planner's day was never
+        touched, >0 means ``maybe_revise_plan`` rewrote the unstarted tail that
+        many times and this is no longer what the planner first produced. A run
+        killed before finish keeps the t=0 stamp (its row stays "running").
+        """
+        plans = {}
+        for name, char in self.chars.items():
+            plan = getattr(char.agent, "plan", None) if char.agent else None
+            if plan is not None:
+                plans[name] = plan.to_primitive()
+        return plans
+
     def _store_manifest(self) -> dict:
         """The manifest persisted to the store: the handshake meta() plus the
         provenance a re-run needs (#715). Kept OFF meta() itself so the live
@@ -1543,6 +1577,12 @@ class PennStepper:
             # Per-persona plan provenance (#787): {name: "llm"|"static"}. The
             # plan_mode above is the request; this is what each agent got.
             "planner_sources": self._planner_sources,
+            # What each agent actually planned (#824): {name:
+            # DailyPlan.to_primitive()}, carrying `revision` so a reader can
+            # tell a never-revised day from a replanned one. See
+            # _plans_for_manifest -- and note this, NOT `personas[].schedule`
+            # above, is the run's plan.
+            "daily_plans": self._plans_for_manifest(),
             # The step BUDGET this run was launched with -- not how many steps
             # it actually took (that is the row's `steps`). meta() deliberately
             # omits it, but a re-run needs it (#787): LLMPlanner bounds the day
@@ -1990,7 +2030,13 @@ class PennStepper:
                 f"compare."
             )
         if self.run_store is not None and self._run_id is not None:
-            self.run_store.update_run(self._run_id, status="finished")
+            # Re-stamp the manifest as well as the status: `daily_plans` (#824)
+            # is only final once the day is over, since maybe_revise_plan can
+            # rewrite an agent's unstarted tail at any tick. Everything else in
+            # the blob is build-time constant, so this changes nothing else.
+            self.run_store.update_run(
+                self._run_id, status="finished", manifest=self._store_manifest()
+            )
             self._write_run_record()
         self._run_finished = True
 
