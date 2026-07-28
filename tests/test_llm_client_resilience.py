@@ -444,3 +444,90 @@ def test_client_from_env_reads_resilience_vars(monkeypatch):
     assert getattr(client, "_max_retries") == 7
     assert captured["timeout"] == 5.0
     assert captured["max_retries"] == 0
+
+
+# --- Anthropic request shaping: thinking/effort vs temperature ----------
+#
+# Sonnet-5 / Opus-4.6+ models reject a non-default `temperature` (400) and take
+# adaptive thinking + `output_config.effort` instead; Haiku 4.5 and older keep
+# `temperature` and have neither. Adaptive thinking also shares the max_tokens
+# ceiling with the reply, so a small decide budget (Agent.max_tokens defaults
+# to 128) must be floored or the thinking starves the tool call.
+
+
+class _CapturingCreate:
+    """A fake ``create`` that records the kwargs it was called with and returns
+    a canned response."""
+
+    def __init__(self, response):
+        self._response = response
+        self.kwargs = None
+
+    def __call__(self, **kwargs):
+        self.kwargs = kwargs
+        return self._response
+
+
+def _anthropic_model(model, effort, create, *, ledger=None):
+    c = AnthropicClient.__new__(AnthropicClient)
+    c._client = SimpleNamespace(messages=SimpleNamespace(create=create))
+    c._model = model
+    c._models_by_role = None
+    c._effort = effort
+    c._verbose = False
+    c._max_retries = 0
+    c._schema_repair = False
+    c._sleep = lambda *a, **k: None
+    c.ledger = ledger or UsageLedger()
+    c.context = {}
+    return c
+
+
+def test_anthropic_sonnet5_chat_sends_adaptive_thinking_and_effort_not_temperature():
+    create = _CapturingCreate(_anthropic_chat_response("ok"))
+    c = _anthropic_model("claude-sonnet-5", "medium", create)
+
+    c.chat(MSG, max_tokens=128, temperature=0.7)
+
+    assert create.kwargs["thinking"] == {"type": "adaptive"}
+    assert create.kwargs["output_config"] == {"effort": "medium"}
+    assert "temperature" not in create.kwargs  # a non-default value would 400
+    assert create.kwargs["max_tokens"] >= 4096  # floored so thinking has room
+
+
+def test_anthropic_haiku_chat_keeps_temperature_and_no_thinking():
+    create = _CapturingCreate(_anthropic_chat_response("ok"))
+    c = _anthropic_model("claude-haiku-4-5", None, create)
+
+    c.chat(MSG, max_tokens=128, temperature=0.0)
+
+    assert create.kwargs["temperature"] == 0.0
+    assert "thinking" not in create.kwargs
+    assert "output_config" not in create.kwargs
+    assert create.kwargs["max_tokens"] == 128  # legacy path is untouched
+
+
+def test_anthropic_sonnet5_tool_call_uses_adaptive_thinking_keeps_tools():
+    create = _CapturingCreate(_anthropic_tool_response({"action": "wait"}))
+    c = _anthropic_model("claude-sonnet-5", "high", create)
+
+    c.call_tools(MSG, [TOOL], max_tokens=128, temperature=0.7)
+
+    assert create.kwargs["thinking"] == {"type": "adaptive"}
+    assert create.kwargs["output_config"] == {"effort": "high"}
+    assert "temperature" not in create.kwargs
+    assert create.kwargs["max_tokens"] >= 4096
+    assert "tools" in create.kwargs and "tool_choice" in create.kwargs
+
+
+def test_anthropic_sonnet5_without_effort_still_drops_temperature():
+    # A thinking-capable model with no effort configured still must not send
+    # temperature (it 400s), and still gets adaptive thinking.
+    create = _CapturingCreate(_anthropic_chat_response("ok"))
+    c = _anthropic_model("claude-sonnet-5", None, create)
+
+    c.chat(MSG, max_tokens=128, temperature=0.7)
+
+    assert create.kwargs["thinking"] == {"type": "adaptive"}
+    assert "temperature" not in create.kwargs
+    assert "output_config" not in create.kwargs  # no effort → omit the block
