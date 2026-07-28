@@ -175,6 +175,12 @@ gate and `_credit_stop_for_conversation` each carried their own inline copy of
 "is this character standing where its stop says", so the next change to what
 that means had five places to miss.
 
+> **Superseded by #831** (2026-07-28): the "Deviation completed" branch in
+> point 3 above was deleted outright, and `_credit_stop_for_conversation`
+> dropped its own place check -- so it is no longer one of `at_scheduled_stop`'s
+> five callers. This section is left as-is for the historical record; do not
+> reuse its caller count or list in a future enumeration pass.
+
 **The sentence has to change too.** `elapsed` no longer means "time spent at the
 place" — for an agent that never arrives, nothing re-anchors and the clock runs
 on the stop it is neglecting, which is exactly the signal #826 needs. But

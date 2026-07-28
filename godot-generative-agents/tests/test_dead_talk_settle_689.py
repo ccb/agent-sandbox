@@ -65,7 +65,7 @@ def _persona(name, home):
         "destination": "Plaza",
         "activity": "reading",
         # Two stops so an *erroneous* schedule.advance() (the bug the
-        # on_plan=False guard prevents) is observable as stop_index moving.
+        # credit_stop=False guard prevents) is observable as stop_index moving.
         "schedule": [
             {"place": "Plaza", "activity": "reading", "emoji": None, "steps": 5},
             {"place": "Library", "activity": "studying", "emoji": None, "steps": 5},
@@ -100,7 +100,7 @@ def _full_state(tile=(0, 0)):
         "memories": [],
         "chat": None,
         "stop_since": 0,
-        "on_plan": True,
+        "credit_stop": True,
         "conversing": False,
     }
 
@@ -128,7 +128,7 @@ def test_empty_talk_settles_briefly_and_bounds_the_retry():
     step(game, chars, state, 0, order=order, world_map=_StubMap(), emoji=emoji)
     assert len(calls) == 1
     assert state["Diego Cruz"]["performing"] is True
-    assert state["Diego Cruz"]["on_plan"] is False
+    assert state["Diego Cruz"]["credit_stop"] is False
     assert (
         state["Diego Cruz"]["perform_until"] == 30
     )  # 0 + default dead_talk_settle_steps
@@ -138,7 +138,7 @@ def test_empty_talk_settles_briefly_and_bounds_the_retry():
     assert len(calls) == 1
 
     # Settle expires: due again, re-decides -- bounded, not permanently stuck --
-    # and the on_plan=False guard means the schedule pointer never moved.
+    # and the credit_stop=False guard means the schedule pointer never moved.
     step(game, chars, state, 30, order=order, world_map=_StubMap(), emoji=emoji)
     assert len(calls) == 2
     assert chars["Diego Cruz"].agent.schedule.stop_index == 0
@@ -172,7 +172,7 @@ def test_blocked_talk_settles_and_still_offers_the_planner_a_replan():
     step(game, chars, state, 0, order=order, world_map=_StubMap(), emoji=emoji)
     assert len(calls) == 1
     assert state["Diego Cruz"]["performing"] is True
-    assert state["Diego Cruz"]["on_plan"] is False
+    assert state["Diego Cruz"]["credit_stop"] is False
     assert state["Diego Cruz"]["perform_until"] == 30
     # The existing ACTION_FAILED revise-plan hook still fires alongside the
     # new settle -- this fix adds a bound, it doesn't remove the nudge.
