@@ -221,6 +221,59 @@ Each gate before the next:
 - **#849 stays with #856.** Same-place oscillation is a different mechanism and
   must not share this metric.
 
+## Review round (post-PR, 2026-07-29)
+
+A broad review of the shipped branch found two states where the design above is
+wrong rather than merely incomplete. Both are fixed on the branch.
+
+1. **The hold could latch forever, deleting the signal this whole change
+   protects.** `maybe_revise_plan` commits
+   `plan.stops[: after + 1] + proposed.stops[after + 1 :]`, so a revision
+   proposing fewer stops than that protected prefix leaves the pointer on the
+   *last* stop. `advance()` then refuses forever on `next_stop is None`, and §2's
+   "clear it only where the pointer moves" rule means nothing can ever clear the
+   flag. Because `finished` **replaces** the elapsed clause (§5 — the load-bearing
+   part), every later prompt would call the stop finished and drop "This has been
+   your current stop for N min." for the rest of the run. Reproduced: the flag
+   stayed True at steps 300/720/1400 and the elapsed clause was gone. §6's block
+   now also clears the flag when `not has_next` — no next stop means no anchor is
+   coming, so there is no hold to describe.
+
+2. **`start_hour` reaches the renderer raw.** `planner.py` keeps whatever the
+   model wrote (`_anchor_correction` only *skips validating* an out-of-window
+   anchor; it never drops the field), so a 99 or a -1 arrives intact — and
+   `advance()` refuses every real hour against it, making the hold permanent and
+   this render the agent's context all run. Unguarded, `_hour_words(99)` is
+   "3 PM" beside "5445 min from now": the false-time-word class #812 exists to
+   prevent. The `next_hour is None` suppression in §5 is now
+   `next_hour not in range(24)`, which covers both cases in one membership test.
+
+Also from that round: the retry's `advance()` call moved out of the `and` chain
+into a statement (a condition appended after a mutating call would advance the
+pointer while skipping the `stop_since` re-stamp — the §6 desync), `deciding_sink`
+became keyword-only (`waiting` was inserted ahead of it in a
+positionally-reachable signature), and one test's name was corrected: it claimed
+to exercise the §6 retry but its agent re-settles, so the *completed-activity*
+block does the advancing. All three new guards are mutation-checked.
+
+Findings deliberately **not** fixed:
+
+- **The next stop can be un-travelable when it shares the current stop's
+  building.** `travel_destination_allowed` refuses same-address-parent travel
+  while the pointer is held, so naming that stop points at a destination the
+  travel enum omits. Left alone: the stop is *not due yet* (the sentence says so,
+  with the hour), and the gate opens exactly when the pointer advances and the
+  stop becomes `scheduled`. This block already names the current stop's place
+  while the agent stands there, which the same gate refuses — so this is the
+  pre-existing shape, not a new class.
+- **An anchor pinned outside the run window holds the pointer for the whole
+  run.** True, and pre-existing: `advance()` refused it before this change too.
+  The new render ("starting at 6 PM") is at least honest about the wait, where
+  the old one showed growing debt.
+- **`advance()`'s hour comparison has no day roll**, so a midnight-spanning run
+  reads an after-midnight anchor as already due. Pre-existing in #838, whose gate
+  this design explicitly does not move — filed separately.
+
 ## Risk
 
 Any prompt change rehashes `recording.request_key`, so every pre-existing

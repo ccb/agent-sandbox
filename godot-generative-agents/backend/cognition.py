@@ -1233,13 +1233,17 @@ def decide_context_block(
     steps = schedule.steps
     next_stop = getattr(schedule, "next_stop", None) if waiting else None
     next_hour = next_stop.get("start_hour") if next_stop else None
-    if next_hour is None:
-        # A revision can replace the tail while a hold stands (#826 Task 2's
-        # test_hold_survives_schedule_replacement pins that state), so the next
-        # stop may have lost the very anchor that caused the hold. Then there is
-        # no hour to report and no wait to describe -- say only that this stop is
-        # finished, rather than rendering "starting at None".
-        next_stop = None
+    if next_hour not in range(24):
+        # Two ways there is no usable hour here. A revision can replace the tail
+        # while a hold stands (#826 Task 2's test_hold_survives_schedule_replacement
+        # pins that state), so the next stop may have lost the very anchor that
+        # caused the hold; and planner.py deliberately keeps a model's
+        # `start_hour` raw, so it can be a 99 or a -1 that no clock hour matches.
+        # Either way there is no hour to report and no wait to describe -- say
+        # only that this stop is finished, rather than rendering "starting at
+        # None" or, from a 99, the self-contradicting "starting at 3 PM (5445 min
+        # from now)". One membership test covers both, since None is not a member.
+        next_stop, next_hour = None, None
     now = clock.time_at(step)
     return render(
         "decide_context",

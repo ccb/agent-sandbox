@@ -1247,6 +1247,11 @@ class PennStepper:
                 "memories": [],
                 "chat": None,
                 "stop_since": 0,
+                # Set when a finished stop's pointer is held by the next stop's
+                # start_hour (#826/#838); the decide prompt reads it to say the
+                # stop is done instead of showing it as overdue. This is the path
+                # a real-LLM run takes, so it is the one that actually sets it.
+                "waiting_for_anchor": False,
                 # Pinned during a multi-tick conversation (issue #371); step()
                 # skips schedule-advance/decision/movement while set. Stays set
                 # through the post-conversation playback hold (#673).

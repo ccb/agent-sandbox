@@ -9,12 +9,12 @@ Fully offline. Run from the repo root::
 import datetime
 
 from backend.build_world import build_world
-from backend.cognition import ScheduleMockClient, attach_agents
+from backend.cognition import ScheduleMockClient, attach_agents, decide_context_block
 from backend.run_simulation import step
 from backend.sim_clock import SimClock
 
 
-def _schedule(next_start_hour=10):
+def _schedule():
     return [
         {
             "place": "Cafe",
@@ -27,7 +27,7 @@ def _schedule(next_start_hour=10):
             "activity": "meeting",
             "emoji": None,
             "steps": 5,
-            "start_hour": next_start_hour,
+            "start_hour": 10,
         },
     ]
 
@@ -88,7 +88,18 @@ def _state():
     }
 
 
-def test_step_retries_a_held_pointer_and_advances_when_due():
+def test_step_holds_a_credited_pointer_then_advances_when_the_anchor_arrives():
+    """A held pointer un-latches and settles again, and the *completed-activity*
+    block advances it once the anchor hour arrives -- which must not be mistaken
+    for end-of-day parking.
+
+    Named for the completion path deliberately: at 180 the agent re-settles with
+    ``perform_until=185``, so by 720 an activity has completed and the
+    pre-existing block does the advancing. This test does NOT exercise the #826
+    retry (deleting that block leaves it green); the retry is pinned by
+    ``test_step_advances_a_held_pointer_for_an_agent_that_walked_away`` and
+    ``test_step_decides_with_the_advanced_pointer_when_the_agent_is_stationary``,
+    where nothing completes. An earlier name claimed the retry and was wrong."""
     game, chars = build_world(None, [_persona()], _LOCATIONS)
     attach_agents(chars, [_persona()], llm_client=None)
     state = _state()
@@ -105,8 +116,6 @@ def test_step_retries_a_held_pointer_and_advances_when_due():
     assert state["Ada"]["performing"] is True
     assert state["Ada"]["stop_since"] == 0
 
-    # The retry settled again. At 10:00 its timer has elapsed and the same
-    # pointer can advance; this must not be mistaken for end-of-day parking.
     step(game, chars, state, 720, **common)
     assert chars["Ada"].agent.schedule.stop_index == 1
     assert state["Ada"]["stop_since"] == 720
@@ -327,6 +336,95 @@ def test_step_advances_a_held_pointer_for_an_agent_that_walked_away():
     assert chars["Ada"].agent.schedule.stop_index == 1
     assert state["Ada"]["waiting_for_anchor"] is False
     assert state["Ada"]["stop_since"] == 720
+
+
+def test_the_retry_leaves_a_conversing_agents_pointer_alone():
+    """The retry must not re-point the plan of an agent mid-exchange. #371 pins
+    the schedule for the whole of a multi-tick conversation, and the anchor hour
+    arriving is no reason to break that -- the agent would return from its
+    meeting to find its current stop silently changed underneath it.
+
+    Mutation check: drop ``and not st.get("conversing")`` from the retry and this
+    goes RED. (It was the one guard in that condition nothing pinned.)"""
+    game, chars = build_world(None, [_persona()], _LOCATIONS)
+    attach_agents(chars, [_persona()], llm_client=None)
+    state = _state()
+    state["Ada"].update(
+        performing=False,
+        perform_until=None,
+        waiting_for_anchor=True,
+        conversing=True,
+        path=[],
+    )
+    common = {
+        "order": ["Ada"],
+        "world_map": None,
+        "emoji": {"Ada": "📖"},
+        "clock": SimClock(datetime.datetime(2023, 2, 13, 8, 0)),
+    }
+
+    # 10:00 -- the anchor is due and nothing is performing, so only `conversing`
+    # stands between the retry and the pointer.
+    step(game, chars, state, 720, **common)
+    assert chars["Ada"].agent.schedule.stop_index == 0
+    assert state["Ada"]["waiting_for_anchor"] is True
+
+    # The exchange ends, and the very next tick resumes the plan.
+    state["Ada"]["conversing"] = False
+    step(game, chars, state, 721, **common)
+    assert chars["Ada"].agent.schedule.stop_index == 1
+    assert state["Ada"]["waiting_for_anchor"] is False
+
+
+def test_a_hold_clears_when_a_revision_leaves_no_next_stop():
+    """A hold with no next stop has no reason to exist, so it must not latch.
+
+    Reachable through ``cognition.maybe_revise_plan``, which commits
+    ``plan.stops[: after + 1] + proposed.stops[after + 1 :]`` -- a revision
+    proposing fewer stops than that protected prefix leaves the pointer on the
+    last stop. ``advance()`` then refuses forever on ``next_stop is None``, so a
+    flag that only the pointer's movement could clear would stay True for the
+    rest of the run. That is worse than a stuck flag: ``finished`` *replaces* the
+    elapsed clause in decide_context.prompty, so every later prompt would call
+    the stop finished and drop "This has been your current stop for N min." --
+    deleting #826's own warning signal for the agent most likely to need it.
+
+    Mutation check: remove the ``not has_next`` branch from the retry and this
+    goes RED at the first assertion after the replacement."""
+    game, chars = build_world(None, [_persona()], _LOCATIONS)
+    attach_agents(chars, [_persona()], llm_client=None)
+    state = _state()
+    common = {
+        "order": ["Ada"],
+        "world_map": None,
+        "emoji": {"Ada": "📖"},
+        "clock": SimClock(datetime.datetime(2023, 2, 13, 8, 0)),
+    }
+
+    # 08:30: hold established against the 10:00 anchor.
+    step(game, chars, state, 180, **common)
+    assert state["Ada"]["waiting_for_anchor"] is True
+
+    # The revision's committed result: only the protected prefix survives, so the
+    # held stop is now the last one.
+    chars["Ada"].agent.schedule.replace_schedule([_schedule()[0]])
+    assert chars["Ada"].agent.schedule.has_next is False
+
+    # 08:50: no anchor can ever arrive, so the hold ends here rather than latching.
+    step(game, chars, state, 300, **common)
+    assert state["Ada"]["waiting_for_anchor"] is False
+    assert chars["Ada"].agent.schedule.stop_index == 0
+
+    # And the prompt is back to reporting elapsed time, not "already finished".
+    block = decide_context_block(
+        chars["Ada"].agent,
+        300,
+        common["clock"],
+        stop_since=0,
+        waiting=state["Ada"]["waiting_for_anchor"],
+    )
+    assert "This has been your current stop for" in block
+    assert "already finished" not in block
 
 
 def test_step_decides_with_the_advanced_pointer_when_the_agent_is_stationary():

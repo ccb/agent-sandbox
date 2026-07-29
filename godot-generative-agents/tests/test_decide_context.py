@@ -562,8 +562,8 @@ def test_an_offplan_travel_drops_the_furniture_hint():
     ]
 
 
-def _held_agent(next_start_hour=10):
-    """Ada, mid-plan, with a second stop anchored to a later hour."""
+def _held_agent():
+    """Ada, mid-plan, with a second stop anchored to 10:00."""
     game, chars = build_world(None, _personas(), LOCATIONS)
     attach_agents(chars, _personas(), llm_client=None)
     agent = chars["Ada"].agent
@@ -573,7 +573,7 @@ def _held_agent(next_start_hour=10):
             "activity": "meeting a friend",
             "emoji": "\U0001f4d6",
             "steps": 30,
-            "start_hour": next_start_hour,
+            "start_hour": 10,
         }
     )
     return agent
@@ -634,6 +634,31 @@ def test_a_held_stop_with_no_anchored_next_stop_omits_the_next_sentence():
         "Your plan's current stop: reading a novel at Cafe."
         " You have already finished this stop."
     )
+
+
+def test_a_start_hour_that_is_not_a_real_hour_omits_the_next_sentence():
+    """``start_hour`` reaches here raw. planner.py keeps whatever the model
+    wrote (its own comment: "kept raw ... there is nothing to guard here",
+    because ``_anchor_correction`` only *skips validating* an out-of-window
+    anchor, it never drops the field), so a 99 or a -1 arrives intact -- and
+    ``advance()`` refuses every real hour against it, which makes the hold
+    permanent and this render the agent's context all run. Unguarded,
+    ``_hour_words(99)`` is "3 PM" beside "5445 min from now": two different
+    times in the one sentence whose whole job is saying when to be where, the
+    false-time-word class #812 exists to prevent.
+
+    Mutation check: widen the guard back to ``next_hour is None`` and this goes
+    RED with the 3 PM / 5445 min sentence."""
+    clock = SimClock(START)
+    for hour in (99, -1, 24):
+        agent = _held_agent()
+        agent.schedule.schedule[-1]["start_hour"] = hour
+
+        assert decide_context_block(agent, 180, clock, stop_since=0, waiting=True) == (
+            "Right now it is Monday 08:30 AM.\n"
+            "Your plan's current stop: reading a novel at Cafe."
+            " You have already finished this stop."
+        ), f"start_hour={hour} leaked into the prompt"
 
 
 # ---------------------------------- the hold reaches step()'s real prompt

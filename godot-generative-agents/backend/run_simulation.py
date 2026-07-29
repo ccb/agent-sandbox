@@ -84,6 +84,7 @@ def _decide_for(
     clock=None,
     stop_since=0,
     waiting=False,
+    *,
     deciding_sink=None,
 ):
     """Stamp the agent's LLM-usage context, then observe + decide (one call).
@@ -441,17 +442,31 @@ def step(
         # off instead can sit on a finished stop long after its anchor hour
         # arrives -- batch 5 had one parked on a completed coffee break for
         # 2 h 15 m. Retrying here needs no completion, only that the agent is
-        # not mid-activity or mid-conversation. advance() does not mutate when it
-        # refuses, so re-asking on the same tick the flag was set is harmless.
-        if (
-            st.get("waiting_for_anchor")
-            and not st["performing"]
-            and not st.get("conversing")
-            and clock is not None
-            and char.agent.schedule.advance(clock.hour_at(step_idx))
-        ):
-            st["stop_since"] = step_idx
-            st["waiting_for_anchor"] = False
+        # not mid-activity or mid-conversation.
+        if st.get("waiting_for_anchor"):
+            if not char.agent.schedule.has_next:
+                # No next stop means no anchor is coming, so the hold has no
+                # reason left. Reachable: maybe_revise_plan commits
+                # `plan.stops[: after + 1] + proposed.stops[after + 1 :]`, so a
+                # revision proposing fewer stops than that protected prefix
+                # leaves the pointer on the last stop. advance() would then
+                # refuse forever on `next_stop is None`, and a flag that can
+                # never clear makes decide_context_block call the stop finished
+                # for the rest of the run -- dropping the elapsed clause that is
+                # #826's own warning signal.
+                st["waiting_for_anchor"] = False
+            elif (
+                not st["performing"] and not st.get("conversing") and clock is not None
+            ):
+                # advance() does not mutate when it refuses, so re-asking on the
+                # same tick the flag was set is harmless. Called as a statement
+                # rather than as the last term of the `and` chain above: the two
+                # writes below belong to the pointer *moving*, and a condition
+                # appended after a mutating call would advance the pointer while
+                # skipping them -- the pointer/clock desync #826 forbids.
+                if char.agent.schedule.advance(clock.hour_at(step_idx)):
+                    st["stop_since"] = step_idx
+                    st["waiting_for_anchor"] = False
 
         if not st["path"] and not st["performing"] and not st.get("conversing"):
             due.append(name)
