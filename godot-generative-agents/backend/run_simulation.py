@@ -395,6 +395,12 @@ def step(
             waiting_for_anchor = (
                 credited and not advanced and char.agent.schedule.has_next
             )
+            # #826: remember the hold so the decide context can say this stop is
+            # already done instead of presenting a finished errand as the current
+            # objective. In batch 5 an agent read its own completed coffee break
+            # as "77 min into a planned 15" and walked 62 min back across campus
+            # to redo it. The flag means exactly "credited, pointer held".
+            st["waiting_for_anchor"] = waiting_for_anchor
             # Settling here for the rest of the run is the end-of-day rule, and
             # the mock bake rests on it -- but it belongs to an agent that
             # genuinely finished its LAST scheduled stop, not to one that
@@ -413,6 +419,8 @@ def step(
                 # pointer stands still claims a stop just became current when it
                 # had been current all along.
                 st["stop_since"] = step_idx
+                # The pointer moved, so whatever hold was recorded is over.
+                st["waiting_for_anchor"] = False
             if not done_for_the_day:
                 st["performing"] = False
             st["perform_until"] = None
@@ -1048,6 +1056,11 @@ def simulate(
             # nothing. Defaults True so a never-performed agent's first advance
             # is safe.
             "credit_stop": True,
+            # Is a credited stop's pointer being held by the next stop's
+            # start_hour? (#826, #838) Read by the decide-context block so the
+            # prompt can say the stop is finished. False for a fresh agent: it
+            # has completed nothing yet, so nothing is being held.
+            "waiting_for_anchor": False,
             # Pinned while a multi-tick conversation runs (issue #371): step()'s
             # pre-pass skips schedule-advance/decision/movement for a conversing
             # agent, so the meeting isn't interrupted. Stays set through the

@@ -125,3 +125,24 @@ def test_next_stop_is_the_stop_after_the_current_one():
 
     assert schedule.advance(current_hour=10) is True
     assert schedule.next_stop is None
+
+
+def test_step_records_the_hold_so_the_prompt_can_report_it():
+    game, chars = build_world(None, [_persona()], _LOCATIONS)
+    attach_agents(chars, [_persona()], llm_client=None)
+    state = _state()
+    common = {
+        "order": ["Ada"],
+        "world_map": None,
+        "emoji": {"Ada": "📖"},
+        "clock": SimClock(datetime.datetime(2023, 2, 13, 8, 0)),
+    }
+
+    # 08:30: credited, but the 10:00 stop is held -- the flag says so.
+    step(game, chars, state, 180, **common)
+    assert state["Ada"]["waiting_for_anchor"] is True
+
+    # 10:00: the pointer moves, so the hold is over and the flag clears.
+    step(game, chars, state, 720, **common)
+    assert chars["Ada"].agent.schedule.stop_index == 1
+    assert state["Ada"]["waiting_for_anchor"] is False
