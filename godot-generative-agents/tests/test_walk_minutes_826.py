@@ -254,3 +254,45 @@ def test_render_pins_the_line():
         "Walking from here takes at least about: "
         "Van Pelt — Moelis Reading Room 0 min; Houston Hall 27 min."
     )
+
+
+# ------------------------------------------------- accurate pricing (#866)
+
+
+def test_walk_steps_from_prices_the_measured_campus_leg():
+    # The Chebyshev bbox gap under-reported ~2x on this campus (26 min
+    # advertised, ~52 real in #760 batch 6) and provably changed a decision,
+    # meeting the documented upgrade condition. The BFS field walks the real
+    # collision grid: Moelis -> Houston Hall is ~305 steps (~50 sim-min at
+    # 10 s/step) against the bbox's 158.
+    wm = WorldMap(UPENN)
+    moelis = "UPenn:Van Pelt Library:Moelis Family Grand Reading Room"
+    houston = "UPenn:Houston Hall:lobby"
+    tile = min(t for t in wm.tiles_for(moelis) if not wm.is_blocked(t))
+    bfs = wm.walk_steps_from(tile, houston)
+    cheb = wm.tile_gap_from(tile, houston)
+    assert 290 <= bfs <= 360
+    assert bfs > 1.8 * cheb
+    # Inside the footprint is free, like the bbox gap.
+    assert wm.walk_steps_from(tile, moelis) == 0
+    # An unmapped address still gets the never-nearby sentinel fallback.
+    assert wm.walk_steps_from(tile, "UPenn:Nowhere:void") == wm.width + wm.height
+
+
+def test_line_prices_via_walk_steps_when_the_map_offers_it():
+    # The seam (#866): a map with BFS fields must be priced by them, not by
+    # the Chebyshev fallback -- this is the one test that fails if the
+    # walk_minutes_line swap is dropped while both methods stay individually
+    # correct.
+    class _AccurateMap(_FakeMap):
+        def walk_steps_from(self, tile, address):
+            gap = self.tile_gap_from(tile, address)
+            return gap if gap >= self.width + self.height else gap * 2
+
+    game, ada = _ada(_AccurateMap())
+    ada.agent.schedule = None
+    ada.tile = (0, 0)
+    # Library: 6 tiles Chebyshev -> 12 BFS (2 min); Cafe: 30 -> 60 (10 min).
+    assert walk_minutes_line(game, ada, SimClock(START)) == (
+        "Walking from here takes at least about: Library 2 min; Cafe 10 min."
+    )

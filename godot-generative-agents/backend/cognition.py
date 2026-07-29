@@ -1370,20 +1370,23 @@ def walk_minutes_line(game, char, clock) -> str:
     would grow this line unboundedly on a larger world for no benefit past the
     cap the model can no longer see reflected in its own tool schema.
 
-    ponytail: Chebyshev over precomputed bounding boxes ignores walls and
-    under-reports about 2x on this campus (27 min to Houston Hall against a
-    measured 58), hence the template's "at least about". Two accurate
-    alternatives were measured and rejected: the real pathfinder costs ~20 s per
-    decide (18 A* runs over a 245x279 grid, and it must not go through the
-    patched walk_path, whose rendezvous routing is stateful round-robin), and a
-    precomputed BFS distance matrix costs ~18 s per world build -- boot time is
-    what overran drive_run.sh's readiness gate in #760 batch 4. Upgrade to the
-    matrix if the under-report ever changes a decision.
+    Priced with the map's BFS distance fields (``walk_steps_from``, #866): the
+    Chebyshev bbox gap it replaced ignored walls and under-reported ~2x on
+    this campus, and in #760 batch 6 that provably changed a decision (26 min
+    advertised, ~52 real -- Maya budgeted a lecture arrival against it), the
+    documented upgrade condition. The fields are lazy and ~0.03 s per priced
+    address, superseding the ~18 s all-pairs-matrix estimate that had deferred
+    this. The template keeps "at least about": the BFS lands at the nearest
+    destination tile, and the patched walk_path routes a few tiles further (a
+    furniture or rendezvous spot), so the price stays a tight lower bound. The
+    getattr fallback keeps map doubles that only implement ``tile_gap_from``
+    (tests) working.
     """
     world_map = getattr(game, "world_map", None)
     tile = getattr(char, "tile", None)
     if world_map is None or clock is None or tile is None:
         return ""
+    gap_from = getattr(world_map, "walk_steps_from", world_map.tile_gap_from)
     priced = []
     for name, location in game.locations.items():
         if not travel_destination_allowed(game, char, location):
@@ -1391,7 +1394,7 @@ def walk_minutes_line(game, char, clock) -> str:
         address = getattr(location, "tile_address", None)
         if not address or not world_map.tiles_for(address):
             continue
-        priced.append((world_map.tile_gap_from(tuple(tile), address), name))
+        priced.append((gap_from(tuple(tile), address), name))
     if not priced:
         return ""
     # Sort on the raw tile gap, not the rendered minutes: minutes_for_steps
