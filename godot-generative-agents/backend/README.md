@@ -907,17 +907,23 @@ and the currently active `cast` ids), the #564 `SimulationConfig` knobs
 advertised `brains` (`llm` appears only when the server env holds
 `ANTHROPIC_API_KEY` — keys never travel over HTTP), the advertised day-`plans`
 vocabulary (`auto`/`schedule`/`llm`, #787), the advertised thinking-depth
-`efforts` vocabulary (`default` plus the `--effort` levels, #845), and the `run`
-controls (`brain`, `steps`, derived `stop_time`, `max_cost`, `tick_seconds`, the
-resolved `plan` the current brain would run, `plan_request` — the RAW
-planner request, e.g. `auto`, that the setup dropdown defaults to so an
-untouched form keeps the session's request, #791 — and `effort`, the depth in
-force, `"default"` when none is requested).
+`efforts` vocabulary (`default` plus the `--effort` levels, #845), the advertised
+`models` — every **priced** Anthropic model (`usage.PRICES`) plus the server's own
+current one, #887 — and the `run` controls (`brain`, `steps`, derived `stop_time`,
+`max_cost`, `tick_seconds`, the resolved `plan` the current brain would run,
+`plan_request` — the RAW planner request, e.g. `auto`, that the setup dropdown
+defaults to so an untouched form keeps the session's request, #791 — `effort`, the
+depth in force, `"default"` when none is requested, and `model`, which stays
+concrete even on a free brain: the model a switch to `llm` would use, so an
+untouched dropdown truthfully means "keep the session's model").
 
-`POST /config` (any subset of `{cast, brain, plan, effort, sim_config, steps,
-tick_seconds, max_cost}` — `plan` is the day-planner request, #791; `effort` is
-the adaptive thinking depth, llm-brain only, where `"default"` means "send no
-thinking config" and is the only way to clear a launch `--effort`, #845) applies
+`POST /config` (any subset of `{cast, brain, plan, effort, model, sim_config,
+steps, tick_seconds, max_cost}` — `plan` is the day-planner request, #791;
+`effort` is the adaptive thinking depth, llm-brain only, where `"default"` means
+"send no thinking config" and is the only way to clear a launch `--effort`, #845;
+`model` is llm-brain only and restricted to the advertised `models`, because an
+unpriced model costs `$0` in `usage.price` and would make a paid run report no
+spend at all — the CLI's `--model` keeps its any-id escape hatch, #887) applies
 the setup by rebuilding through the stepper's reset path
 and echoes it back (`applied`), alongside the standard rebuild signal
 (`status` record, `reason: "reset"`, additive `run_id`). After the first
@@ -925,10 +931,12 @@ and echoes it back (`applied`), alongside the standard rebuild signal
 answers `409` (on a paused loop — e.g. after the day finishes — `POST /reset`
 returns it to tick 0 and re-opens it). Bad
 input — empty cast, unknown persona id, unknown or key-less brain, an unknown
-effort level or a depth on a free brain, a bad `sim_config` mapping — is a `400`.
-The applied config also lands in the run manifest as its `config` block, so every
-saved run records its setup — including the `effort`, so the Past-runs "Re-run
-with this setup" reproduces the thinking depth instead of dropping to none (#845).
+effort level or model, a depth or a model on a free brain, a bad `sim_config`
+mapping — is a `400`. The applied config also lands in the run manifest as its
+`config` block, so every saved run records its setup — including the `effort`
+(#845) and the `model` (#887), so the Past-runs "Re-run with this setup"
+reproduces the brain a run actually had instead of resolving the fresh server's
+world-YAML default.
 
 Servers without the surface (no live loop, or a stepper that doesn't offer
 `describe_config`/`apply_config`) answer `404` on both.

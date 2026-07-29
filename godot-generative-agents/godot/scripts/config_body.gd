@@ -25,6 +25,8 @@ extends RefCounted
 #   effort         String         selected thinking depth ("" = no effort row on this backend;
 #                                 "default" = send no thinking config at all)
 #   initial_effort String         run.effort from GET /config ("" = no effort row)
+#   model          String         selected model ("" = no model row on this backend)
+#   initial_model  String         run.model from GET /config ("" = no model row)
 #   knobs_current  Dictionary     GET /config's knobs.current
 #   knob_edits     Dictionary     nested dict keyed by path segments, for CHANGED knobs only
 static func build_post_body(state: Dictionary) -> Dictionary:
@@ -52,6 +54,12 @@ static func build_post_body(state: Dictionary) -> Dictionary:
 	var effort := str(state.get("effort", ""))
 	if effort != "" and effort != str(state.get("initial_effort", "")):
 		body["effort"] = effort
+	# The model knob (#887): same only-send-changed rule and same empty guard. No
+	# sentinel here -- a model always has a concrete value, so "unchanged" simply
+	# sends nothing and the server keeps the one it already resolved.
+	var model := str(state.get("model", ""))
+	if model != "" and model != str(state.get("initial_model", "")):
+		body["model"] = model
 	var edits: Dictionary = state.get("knob_edits", {})
 	if not edits.is_empty():
 		body["sim_config"] = merge_knobs(state.get("knobs_current", {}), edits)

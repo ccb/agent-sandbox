@@ -371,6 +371,42 @@ def test_post_config_accepts_the_effort_knob():
     assert client.post("/config", json={"effort": "nonsense"}).status_code == 400
 
 
+def test_model_is_advertised_and_paid_brain_only():
+    # #887: the model joins the config surface, so a saved run's model can be
+    # asked for again on a fresh server instead of silently resolving the world
+    # YAML's. The vocabulary is the PRICED Anthropic models -- an unpriced model
+    # costs $0 in usage.price, so a run driven by one reports no spend at all.
+    stepper = _mock_stepper()
+    cfg = stepper.describe_config()
+    assert "claude-sonnet-5" in cfg["models"]
+    assert "claude-haiku-4-5" in cfg["models"]
+    assert not [m for m in cfg["models"] if not m.startswith("claude-")]
+    # Concrete even on a free brain: the model a switch to llm would use, which
+    # is what makes leaving the dropdown untouched safe.
+    assert cfg["run"]["model"] == "claude-haiku-4-5"
+    with pytest.raises(ValueError, match="needs the llm brain"):
+        stepper.apply_config(model="claude-sonnet-5")
+    with pytest.raises(ValueError, match="unknown model"):
+        stepper.apply_config(model="claude-sonnet-9")
+    # An OpenAI model is priced but not offered: resolve_llm is Anthropic-only.
+    with pytest.raises(ValueError, match="unknown model"):
+        stepper.apply_config(model="gpt-4o")
+    assert stepper.tick() is not None  # guard-before-teardown
+
+
+def test_post_config_accepts_the_model_knob():
+    client, stepper = _client()
+    body = client.get("/config").json()
+    assert "claude-sonnet-5" in body["models"]
+    assert body["run"]["model"] == "claude-haiku-4-5"
+    # Pins that req.model reaches apply_config, and that both rejections are
+    # 400s rather than 500s.
+    resp = client.post("/config", json={"model": "claude-sonnet-5"})
+    assert resp.status_code == 400
+    assert "llm brain" in resp.json()["detail"]
+    assert client.post("/config", json={"model": "nope"}).status_code == 400
+
+
 def test_create_run_drops_a_prior_applied_config(tmp_path):
     stepper = _mock_stepper(run_store=RunStore(tmp_path / "runs"))
     stepper.apply_config(cast=["diego"])
