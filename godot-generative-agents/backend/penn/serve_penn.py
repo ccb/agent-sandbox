@@ -2098,6 +2098,9 @@ class PennStepper:
             # defaults. step() has threaded this into every decide since #296.
             retrieval=self.retrieval,
             clock=self.clock,
+            # The day's length, for the decide context's end-of-day clause
+            # (#891) -- an agent otherwise starts walks the run cannot fit.
+            num_steps=self.num_steps,
             # Real conversations only when a real brain drives -- the same gate
             # simulate() applies (conversation_enabled = llm_client is not None).
             conversation_enabled=self.llm_client is not None,
