@@ -187,11 +187,22 @@ def test_hold_survives_an_unrelated_dead_talk_settle():
 
 
 def test_hold_survives_schedule_replacement():
-    """When a DEVIATED plan swaps the next stop, the hold flag remains truthful.
-    The flag says 'current stop is finished', which is independent of what the
-    next stop is. If the new next stop has no start_hour, the pointer will
-    advance on the next completion; if it does, it stays held. Either way, the
-    flag correctly represents the current state. #826, #838."""
+    """When a DEVIATED plan swaps the next stop, the hold flag remains truthful,
+    and it is dropping the replacement's anchor -- not the mere passage of
+    time -- that lets the pointer move. #826, #838.
+
+    Steps at 300 (08:50), BEFORE the original 10:00 anchor: at that hour
+    nothing but the missing ``start_hour`` on the replacement stop can let
+    the pointer advance. (An earlier version of this test stepped at 720,
+    10:00 -- by which time the pointer would advance whether or not the
+    anchor survived the replacement, so it never actually exercised what its
+    docstring claimed.) See
+    ``test_hold_survives_schedule_replacement_with_a_new_anchor`` below for
+    the control: the same replacement, same pre-anchor hour, but with the
+    anchor carried over -- there the pointer must stay held.
+
+    Mutation check: put ``"start_hour": 10`` back onto the replacement stop
+    and this test goes RED (the pointer would still be held at 300)."""
     game, chars = build_world(None, [_persona()], _LOCATIONS)
     attach_agents(chars, [_persona()], llm_client=None)
     state = _state()
@@ -229,8 +240,57 @@ def test_hold_survives_schedule_replacement():
     # The hold flag still reflects that the current stop is finished.
     assert state["Ada"]["waiting_for_anchor"] is True
 
-    # But now the pointer can advance without waiting for an anchor hour, because
-    # the new next stop has no start_hour constraint.
+    # 08:50 -- BEFORE the original 10:00 anchor. The pointer advances anyway,
+    # because the replacement's next stop carries no start_hour constraint.
+    step(game, chars, state, 300, **common)
+    assert state["Ada"]["waiting_for_anchor"] is False
+    assert chars["Ada"].agent.schedule.stop_index == 1
+
+
+def test_hold_survives_schedule_replacement_with_a_new_anchor():
+    """Control for the test above: the replacement stop keeps its OWN
+    start_hour (still 10:00), so at the very same pre-anchor hour (300 ==
+    08:50) the pointer must stay held. Together the two tests isolate the
+    real variable -- whether the replacement carries an anchor -- rather
+    than the hour `step()` happens to be called at. #826, #838."""
+    game, chars = build_world(None, [_persona()], _LOCATIONS)
+    attach_agents(chars, [_persona()], llm_client=None)
+    state = _state()
+    common = {
+        "order": ["Ada"],
+        "world_map": None,
+        "emoji": {"Ada": "📖"},
+        "clock": SimClock(datetime.datetime(2023, 2, 13, 8, 0)),
+    }
+
+    # 08:30: hold established with next stop anchored at 10:00.
+    step(game, chars, state, 180, **common)
+    assert state["Ada"]["waiting_for_anchor"] is True
+
+    new_schedule = [
+        {
+            "place": "Cafe",
+            "activity": "reading",
+            "emoji": None,
+            "steps": 5,
+        },
+        {
+            "place": "Cafe",
+            "activity": "lunch",
+            "emoji": None,
+            "steps": 5,
+            "start_hour": 10,  # anchor carried over, unlike the test above
+        },
+    ]
+    chars["Ada"].agent.schedule.replace_schedule(new_schedule)
+    assert state["Ada"]["waiting_for_anchor"] is True
+
+    # 08:50 -- still before 10:00: the anchor survived, so the pointer stays held.
+    step(game, chars, state, 300, **common)
+    assert state["Ada"]["waiting_for_anchor"] is True
+    assert chars["Ada"].agent.schedule.stop_index == 0
+
+    # 10:00 -- now due.
     step(game, chars, state, 720, **common)
     assert state["Ada"]["waiting_for_anchor"] is False
     assert chars["Ada"].agent.schedule.stop_index == 1
