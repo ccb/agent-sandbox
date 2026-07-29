@@ -77,7 +77,14 @@ DEVIATED = "deviated"
 
 
 def _decide_for(
-    game, char, step_idx, retrieval, clock=None, stop_since=0, deciding_sink=None
+    game,
+    char,
+    step_idx,
+    retrieval,
+    clock=None,
+    stop_since=0,
+    waiting=False,
+    deciding_sink=None,
 ):
     """Stamp the agent's LLM-usage context, then observe + decide (one call).
 
@@ -87,7 +94,8 @@ def _decide_for(
     client -- under a real brain the live server gives every agent its own
     instance precisely so concurrent stamps can't clobber each other.
     ``clock`` and ``stop_since`` (the step the agent's current schedule stop
-    began) feed the decide-context block (#580) in the prompt.
+    began) feed the decide-context block (#580) in the prompt. ``waiting``
+    says the current stop is finished but its pointer is held (#826).
     """
     # Attribute this LLM call to the persona and step (usage.py). The
     # "role" key is read by the terminal request monitor (llm_monitor)
@@ -111,6 +119,7 @@ def _decide_for(
             retrieval=retrieval,
             clock=clock,
             stop_since=stop_since,
+            waiting=waiting,
         )
     finally:
         if deciding_sink is not None:
@@ -460,6 +469,7 @@ def step(
                 retrieval,
                 clock=clock,
                 stop_since=state[name].get("stop_since", 0),
+                waiting=state[name].get("waiting_for_anchor", False),
                 deciding_sink=deciding_sink,
             )
         if futs:
@@ -537,6 +547,7 @@ def step(
                     retrieval,
                     clock=clock,
                     stop_since=st.get("stop_since", 0),
+                    waiting=st.get("waiting_for_anchor", False),
                     deciding_sink=deciding_sink,
                 )
             )

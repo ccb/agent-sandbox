@@ -561,6 +561,62 @@ def test_an_offplan_travel_drops_the_furniture_hint():
     ]
 
 
+def _held_agent(next_start_hour=10):
+    """Ada, mid-plan, with a second stop anchored to a later hour."""
+    game, chars = build_world(None, _personas(), LOCATIONS)
+    attach_agents(chars, _personas(), llm_client=None)
+    agent = chars["Ada"].agent
+    agent.schedule.schedule.append(
+        {
+            "place": "Library",
+            "activity": "meeting a friend",
+            "emoji": "\U0001f4d6",
+            "steps": 30,
+            "start_hour": next_start_hour,
+        }
+    )
+    return agent
+
+
+def test_a_held_stop_reports_itself_finished_and_names_the_next_one():
+    agent = _held_agent()
+    clock = SimClock(START)
+
+    # step 180 == 08:30, and the next stop is anchored at 10:00.
+    assert decide_context_block(agent, 180, clock, stop_since=0, waiting=True) == (
+        "Right now it is Monday 08:30 AM.\n"
+        "Your plan's current stop: reading a novel at Cafe."
+        " You have already finished this stop."
+        " Your next stop is meeting a friend at Library,"
+        " starting at 10 AM (90 min from now)."
+    )
+
+
+def test_a_passed_anchor_says_due_now_instead_of_a_future_time():
+    agent = _held_agent()
+    clock = SimClock(START)
+
+    # step 750 == 10:05: the anchor has passed, so a "starting at 10 AM" clause
+    # would be a false time word (#812).
+    assert decide_context_block(agent, 750, clock, stop_since=0, waiting=True) == (
+        "Right now it is Monday 10:05 AM.\n"
+        "Your plan's current stop: reading a novel at Cafe."
+        " You have already finished this stop."
+        " Your next stop is meeting a friend at Library, due now."
+    )
+
+
+def test_an_unheld_stop_still_renders_exactly_todays_elapsed_clause():
+    agent = _held_agent()
+    clock = SimClock(START)
+
+    assert decide_context_block(agent, 180, clock, stop_since=0) == (
+        "Right now it is Monday 08:30 AM.\n"
+        "Your plan's current stop: reading a novel at Cafe."
+        " This has been your current stop for 30 min."
+    )
+
+
 def test_live_mock_decide_request_carries_the_block():
     # The issue's acceptance, offline: a live decide request body shows time +
     # current stop (+ elapsed once nonzero). Under the mock brain the pacing
