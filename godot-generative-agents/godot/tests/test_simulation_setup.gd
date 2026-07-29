@@ -155,6 +155,19 @@ func _initialize() -> void:
 	body = ConfigBody.build_post_body(_base_state())
 	_check(not body.has("effort"), "absent effort state sends nothing")
 
+	# --- model knob (#887): only a CHANGED model is sent ---
+	s = _base_state()
+	s["model"] = "claude-haiku-4-5"
+	s["initial_model"] = "claude-haiku-4-5"
+	body = ConfigBody.build_post_body(s)
+	_check(not body.has("model"), "untouched model is omitted (keeps the session's model)")
+	s["model"] = "claude-sonnet-5"
+	body = ConfigBody.build_post_body(s)
+	_check(body.get("model") == "claude-sonnet-5", "changed model is sent")
+	# No model row rendered (a pre-#887 backend serves no `models`).
+	body = ConfigBody.build_post_body(_base_state())
+	_check(not body.has("model"), "absent model state sends nothing")
+
 	# --- effective_plan (#791): the hint label's client-side auto rule ---
 	_check(ConfigBody.effective_plan("auto", "llm") == "llm", "auto resolves to llm under the llm brain")
 	_check(ConfigBody.effective_plan("auto", "mock") == "schedule", "auto resolves to schedule under a free brain")

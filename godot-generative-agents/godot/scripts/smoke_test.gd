@@ -223,8 +223,10 @@ func _rerun_seed() -> Dictionary:
 		# The saved planner REQUEST (#791): the seed reproduces what was asked
 		# ("schedule"), not the resolved value.
 		"plan_request": "schedule",
-		# The saved thinking depth (#845).
+		# The saved thinking depth (#845) and model (#887) -- the two brain
+		# settings a re-run has to ask for again rather than inherit.
 		"effort": "medium",
+		"model": "claude-sonnet-5",
 		"sim_config": {
 			"game": {"agent": {"temperature": 1.1}},
 			"cognition": {"vision_r": 3},
@@ -260,9 +262,15 @@ func _fake_config() -> Dictionary:
 		# The thinking-depth surface (#845): `efforts` is the vocabulary,
 		# run.effort the depth in force ("default" = none requested).
 		"efforts": ["default", "low", "medium", "high", "xhigh", "max"],
+		# The model surface (#887): `models` is the priced vocabulary, run.model
+		# the model in force (concrete even under this fake's mock brain).
+		"models": ["claude-haiku-4-5", "claude-opus-4-8", "claude-sonnet-5"],
 		"run": {
 			"brain": "mock", "steps": 1080, "tick_seconds": 0.1, "max_cost": null,
 			"plan": "schedule", "plan_request": "auto", "effort": "default",
+			# Differs from the seed's claude-sonnet-5, so the pre-fill is visible
+			# and rides the POST body as a change (#887).
+			"model": "claude-haiku-4-5",
 		},
 	}
 
@@ -289,6 +297,14 @@ func _check_seed_prefill(inst: Node) -> int:
 		fails += 1
 	elif inst._selected_effort() != "medium":
 		printerr("  simulation_setup seed: depth not selected from seed (%s)" % inst._selected_effort())
+		fails += 1
+	# The model row (#887): the saved model must land on the real dropdown -- this
+	# is the assertion that a cross-process re-run reproduces the model at all.
+	if inst._model_opt == null:
+		printerr("  simulation_setup seed: no model row built (models not read?)")
+		fails += 1
+	elif inst._selected_model() != "claude-sonnet-5":
+		printerr("  simulation_setup seed: model not selected from seed (%s)" % inst._selected_model())
 		fails += 1
 	# The planner row (#791) drives the real scene wiring, not just the pure
 	# helpers: the seed's plan_request ("schedule") must land on the dropdown and

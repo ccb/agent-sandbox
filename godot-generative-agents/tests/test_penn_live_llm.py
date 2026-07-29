@@ -214,6 +214,48 @@ def test_a_brain_re_resolve_keeps_the_launch_model_and_depth(monkeypatch):
     assert stepper._llm_config.effort == "medium"
 
 
+def test_apply_config_sets_the_model(monkeypatch, tmp_path):
+    # #887: the model is configurable and RECORDED in the applied block, which is
+    # what a cross-process re-run reads. Before this the block said `brain: "llm"`
+    # and nothing else, so a fresh server resolved its own world YAML.
+    stepper = _effort_stepper(monkeypatch, run_store=RunStore(tmp_path / "runs"))
+    assert stepper.describe_config()["run"]["model"] == "claude-sonnet-5"
+    applied = stepper.apply_config(model="claude-opus-4-8")
+    assert stepper.llm["model"] == "claude-opus-4-8"
+    assert applied["model"] == "claude-opus-4-8"  # -> the manifest's config block
+    assert stepper.meta()["llm"]["model"] == "claude-opus-4-8"
+    # ...and the brain was rebuilt with it: AnthropicClient reads config.model
+    # once, in __init__, so a model in meta() but not in the config never runs.
+    assert stepper._llm_config.model == "claude-opus-4-8"
+    manifest = stepper.run_store.get_run(stepper.run_id)["manifest"]
+    assert manifest["config"]["model"] == "claude-opus-4-8"
+
+
+def test_a_launch_only_model_stays_selectable(monkeypatch):
+    # The config surface offers only PRICED models, but the CLI's --model takes
+    # any id (#887) -- so a server launched on an unpriced model must still be
+    # able to show, and re-apply, its own current value rather than silently
+    # snapping the form onto a different model.
+    stepper = _effort_stepper(monkeypatch, model="claude-vaporware-9")
+    cfg = stepper.describe_config()
+    assert cfg["run"]["model"] == "claude-vaporware-9"
+    assert "claude-vaporware-9" in cfg["models"]
+    assert stepper.apply_config(model="claude-vaporware-9")["model"] == (
+        "claude-vaporware-9"
+    )
+
+
+def test_the_free_brain_records_no_model(monkeypatch):
+    # A mock/scripted run drives no model, so the applied block must say None
+    # rather than the model a switch to llm would have used -- the block records
+    # what RAN. (describe_config's run.model is the other question: what WOULD
+    # run, so the dropdown has something concrete to show.)
+    stepper = _effort_stepper(monkeypatch)
+    applied = stepper.apply_config(brain="mock")
+    assert applied["model"] is None
+    assert stepper.describe_config()["run"]["model"] == "claude-sonnet-5"
+
+
 def test_parse_model_for_pairs():
     parse = serve_penn._parse_model_for
     assert parse(["plan=claude-sonnet-4-6", "score=claude-haiku-4-5"]) == {
