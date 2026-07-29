@@ -144,6 +144,76 @@ def test_every_effort_level_survives_resolve_llm(monkeypatch):
         resolve_llm(world_llm, "llm", effort="nonsense")
 
 
+def _effort_stepper(monkeypatch, run_store=None, **llm_extra):
+    """A paid stepper whose ``apply_config(brain="llm")`` can actually land: the
+    client factory, the lazy ``anthropic`` import probe and the key check are all
+    faked, so these tests stay offline and key-free like the rest of the file.
+    Launched on Sonnet 5 (not the YAML's Haiku) so a lost --model override is
+    visible.
+    """
+    monkeypatch.setattr(
+        serve_penn,
+        "create_llm_client",
+        lambda config, ledger=None: _ScriptedBrain(ledger=ledger),
+    )
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    monkeypatch.setitem(sys.modules, "anthropic", SimpleNamespace())
+    monkeypatch.setattr(serve_penn, "check_anthropic_key", lambda: None)
+    return PennStepper(
+        num_steps=50,
+        world=build_penn_world(),
+        monitor=None,
+        run_store=run_store,
+        llm={
+            "provider": "anthropic",
+            "model": "claude-sonnet-5",
+            "max_cost_usd": 5.0,
+            **llm_extra,
+        },
+    )
+
+
+def test_apply_config_sets_the_thinking_depth(monkeypatch, tmp_path):
+    # #845: a run's thinking depth is configurable, not just recorded -- so a
+    # re-run of a Sonnet-at-medium run can ask for that depth again.
+    stepper = _effort_stepper(monkeypatch, run_store=RunStore(tmp_path / "runs"))
+    assert stepper.describe_config()["run"]["effort"] == "default"
+    applied = stepper.apply_config(effort="high")
+    assert stepper.llm["effort"] == "high"
+    assert applied["effort"] == "high"  # -> the manifest's config block
+    assert stepper.meta()["llm"]["effort"] == "high"  # -> the manifest's llm block
+    # ...and the brain was REBUILT with it: the clients read the depth once, at
+    # construction, so a depth in meta() but not in the config is a depth that
+    # never reaches the wire.
+    assert stepper._llm_config.effort == "high"
+    # The whole chain the #734 re-run reads back: applied -> the manifest's
+    # `config` block -> GET /runs' per-row config -> the setup screen's seed.
+    manifest = stepper.run_store.get_run(stepper.run_id)["manifest"]
+    assert manifest["config"]["effort"] == "high"
+    assert manifest["llm"]["effort"] == "high"
+    # "default" is the only way back to no thinking config at all.
+    applied = stepper.apply_config(effort="default")
+    assert "effort" not in stepper.llm
+    assert applied["effort"] == "default"
+    assert stepper.meta()["llm"]["effort"] is None
+    assert stepper._llm_config.effort is None
+
+
+def test_a_brain_re_resolve_keeps_the_launch_model_and_depth(monkeypatch):
+    # #845: apply_config used to re-resolve a brain change from the world YAML,
+    # which pins claude-haiku-4-5 at no thinking depth -- so a free-brain detour
+    # in the setup session silently moved a Sonnet-at-medium run onto Haiku with
+    # no thinking. It re-resolves from the session's own last paid resolution now
+    # (the same dict carries the --model-for tiering map).
+    stepper = _effort_stepper(monkeypatch, effort="medium")
+    assert stepper.apply_config(brain="mock")["effort"] == "default"
+    applied = stepper.apply_config(brain="llm")
+    assert stepper.llm["model"] == "claude-sonnet-5"
+    assert stepper.llm["effort"] == "medium"
+    assert applied["effort"] == "medium"
+    assert stepper._llm_config.effort == "medium"
+
+
 def test_parse_model_for_pairs():
     parse = serve_penn._parse_model_for
     assert parse(["plan=claude-sonnet-4-6", "score=claude-haiku-4-5"]) == {

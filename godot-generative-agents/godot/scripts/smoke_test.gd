@@ -216,11 +216,15 @@ func _check_simulation_setup() -> int:
 func _rerun_seed() -> Dictionary:
 	return {
 		"cast": ["diego"],
-		"brain": "scripted",
+		# The llm brain, so the saved thinking depth below survives
+		# _update_effort_row (a depth is a paid-brain setting) -- a saved
+		# Sonnet-at-medium run is the case #845 exists for.
+		"brain": "llm",
 		# The saved planner REQUEST (#791): the seed reproduces what was asked
-		# ("schedule"), not the resolved value. A non-llm planner under the
-		# scripted brain, so _update_plan_row won't snap it away.
+		# ("schedule"), not the resolved value.
 		"plan_request": "schedule",
+		# The saved thinking depth (#845).
+		"effort": "medium",
 		"sim_config": {
 			"game": {"agent": {"temperature": 1.1}},
 			"cognition": {"vision_r": 3},
@@ -253,9 +257,12 @@ func _fake_config() -> Dictionary:
 		# resolved value (auto under the mock brain -> schedule), plan_request the
 		# raw ask the dropdown defaults to.
 		"plans": ["auto", "schedule", "llm"],
+		# The thinking-depth surface (#845): `efforts` is the vocabulary,
+		# run.effort the depth in force ("default" = none requested).
+		"efforts": ["default", "low", "medium", "high", "xhigh", "max"],
 		"run": {
 			"brain": "mock", "steps": 1080, "tick_seconds": 0.1, "max_cost": null,
-			"plan": "schedule", "plan_request": "auto",
+			"plan": "schedule", "plan_request": "auto", "effort": "default",
 		},
 	}
 
@@ -272,8 +279,16 @@ func _check_seed_prefill(inst: Node) -> int:
 	if inst._checked_ids() != ["diego"]:
 		printerr("  simulation_setup seed: cast not pre-filled (%s)" % str(inst._checked_ids()))
 		fails += 1
-	if inst._brains[inst._brain_opt.selected] != "scripted":
+	if inst._brains[inst._brain_opt.selected] != "llm":
 		printerr("  simulation_setup seed: brain not selected from seed")
+		fails += 1
+	# The thinking-depth row (#845), like the planner row below: the saved depth
+	# must land on the real dropdown, not just survive the pure helper.
+	if inst._effort_opt == null:
+		printerr("  simulation_setup seed: no thinking-depth row built (efforts not read?)")
+		fails += 1
+	elif inst._selected_effort() != "medium":
+		printerr("  simulation_setup seed: depth not selected from seed (%s)" % inst._selected_effort())
 		fails += 1
 	# The planner row (#791) drives the real scene wiring, not just the pure
 	# helpers: the seed's plan_request ("schedule") must land on the dropdown and
