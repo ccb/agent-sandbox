@@ -16,6 +16,7 @@ from backend.eval.believability import (
     DIMENSIONS,
     HeuristicJudge,
     LlmJudge,
+    Segment,
     audit,
     build_evidence,
     evidence_text,
@@ -353,6 +354,41 @@ def test_plan_coherence_penalises_a_day_that_never_advances():
     assert "reached 1 of 2 planned stops" in stalled.note
 
 
+def test_plan_coherence_preserves_a_later_valid_visit_after_an_early_one():
+    """An early stop-two visit must not consume its later in-order visit."""
+    judge = HeuristicJudge()
+    ev = build_evidence(make_replay())["Ada"]
+    ev.schedule = [
+        {"place": "Cafe", "activity": "breakfast"},
+        {"place": "Library", "activity": "shelving"},
+        {"place": "Gymnasium", "activity": "training"},
+    ]
+    ev.segments = [
+        Segment(0, 0, "shelving at Library"),
+        Segment(1, 1, "breakfast at Cafe"),
+        Segment(2, 2, "shelving at Library"),
+        Segment(3, 3, "training at Gymnasium"),
+    ]
+
+    score = judge._plan_coherence(ev)
+
+    assert score.score == 7.8
+    assert "reached 3 of 3 planned stops in order" in score.note
+
+
+def test_plan_coherence_cites_an_unmatched_segment_when_progress_is_zero():
+    judge = HeuristicJudge()
+    ev = build_evidence(make_replay())["Ada"]
+    ev.segments = [Segment(0, 4, "meditating quietly")]
+
+    score = judge._plan_coherence(ev)
+
+    assert score.score == 1.0
+    assert score.evidence == [
+        "steps 0-4 (08:00): 'meditating quietly' matches no schedule stop"
+    ]
+
+
 # ------------------------------------------------------------ memory use
 
 
@@ -464,6 +500,26 @@ def test_social_grounding_stays_na_for_an_agent_who_was_never_near_anyone():
     evidence["Ada"].positions = [(500, 500)] * evidence["Ada"].n_steps
 
     assert judge._social_grounding(evidence["Ada"], evidence).score is None
+
+
+def test_social_grounding_ignores_personas_absent_from_partial_frames():
+    """Missing frame entries are unknown positions, not the map origin."""
+    replay = {
+        "meta": {
+            "personas": [{"name": name} for name in ("Ada", "Bea", "Cy")],
+            "vision_r": 8,
+        },
+        "frames": [
+            {"Ada": {"x": 100, "y": 100, "act": "working", "chat": None}}
+            for _ in range(20)
+        ],
+        "memory_streams": {},
+    }
+    evidence = build_evidence(replay)
+    judge = HeuristicJudge()
+
+    assert judge._social_grounding(evidence["Bea"], evidence).score is None
+    assert judge._social_grounding(evidence["Cy"], evidence).score is None
 
 
 # ------------------------------------------------------------ world grounding
