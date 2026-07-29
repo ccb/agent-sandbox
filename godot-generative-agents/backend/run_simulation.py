@@ -318,6 +318,13 @@ def step(
         conversation_cooldowns if conversation_cooldowns is not None else {}
     )
     cog = cog if cog is not None else CognitionConfig()
+    # Actions run behind the parser and cannot be threaded kwargs, so the tick's
+    # clock rides on the game (as sim_clock -- the engine's game.clock is the
+    # #7 GameClock, a different object): the anchor travel gate (#885) reads it to
+    # price a leg against the next pinned stop. None on the bake (no clock),
+    # which keeps the gate inert there by construction.
+    game.sim_clock = clock
+    game.sim_clock_step = step_idx
 
     # React gate (#370): edge-triggered encounter detection needs memory of
     # who was already in range last tick. A throwaway dict would make every
