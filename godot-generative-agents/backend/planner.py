@@ -311,10 +311,17 @@ class LLMPlanner:
         clock=None,
         num_steps=None,
         max_tokens: int = 700,
+        actor: str | None = None,
         travel_minutes: int | None = None,
     ):
         self.client = client
         self.known_places = set(known_places)
+        # Whose plan this is (issue #847). The plan client is shared across the
+        # cast and stamped with a fixed ``role`` once; the actor varies per agent,
+        # so stamp it in ``_call`` right before each (sequential) request -- as the
+        # decide/score sites do. ``None`` (the default) stamps nothing, leaving
+        # attribution unchanged for callers that don't supply one.
+        self.actor = actor
         # When both are given (a :class:`~backend.sim_clock.SimClock` and the run
         # length in steps), the plan is bounded to the hours the run actually
         # covers -- so the model plans 8-11am for a 3-hour run instead of a generic
@@ -681,6 +688,11 @@ class LLMPlanner:
             {"role": "system", "content": render("plan_system")},
             {"role": "user", "content": user},
         ]
+        # Attribute this call to its agent (issue #847) so per-actor cost rollups
+        # (usage.py by_actor) don't bucket planning under "(unattributed)".
+        ctx = getattr(self.client, "context", None)
+        if self.actor is not None and ctx is not None:
+            ctx["actor"] = self.actor
         result = self.client.call_tool(messages, tool, max_tokens=self.max_tokens)
         return result or {}
 
