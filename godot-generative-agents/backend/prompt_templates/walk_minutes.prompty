@@ -8,10 +8,12 @@ description: >
   sim-minutes -- but the exits list prices every destination identically, so an
   agent forms "quick coffee run" intentions that are two-hour round trips.
   planner.median_travel_minutes gives the PLANNER a travel budget; this is the
-  per-tick decide's equivalent. The estimate is a Chebyshev lower bound over
-  precomputed bounding boxes (WorldMap.tile_gap_from), which ignores walls and
-  under-reports by roughly 2x on this campus -- hence "at least about". The
-  ordering, which is what the decision needs, is right. The destination list is
+  per-tick decide's equivalent. The estimate is a per-destination BFS distance
+  field over the collision grid (WorldMap.walk_steps_from, #866) -- it walks
+  around walls, so the price matches the leg the agent will actually take.
+  Still "at least about": the BFS lands at the nearest destination tile and
+  the patched walk_path routes a few tiles further, so it is a tight lower
+  bound. The destination list is
   assembled in Python (it is data), like nearby_affordances; only the wording
   lives here. The deterministic mock reads only the observation's first line, so
   this can never change a mock decision.
