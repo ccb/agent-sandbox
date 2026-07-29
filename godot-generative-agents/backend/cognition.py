@@ -363,6 +363,16 @@ class ScheduleMockClient(MockReActClient):
         """Whether another scheduled stop remains after the current one."""
         return self.stop_index + 1 < len(self.schedule)
 
+    @property
+    def next_stop(self) -> dict | None:
+        """The stop after the current one, or ``None`` at the last stop.
+
+        One definition, read by both :meth:`advance`'s clock gate (#838) and the
+        decide-context block's held-stop sentences (#826), so "what comes next"
+        cannot drift between the mechanism and what the agent is told about it.
+        """
+        return self.schedule[self.stop_index + 1] if self.has_next else None
+
     def advance(self, current_hour: int | None = None) -> bool:
         """Move to the next due stop.
 
@@ -376,9 +386,9 @@ class ScheduleMockClient(MockReActClient):
         not due; callers that distinguish those states can inspect
         :attr:`has_next`.
         """
-        if not self.has_next:
+        next_stop = self.next_stop
+        if next_stop is None:
             return False
-        next_stop = self.schedule[self.stop_index + 1]
         start_hour = next_stop.get("start_hour")
         if (
             current_hour is not None
@@ -1179,7 +1189,18 @@ def at_scheduled_stop(char) -> bool:
     return bool(place) and char.location is not None and char.location.name == place
 
 
-def decide_context_block(agent, step: int, clock, stop_since: int = 0) -> str:
+def _hour_words(hour: int) -> str:
+    """A whole hour of the day in words: ``14`` -> ``"2 PM"``.
+
+    Plain arithmetic rather than ``strftime``, which zero-pads ("02 PM") and
+    would need a date to anchor a bare hour to.
+    """
+    return f"{hour % 12 or 12} {'AM' if hour < 12 else 'PM'}"
+
+
+def decide_context_block(
+    agent, step: int, clock, stop_since: int = 0, waiting: bool = False
+) -> str:
     """Render the always-on decide context (issue #580), or ``""``.
 
     Sim time of day, the plan's current stop, and how long that stop has been
@@ -1197,18 +1218,50 @@ def decide_context_block(agent, step: int, clock, stop_since: int = 0) -> str:
     where a 10-minute coffee run stayed current for 2 h 15 min. The template
     says "this has been your current stop", not "you have been here", because
     for that agent the second sentence would be false.
+
+    ``waiting`` (#826) means the loop credited this stop but is holding the
+    pointer until the next stop's ``start_hour`` (#838). It replaces the elapsed
+    clause with "you have already finished this stop" plus what comes next and
+    when: the elapsed number is *true* in that state but reads as debt, and an
+    agent acted on it by walking 62 sim-minutes back to an errand it had
+    finished. Only the loop knows this -- the schedule alone cannot tell a
+    finished stop from one still being worked on.
     """
     schedule = getattr(agent, "schedule", None)
     if clock is None or schedule is None:
         return ""
     steps = schedule.steps
+    next_stop = getattr(schedule, "next_stop", None) if waiting else None
+    next_hour = next_stop.get("start_hour") if next_stop else None
+    if next_hour not in range(24):
+        # Two ways there is no usable hour here. A revision can replace the tail
+        # while a hold stands (#826 Task 2's test_hold_survives_schedule_replacement
+        # pins that state), so the next stop may have lost the very anchor that
+        # caused the hold; and planner.py deliberately keeps a model's
+        # `start_hour` raw, so it can be a 99 or a -1 that no clock hour matches.
+        # Either way there is no hour to report and no wait to describe -- say
+        # only that this stop is finished, rather than rendering "starting at
+        # None" or, from a 99, the self-contradicting "starting at 3 PM (5445 min
+        # from now)". One membership test covers both, since None is not a member.
+        next_stop, next_hour = None, None
+    now = clock.time_at(step)
     return render(
         "decide_context",
-        time=clock.time_at(step).strftime("%A %I:%M %p"),
+        time=now.strftime("%A %I:%M %p"),
         place=schedule.destination,
         activity=schedule.activity,
         minutes=clock.minutes_for_steps(steps) if steps is not None else None,
         elapsed=clock.minutes_for_steps(max(0, step - stop_since)),
+        finished=bool(waiting),
+        next_place=next_stop.get("place") if next_stop else None,
+        next_activity=next_stop.get("activity") if next_stop else None,
+        next_hour=_hour_words(next_hour) if next_hour is not None else None,
+        next_in=(
+            max(0, (next_hour - now.hour) * 60 - now.minute)
+            if next_hour is not None
+            else None
+        ),
+        next_due=next_hour is not None and now.hour >= next_hour,
     )
 
 
@@ -1340,7 +1393,7 @@ def walk_minutes_line(game, char, clock) -> str:
 
 
 def observe_and_decide(
-    game, char, step: int, retrieval=None, *, clock=None, stop_since=0
+    game, char, step: int, retrieval=None, *, clock=None, stop_since=0, waiting=False
 ):
     """Build ``char``'s observation, fold in memory, and ask its agent to decide.
 
@@ -1362,7 +1415,9 @@ def observe_and_decide(
        the first line -- the decision stays deterministic).
     4. **Contextualize** (#580): when the loop threads a ``clock``, append the
        decide-context block -- sim time, current plan stop, elapsed -- after
-       the environment text (never read by the deterministic mock).
+       the environment text (never read by the deterministic mock). A held
+       stop (#826) reports itself finished instead of accruing elapsed
+       minutes.
     5. **Nearby affordances** (#613): append the visible-but-distant tagged
        arenas (:func:`nearby_affordances_line`) so a live brain can choose to
        *travel* toward one. Gated on the same real-brain tool-path predicate
@@ -1427,7 +1482,7 @@ def observe_and_decide(
     # AFTER the environment text (the mock brain reads only the first line)
     # and AFTER the retrieve above ran on the plain `base` -- the block must
     # never shift which memories surface, because frames embed that list.
-    context = decide_context_block(agent, step, clock, stop_since)
+    context = decide_context_block(agent, step, clock, stop_since, waiting)
     if context:
         base = f"{base}\n\n{context}"
     # Perceivable needs (#594): surface thirst in the decide prompt so a live
