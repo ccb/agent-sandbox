@@ -33,7 +33,7 @@ inputs:
     description: The place arrived at (used when verb == "travel").
   activity:
     type: string
-    description: What the persona is doing (used when verb == "perform").
+    description: What the persona did, as a gerund phrase (used when verb == "perform"); rendered past tense ("I was <activity>.", #851) -- the memory records a finished action, and #826's recent_actions block replays it under a "how long ago" prefix.
   item:
     type: string
     description: What was drunk (verb == "drink"), eaten (verb == "eat"), checked out, or read (verb == "check_out_book" or "read").
@@ -87,7 +87,7 @@ I tried to "{{ command }}" but it didn't work.
 {%- elif verb == "travel" -%}
 I traveled to {{ location }}.
 {%- elif verb == "perform" -%}
-I am {{ activity }}.
+I was {{ activity }}.
 {%- elif verb == "drink" and sick -%}
 I drank the {{ item }} and now I feel terribly sick.
 {%- elif verb == "drink" and recovered -%}
