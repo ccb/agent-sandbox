@@ -906,23 +906,29 @@ and the currently active `cast` ids), the #564 `SimulationConfig` knobs
 (`knobs.defaults` / `knobs.current`, key-carrying sections stripped), the
 advertised `brains` (`llm` appears only when the server env holds
 `ANTHROPIC_API_KEY` — keys never travel over HTTP), the advertised day-`plans`
-vocabulary (`auto`/`schedule`/`llm`, #787), and the `run` controls
-(`brain`, `steps`, derived `stop_time`, `max_cost`, `tick_seconds`, the
-resolved `plan` the current brain would run, and `plan_request` — the RAW
+vocabulary (`auto`/`schedule`/`llm`, #787), the advertised thinking-depth
+`efforts` vocabulary (`default` plus the `--effort` levels, #845), and the `run`
+controls (`brain`, `steps`, derived `stop_time`, `max_cost`, `tick_seconds`, the
+resolved `plan` the current brain would run, `plan_request` — the RAW
 planner request, e.g. `auto`, that the setup dropdown defaults to so an
-untouched form keeps the session's request, #791).
+untouched form keeps the session's request, #791 — and `effort`, the depth in
+force, `"default"` when none is requested).
 
-`POST /config` (any subset of `{cast, brain, plan, sim_config, steps,
-tick_seconds, max_cost}` — `plan` is the day-planner request, #791) applies
+`POST /config` (any subset of `{cast, brain, plan, effort, sim_config, steps,
+tick_seconds, max_cost}` — `plan` is the day-planner request, #791; `effort` is
+the adaptive thinking depth, llm-brain only, where `"default"` means "send no
+thinking config" and is the only way to clear a launch `--effort`, #845) applies
 the setup by rebuilding through the stepper's reset path
 and echoes it back (`applied`), alongside the standard rebuild signal
 (`status` record, `reason: "reset"`, additive `run_id`). After the first
 `POST /resume` the gate closes: `status` reads `"locked"` and `POST /config`
 answers `409` (on a paused loop — e.g. after the day finishes — `POST /reset`
 returns it to tick 0 and re-opens it). Bad
-input — empty cast, unknown persona id, unknown or key-less brain, a bad
-`sim_config` mapping — is a `400`. The applied config also lands in the run
-manifest as its `config` block, so every saved run records its setup.
+input — empty cast, unknown persona id, unknown or key-less brain, an unknown
+effort level or a depth on a free brain, a bad `sim_config` mapping — is a `400`.
+The applied config also lands in the run manifest as its `config` block, so every
+saved run records its setup — including the `effort`, so the Past-runs "Re-run
+with this setup" reproduces the thinking depth instead of dropping to none (#845).
 
 Servers without the surface (no live loop, or a stepper that doesn't offer
 `describe_config`/`apply_config`) answer `404` on both.

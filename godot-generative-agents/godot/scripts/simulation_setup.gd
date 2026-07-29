@@ -52,6 +52,7 @@ var _knob_rows: Array = []       # [{section, key, kind, spin, initial}]
 var _brain_opt: OptionButton = null
 var _plan_opt: OptionButton = null
 var _plan_hint: Label = null
+var _effort_opt: OptionButton = null
 var _steps_spin: SpinBox = null
 var _tick_spin: SpinBox = null
 var _cost_spin: SpinBox = null
@@ -59,9 +60,13 @@ var _cost_spin: SpinBox = null
 # Server state captured from GET /config, needed to build the POST body.
 var _brains: Array = []
 var _plans: Array = []
+var _efforts: Array = []
 var _knobs_current: Dictionary = {}
 var _knobs_defaults: Dictionary = {}
-var _initial := {"brain": "mock", "plan": "auto", "steps": 0, "tick_seconds": 0.0, "max_cost": 0.0}
+var _initial := {
+	"brain": "mock", "plan": "auto", "effort": "default",
+	"steps": 0, "tick_seconds": 0.0, "max_cost": 0.0,
+}
 
 
 func _ready() -> void:
@@ -180,6 +185,8 @@ func _set_busy(busy: bool) -> void:
 		_brain_opt.disabled = busy
 	if _plan_opt != null:
 		_plan_opt.disabled = busy
+	if _effort_opt != null:
+		_effort_opt.disabled = busy
 	if _steps_spin != null:
 		_steps_spin.editable = not busy
 	if _tick_spin != null:
@@ -270,6 +277,7 @@ func _on_http_completed(
 func _render_config(data: Dictionary) -> void:
 	_brains = data.get("brains", [])
 	_plans = data.get("plans", [])
+	_efforts = data.get("efforts", [])
 	var knobs: Dictionary = data.get("knobs", {})
 	_knobs_current = knobs.get("current", {})
 	_knobs_defaults = knobs.get("defaults", {})
@@ -277,6 +285,7 @@ func _render_config(data: Dictionary) -> void:
 	_initial = {
 		"brain": str(run.get("brain", "mock")),
 		"plan": str(run.get("plan_request", run.get("plan", "auto"))),
+		"effort": str(run.get("effort", "default")),
 		"steps": int(run.get("steps", 0)),
 		"tick_seconds": float(run.get("tick_seconds", 0.0)),
 		# `max_cost` is null on a free brain; get()'s default only applies to a
@@ -398,6 +407,32 @@ func _render_config(data: Dictionary) -> void:
 		_brain_opt.item_selected.connect(_update_plan_row.unbind(1))
 		_update_plan_row()
 
+	# The thinking-depth row (#845): adaptive-thinking effort for the paid brain,
+	# so a saved Sonnet-at-medium run can be re-run at medium instead of silently
+	# dropping to no thinking. Same shape as the planner row above -- the
+	# vocabulary (including "default" = none) comes from the server, and a
+	# pre-#845 backend advertises none and so gets no row.
+	_effort_opt = null
+	if not _efforts.is_empty():
+		var effort_row := HBoxContainer.new()
+		effort_row.add_theme_constant_override("separation", 8)
+		var effort_cap := Label.new()
+		effort_cap.text = "Thinking depth (llm only)"
+		effort_cap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		effort_row.add_child(effort_cap)
+		_effort_opt = OptionButton.new()
+		for e in _efforts:
+			_effort_opt.add_item(str(e))
+		var ei := (_efforts as Array).find(_initial.effort)
+		if ei < 0:
+			ei = 0
+			_initial.effort = str(_efforts[0])  # so an untouched form stays untouched
+		_effort_opt.select(ei)
+		effort_row.add_child(_effort_opt)
+		_form_box.add_child(effort_row)
+		_brain_opt.item_selected.connect(_update_effort_row.unbind(1))
+		_update_effort_row()
+
 	_steps_spin = _spin_row("Steps", 1, 1000000, 1, float(_initial.steps))
 	# Floor > 0: POST /config's tick_seconds is Field(gt=0), so a 0 would 422.
 	# step 0.05 (not 0.1): a SpinBox snaps to `min + round((v-min)/step)*step`, and
@@ -432,6 +467,27 @@ func _selected_plan() -> String:
 	if _plan_opt == null or _plan_opt.selected < 0:
 		return str(_initial.plan)
 	return str(_plans[_plan_opt.selected])
+
+
+func _selected_effort() -> String:
+	if _effort_opt == null or _effort_opt.selected < 0:
+		return str(_initial.effort)
+	return str(_efforts[_effort_opt.selected])
+
+
+# Keep the thinking-depth row consistent with the selected brain (#845): a depth
+# is a paid-brain setting (the server 400s a level on a free brain), so grey the
+# levels out under a free brain and snap a stranded selection back to "default".
+# Mirrors _update_plan_row; the server's validation stays the backstop.
+func _update_effort_row() -> void:
+	if _effort_opt == null:
+		return
+	var paid := _selected_brain() == "llm"
+	var default_idx := (_efforts as Array).find("default")
+	for i in range(_efforts.size()):
+		_effort_opt.set_item_disabled(i, not paid and str(_efforts[i]) != "default")
+	if not paid and _selected_effort() != "default" and default_idx >= 0:
+		_effort_opt.select(default_idx)
 
 
 # Keep the planner row consistent with the selected brain (#791): the `llm`
@@ -518,6 +574,23 @@ func _apply_seed(seed: Dictionary) -> void:
 				)
 		else:
 			unmet.append("planner '%s' not offered here" % plan)
+	# The saved thinking depth (#845), same shape as the planner branch: skip
+	# silently when this backend has no effort row, warn when it has one that
+	# can't honor the saved depth. Seed the brain FIRST (above) -- _update_effort_row
+	# reads it, and a level under a free brain gets snapped back to "default".
+	var effort := str(seed.get("effort", ""))
+	if effort != "" and _effort_opt != null:
+		var eidx := (_efforts as Array).find(effort)
+		if eidx >= 0:
+			_effort_opt.select(eidx)
+			_update_effort_row()
+			if _selected_effort() != effort:
+				unmet.append(
+					"thinking depth '%s' needs the llm brain here -- kept '%s'"
+					% [effort, _selected_effort()]
+				)
+		else:
+			unmet.append("thinking depth '%s' not offered here" % effort)
 	var run: Variant = seed.get("run")
 	if typeof(run) == TYPE_DICTIONARY:
 		var r := run as Dictionary
@@ -533,6 +606,11 @@ func _apply_seed(seed: Dictionary) -> void:
 	# leave the row and hint stale against the brain that actually got picked.
 	# A safe no-op when _plan_opt is null (no planner row on this backend).
 	_update_plan_row()
+	# Same reason for the depth row (#845): a brain-seeded selection emits no
+	# signal, and a seed with a brain but no `effort` (a config block saved
+	# before #845) skips the branch above entirely, leaving the levels enabled
+	# under a free brain. No-op when there is no effort row.
+	_update_effort_row()
 	if unmet.is_empty():
 		_set_status("Pre-filled from a saved run. Adjust anything, then Start.", false)
 	else:
@@ -638,6 +716,8 @@ func _on_start_pressed() -> void:
 		"initial_brain": _initial.brain,
 		"plan": _selected_plan() if _plan_opt != null else "",
 		"initial_plan": str(_initial.plan) if _plan_opt != null else "",
+		"effort": _selected_effort() if _effort_opt != null else "",
+		"initial_effort": str(_initial.effort) if _effort_opt != null else "",
 		"steps": int(_steps_spin.value),
 		"initial_steps": int(_initial.steps),
 		"tick": float(_tick_spin.value),

@@ -22,6 +22,9 @@ extends RefCounted
 #   max_cost       float          cost spinbox value (0.0 = unset)
 #   plan           String         selected planner ("" = no planner row on this backend)
 #   initial_plan   String         run.plan_request from GET /config ("" = no planner row)
+#   effort         String         selected thinking depth ("" = no effort row on this backend;
+#                                 "default" = send no thinking config at all)
+#   initial_effort String         run.effort from GET /config ("" = no effort row)
 #   knobs_current  Dictionary     GET /config's knobs.current
 #   knob_edits     Dictionary     nested dict keyed by path segments, for CHANGED knobs only
 static func build_post_body(state: Dictionary) -> Dictionary:
@@ -42,6 +45,13 @@ static func build_post_body(state: Dictionary) -> Dictionary:
 	var plan := str(state.get("plan", ""))
 	if plan != "" and plan != str(state.get("initial_plan", "")):
 		body["plan"] = plan
+	# The thinking-depth knob (#845): same only-send-changed rule, same empty
+	# guard for a backend that advertises no `efforts`. "default" is a real value
+	# here, not an absence -- it is how a re-run of a run that requested NO
+	# thinking depth clears a depth this server launched with.
+	var effort := str(state.get("effort", ""))
+	if effort != "" and effort != str(state.get("initial_effort", "")):
+		body["effort"] = effort
 	var edits: Dictionary = state.get("knob_edits", {})
 	if not edits.is_empty():
 		body["sim_config"] = merge_knobs(state.get("knobs_current", {}), edits)

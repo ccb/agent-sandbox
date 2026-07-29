@@ -136,6 +136,25 @@ func _initialize() -> void:
 	_check(ConfigBody.seed_plan({"plan": "llm"}) == "llm", "seed_plan falls back to the resolved plan")
 	_check(ConfigBody.seed_plan({}) == "", "seed_plan with no planner in the seed -> empty")
 
+	# --- thinking-depth knob (#845): only a CHANGED effort is sent ---
+	s = _base_state()
+	s["effort"] = "default"
+	s["initial_effort"] = "default"
+	body = ConfigBody.build_post_body(s)
+	_check(not body.has("effort"), "untouched effort is omitted (keeps the session's depth)")
+	s["effort"] = "medium"
+	body = ConfigBody.build_post_body(s)
+	_check(body.get("effort") == "medium", "changed effort is sent")
+	# "default" is a real request, not an absence: it is how a re-run of a run
+	# that asked for no thinking clears a depth the server launched with.
+	s["effort"] = "default"
+	s["initial_effort"] = "high"
+	body = ConfigBody.build_post_body(s)
+	_check(body.get("effort") == "default", "clearing a depth back to default is sent")
+	# No effort row rendered (a pre-#845 backend serves no `efforts`).
+	body = ConfigBody.build_post_body(_base_state())
+	_check(not body.has("effort"), "absent effort state sends nothing")
+
 	# --- effective_plan (#791): the hint label's client-side auto rule ---
 	_check(ConfigBody.effective_plan("auto", "llm") == "llm", "auto resolves to llm under the llm brain")
 	_check(ConfigBody.effective_plan("auto", "mock") == "schedule", "auto resolves to schedule under a free brain")
