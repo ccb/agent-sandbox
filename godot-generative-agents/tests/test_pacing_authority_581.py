@@ -410,6 +410,55 @@ def test_off_plan_perform_without_duration_is_bounded_not_frozen():
     assert state["Ada"]["perform_until"] == 0 + 540
 
 
+def test_on_plan_perform_without_duration_is_bounded_when_a_stop_follows():
+    """#865: the "settle for the rest of the run" branch is only correct at the
+    LAST stop, and nothing checked that.
+
+    `perform_until = None` means the settle-completion check never fires again,
+    so the agent never re-decides for the rest of the run. That is right for an
+    end-of-day stop and wrong anywhere else. Every authored persona happens to
+    put its one duration-less stop last (35 of 35 in `personas/*.yaml`), which is
+    why authored data never reached the gap -- but the LLM planner is under no
+    such rule, and a duration-less stop mid-schedule froze the agent.
+
+    It also quietly corrupts every behavioral metric: a frozen agent cannot
+    thrash, cannot retarget and cannot converse, so #826's own criterion reads as
+    an improvement. #760 batch 6 had four of five agents end frozen.
+
+    Mutation check: restore `elif matched or clock is None:` and this goes RED
+    with perform_until None.
+    """
+    brain = PerActionBrain("perform", {"activity": "reading a novel"})
+    persona = _persona(place="The Green", activity="reading a novel", steps=None)
+    # A second stop, so the duration-less one above is NOT the last.
+    persona["schedule"].append(
+        {"place": "Cafe", "activity": "studying", "emoji": "\U0001f4d6", "steps": 1}
+    )
+    game, chars = build_world(None, [persona], LOCATIONS)
+    attach_agents(chars, [persona], llm_client=brain)
+    state = _state()
+    _run_step(game, chars, state, 0, _clock())
+
+    # On-plan (scheduled at The Green, performing at The Green, where she starts).
+    assert state["Ada"]["credit_stop"] is True
+    # Bounded by the 90-minute ceiling (540 steps at 10s/step), not frozen.
+    assert state["Ada"]["perform_until"] == 540
+
+
+def test_on_plan_perform_without_duration_still_settles_at_the_last_stop():
+    """The control for the test above, and the invariant the mock bake rests on:
+    at the LAST stop a duration-less on-plan perform still settles for the rest
+    of the run. This is what every authored persona's final stop does, so if this
+    changes the committed replay changes with it. #865."""
+    brain = PerActionBrain("perform", {"activity": "reading a novel"})
+    game, ada = _world(llm_client=brain, place="The Green", activity="reading a novel")
+    assert ada.agent.schedule.has_next is False  # single-stop schedule
+    state = _state()
+    _run_step(game, {"Ada": ada}, state, 0, _clock())
+
+    assert state["Ada"]["perform_until"] is None
+
+
 def test_stray_duration_on_a_non_pacing_verb_is_ignored():
     # A model that hallucinates duration_minutes onto a verb that never
     # advertised the slot (travel) must have it popped (no leak into the

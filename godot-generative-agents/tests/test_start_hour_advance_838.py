@@ -305,37 +305,17 @@ def test_hold_survives_schedule_replacement_with_a_new_anchor():
     assert chars["Ada"].agent.schedule.stop_index == 1
 
 
-def test_step_advances_a_held_pointer_for_an_agent_that_walked_away():
-    game, chars = build_world(None, [_persona()], _LOCATIONS)
-    attach_agents(chars, [_persona()], llm_client=None)
-    state = _state()
-    # The batch-5 shape: the stop was credited, the pointer is held, and the
-    # agent left instead of performing again -- so nothing completes to trigger
-    # the retry inside the completed-activity block.
-    state["Ada"].update(
-        performing=False,
-        perform_until=None,
-        waiting_for_anchor=True,
-        path=[(0, 1), (0, 2), (0, 3)],
-    )
-    common = {
-        "order": ["Ada"],
-        "world_map": None,
-        "emoji": {"Ada": "📖"},
-        "clock": SimClock(datetime.datetime(2023, 2, 13, 8, 0)),
-    }
-
-    # 08:50 -- before the 10:00 anchor, the hold stands.
-    step(game, chars, state, 300, **common)
-    assert chars["Ada"].agent.schedule.stop_index == 0
-    assert state["Ada"]["waiting_for_anchor"] is True
-
-    # 10:00 -- the anchor arrives with no activity completing, and the plan
-    # resumes anyway.
-    step(game, chars, state, 720, **common)
-    assert chars["Ada"].agent.schedule.stop_index == 1
-    assert state["Ada"]["waiting_for_anchor"] is False
-    assert state["Ada"]["stop_since"] == 720
+# `test_step_advances_a_held_pointer_for_an_agent_that_walked_away` lived here.
+# It asserted that a held pointer advances at its anchor hour while the agent is
+# still WALKING, which #868 established is the wrong behavior: the pointer moved
+# mid-leg, `stop_since` was stamped there, and the agent's next prompt reported an
+# unreached stop as current with minutes already accrued against it (batch 6, a
+# 52-minute abandoned leg). Its real guarantee -- that the retry fires with *no
+# activity completing*, the batch-5 shape where an agent left instead of
+# performing again -- is kept by
+# `test_the_retry_leaves_a_walking_agents_pointer_alone_until_it_arrives` (which
+# advances on the arrival tick, nothing having completed) and by
+# `test_step_decides_with_the_advanced_pointer_when_the_agent_is_stationary`.
 
 
 def test_the_retry_leaves_a_conversing_agents_pointer_alone():
@@ -425,6 +405,56 @@ def test_a_hold_clears_when_a_revision_leaves_no_next_stop():
     )
     assert "This has been your current stop for" in block
     assert "already finished" not in block
+
+
+def test_the_retry_leaves_a_walking_agents_pointer_alone_until_it_arrives():
+    """#868: a held pointer must not advance mid-walk.
+
+    The retry's gate is the same three-part gate `due` uses, `not st["path"]`
+    included. Without it the pointer moved while the agent was walking and
+    `stop_since` was stamped there, so the elapsed clock started on a stop the
+    agent had not reached and was walking *away* from -- and the decide prompt
+    then reported that stop as current, with minutes already accrued against it.
+
+    `decide_context_block` defends the elapsed clock on an unreached stop
+    deliberately ("an agent that wanders off-plan never arrives, so nothing
+    re-anchors"), but that premise is "the agent chose not to go". It is false
+    when the loop assigns the stop mid-transit. In #760 batch 6 Maya Chen was told
+    she had been on a Houston Hall coffee break for 15 minutes in a building she
+    had never entered, and turned around five steps from the door she was walking
+    to -- a 52-minute abandoned leg, the run's only #826 criterion-1 breach.
+
+    Mutation check: drop `not st["path"]` from the retry and this goes RED at the
+    first assertion after 10:00."""
+    game, chars = build_world(None, [_persona()], _LOCATIONS)
+    attach_agents(chars, [_persona()], llm_client=None)
+    state = _state()
+    state["Ada"].update(
+        performing=False,
+        perform_until=None,
+        waiting_for_anchor=True,
+        path=[(0, 1), (0, 2), (0, 3)],  # mid-walk
+    )
+    common = {
+        "order": ["Ada"],
+        "world_map": None,
+        "emoji": {"Ada": "📖"},
+        "clock": SimClock(datetime.datetime(2023, 2, 13, 8, 0)),
+    }
+
+    # 10:00 -- the anchor is due, but she is walking, so the pointer holds and
+    # no elapsed clock starts on a stop she has not reached.
+    step(game, chars, state, 720, **common)
+    assert chars["Ada"].agent.schedule.stop_index == 0
+    assert state["Ada"]["waiting_for_anchor"] is True
+    assert state["Ada"]["stop_since"] == 0
+
+    # She arrives (the path empties), and the very next tick resumes the plan.
+    state["Ada"]["path"] = []
+    step(game, chars, state, 721, **common)
+    assert chars["Ada"].agent.schedule.stop_index == 1
+    assert state["Ada"]["waiting_for_anchor"] is False
+    assert state["Ada"]["stop_since"] == 721
 
 
 def test_step_decides_with_the_advanced_pointer_when_the_agent_is_stationary():
