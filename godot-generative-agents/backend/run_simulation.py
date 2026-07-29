@@ -395,12 +395,14 @@ def step(
             waiting_for_anchor = (
                 credited and not advanced and char.agent.schedule.has_next
             )
-            # #826: remember the hold so the decide context can say this stop is
-            # already done instead of presenting a finished errand as the current
-            # objective. In batch 5 an agent read its own completed coffee break
-            # as "77 min into a planned 15" and walked 62 min back across campus
-            # to redo it. The flag means exactly "credited, pointer held".
-            st["waiting_for_anchor"] = waiting_for_anchor
+            # Set only when the hold is observed, never cleared here: `credited`
+            # is a shared flag that an unrelated dead-talk settle
+            # (cognition.settle_after_dead_talk) sets False, and recomputing
+            # from it would report "no hold" while the pointer still sits on a
+            # finished stop. The clear belongs to the paths where the pointer
+            # really moves -- the `if advanced:` branch below.
+            if waiting_for_anchor:
+                st["waiting_for_anchor"] = True
             # Settling here for the rest of the run is the end-of-day rule, and
             # the mock bake rests on it -- but it belongs to an agent that
             # genuinely finished its LAST scheduled stop, not to one that

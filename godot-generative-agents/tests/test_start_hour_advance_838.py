@@ -146,3 +146,91 @@ def test_step_records_the_hold_so_the_prompt_can_report_it():
     step(game, chars, state, 720, **common)
     assert chars["Ada"].agent.schedule.stop_index == 1
     assert state["Ada"]["waiting_for_anchor"] is False
+
+
+def test_hold_survives_an_unrelated_dead_talk_settle():
+    """The hold is per-stop, not per-settle: credit_stop=False from a dead-talk
+    should not clear a hold that is still in force. #826, #838."""
+    game, chars = build_world(None, [_persona()], _LOCATIONS)
+    attach_agents(chars, [_persona()], llm_client=None)
+    state = _state()
+    common = {
+        "order": ["Ada"],
+        "world_map": None,
+        "emoji": {"Ada": "📖"},
+        "clock": SimClock(datetime.datetime(2023, 2, 13, 8, 0)),
+    }
+
+    # 08:30: credited, but the 10:00 stop is held -- the flag says so.
+    step(game, chars, state, 180, **common)
+    assert state["Ada"]["waiting_for_anchor"] is True
+    assert chars["Ada"].agent.schedule.stop_index == 0
+
+    # Simulate a dead-talk settle: credit_stop becomes False, and a short idle
+    # is performed.
+    state["Ada"]["credit_stop"] = False
+    state["Ada"]["perform_until"] = 260
+    state["Ada"]["performing"] = True
+
+    # 08:43: the idle completes. credit_stop is False, so waiting_for_anchor
+    # recomputes to False in the old broken code. But the pointer hasn't moved
+    # and the anchor hour hasn't arrived, so the hold is still valid. The flag
+    # must stay True.
+    step(game, chars, state, 260, **common)
+    assert state["Ada"]["waiting_for_anchor"] is True
+    assert chars["Ada"].agent.schedule.stop_index == 0
+
+    # 10:00: the pointer finally moves, and the flag clears.
+    step(game, chars, state, 720, **common)
+    assert state["Ada"]["waiting_for_anchor"] is False
+    assert chars["Ada"].agent.schedule.stop_index == 1
+
+
+def test_hold_survives_schedule_replacement():
+    """When a DEVIATED plan swaps the next stop, the hold flag remains truthful.
+    The flag says 'current stop is finished', which is independent of what the
+    next stop is. If the new next stop has no start_hour, the pointer will
+    advance on the next completion; if it does, it stays held. Either way, the
+    flag correctly represents the current state. #826, #838."""
+    game, chars = build_world(None, [_persona()], _LOCATIONS)
+    attach_agents(chars, [_persona()], llm_client=None)
+    state = _state()
+    common = {
+        "order": ["Ada"],
+        "world_map": None,
+        "emoji": {"Ada": "📖"},
+        "clock": SimClock(datetime.datetime(2023, 2, 13, 8, 0)),
+    }
+
+    # 08:30: hold established with next stop anchored at 10:00.
+    step(game, chars, state, 180, **common)
+    assert state["Ada"]["waiting_for_anchor"] is True
+    assert chars["Ada"].agent.schedule.stop_index == 0
+    assert chars["Ada"].agent.schedule.next_stop["start_hour"] == 10
+
+    # A plan revision swaps the tail with a new next stop that has NO start_hour.
+    new_schedule = [
+        {
+            "place": "Cafe",
+            "activity": "reading",
+            "emoji": None,
+            "steps": 5,
+        },
+        {
+            "place": "Cafe",
+            "activity": "lunch",  # new activity
+            "emoji": None,
+            "steps": 5,
+            # NO start_hour
+        },
+    ]
+    chars["Ada"].agent.schedule.replace_schedule(new_schedule)
+
+    # The hold flag still reflects that the current stop is finished.
+    assert state["Ada"]["waiting_for_anchor"] is True
+
+    # But now the pointer can advance without waiting for an anchor hour, because
+    # the new next stop has no start_hour constraint.
+    step(game, chars, state, 720, **common)
+    assert state["Ada"]["waiting_for_anchor"] is False
+    assert chars["Ada"].agent.schedule.stop_index == 1
