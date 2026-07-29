@@ -1219,7 +1219,12 @@ def _hour_words(hour: int) -> str:
 
 
 def decide_context_block(
-    agent, step: int, clock, stop_since: int = 0, waiting: bool = False
+    agent,
+    step: int,
+    clock,
+    stop_since: int = 0,
+    waiting: bool = False,
+    day_steps: int | None = None,
 ) -> str:
     """Render the always-on decide context (issue #580), or ``""``.
 
@@ -1246,6 +1251,12 @@ def decide_context_block(
     agent acted on it by walking 62 sim-minutes back to an errand it had
     finished. Only the loop knows this -- the schedule alone cannot tell a
     finished stop from one still being worked on.
+
+    ``day_steps`` (#891) is the run's total step count; inside the final
+    stretch the block adds when the day ends and in how many minutes. Agents
+    know the time and every walk's price but not that the world stops at the
+    run boundary -- batch 8's criterion-2 breach was an agent starting a
+    ~50-minute walk 23 minutes before an end nothing had told it about.
     """
     schedule = getattr(agent, "schedule", None)
     if clock is None or schedule is None:
@@ -1265,6 +1276,21 @@ def decide_context_block(
         # from now)". One membership test covers both, since None is not a member.
         next_stop, next_hour = None, None
     now = clock.time_at(step)
+    day_end, day_end_in = None, None
+    if day_steps is not None:
+        remaining = clock.minutes_for_steps(max(0, day_steps - step))
+        # ponytail: 120 min is a calibration knob, not a magic number -- wide
+        # enough that an agent can still wrap up a last errand deliberately,
+        # narrow enough that the sentence isn't nagging all day. Widen it if
+        # runs still end with agents mid-walk; narrow it if evenings go idle.
+        if 0 < remaining <= 120:
+            end = clock.time_at(day_steps)
+            day_end = (
+                _hour_words(end.hour)
+                if end.minute == 0
+                else end.strftime("%I:%M %p").lstrip("0")
+            )
+            day_end_in = remaining
     return render(
         "decide_context",
         time=now.strftime("%A %I:%M %p"),
@@ -1282,6 +1308,8 @@ def decide_context_block(
             else None
         ),
         next_due=next_hour is not None and now.hour >= next_hour,
+        day_end=day_end,
+        day_end_in=day_end_in,
     )
 
 
@@ -1505,7 +1533,17 @@ def observe_and_decide(
     # AFTER the environment text (the mock brain reads only the first line)
     # and AFTER the retrieve above ran on the plain `base` -- the block must
     # never shift which memories surface, because frames embed that list.
-    context = decide_context_block(agent, step, clock, stop_since, waiting)
+    context = decide_context_block(
+        agent,
+        step,
+        clock,
+        stop_since,
+        waiting,
+        # The run's length rides on the game like sim_clock does (#885's
+        # stamp pattern): only the loop's callers know it, and actions and
+        # this block both read it off the shared object (#891).
+        day_steps=getattr(game, "sim_day_steps", None),
+    )
     if context:
         base = f"{base}\n\n{context}"
     # Perceivable needs (#594): surface thirst in the decide prompt so a live

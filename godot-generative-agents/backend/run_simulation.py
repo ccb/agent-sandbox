@@ -241,6 +241,7 @@ def step(
     emoji: dict,
     retrieval=None,
     clock: SimClock | None = None,
+    num_steps: int | None = None,
     conversation_enabled: bool = False,
     conversation_cooldowns: dict | None = None,
     active_conversations: dict | None = None,
@@ -322,9 +323,11 @@ def step(
     # clock rides on the game (as sim_clock -- the engine's game.clock is the
     # #7 GameClock, a different object): the anchor travel gate (#885) reads it to
     # price a leg against the next pinned stop. None on the bake (no clock),
-    # which keeps the gate inert there by construction.
+    # which keeps the gate inert there by construction. num_steps rides along
+    # the same way for the day-end clause (#891).
     game.sim_clock = clock
     game.sim_clock_step = step_idx
+    game.sim_day_steps = num_steps
 
     # React gate (#370): edge-triggered encounter detection needs memory of
     # who was already in range last tick. A throwaway dict would make every
@@ -1201,6 +1204,7 @@ def simulate(
             emoji=emoji,
             retrieval=retrieval,
             clock=clock,
+            num_steps=num_steps,
             conversation_enabled=conversation_enabled,
             conversation_cooldowns=conversation_cooldowns,
             active_conversations=active_conversations,
