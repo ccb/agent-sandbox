@@ -42,8 +42,10 @@ from __future__ import annotations
 
 import argparse
 import collections
+import datetime
 import json
 import pathlib
+import re
 import sqlite3
 import sys
 import tempfile
@@ -183,42 +185,150 @@ def _load_run_record(run_id: str, runs_dir: pathlib.Path) -> dict:
     return {"result": result} if result else {}
 
 
-def _arrived_then_departed(frames: list) -> dict:
-    """Per agent, how many walks ended in another walk rather than an arrival.
+_WALK_ACT = re.compile(r"^walking to (.+?) @ (.*)$")
+
+
+def _walk_target(act: str) -> tuple[str, str] | None:
+    """``(display name, building)`` for a walk-in-progress act, else ``None``.
+
+    A leg in progress paints ``walking to <display name> @
+    <world>:<building>:<place>``. Classifying a turn-around needs the
+    *building*, and the address is the only reliable source for it: a
+    sub-place's display name drops its building's qualifier, so ``Van Pelt --
+    Moelis Reading Room`` (address ``UPenn:Van Pelt Library:Moelis Family
+    Grand Reading Room``) shares no prefix with its own building's display
+    name, ``Van Pelt Library``. Reducing display names and comparing those is
+    what scored two of #826's baseline library-to-its-own-reading-room hops as
+    cross-campus retargets, and published the wrong number.
+
+    The addressless campus hub paints ``walking to Penn campus @ None`` -- it
+    is nowhere in particular, so its building is ``""``, which
+    ``_same_place`` treats as matching anything.
+    """
+    m = _WALK_ACT.match(act)
+    if not m:
+        return None
+    place, address = m.group(1), m.group(2)
+    parts = address.split(":")
+    return place, (parts[1] if address != "None" and len(parts) >= 3 else "")
+
+
+def _same_place(a: str, b: str) -> bool:
+    """Two walk targets naming one building. ``""`` -- the hub -- matches all."""
+    return not a or not b or a == b
+
+
+def _turnarounds(frames: list, sec_per_step: int = 10, start: str = "") -> list[dict]:
+    """Every arrival that departed again, split by kind (#850).
 
     The #826 signature: `run_simulation.step` only asks an agent to decide once
     its tile path is empty, so a destination change always sits on an arrival
-    boundary -- and a walk segment followed *immediately* by another walk segment
-    means the agent got there and turned straight around. Reading frames alone
-    is enough: the act line is "walking to <place> @ <address>" for the whole
-    leg, so a change of act between two walking frames is a new leg.
+    boundary -- and a walk segment followed *immediately* by another walk
+    segment means the agent got there and turned straight around. Reading
+    frames alone is enough: the act line is "walking to <place> @ <address>"
+    for the whole leg, so a change of act between two walking frames is a new
+    leg.
 
-    Known under-count: a zero-tile travel to the place the agent already stands
-    sets `desc`/`act` to the same "walking to <place> @ <address>" string
-    (`run_simulation.step`'s travel branch builds it whether or not `path` comes
-    back empty), so the agent re-decides every tick with an UNCHANGED `act` and this
-    reads as one continuous leg, scoring 0 -- exactly what the design doc's
-    "+elapsed only" A/B arm produced. Not a false-"fixed" risk in practice: that
-    mode also drives `walking_share` toward 100%, the other validation number,
-    so a run with thrash near 0 and walking_share near 100% is this failure
-    mode, not a fix.
+    Combining the two kinds into one count (what this did before #850) makes a
+    number no fix can be judged by -- #760 batch 5 measured 17 of the
+    baseline's 20 as one agent oscillating inside a single building (#849),
+    while the cross-building retargeting #826 is about sat flat at 3:
 
-    Nothing here needs the cassette, so it works for any persisted run.
+    * ``same_place`` -- the two destinations share a building, or one is the
+      campus hub. #849.
+    * ``retarget`` -- the agent abandoned a leg to a genuinely different
+      building. #826. ``abandoned_minutes`` is how long it had been walking the
+      leg it gave up on, which is the cost of the event and #826's acceptance
+      measure.
+
+    Known under-count, and #850 asked for a second look at it: a zero-tile
+    travel to the place the agent already stands sets `desc`/`act` to the same
+    "walking to <place> @ <address>" string (`run_simulation.step`'s travel
+    branch builds it whether or not `path` comes back empty), so the agent
+    re-decides every tick with an UNCHANGED `act` and this reads as one
+    continuous leg, scoring 0. The split narrows the blast radius rather than
+    fixing it: a zero-tile travel targets the place the agent is standing in,
+    so an invisible one can only ever be a ``same_place`` hit -- the
+    ``retarget`` count #826 now rests on is not exposed to it. Detecting them
+    at all needs the cassette's travel decisions, not frames. And the old
+    warning still holds for the combined number: a run with thrash near 0 and
+    `walking_share` near 100% is this failure mode, not a fix.
+
+    frames.jsonl carries no clock, so ``sec_per_step``/``start`` (from
+    manifest.json) are what turn steps into sim-minutes and wall-clock.
     """
-    counts: collections.Counter = collections.Counter()
-    previous: dict = {}
-    for frame in frames:
+    started = datetime.datetime.fromisoformat(start) if start else None
+    events: list[dict] = []
+    previous: dict = {}  # agent -> (its act, the step that act began)
+    for step, frame in enumerate(frames):
         for name, a in frame.items():
             act = str((a or {}).get("act") or "")
-            walking = act.startswith("walking to ")
-            was_walking, was_act = previous.get(name, (False, ""))
-            if walking and act != was_act:
-                # A new leg began. It is a turn-around only if the frame before
-                # it was itself a walk (no arrival happened in between).
-                if was_walking:
-                    counts[name] += 1
-            previous[name] = (walking, act)
-    return dict(sorted(counts.items()))
+            was_act, began = previous.get(name, ("", step))
+            if act == was_act:
+                continue
+            previous[name] = (act, step)
+            old, new = _walk_target(was_act), _walk_target(act)
+            if not (old and new):
+                continue  # not two back-to-back legs: an arrival came between
+            events.append(
+                {
+                    "agent": name,
+                    "step": step,
+                    "clock": (
+                        (
+                            started + datetime.timedelta(seconds=step * sec_per_step)
+                        ).strftime("%H:%M")
+                        if started
+                        else ""
+                    ),
+                    "kind": "same_place" if _same_place(old[1], new[1]) else "retarget",
+                    "from": old[0],
+                    "to": new[0],
+                    "abandoned_minutes": (step - began) * sec_per_step // 60,
+                }
+            )
+    return events
+
+
+def _walk_stretches(frames: list, sec_per_step: int = 10) -> tuple[dict, dict]:
+    """Per agent: the longest unbroken walk, and how long it was still walking at the end.
+
+    Replaces `walk_legs.py`, the batch-5 scratch script, which existed for one
+    number: the baseline run ended with Priya Nair having walked 135 unbroken
+    minutes and arrived nowhere. ``_turnarounds`` cannot see that -- a leg
+    that is never abandoned is not a turn-around -- so the two are
+    complementary readings of the same #826 failure and belong in one summary.
+    """
+    current: collections.Counter = collections.Counter()
+    longest: collections.Counter = collections.Counter()
+    for frame in frames:
+        for name, a in frame.items():
+            walking = str((a or {}).get("act") or "").startswith("walking to ")
+            current[name] = current[name] + 1 if walking else 0
+            longest[name] = max(longest[name], current[name])
+    return (
+        {n: longest[n] * sec_per_step // 60 for n in sorted(longest)},
+        {n: current[n] * sec_per_step // 60 for n in sorted(current)},
+    )
+
+
+def _load_manifest(run_dir: pathlib.Path) -> dict:
+    """The run's manifest.json, or ``{}``.
+
+    frames.jsonl has no clock, so this is the only record of how much sim-time
+    a step is worth. The exporter writes ``sec_per_step`` and ``start`` into
+    it (#580). Without it the tool falls back to the exporter's own default of
+    10 s/step and *says* which it used, rather than printing minutes derived
+    from a guess as if they were measured.
+    """
+    path = run_dir / "manifest.json"
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def summarise(run_id: str, runs_dir: pathlib.Path, usage: dict | None) -> dict:
@@ -256,7 +366,15 @@ def summarise(run_id: str, runs_dir: pathlib.Path, usage: dict | None) -> dict:
         co_settled, by_pair = _co_settled_from_frames(frames)
         co_settled_source = "frames (approximate: idle counts as settled)"
 
-    thrash = _arrived_then_departed(frames)
+    manifest = _load_manifest(run_dir)
+    spm = manifest.get("sec_per_step")
+    spm_ok = isinstance(spm, int) and not isinstance(spm, bool) and spm > 0
+    sec_per_step = spm if spm_ok else 10
+    turnarounds = _turnarounds(frames, sec_per_step, str(manifest.get("start") or ""))
+    thrash = dict(sorted(collections.Counter(e["agent"] for e in turnarounds).items()))
+    retargets = [e for e in turnarounds if e["kind"] == "retarget"]
+    abandoned = [e["abandoned_minutes"] for e in retargets]
+    longest_walk, still_walking = _walk_stretches(frames, sec_per_step)
 
     out = {
         "run_id": run_id,
@@ -278,12 +396,29 @@ def summarise(run_id: str, runs_dir: pathlib.Path, usage: dict | None) -> dict:
             round(verbs.get("talk_to", 0) / total_verbs, 4) if total_verbs else 0.0
         ),
         "walking_share": round(walking / agent_frames, 4) if agent_frames else 0.0,
-        # #826: arrivals that immediately departed again -- a walk segment
-        # followed by another walk with no arrival between. 20 across #760
-        # batch 4 (Priya 4, Mateo 16); expect ~0 once the decide seam tells an
-        # agent what it just did and what a walk costs.
+        "sec_per_step": sec_per_step,
+        "sec_per_step_source": "manifest.json" if spm_ok else "default (no manifest)",
+        # Arrivals that immediately departed again -- a walk segment followed
+        # by another walk with no arrival between. 20 across #760 batch 4
+        # (Priya 4, Mateo 16). #850: the combined total is NOT a criterion for
+        # either issue, because a fix to either mechanism moves it in either
+        # direction -- read the split below.
         "arrived_then_departed": thrash,
-        "arrived_then_departed_total": sum(thrash.values()),
+        "arrived_then_departed_total": len(turnarounds),
+        # #849: hops between a building and its own sub-places, or on and off
+        # the addressless campus hub.
+        "same_place_total": len(turnarounds) - len(retargets),
+        # #826: legs abandoned for a genuinely different building. Its
+        # acceptance test is a per-event ceiling on abandoned_minutes_max.
+        "retarget_total": len(retargets),
+        "retarget_abandoned_minutes_max": max(abandoned, default=0),
+        "retarget_abandoned_minutes_sum": sum(abandoned),
+        "turnarounds": turnarounds,
+        # #826's other half, from the retired walk_legs.py: a leg nobody ever
+        # abandons is invisible to the counts above, and the baseline run
+        # ended with an agent 135 unbroken minutes into one.
+        "longest_walk_minutes": longest_walk,
+        "still_walking_at_end_minutes": still_walking,
         # Halved: each conversation is seen once per participant.
         "conversations": conversations // 2 if conversations > 1 else conversations,
         "conversations_agent_sided": conversations,
@@ -353,8 +488,19 @@ def render(s: dict) -> str:
         lines.append(
             f"  persisted   status={p['status']} cost=${p['cost']:.4f} steps={p['steps']}"
         )
+    still = {n: m for n, m in s["still_walking_at_end_minutes"].items() if m}
     lines += [
-        f"  walking     {s['walking_share']:.1%} of agent-frames",
+        f"  walking     {s['walking_share']:.1%} of agent-frames"
+        f"   ({s['sec_per_step']}s per step, {s['sec_per_step_source']})",
+        "  legs        longest unbroken walk "
+        + ", ".join(
+            f"{name} {m} min"
+            for name, m in sorted(
+                s["longest_walk_minutes"].items(), key=lambda kv: -kv[1]
+            )[:3]
+        ),
+        "              still walking when the run ended: "
+        + (", ".join(f"{n} {m} min" for n, m in sorted(still.items())) or "nobody"),
         f"  thrash      {s['arrived_then_departed_total']} arrivals departed again"
         + (
             "  "
@@ -366,6 +512,18 @@ def render(s: dict) -> str:
             )
             if s["arrived_then_departed"]
             else ""
+        ),
+        f"              {s['same_place_total']} same-place oscillation (#849)"
+        f"  |  {s['retarget_total']} cross-building retarget (#826),"
+        f" worst abandoned leg {s['retarget_abandoned_minutes_max']} min,"
+        f" {s['retarget_abandoned_minutes_sum']} min total",
+        *(
+            f"                {e['clock']}  {e['agent']}: {e['from']} -> {e['to']}"
+            f"  ({e['abandoned_minutes']} min abandoned)"
+            for e in sorted(
+                (t for t in s["turnarounds"] if t["kind"] == "retarget"),
+                key=lambda e: -e["abandoned_minutes"],
+            )[:10]
         ),
         f"  talk_to     {s['talk_to_share']:.1%} of {s['decision_count']} decisions"
         f"   ({s['talk_to_time_share']:.1%} of agent-time)",
@@ -546,11 +704,131 @@ def self_check() -> None:
             "Bo": {"act": "reading @ T:Library:desks"},
         },
     ]
-    got = _arrived_then_departed(frames)
-    assert got == {"Bo": 1}, got
+    got = _turnarounds(frames)
+    assert [(e["agent"], e["kind"]) for e in got] == [("Bo", "retarget")], got
     # An agent who never walks contributes nothing, and a missing agent entry is
     # tolerated (frames from a run that added a resident mid-way).
-    assert _arrived_then_departed([{"Cy": {"act": "reading @ x"}}, {}]) == {}
+    assert _turnarounds([{"Cy": {"act": "reading @ x"}}, {}]) == []
+
+    # #850: the classifier primitive. Every comparison is on the ADDRESS -- see
+    # _walk_target for why display names cannot be reduced and compared, which
+    # is how the published batch-5 split was wrong the first time.
+    vp_room = (
+        "walking to Van Pelt — Moelis Reading Room @ "
+        "UPenn:Van Pelt Library:Moelis Family Grand Reading Room"
+    )
+    assert _walk_target(vp_room) == (
+        "Van Pelt — Moelis Reading Room",
+        "Van Pelt Library",
+    ), _walk_target(vp_room)
+    # THE TRAP: these two display names share no prefix, but they are one
+    # building. Reducing "Van Pelt — Moelis Reading Room" to "Van Pelt" and
+    # comparing it to "Van Pelt Library" scores this as a cross-campus retarget.
+    vp = "walking to Van Pelt Library @ UPenn:Van Pelt Library:lobby"
+    assert _walk_target(vp) == ("Van Pelt Library", "Van Pelt Library")
+    assert _same_place(_walk_target(vp_room)[1], _walk_target(vp)[1])
+    # The addressless campus hub is nowhere in particular: it matches anything.
+    hub = "walking to Penn campus @ None"
+    assert _walk_target(hub) == ("Penn campus", "")
+    assert _same_place("", "Houston Hall") and _same_place("Houston Hall", "")
+    # Two genuinely different buildings do not match.
+    assert not _same_place("Van Pelt Library", "Houston Hall")
+    # Not a walk at all, and an address this scanner does not recognise (fewer
+    # than three segments) -- the latter compares as "unknown", never as a
+    # match, so an unfamiliar world over-reports retargets rather than hiding
+    # oscillation.
+    assert _walk_target("reading @ UPenn:Van Pelt Library:lobby") is None
+    assert _walk_target("walking to Elsewhere @ flat-address") == (
+        "Elsewhere",
+        "",
+    ), _walk_target("walking to Elsewhere @ flat-address")
+
+    # #850: the two kinds, on the real act strings the Penn runs emit.
+    hh = "walking to Houston Hall @ UPenn:Houston Hall:lobby"
+    hh_pool = (
+        "walking to Houston Hall — Billiard Room @ UPenn:Houston Hall:Billiard Room"
+    )
+    ch = "walking to College Hall @ UPenn:College Hall:lobby"
+    sat = "reading @ UPenn:Van Pelt Library:lobby"
+
+    def frame(**acts):
+        return {name: {"act": act} for name, act in acts.items()}
+
+    # 60 s/step keeps the arithmetic readable: one frame is one sim-minute.
+    split = [
+        frame(Osc=hh, Trap=vp_room, Hub=hub, Real=vp, Arrives=vp, Sits=sat),
+        frame(Osc=hh, Trap=vp_room, Hub=hub, Real=vp, Arrives=vp, Sits=sat),
+        frame(Osc=hh, Trap=vp_room, Hub=hub, Real=vp, Arrives=sat, Sits=sat),
+        frame(Osc=hh_pool, Trap=vp, Hub=ch, Real=hh, Arrives=hh, Sits=sat),
+    ]
+    events = _turnarounds(split, sec_per_step=60, start="2023-02-13 08:00:00")
+    by_agent = {e["agent"]: e for e in events}
+    assert len(events) == 4, events
+    # Same building via its own sub-place; via the em-dash display name that
+    # does NOT prefix-match its building; and via the addressless hub.
+    assert by_agent["Osc"]["kind"] == "same_place", by_agent["Osc"]
+    assert by_agent["Trap"]["kind"] == "same_place", by_agent["Trap"]
+    assert by_agent["Hub"]["kind"] == "same_place", by_agent["Hub"]
+    # A genuinely different building, and only that one.
+    assert by_agent["Real"]["kind"] == "retarget", by_agent["Real"]
+    assert by_agent["Real"]["from"] == "Van Pelt Library", by_agent["Real"]
+    assert by_agent["Real"]["to"] == "Houston Hall", by_agent["Real"]
+    # The leg ran steps 0-3, so three minutes were thrown away; the clock is
+    # the moment it was abandoned, 08:00 + 3 steps of 60 s.
+    assert by_agent["Real"]["abandoned_minutes"] == 3, by_agent["Real"]
+    assert by_agent["Real"]["clock"] == "08:03", by_agent["Real"]
+    # An agent that ARRIVED between its two legs is not a turn-around, and one
+    # that never walks contributes nothing.
+    assert "Arrives" not in by_agent and "Sits" not in by_agent, by_agent
+    # No start -> no clock string, and the 10 s/step default floors the same
+    # 3-step leg to 0 min rather than fabricating 3.
+    assert _turnarounds(split)[0]["clock"] == ""
+    assert {e["abandoned_minutes"] for e in _turnarounds(split)} == {0}
+
+    # #850: manifest.json is the only record of sim-time per step. Absent or
+    # unreadable falls back to 10 and is labelled as a fallback, never printed
+    # as if measured.
+    with tempfile.TemporaryDirectory() as tmp:
+        run_dir = pathlib.Path(tmp)
+        assert _load_manifest(run_dir) == {}
+        (run_dir / "manifest.json").write_text("{ not json", encoding="utf-8")
+        assert _load_manifest(run_dir) == {}
+        (run_dir / "manifest.json").write_text(
+            '{"sec_per_step": 10, "start": "2023-02-13 08:00:00"}', encoding="utf-8"
+        )
+        assert _load_manifest(run_dir)["sec_per_step"] == 10
+
+    # #850: the split has to survive summarise() -> render(), not just the
+    # classifier -- the #795 by_pair bug was in render() and a function-level
+    # assert missed it. Reuses the four-frame fixture above.
+    with tempfile.TemporaryDirectory() as tmp:
+        runs_dir = pathlib.Path(tmp)
+        run_dir = runs_dir / "run-split"
+        run_dir.mkdir()
+        (run_dir / "frames.jsonl").write_text(
+            "".join(json.dumps(f) + "\n" for f in split), encoding="utf-8"
+        )
+        (run_dir / "manifest.json").write_text(
+            '{"sec_per_step": 60, "start": "2023-02-13 08:00:00"}', encoding="utf-8"
+        )
+        s = summarise("run-split", runs_dir, usage=None)
+        assert s["arrived_then_departed_total"] == 4, s
+        assert s["same_place_total"] == 3, s
+        assert s["retarget_total"] == 1, s
+        assert s["retarget_abandoned_minutes_max"] == 3, s
+        assert s["retarget_abandoned_minutes_sum"] == 3, s
+        assert s["sec_per_step"] == 60 and s["sec_per_step_source"] == "manifest.json"
+        out = render(s)
+        assert "3 same-place oscillation (#849)  |  1 cross-building" in out, out
+        assert "08:03  Real: Van Pelt Library -> Houston Hall" in out, out
+
+    # #850: the walk_legs.py numbers, folded in. "Real" walks all 4 frames
+    # (longest 4, still walking 4 at the end); "Arrives" walks 2, sits, then
+    # walks 1, so its longest is 2 and it ends walking 1; "Sits" never walks.
+    longest, still = _walk_stretches(split, sec_per_step=60)
+    assert longest["Real"] == 4 and still["Real"] == 4, (longest, still)
+    assert longest["Arrives"] == 2 and still["Arrives"] == 1, (longest, still)
+    assert longest["Sits"] == 0 and still["Sits"] == 0, (longest, still)
 
     print("self-check OK")
 

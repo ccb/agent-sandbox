@@ -178,8 +178,10 @@ for the session — saving them to disk is a separate follow-up.
 
 **Analyzing a saved run offline.** `tools/analyze_run.py` (promoted from a
 batch-2 scratch script, #795) summarises one `runs/<id>/` directory: verbs,
-`talk_to` share, conversations, and co-settled pair-steps (two agents settled
-within earshot of each other, with a per-pair breakdown):
+`talk_to` share, conversations, co-settled pair-steps (two agents settled
+within earshot of each other, with a per-pair breakdown), and how the agents
+moved — longest unbroken walk, who was still walking when the run ended, and
+every arrival that departed again:
 
 ```bash
 uv run python godot-generative-agents/tools/analyze_run.py <run-id>
@@ -195,6 +197,21 @@ way the output states which source it used. Like the sibling
 `most_common_actions.py` / `most_wanted_actions.py`, it's stdlib-only and
 reads a run without importing the engine, so it stays runnable against an
 archived run long after the code that wrote it has moved on.
+
+**Turn-arounds are reported as two numbers, not one (#850).** An arrival that
+departs again is either an agent hopping between a building and its own
+sub-places (#849) or one abandoning a real cross-campus leg (#826), and a fix
+to either moves a combined count in either direction — #760 batch 5 measured
+17 of its baseline's 20 as a single agent oscillating inside one building. The
+split compares the *building segment of the destination address*
+(`UPenn:Van Pelt Library:Moelis Family Grand Reading Room`), never the display
+name: `Van Pelt — Moelis Reading Room` shares no prefix with its own
+building's name, `Van Pelt Library`, and reducing names is how the first
+published split was wrong. Each cross-building event carries
+`abandoned_minutes` — how long the agent had been walking the leg it gave up
+on — which is #826's acceptance measure. Minutes come from `manifest.json`'s
+`sec_per_step`/`start`; with no manifest the tool assumes 10 s/step and says
+so on the `walking` line.
 
 ### Live mode — follow a running sim (issue #263)
 

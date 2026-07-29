@@ -13,6 +13,60 @@ that, each going through the engine's precondition gate like any built-in action
 from text_adventure_games.actions import base, consume, investigate
 
 
+def _tile_address_parent(location):
+    """The ``world:sector`` portion of a location's tile address, or ``None``.
+
+    Penn's named rooms use arena-level addresses below a shared building
+    sector.  The addressless campus hub intentionally has no parent: callers
+    treat it as matching every place, mirroring the run analyzer's
+    ``same_place_total`` classification.
+    """
+    address = getattr(location, "tile_address", None)
+    if not address:
+        return None
+    return ":".join(str(address).split(":")[:2])
+
+
+def travel_destination_allowed(game, character, destination) -> bool:
+    """Whether ``character`` may travel to ``destination`` right now.
+
+    A scheduled character may deviate to a genuinely different building, but
+    cannot bounce among the lobby, rooms, and addressless campus hub that all
+    represent its current place.  Within that same-place group, the current
+    scheduled stop is the sole legal destination until arrival; after arrival,
+    no same-place travel is legal.  Characters without an attached schedule
+    retain the engine's unrestricted travel behavior.
+
+    This is the single authority used both to curate cognition's travel choices
+    and by :class:`Travel`'s parser gate, so free-text and oversized-enum
+    fallbacks cannot bypass the model-facing menu.
+    """
+    schedule = getattr(getattr(character, "agent", None), "schedule", None)
+    scheduled_name = getattr(schedule, "destination", None)
+    current = getattr(character, "location", None)
+    if schedule is None or not scheduled_name or current is None:
+        return True
+
+    scheduled = game.locations.get(scheduled_name)
+    if scheduled is None:
+        # Schedules are normally grounded during world construction.  If a
+        # hand-built character carries an invalid stop, do not silently disable
+        # all ordinary travel; the existing destination matching remains the
+        # authoritative validation for that malformed setup.
+        return True
+
+    current_parent = _tile_address_parent(current)
+    destination_parent = _tile_address_parent(destination)
+    same_place = (
+        current_parent is None
+        or destination_parent is None
+        or current_parent == destination_parent
+    )
+    if not same_place:
+        return True
+    return current is not scheduled and destination is scheduled
+
+
 class Travel(base.Action):
     """Move the acting character to a named location (matched from the command).
 
@@ -22,6 +76,11 @@ class Travel(base.Action):
 
     ACTION_NAME = "travel"
     ACTION_DESCRIPTION = "Travel to a named location in town"
+    # The hub's engine connections are named ``to <location>``.  Register the
+    # complete routed phrase as a multi-word alias so the parser selects Travel
+    # before its generic direction detector sees that exit text and routes the
+    # command through Go, bypassing this class's precondition gate.
+    ACTION_ALIASES = ["travel to"]
     # Typed tool slot (issues #356/#485): a tool-calling brain fills a
     # ``destination`` field instead of writing free text, and the ``connector``
     # reassembles its pick as ``"travel to <destination>"`` -- the same phrasing
@@ -60,6 +119,30 @@ class Travel(base.Action):
         if not self.was_matched(
             self.destination, "I don't know how to get to that place."
         ):
+            return False
+        if not travel_destination_allowed(self.game, self.character, self.destination):
+            scheduled = self.character.agent.schedule.destination
+            if self.character.location is self.game.locations.get(scheduled):
+                if _tile_address_parent(self.character.location) is None:
+                    message = (
+                        f"You are already at your scheduled stop, {scheduled}. "
+                        "Stay here to perform, wait, or talk; this campus-wide "
+                        "stop has no separate travel destination."
+                    )
+                else:
+                    message = (
+                        f"You are already at your scheduled stop, {scheduled}. "
+                        "Stay here to perform, wait, or talk; only travel when "
+                        "leaving for a genuinely different building."
+                    )
+            else:
+                message = (
+                    f"Keep heading to your scheduled stop, {scheduled}. "
+                    f"Do not detour to {self.destination.name} within the same "
+                    "place; travel to the scheduled stop or to a genuinely "
+                    "different building."
+                )
+            self.parser.fail(message)
             return False
         return True
 

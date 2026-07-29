@@ -137,6 +137,9 @@ def test_line_is_empty_without_a_map_or_a_clock():
 
 def test_line_prices_destinations_nearest_first_and_drops_unmapped_ones():
     game, ada = _ada(_FakeMap())
+    # Exercise the generic pricing helper without #849's schedule curation;
+    # focused same-place tests pin the curated subset.
+    ada.agent.schedule = None
     ada.tile = (0, 0)
     # Library is 6 tiles away (1 min at 10 s/step), Cafe 30 tiles (5 min).
     # The Green has address None -- no tiles -- so it is dropped.
@@ -147,6 +150,7 @@ def test_line_prices_destinations_nearest_first_and_drops_unmapped_ones():
 
 def test_line_lists_the_place_the_agent_is_standing_in_at_zero():
     game, ada = _ada(_FakeMap())
+    ada.agent.schedule = None
     ada.tile = (0, 6)  # standing on the Library's tile
     got = walk_minutes_line(game, ada, SimClock(START))
     assert got.startswith("Walking from here takes at least about: Library 0 min;")

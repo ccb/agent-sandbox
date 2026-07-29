@@ -357,6 +357,10 @@ PRICES: dict[str, tuple[float, float]] = {
     "claude-opus-4-8": (5.00, 25.00),
     "claude-opus-4-7": (5.00, 25.00),
     "claude-opus-4-6": (5.00, 25.00),
+    # List price. Sonnet 5 also has a lower introductory rate ($2/$10) running
+    # to 2026-08-31, so this over-estimates while that lasts -- the safe
+    # direction for a budget ceiling, which trips early rather than late.
+    "claude-sonnet-5": (3.00, 15.00),
     "claude-sonnet-4-6": (3.00, 15.00),
     "claude-sonnet-4-5": (3.00, 15.00),
     "claude-haiku-4-5": (1.00, 5.00),

@@ -287,7 +287,7 @@ from text_adventure_games.actions.things import CRAFT_VERBS
 from text_adventure_games.enums import ActionName, Property
 
 from . import seed
-from .actions import TalkTo, Travel
+from .actions import TalkTo, Travel, travel_destination_allowed
 from .planner import LLMPlanner, MockPlanner
 from .prompt_templates import render
 
@@ -894,10 +894,10 @@ def action_tools_for(game, char, max_enum: int = DECIDE_MAX_ENUM):
     scope kinds (item / character / direction) can't describe travel's "any
     named location in town" -- the campus is wired hub-and-spoke purely so the
     engine discovers every location, not as a compass maze -- so the enum of
-    destinations is filled in here, from the same ``game.locations`` the
-    :class:`~backend.actions.Travel` action matches a command against. The
-    menu and the precondition gate can therefore never disagree about which
-    venues exist.
+    destinations is filled in here, filtering the same ``game.locations`` the
+    :class:`~backend.actions.Travel` action matches through its shared
+    schedule-aware eligibility predicate. The menu and precondition gate can
+    therefore never disagree about which venues are legal this tick.
 
     The same enrichment (#635) covers the item-bearing verbs: without it a
     tool-calling brain must blind-guess the exact item string into the engine's
@@ -916,7 +916,11 @@ def action_tools_for(game, char, max_enum: int = DECIDE_MAX_ENUM):
     tools = tools_for(
         game.parser, actor=char, names=agent.action_names, max_enum=max_enum
     )
-    destinations = sorted(game.locations)
+    destinations = sorted(
+        name
+        for name, location in game.locations.items()
+        if travel_destination_allowed(game, char, location)
+    )
     # Per-verb enum of the exact argument string the model should emit. Keyed by
     # the verb (== tool name); the craft verbs are matched separately below since
     # any of CRAFT_VERBS ("make"/"cook"/...) may be the authored one.
@@ -930,11 +934,14 @@ def action_tools_for(game, char, max_enum: int = DECIDE_MAX_ENUM):
         ),
     }
     craftable = sorted({n for r in getattr(game, "recipes", []) for n in r.names()})
+    remove_travel = False
     for tool in tools:
         name = tool["name"]
         props = tool["parameters"]["properties"]
         if name == Travel.ACTION_NAME:
-            if len(destinations) <= max_enum and "destination" in props:
+            if not destinations:
+                remove_travel = True
+            elif len(destinations) <= max_enum and "destination" in props:
                 props["destination"]["enum"] = destinations
             continue
         values = craftable if name in CRAFT_VERBS else arg_enums.get(name)
@@ -943,6 +950,8 @@ def action_tools_for(game, char, max_enum: int = DECIDE_MAX_ENUM):
             # Overwrite the engine's generic placeholder ("... e.g. 'player with
             # club'"), which actively misleads once the slot is a closed menu.
             props["arguments"]["description"] = "choose exactly one of the listed names"
+    if remove_travel:
+        tools = [tool for tool in tools if tool["name"] != Travel.ACTION_NAME]
 
     # Bespoke curation for talk_to (#614): "another living character is
     # co-located" is not expressible as a REQUIRED_AFFORDANCES tag -- the #612
@@ -1161,6 +1170,8 @@ def nearby_affordances_line(game, char) -> str:
     ):
         if loc is here:
             continue
+        if not travel_destination_allowed(game, char, loc):
+            continue
         tags = [tag for tag in ARENA_AFFORDANCE_TAGS if loc.get_property(tag)]
         if tags:
             fragments.append(f"{loc.name} ({', '.join(tags)})")
@@ -1292,15 +1303,15 @@ def walk_minutes_line(game, char, clock) -> str:
     (``planner.median_travel_minutes``, #795); this is the per-tick decide's
     equivalent.
 
-    Scoped to the destinations the ``travel`` tool actually offers (the same
-    ``game.locations`` whose names :func:`action_tools_for` puts in its enum) --
-    including the place the agent is already standing in, at 0 min, which is a
-    signal in its own right. Two gaps between this list and that enum, both
-    benign: a location with no ``tile_address`` (Penn's ``Penn campus`` hub) is
-    selectable but cannot be priced, and past :data:`DECIDE_MAX_ENUM` the enum
-    falls back to free text while this line stays capped. Neither hides a price
-    the agent would otherwise have seen -- an unmapped place has no distance to
-    report. Capped at :data:`DECIDE_MAX_ENUM`, nearest first, for the same reason
+    Scoped to the destinations the ``travel`` tool actually offers: the shared
+    schedule-aware eligibility predicate filters ``game.locations`` before
+    either this context line or :func:`action_tools_for` sees them. Two gaps
+    between this list and that enum are benign: a legal location with no
+    ``tile_address`` (Penn's ``Penn campus`` hub) is selectable but cannot be
+    priced, and past :data:`DECIDE_MAX_ENUM` the enum falls back to free text
+    while this line stays capped. Neither hides a price the agent would
+    otherwise have seen -- an unmapped place has no distance to report. Capped
+    at :data:`DECIDE_MAX_ENUM`, nearest first, for the same reason
     :func:`action_tools_for` caps its destination enum at that size: past it the
     enum itself falls back to free text, so pricing every destination anyway
     would grow this line unboundedly on a larger world for no benefit past the
@@ -1322,6 +1333,8 @@ def walk_minutes_line(game, char, clock) -> str:
         return ""
     priced = []
     for name, location in game.locations.items():
+        if not travel_destination_allowed(game, char, location):
+            continue
         address = getattr(location, "tile_address", None)
         if not address or not world_map.tiles_for(address):
             continue
@@ -1661,12 +1674,10 @@ def apply_conversation_outcome(
     # test_reflection_and_plan_records_are_not_rescored). Written anyway so that
     # widening that kind filter can't silently re-guess an authored importance.
     #
-    # No reflection-cadence side effect: AgentMemory._add deliberately skips
-    # PLAN records when accruing importance_since_reflection (#777 -- the
-    # reflection pass filters plans from its inputs, so letting them pay into
-    # its trigger bought real LLM reflection calls over evidence that hadn't
-    # moved). A conversation therefore contributes 8.0 toward the 30.0
-    # threshold via the relationship note above, not 16.0.
+    # #815: reflection now sees this PLAN as an explicitly tagged intention, so
+    # it pays into importance_since_reflection again. A conversation with both
+    # a relationship note and a commitment contributes 16.0 toward the default
+    # 30.0 reflection threshold (8.0 from each record).
     if has_commitment:
         intent = agent.memory.add_plan(
             render("commitment_memory", other=partner_name, commitment=detail),

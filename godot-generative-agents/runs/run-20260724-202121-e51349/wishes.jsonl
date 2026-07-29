@@ -1,0 +1,2 @@
+{"actor":"Professor Tanaka","turn":71,"location":"Irvine Auditorium","desired":"microphone","reason":"","trigger":"parse_gap","goals":[],"scope":[],"raw_command":"microphone","meta":{}}
+{"actor":"Professor Tanaka","turn":71,"location":"Irvine Auditorium","desired":"and screen functionality","reason":"","trigger":"parse_gap","goals":[],"scope":[],"raw_command":"and screen functionality","meta":{}}

@@ -162,7 +162,7 @@ class AgentEvidence:
     segments: list[Segment]
     conversations: list[Conversation]
     retrievals: list[dict]  # [{step, act, reasoning, memories}]
-    positions: list[tuple[int, int]]  # (x, y) per step, for co-location
+    positions: list[tuple[int, int] | None]  # (x, y) per step; None when absent
     n_steps: int
     vision_r: float
     start_dt: datetime.datetime | None
@@ -326,8 +326,13 @@ def build_evidence(replay: dict) -> dict[str, AgentEvidence]:
         retrievals = []
         positions = []
         for step, frame in enumerate(frames):
-            entry = frame.get(name, {})
-            positions.append((int(entry.get("x", 0)), int(entry.get("y", 0))))
+            entry = frame.get(name)
+            positions.append(
+                (int(entry.get("x", 0)), int(entry.get("y", 0)))
+                if entry is not None
+                else None
+            )
+            entry = entry or {}
             if entry.get("memories"):
                 retrievals.append(
                     {
@@ -539,8 +544,8 @@ def _longest_increasing(values: list[int]) -> int:
     """Length of the longest strictly increasing subsequence.
 
     Unlike deduplicating before measuring progress, this preserves a later
-    in-order visit when the same stop was visited out of sequence earlier.
-    O(n^2), fine for a day's worth of segments.
+    in-order visit when the same stop was visited prematurely. O(n^2), fine for
+    a day's worth of segments.
     """
     if not values:
         return 0
@@ -693,8 +698,14 @@ class HeuristicJudge:
         matches = self._match_segments(ev)
         matched_order = [m for m in matches if m is not None]
         if not matched_order:
+            seg = ev.segments[0]
             return DimScore(
-                _scale(0.0), [], "the day never reached a single planned stop"
+                _scale(0.0),
+                [
+                    f"steps {seg.start}-{seg.end} ({ev.time_at(seg.start)}): "
+                    f"'{seg.act}' matches no schedule stop"
+                ],
+                "the day never reached a single planned stop",
             )
         stops_reached = _longest_increasing(matched_order)
         progress = min(1.0, stops_reached / len(ev.schedule))
@@ -811,6 +822,8 @@ class HeuristicJudge:
                 for step in range(ev.n_steps)
                 if any(
                     step < len(other.positions)
+                    and ev.positions[step] is not None
+                    and other.positions[step] is not None
                     and (ev.positions[step][0] - other.positions[step][0]) ** 2
                     + (ev.positions[step][1] - other.positions[step][1]) ** 2
                     <= ev.vision_r**2
@@ -849,11 +862,16 @@ class HeuristicJudge:
                     evidence_by_name[p].positions[step]
                     for p in others
                     if step < len(evidence_by_name[p].positions)
+                    and evidence_by_name[p].positions[step] is not None
                 ]
-                if pts and all(
-                    (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 <= ev.vision_r**2
-                    for i, a in enumerate(pts)
-                    for b in pts[i + 1 :]
+                if (
+                    len(pts) == len(others)
+                    and pts
+                    and all(
+                        (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 <= ev.vision_r**2
+                        for i, a in enumerate(pts)
+                        for b in pts[i + 1 :]
+                    )
                 ):
                     together += 1
             coloc = together / len(span)

@@ -335,6 +335,10 @@ def test_item_verbs_expose_scoped_enums_635():
     generic free-text slot; #635 fills each verb's enum with the routable
     argument so it picks a real name from a menu (like travel's destination)."""
     game, char = _boil_agent_world()
+    # This assertion pins coexistence with travel's generic enum enrichment.
+    # At the scheduled Houston Hall stop #849 intentionally removes travel
+    # altogether (the only alternative is the addressless campus hub).
+    char.agent.schedule = None
     tools = action_tools_for(game, char)
     assert _arg_enum(tools, "get", "arguments") == ["pot of murky water"]
     assert _arg_enum(tools, "drink", "arguments") == ["pot of murky water"]
@@ -479,6 +483,23 @@ def test_boil_is_remembered_as_the_arc_hinge():
     assert boiled, f"no boil memory in {[e['text'] for e in entries]}"
     assert boiled[-1]["text"] == "I boiled the water to make it safe to drink."
     assert boiled[-1]["importance"] == 6.0
+
+
+def test_perform_is_remembered_in_the_past_tense():
+    """#851: a `perform` memory records a *finished* action, so it must read
+    like every sibling branch ("I traveled to X.", "I studied Y for N
+    minutes."). #826's recent_actions block replays these verbatim under a
+    "36 min ago:" prefix, so a present-tense "I am <activity>." told the agent
+    its completed activity was still running -- 34% of that block's lines in
+    the batch-5 live run."""
+    char = _attached_char()
+    char.set_property("activity", "shuffling around half-awake")
+    remember_outcome(char, "perform shuffling around half-awake", 3)
+    entries = memory_stream_for_persona(char.agent)
+    acted = [e for e in entries if "shuffling around half-awake" in e["text"]]
+    assert acted, f"no perform memory in {[e['text'] for e in entries]}"
+    assert acted[-1]["text"] == "I was shuffling around half-awake."
+    assert acted[-1]["importance"] == 2.0
 
 
 def test_wait_is_not_remembered_at_all():

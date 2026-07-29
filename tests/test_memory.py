@@ -133,14 +133,13 @@ def test_add_accrues_importance_since_reflection():
     assert mem.importance_since_reflection == 8.0
 
 
-def test_plan_importance_does_not_accrue_toward_reflection():
-    # Plans are invisible to the reflection pass (#777), so they don't pay into
-    # its trigger either: otherwise #778's one-commitment-per-conversation fires
-    # paid reflection passes over evidence that hasn't moved.
+def test_plan_importance_accrues_toward_reflection():
+    # #815 re-admits plans as tagged intentions, so their importance once again
+    # contributes to the reflection pass that can see them.
     mem = AgentMemory()
     mem.add_observation("x", turn=0, importance=3)
     mem.add_plan("head to the hall for dinner", turn=0, importance=8)
-    assert mem.importance_since_reflection == 3.0
+    assert mem.importance_since_reflection == 11.0
 
 
 def test_agent_memory_round_trips():
