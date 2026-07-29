@@ -19,6 +19,7 @@ The address scheme and the ``(x, y) = (col, row)`` convention mirror upstream
 import csv
 import json
 import os
+from collections import deque
 
 from . import path_finder
 
@@ -106,6 +107,9 @@ class WorldMap:
         # the file (every non-Penn map) gets {} and behaves exactly as before.
         self.furniture_spots: dict[str, list[tuple[int, int]]] = {}
         self.furniture_spot_type: dict[tuple[int, int], str] = {}
+        # Lazy per-address BFS distance fields for walk_steps_from (#866);
+        # None caches "address has no walkable tiles".
+        self._distance_fields: dict[str, list[list[int]] | None] = {}
         spots_path = os.path.join(blocks, "furniture_spots.csv")
         if os.path.exists(spots_path):
             for row in open(spots_path).read().splitlines():
@@ -179,6 +183,57 @@ class WorldMap:
     def is_blocked(self, tile: tuple[int, int]) -> bool:
         x, y = tile
         return self.collision[y][x] == 1
+
+    def walk_steps_from(self, tile: tuple[int, int], address: str) -> int:
+        """Actual walking distance, in tiles, from ``tile`` to ``address``.
+
+        :meth:`tile_gap_from`'s accurate sibling (issue #866): a multi-source
+        BFS field per destination address over the collision grid, so the
+        number respects walls. 4-neighbor movement, matching
+        :mod:`path_finder`, so the value equals the steps ``walk_path`` would
+        actually take to the nearest walkable destination tile (the patched
+        Penn ``walk_path`` then routes a few tiles further, to furniture or a
+        rendezvous spot -- the prompt's "at least about" absorbs that).
+
+        Falls back to the Chebyshev gap when the address has no walkable tiles
+        (preserving the never-nearby sentinel) or the tile can't reach it.
+        Fields are built lazily and cached per instance -- ~0.03 s each on the
+        245x279 campus, and only addresses actually priced pay it.
+        """
+        if address not in self._distance_fields:
+            self._distance_fields[address] = self._bfs_field(address)
+        field = self._distance_fields[address]
+        if field is not None:
+            x, y = tile
+            steps = field[y][x]
+            if steps >= 0:
+                return steps
+        return self.tile_gap_from(tile, address)
+
+    def _bfs_field(self, address: str):
+        """Distance-in-steps grid to ``address``'s nearest walkable tile, or
+        ``None`` when the address has no walkable tiles. ``-1`` = unreachable."""
+        seeds = [t for t in self.tiles_for(address) if not self.is_blocked(t)]
+        if not seeds:
+            return None
+        field = [[-1] * self.width for _ in range(self.height)]
+        queue = deque()
+        for x, y in seeds:
+            field[y][x] = 0
+            queue.append((x, y))
+        while queue:
+            x, y = queue.popleft()
+            d = field[y][x] + 1
+            for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
+                if (
+                    0 <= nx < self.width
+                    and 0 <= ny < self.height
+                    and field[ny][nx] < 0
+                    and self.collision[ny][nx] == 0
+                ):
+                    field[ny][nx] = d
+                    queue.append((nx, ny))
+        return field
 
     def walk_path(
         self, from_tile: tuple[int, int], address: str
