@@ -1233,6 +1233,13 @@ def decide_context_block(
     steps = schedule.steps
     next_stop = getattr(schedule, "next_stop", None) if waiting else None
     next_hour = next_stop.get("start_hour") if next_stop else None
+    if next_hour is None:
+        # A revision can replace the tail while a hold stands (#826 Task 2's
+        # test_hold_survives_schedule_replacement pins that state), so the next
+        # stop may have lost the very anchor that caused the hold. Then there is
+        # no hour to report and no wait to describe -- say only that this stop is
+        # finished, rather than rendering "starting at None".
+        next_stop = None
     now = clock.time_at(step)
     return render(
         "decide_context",

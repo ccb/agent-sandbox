@@ -617,6 +617,24 @@ def test_an_unheld_stop_still_renders_exactly_todays_elapsed_clause():
     )
 
 
+def test_a_held_stop_with_no_anchored_next_stop_omits_the_next_sentence():
+    # #826 fix round 1: a DEVIATED revision (cognition.maybe_revise_plan) can
+    # replace the tail after stop_index while a hold stands -- Task 2's
+    # test_hold_survives_schedule_replacement pins that the flag correctly
+    # stays True in that state. If the replacement next stop carries no
+    # start_hour, there is no anchor hour to report, so the "finished"
+    # sentence must stand alone rather than render "starting at None".
+    agent = _held_agent()
+    del agent.schedule.schedule[-1]["start_hour"]
+    clock = SimClock(START)
+
+    assert decide_context_block(agent, 180, clock, stop_since=0, waiting=True) == (
+        "Right now it is Monday 08:30 AM.\n"
+        "Your plan's current stop: reading a novel at Cafe."
+        " You have already finished this stop."
+    )
+
+
 def test_live_mock_decide_request_carries_the_block():
     # The issue's acceptance, offline: a live decide request body shows time +
     # current stop (+ elapsed once nonzero). Under the mock brain the pacing
