@@ -112,18 +112,21 @@ def test_building_choices_converge_then_follow_a_room_to_room_schedule():
     game, ada = _world()
     _move(game, ada, "Van Pelt Library")
 
-    # From the lobby, the scheduled room is the sole same-building option;
-    # cross-building travel remains a legitimate deviation.
+    # From the lobby, the plan's own rooms -- current stop and next stop
+    # (#885: the menu must offer the place the prompt names as "your next
+    # stop") -- are the same-building options; cross-building travel remains a
+    # legitimate deviation.
     assert _destinations(game, ada) == [
         "Houston Hall",
+        "Van Pelt — Book Stacks",
         "Van Pelt — Moelis Reading Room",
     ]
 
     _move(game, ada, "Van Pelt — Moelis Reading Room")
-    assert _destinations(game, ada) == ["Houston Hall"]
+    assert _destinations(game, ada) == ["Houston Hall", "Van Pelt — Book Stacks"]
 
-    # Advancing the authored schedule makes the sibling room the new convergent
-    # target, preserving legitimate room-to-room itineraries.
+    # Advancing the authored schedule makes the sibling room the current
+    # convergent target (and the plan has no further stop to offer).
     assert ada.agent.schedule.advance()
     assert _destinations(game, ada) == [
         "Houston Hall",
@@ -216,12 +219,16 @@ def test_parser_allows_the_scheduled_room_and_a_different_building():
 def test_addressless_hub_converges_and_suppresses_repeated_departures():
     game, ada = _world()
     assert ada.location.name == "Penn campus"
-    assert _destinations(game, ada) == ["Van Pelt — Moelis Reading Room"]
+    assert _destinations(game, ada) == [
+        "Van Pelt — Book Stacks",
+        "Van Pelt — Moelis Reading Room",
+    ]
 
     game, ada = _world(first="Penn campus")
-    # At an addressless scheduled stop every destination is same-place, so the
-    # travel tool disappears and even hand-authored departures fail.
-    assert _destinations(game, ada) is None
+    # At an addressless scheduled stop every destination is same-place, so
+    # only the plan's next stop stays offerable (#885) and other departures
+    # fail.
+    assert _destinations(game, ada) == ["Van Pelt — Book Stacks"]
     assert not game.parser.parse_command("travel to Houston Hall", actor=ada)
     assert ada.location.name == "Penn campus"
     assert (
@@ -261,20 +268,25 @@ def test_walk_cost_and_nearby_affordances_hide_forbidden_destinations():
 
     assert "Moelis Reading Room" in nearby
     assert "Houston Hall" in nearby
-    assert "Book Stacks" not in nearby
+    # The next scheduled stop is offerable since #885, so it is priced too;
+    # the lobby (no stop of the plan) stays hidden.
+    assert "Book Stacks" in nearby
     assert "Van Pelt Library (" not in nearby
     assert "Moelis Reading Room" in walk
     assert "Houston Hall" in walk
-    assert "Book Stacks" not in walk
+    assert "Book Stacks" in walk
     assert "Van Pelt Library " not in walk
 
 
 def test_oversized_enum_fallback_keeps_parser_gate_authoritative():
+    # From the scheduled room itself, the lobby is same-building and on no
+    # stop of the plan (#885 made the next stop legal, so the lobby is the
+    # forbidden destination left to prove the parser gate on).
     game, ada = _world()
-    _move(game, ada, "Van Pelt Library")
+    _move(game, ada, "Van Pelt — Moelis Reading Room")
     assert _destinations(game, ada, max_enum=1) is None
-    assert not game.parser.parse_command("travel to Van Pelt — Book Stacks", actor=ada)
-    assert ada.location.name == "Van Pelt Library"
+    assert not game.parser.parse_command("travel to Van Pelt Library", actor=ada)
+    assert ada.location.name == "Van Pelt — Moelis Reading Room"
 
 
 def test_character_without_a_schedule_keeps_unrestricted_travel():

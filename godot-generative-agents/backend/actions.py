@@ -32,10 +32,17 @@ def travel_destination_allowed(game, character, destination) -> bool:
 
     A scheduled character may deviate to a genuinely different building, but
     cannot bounce among the lobby, rooms, and addressless campus hub that all
-    represent its current place.  Within that same-place group, the current
-    scheduled stop is the sole legal destination until arrival; after arrival,
-    no same-place travel is legal.  Characters without an attached schedule
-    retain the engine's unrestricted travel behavior.
+    represent its current place.  Within that same-place group, the plan's own
+    stops -- the current scheduled stop and the *next* one -- are the only
+    legal destinations, each until arrival.  Characters without an attached
+    schedule retain the engine's unrestricted travel behavior.
+
+    The next stop earns its place from #885: an agent whose finished stop is
+    anchor-held (#838) has a prompt saying "your next stop is <room>" while a
+    current-stop-only menu offers no same-building destination at all -- in
+    #760 batch 7 the model then picked the nearest *name* on the menu, a
+    lookalike room in a building 53 minutes away, and walked 55 minutes on it.
+    The menu must offer the place the prompt promises.
 
     This is the single authority used both to curate cognition's travel choices
     and by :class:`Travel`'s parser gate, so free-text and oversized-enum
@@ -64,7 +71,78 @@ def travel_destination_allowed(game, character, destination) -> bool:
     )
     if not same_place:
         return True
-    return current is not scheduled and destination is scheduled
+    if destination is scheduled:
+        return current is not scheduled
+    next_place = (getattr(schedule, "next_stop", None) or {}).get("place")
+    next_loc = game.locations.get(next_place) if next_place else None
+    if next_loc is not None and destination is next_loc:
+        return current is not next_loc
+    return False
+
+
+def anchor_travel_refusal(game, character, destination):
+    """Reason to refuse a leg that cannot beat the next pinned stop, or ``None``.
+
+    The hard travel gate `docs/design/anchor-hold-context-826.md` held in
+    reserve, armed by #885: in #760 batch 7 an agent whose context truthfully
+    said "your next stop starts in 15 min" and "Houston Hall 53 min" still
+    picked the 53-minute leg (a confusable-name slip its own reasoning
+    contradicted) and walked 55 minutes on it. More context cannot fix an
+    intent-vs-pick mismatch; a refusal that names the numbers can -- it becomes
+    a #636 failure memory, and the model picks again next tick.
+
+    Inert unless the loop stamped a clock (live runs only -- the bake threads
+    none), the world has a map, and the schedule has an upcoming stop pinned to
+    a still-future ``start_hour``. Walking to that anchored stop's own building
+    or to the current scheduled stop is always legal, however late -- refusing
+    the plan itself would strand the agent.
+    """
+    clock = getattr(game, "sim_clock", None)
+    step_idx = getattr(game, "sim_clock_step", None)
+    world_map = getattr(game, "world_map", None)
+    schedule = getattr(getattr(character, "agent", None), "schedule", None)
+    tile = getattr(character, "tile", None)
+    address = getattr(destination, "tile_address", None)
+    if clock is None or step_idx is None or world_map is None or not address:
+        return None
+    if schedule is None or tile is None:
+        return None
+    entries = getattr(schedule, "schedule", None) or []
+    index = getattr(schedule, "stop_index", 0)
+    gap_from = getattr(
+        world_map, "walk_steps_from", getattr(world_map, "tile_gap_from", None)
+    )
+    if gap_from is None:
+        return None
+    if destination.name == getattr(schedule, "destination", None):
+        return None
+    now = clock.time_at(step_idx)
+    minutes_now = now.hour * 60 + now.minute
+    for entry in entries[index:]:
+        hour = entry.get("start_hour")
+        # Same validity rule as the renderer (#862): a raw out-of-range anchor
+        # must not bind. Same no-day-roll convention as advance() (#863).
+        if hour is None or hour not in range(24):
+            continue
+        until = hour * 60 - minutes_now
+        if until <= 0:
+            continue
+        anchored = game.locations.get(entry.get("place"))
+        if destination is anchored:
+            return None
+        parent = _tile_address_parent(destination)
+        if parent is not None and parent == _tile_address_parent(anchored):
+            return None
+        walk = clock.minutes_for_steps(gap_from(tuple(tile), address))
+        if walk <= until:
+            return None
+        return (
+            f"Walking to {destination.name} takes about {walk} min, but your "
+            f"next pinned stop -- {entry.get('activity')} at "
+            f"{entry.get('place')} -- starts in {until} min. Go somewhere "
+            f"nearer, or head to {entry.get('place')}."
+        )
+    return None
 
 
 class Travel(base.Action):
@@ -143,6 +221,10 @@ class Travel(base.Action):
                     "different building."
                 )
             self.parser.fail(message)
+            return False
+        refusal = anchor_travel_refusal(self.game, self.character, self.destination)
+        if refusal:
+            self.parser.fail(refusal)
             return False
         return True
 
