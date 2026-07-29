@@ -796,3 +796,63 @@ def test_live_mock_decide_request_carries_the_block():
         "Right now it is Monday 08:00 AM" in call["messages"][-1]["content"]
         for call in logged
     )
+
+
+# ------------------------------------------------- day-end awareness (#891)
+
+
+def test_day_end_clause_renders_only_in_the_final_stretch():
+    _game, ada = _world()
+    clock = SimClock(START)  # 08:00, 10 s/step; a 4320-step day ends 20:00
+    # 19:37 (step 4182): 23 minutes left -- the batch-8 breach shape.
+    late = decide_context_block(ada.agent, 4182, clock, 4182, day_steps=4320)
+    assert "The day ends at 8 PM (23 min from now)." in late
+    # Midday (12:00, step 1440): 480 min left, clause absent.
+    midday = decide_context_block(ada.agent, 1440, clock, 1440, day_steps=4320)
+    assert "The day ends" not in midday
+    # No day length threaded (the bake, offline callers): absent.
+    bare = decide_context_block(ada.agent, 4182, clock, 4182)
+    assert "The day ends" not in bare
+
+
+def test_step_threads_the_day_length_into_the_decide_prompt():
+    # The seam: step() stamps game.sim_day_steps and observe_and_decide reads
+    # it -- drop either half and the clause never reaches a live prompt.
+    from backend.run_simulation import step as run_step
+
+    brain = MockLlmClient(tool_calls_responses=[TRAVEL])
+    game, ada = _world(llm_client=brain)
+    state = {
+        "Ada": {
+            "tile": (0, 0),
+            "path": [],
+            "pron": "📖",
+            "desc": "",
+            "performing": False,
+            "perform_until": None,
+            "reasoning": "",
+            "memories": [],
+            "chat": None,
+            "stop_since": 4182,
+            "waiting_for_anchor": False,
+            "conversing": False,
+        }
+    }
+
+    class _NoPathMap:
+        def walk_path(self, src, address, furniture=None):
+            return []
+
+    run_step(
+        game,
+        {"Ada": ada},
+        state,
+        4182,
+        order=["Ada"],
+        world_map=_NoPathMap(),
+        emoji={"Ada": "📖"},
+        clock=SimClock(START),
+        num_steps=4320,
+    )
+    user = brain.tool_calls_log[0]["messages"][-1]["content"]
+    assert "The day ends at 8 PM (23 min from now)." in user

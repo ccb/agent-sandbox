@@ -71,6 +71,21 @@ inputs:
       stale snapshot while the schedule is mutated underneath it, not the
       common case -- kept because printing "starting at 10 AM" at 10:05 would
       be the #812 false-time-word class if that path is ever hit.
+  day_end:
+    type: string
+    description: >
+      When the day ends, in clock words, e.g. "8 PM" (#891). Rendered -- with
+      day_end_in -- only inside the run's final stretch, where it changes
+      decisions: batch 8 had an agent start a ~50-minute walk 23 minutes
+      before a day end nothing had ever told it about. Omitted earlier in the
+      day and whenever the loop threads no day length (the bake, offline
+      tests).
+  day_end_in:
+    type: integer
+    description: >
+      Whole minutes from now until day_end. Explicit for the same reason as
+      next_in -- the model should not have to do clock arithmetic to learn
+      whether a walk fits in the day.
 sample:
   time: Monday 12:05 PM
   place: Houston Hall
@@ -80,4 +95,4 @@ sample:
   finished: false
 ---
 Right now it is {{ time }}.
-Your plan's current stop: {{ activity }} at {{ place }}{% if minutes %} (planned ~{{ minutes }} min){% endif %}.{% if finished %} You have already finished this stop.{% if next_place %} Your next stop is {{ next_activity }} at {{ next_place }}{% if next_due %}, due now.{% else %}, starting at {{ next_hour }} ({{ next_in }} min from now).{% endif %}{% endif %}{% elif elapsed %} This has been your current stop for {{ elapsed }} min.{% endif %}
+Your plan's current stop: {{ activity }} at {{ place }}{% if minutes %} (planned ~{{ minutes }} min){% endif %}.{% if finished %} You have already finished this stop.{% if next_place %} Your next stop is {{ next_activity }} at {{ next_place }}{% if next_due %}, due now.{% else %}, starting at {{ next_hour }} ({{ next_in }} min from now).{% endif %}{% endif %}{% elif elapsed %} This has been your current stop for {{ elapsed }} min.{% endif %}{% if day_end %} The day ends at {{ day_end }} ({{ day_end_in }} min from now).{% endif %}
