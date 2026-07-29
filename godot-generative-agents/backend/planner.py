@@ -265,6 +265,19 @@ def median_travel_minutes(world_map, addresses, clock) -> int | None:
 _ANCHOR_TOLERANCE_MINUTES = 15
 
 
+def _pin(stop) -> str:
+    """Render a stop's pinned hour for a revision prompt, or nothing (#870).
+
+    Both revise paths show the model the plan it is rewriting; if the pin is
+    not in that rendering, the model cannot return it and one revision strips
+    the plan's whole time skeleton. ``is not None`` so midnight (hour 0)
+    renders like any other anchor.
+    """
+    if stop.start_hour is None:
+        return ""
+    return f" (pinned {stop.start_hour:02d}:00)"
+
+
 class LLMPlanner:
     """Generate and revise a day's plan with a real model (design doc §6-§9).
 
@@ -344,14 +357,25 @@ class LLMPlanner:
         mem = self._memory_block(memory, detail or "what changed", turn=step)
         if urgency == IMMEDIATE_URGENCY and isinstance(current_stop_index, int):
             return self._revise_immediate(plan, detail, current_stop_index, reason, mem)
-        current = "; ".join(f"{s.place}: {s.activity}" for s in plan.stops) or "(none)"
+        # Each stop's pinned hour is rendered, and the model told to keep it.
+        # A revision that shows bare place/activity pairs strips every anchor
+        # from the plan (#760 batch 6: initial plans carried 8-12 anchors,
+        # every revision came back with 0-4), and with no anchors left
+        # advance()'s hour gate has nothing to hold against, so the schedule
+        # pointer free-runs on dwell latches to the end of the day (#870).
+        current = (
+            "; ".join(f"{s.place}: {s.activity}{_pin(s)}" for s in plan.stops)
+            or "(none)"
+        )
         user = (
             f"Your plan so far: {current}.\n"
             f"Something changed -- {reason}: {detail}.\n"
             f"{self._memory_line(mem)}"
             f"{self._places_line()}"
             "Give a revised full list of stops for the day, keeping the ones that "
-            "have already happened and changing the rest."
+            "have already happened and changing the rest. A pinned stop is a "
+            "fixed commitment: keep its start_hour in your answer unless what "
+            "changed is that stop's own time."
         )
         stops = self._minute_from_user(user)
         if not stops:
@@ -388,7 +412,9 @@ class LLMPlanner:
                 status = "current"
             else:
                 status = "upcoming"
-            labelled.append(f"{index}. {status}: {stop.activity} at {stop.place}")
+            labelled.append(
+                f"{index}. {status}: {stop.activity} at {stop.place}{_pin(stop)}"
+            )
         plan_text = "\n".join(labelled) or "(no stops)"
         user = (
             f"Your plan and its real execution position:\n{plan_text}\n"
@@ -399,7 +425,8 @@ class LLMPlanner:
             "conversation ends. Turn it into `next_stop`. Return only what "
             "remains after the current stop in `later_stops`; do not repeat "
             "completed or current stops. `next_stop` must not carry a future "
-            "start hour."
+            "start hour. A pinned later stop is a fixed commitment: keep its "
+            "start_hour."
         )
         tail = self._immediate_tail_from_user(user)
         if not tail:
