@@ -110,3 +110,18 @@ def test_step_retries_a_held_pointer_and_advances_when_due():
     step(game, chars, state, 720, **common)
     assert chars["Ada"].agent.schedule.stop_index == 1
     assert state["Ada"]["stop_since"] == 720
+
+
+def test_next_stop_is_the_stop_after_the_current_one():
+    schedule = ScheduleMockClient(_schedule())
+
+    assert schedule.next_stop == {
+        "place": "Cafe",
+        "activity": "meeting",
+        "emoji": None,
+        "steps": 5,
+        "start_hour": 10,
+    }
+
+    assert schedule.advance(current_hour=10) is True
+    assert schedule.next_stop is None

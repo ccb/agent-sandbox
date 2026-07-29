@@ -363,6 +363,16 @@ class ScheduleMockClient(MockReActClient):
         """Whether another scheduled stop remains after the current one."""
         return self.stop_index + 1 < len(self.schedule)
 
+    @property
+    def next_stop(self) -> dict | None:
+        """The stop after the current one, or ``None`` at the last stop.
+
+        One definition, read by both :meth:`advance`'s clock gate (#838) and the
+        decide-context block's held-stop sentences (#826), so "what comes next"
+        cannot drift between the mechanism and what the agent is told about it.
+        """
+        return self.schedule[self.stop_index + 1] if self.has_next else None
+
     def advance(self, current_hour: int | None = None) -> bool:
         """Move to the next due stop.
 
@@ -376,9 +386,9 @@ class ScheduleMockClient(MockReActClient):
         not due; callers that distinguish those states can inspect
         :attr:`has_next`.
         """
-        if not self.has_next:
+        next_stop = self.next_stop
+        if next_stop is None:
             return False
-        next_stop = self.schedule[self.stop_index + 1]
         start_hour = next_stop.get("start_hour")
         if (
             current_hour is not None
