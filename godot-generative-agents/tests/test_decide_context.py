@@ -358,6 +358,10 @@ def test_stop_since_survives_an_offplan_arrival():
     personas = _personas()  # destination "Cafe", one Cafe stop
     game, chars = build_world(None, personas, LOCATIONS)
     attach_agents(chars, personas, llm_client=brain)
+    # Start at the scheduled Cafe so Library is a genuine cross-building
+    # deviation under #849, rather than an addressless-hub detour.
+    game.locations["The Green"].remove_character(chars["Ada"])
+    game.locations["Cafe"].add_character(chars["Ada"])
     state = {
         "Ada": {
             "tile": (0, 0),
@@ -521,6 +525,10 @@ def test_an_offplan_travel_drops_the_furniture_hint():
     )
     game, chars = build_world(None, personas, LOCATIONS)
     attach_agents(chars, personas, llm_client=brain)
+    # Make the first off-plan leg a genuine cross-building deviation.  From the
+    # addressless hub #849 intentionally allows only the scheduled destination.
+    game.locations["The Green"].remove_character(chars["Ada"])
+    game.locations["Cafe"].add_character(chars["Ada"])
     walker = _RecordingWalk()
     state = {
         "Ada": {

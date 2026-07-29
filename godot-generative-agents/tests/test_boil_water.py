@@ -335,6 +335,10 @@ def test_item_verbs_expose_scoped_enums_635():
     generic free-text slot; #635 fills each verb's enum with the routable
     argument so it picks a real name from a menu (like travel's destination)."""
     game, char = _boil_agent_world()
+    # This assertion pins coexistence with travel's generic enum enrichment.
+    # At the scheduled Houston Hall stop #849 intentionally removes travel
+    # altogether (the only alternative is the addressless campus hub).
+    char.agent.schedule = None
     tools = action_tools_for(game, char)
     assert _arg_enum(tools, "get", "arguments") == ["pot of murky water"]
     assert _arg_enum(tools, "drink", "arguments") == ["pot of murky water"]

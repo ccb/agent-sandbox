@@ -199,6 +199,9 @@ def test_decide_prompt_carries_the_nearby_line_under_a_real_brain():
     brain = MockLlmClient(tool_calls_responses=[TRAVEL])
     game, ada = _world_with_offer(None)
     ada.agent.llm_client = brain  # make _use_action_tools(agent) true
+    # Pin the generic nearby-affordance rendering; #849's focused tests cover
+    # the schedule-aware destination filter.
+    ada.agent.schedule = None
 
     # Ada stands on The Green (untagged); the Library nearby is studyable.
     game.locations["Library"].set_property("studyable", True)
