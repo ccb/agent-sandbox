@@ -22,12 +22,14 @@ Two implementations are planned, mirroring the brain split in
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import replace
 
 from text_adventure_games.planning import (
     DailyPlan,
     DayBlock,
     HourBlock,
+    IMMEDIATE_URGENCY,
     Stop,
     validate_stops,
 )
@@ -193,7 +195,9 @@ MINUTE_TOOL = {
 # than the ordinary "revised full list": the model names the one stop that must
 # execute next and returns only the later tail. LLMPlanner then preserves the
 # executed/current prefix itself instead of asking the model to reproduce it.
-_MINUTE_STOP_SCHEMA = MINUTE_TOOL["parameters"]["properties"]["stops"]["items"]
+_MINUTE_STOP_SCHEMA = deepcopy(
+    MINUTE_TOOL["parameters"]["properties"]["stops"]["items"]
+)
 IMMEDIATE_REVISION_TOOL = {
     "name": "immediate_plan_revision",
     "description": (
@@ -204,14 +208,14 @@ IMMEDIATE_REVISION_TOOL = {
     "parameters": {
         "type": "object",
         "properties": {
-            "next_stop": _MINUTE_STOP_SCHEMA,
+            "next_stop": deepcopy(_MINUTE_STOP_SCHEMA),
             "later_stops": {
                 "type": "array",
                 "description": (
                     "Optional stops after next_stop, in execution order. Do not "
                     "include completed/current stops."
                 ),
-                "items": _MINUTE_STOP_SCHEMA,
+                "items": deepcopy(_MINUTE_STOP_SCHEMA),
             },
         },
         "required": ["next_stop", "later_stops"],
@@ -338,7 +342,7 @@ class LLMPlanner:
         urgency = getattr(trigger, "urgency", "normal") or "normal"
         current_stop_index = getattr(trigger, "current_stop_index", None)
         mem = self._memory_block(memory, detail or "what changed", turn=step)
-        if urgency == "immediate" and isinstance(current_stop_index, int):
+        if urgency == IMMEDIATE_URGENCY and isinstance(current_stop_index, int):
             return self._revise_immediate(plan, detail, current_stop_index, reason, mem)
         current = "; ".join(f"{s.place}: {s.activity}" for s in plan.stops) or "(none)"
         user = (
@@ -353,7 +357,10 @@ class LLMPlanner:
         if not stops:
             return plan  # nothing usable -> signal "no change" to the loop
         return DailyPlan(
-            day=plan.day, hours=plan.hours, stops=stops, revision=plan.revision + 1
+            day=plan.day,
+            hours=plan.hours,
+            stops=stops,
+            revision=plan.revision + 1,
         )
 
     def _revise_immediate(
@@ -403,7 +410,11 @@ class LLMPlanner:
         tail[0] = replace(tail[0], start_hour=None)
         stops = plan.stops[: current_stop_index + 1] + tail
         return DailyPlan(
-            day=plan.day, hours=plan.hours, stops=stops, revision=plan.revision + 1
+            day=plan.day,
+            hours=plan.hours,
+            stops=stops,
+            revision=plan.revision + 1,
+            immediate_next=True,
         )
 
     # -- per-level prompts + parsing -----------------------------------------

@@ -158,13 +158,17 @@ class DailyPlan:
     without treating an unreached stop as lived experience (#777 / #815).
 
     ``revision`` starts at 0 and is bumped every time :func:`replace_tail`
-    rewrites the not-yet-executed tail of the plan.
+    rewrites the not-yet-executed tail of the plan. ``immediate_next`` is
+    proposal-only metadata: a planner sets it when the first unstarted stop is
+    structurally guaranteed to be an immediate commitment (#829). The commit
+    seam consumes and clears it; it is deliberately excluded from persistence.
     """
 
     day: list[DayBlock] = field(default_factory=list)
     hours: list[HourBlock] = field(default_factory=list)
     stops: list[Stop] = field(default_factory=list)
     revision: int = 0
+    immediate_next: bool = field(default=False, compare=False, repr=False)
 
     def to_primitive(self) -> dict:
         """Serialize to JSON-safe primitives (mirrors ``MemoryRecord``).
@@ -207,6 +211,8 @@ class DailyPlan:
 ACTION_FAILED = "action_failed"  # a travel/perform command failed the gate
 PERCEPTION = "perception"  # a perceived memory contradicts the plan
 BEHIND_SCHEDULE = "behind_schedule"  # still en route when the hour's budget ran out
+# Revision urgency shared by engine triggers and planner implementations (#829).
+IMMEDIATE_URGENCY = "immediate"
 
 
 @dataclass(frozen=True)
@@ -218,9 +224,10 @@ class RevisionTrigger:
     parser's failure message). ``current_stop_index`` is the schedule driver's
     ground-truth boundary between the protected prefix and the unstarted tail;
     ``urgency`` lets a narrow event such as an immediate conversation commitment
-    require the first tail stop to run next (#829). A :class:`Planner` reads this
-    to decide whether and how to rewrite the plan's tail; a mock planner ignores
-    it.
+    require the first tail stop to run next (#829); use
+    :data:`IMMEDIATE_URGENCY` instead of spelling that protocol value locally. A
+    :class:`Planner` reads this to decide whether and how to rewrite the plan's
+    tail; a mock planner ignores it.
 
     Both newer fields have inert defaults so existing engine callers and custom
     planners keep their old behavior.

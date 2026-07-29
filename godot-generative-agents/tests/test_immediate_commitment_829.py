@@ -9,10 +9,15 @@ Fully offline. Run from the repo root::
 from backend import cognition
 from backend.build_world import build_world
 from backend.cognition import attach_agents, maybe_converse
-from backend.planner import LLMPlanner
+from backend.planner import IMMEDIATE_REVISION_TOOL, MINUTE_TOOL, LLMPlanner
 from backend.run_simulation import step
 from text_adventure_games.memory import AgentMemory
-from text_adventure_games.planning import DailyPlan, RevisionTrigger, Stop
+from text_adventure_games.planning import (
+    DailyPlan,
+    IMMEDIATE_URGENCY,
+    RevisionTrigger,
+    Stop,
+)
 from text_adventure_games.things import Character
 
 
@@ -61,6 +66,7 @@ def test_llm_planner_builds_an_immediate_tail_after_the_real_current_stop():
     assert "2. upcoming: editing at Studio" in prompt
     assert revised.stops[:2] == plan.stops[:2]
     assert [stop.place for stop in revised.stops[2:]] == ["Library", "Cafe"]
+    assert revised.immediate_next is True
     # Immediate supersedes the stale future clock gate returned by the model.
     assert revised.stops[2].start_hour is None
 
@@ -85,8 +91,9 @@ def test_immediate_revision_without_a_valid_next_stop_is_a_no_op():
 
 
 class _ImmediatePlanner:
-    def __init__(self):
+    def __init__(self, mark_immediate=True):
         self.triggers = []
+        self.mark_immediate = mark_immediate
 
     def generate(self, persona=None, memory=None, clock=None):
         return DailyPlan(stops=[Stop("Cafe", "reading", steps=100)])
@@ -104,6 +111,10 @@ class _ImmediatePlanner:
                 )
             ],
             revision=plan.revision + 1,
+            immediate_next=(
+                self.mark_immediate
+                and getattr(trigger, "urgency", "normal") == IMMEDIATE_URGENCY
+            ),
         )
 
 
@@ -172,6 +183,39 @@ def test_revision_context_comes_from_the_schedule_and_clears_the_clock_gate():
     assert char.agent.plan.stops[1].activity == "race to the lecture"
     assert char.agent.plan.stops[1].start_hour is None
     assert "start_hour" not in char.agent.schedule.schedule[1]
+
+
+def test_unmarked_custom_planner_tail_cannot_bypass_the_clock_gate():
+    planner = _ImmediatePlanner(mark_immediate=False)
+    char = _bare_agent(planner)
+
+    result = cognition.maybe_revise_plan(
+        char,
+        RevisionTrigger(
+            cognition.CONVERSATION,
+            5,
+            "leave now",
+            urgency=IMMEDIATE_URGENCY,
+        ),
+    )
+
+    assert result == cognition.PlanRevisionResult(changed=True)
+    assert char.agent.plan.stops[1].start_hour == 15
+    assert char.agent.plan.immediate_next is False
+    assert char.agent.schedule.schedule[1]["start_hour"] == 15
+
+
+def test_immediate_tool_stop_schemas_are_independent_copies():
+    minute_stop = MINUTE_TOOL["parameters"]["properties"]["stops"]["items"]
+    immediate = IMMEDIATE_REVISION_TOOL["parameters"]["properties"]
+    next_stop = immediate["next_stop"]
+    later_stop = immediate["later_stops"]["items"]
+
+    assert next_stop == minute_stop
+    assert later_stop == minute_stop
+    assert next_stop is not minute_stop
+    assert later_stop is not minute_stop
+    assert next_stop is not later_stop
 
 
 def test_immediate_requires_a_nonblank_commitment():

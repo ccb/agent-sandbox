@@ -28,7 +28,7 @@ from dataclasses import dataclass, replace
 from text_adventure_games import conversation as convo
 from text_adventure_games.llm_client import MockReActClient, run_tool_loop
 from text_adventure_games.memory import MemoryKind
-from text_adventure_games.planning import RevisionTrigger
+from text_adventure_games.planning import IMMEDIATE_URGENCY, RevisionTrigger
 from text_adventure_games.npc import (
     COGNITION_BUDGET,
     LLMAgent,
@@ -94,7 +94,7 @@ def _consult_entry(summary: str) -> dict:
 # engine's RevisionTrigger.reason is a plain string (planning.py), so an
 # agreement reached in dialogue needs no engine change to reach a planner.
 CONVERSATION = "conversation"
-COMMITMENT_IMMEDIATE = "immediate"
+COMMITMENT_IMMEDIATE = IMMEDIATE_URGENCY
 COMMITMENT_SCHEDULED = "scheduled"
 COMMITMENT_UNSPECIFIED = "unspecified"
 
@@ -1604,16 +1604,21 @@ def maybe_revise_plan(char, trigger, clock=None) -> PlanRevisionResult:
     # current one. Pacing lives on agent.schedule -- the mock client that drives
     # advance()/steps even when a real LLM is the decision brain (Phase A).
     proposed_tail = list(proposed.stops[after + 1 :])
-    immediate = getattr(trigger, "urgency", "normal") == COMMITMENT_IMMEDIATE
+    immediate = (
+        getattr(trigger, "urgency", "normal") == IMMEDIATE_URGENCY
+        and proposed.immediate_next
+        and bool(proposed_tail)
+    )
     if immediate and proposed_tail:
         # #838 treats start_hour as a hard "not before" gate. The first tail
-        # stop is due now by contract, so clear any stale/future anchor even for
-        # a custom planner that did not.
+        # stop is due now by the planner's structural proposal marker, so clear
+        # any stale/future anchor.
         proposed_tail[0] = replace(proposed_tail[0], start_hour=None)
     guarded = replace(
         proposed,
         stops=plan.stops[: after + 1] + proposed_tail,
         revision=plan.revision + 1,
+        immediate_next=False,
     )
     if guarded.stops == plan.stops:
         return PlanRevisionResult()  # only higher-level reasoning moved
@@ -1623,7 +1628,7 @@ def maybe_revise_plan(char, trigger, clock=None) -> PlanRevisionResult:
     )
     return PlanRevisionResult(
         changed=True,
-        immediate_next=immediate and bool(proposed_tail),
+        immediate_next=immediate,
     )
 
 

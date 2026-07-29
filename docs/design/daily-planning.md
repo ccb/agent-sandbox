@@ -185,6 +185,7 @@ class DailyPlan:
     hours: list[HourBlock]
     stops: list[Stop]          # the part the step loop consumes
     revision: int = 0          # bumped each time revise() rewrites the tail
+    immediate_next: bool = False  # ephemeral planner→commit handshake
 ```
 
 `DailyPlan.stops` is exactly the list `SmallvilleMockClient` already walks, so
@@ -279,6 +280,11 @@ commitment as the first unstarted stop. The current stop remains unchanged in
 the protected prefix, playback finishes before movement resumes, and the normal
 schedule pre-pass advances exactly once. See
 [`immediate-conversation-commitments-829.md`](immediate-conversation-commitments-829.md).
+The planner must also mark the returned `DailyPlan` with
+`immediate_next=True`; the commit seam requires both that structural marker and
+an `IMMEDIATE_URGENCY` trigger before clearing a future `start_hour` or
+authorizing preemption. The marker is consumed at commit and never serialized,
+so an ordinary custom-planner tail cannot accidentally bypass the clock gate.
 
 ---
 
