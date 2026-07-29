@@ -436,6 +436,23 @@ def step(
                 st["performing"] = False
             st["perform_until"] = None
 
+        # #826: a hold must end when its reason does. The block above retries a
+        # held pointer only when an activity *completes*, so an agent that walked
+        # off instead can sit on a finished stop long after its anchor hour
+        # arrives -- batch 5 had one parked on a completed coffee break for
+        # 2 h 15 m. Retrying here needs no completion, only that the agent is
+        # not mid-activity or mid-conversation. advance() does not mutate when it
+        # refuses, so re-asking on the same tick the flag was set is harmless.
+        if (
+            st.get("waiting_for_anchor")
+            and not st["performing"]
+            and not st.get("conversing")
+            and clock is not None
+            and char.agent.schedule.advance(clock.hour_at(step_idx))
+        ):
+            st["stop_since"] = step_idx
+            st["waiting_for_anchor"] = False
+
         if not st["path"] and not st["performing"] and not st.get("conversing"):
             due.append(name)
 

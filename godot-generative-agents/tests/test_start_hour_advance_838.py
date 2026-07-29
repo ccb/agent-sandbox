@@ -234,3 +234,36 @@ def test_hold_survives_schedule_replacement():
     step(game, chars, state, 720, **common)
     assert state["Ada"]["waiting_for_anchor"] is False
     assert chars["Ada"].agent.schedule.stop_index == 1
+
+
+def test_step_advances_a_held_pointer_for_an_agent_that_walked_away():
+    game, chars = build_world(None, [_persona()], _LOCATIONS)
+    attach_agents(chars, [_persona()], llm_client=None)
+    state = _state()
+    # The batch-5 shape: the stop was credited, the pointer is held, and the
+    # agent left instead of performing again -- so nothing completes to trigger
+    # the retry inside the completed-activity block.
+    state["Ada"].update(
+        performing=False,
+        perform_until=None,
+        waiting_for_anchor=True,
+        path=[(0, 1), (0, 2), (0, 3)],
+    )
+    common = {
+        "order": ["Ada"],
+        "world_map": None,
+        "emoji": {"Ada": "📖"},
+        "clock": SimClock(datetime.datetime(2023, 2, 13, 8, 0)),
+    }
+
+    # 08:50 -- before the 10:00 anchor, the hold stands.
+    step(game, chars, state, 300, **common)
+    assert chars["Ada"].agent.schedule.stop_index == 0
+    assert state["Ada"]["waiting_for_anchor"] is True
+
+    # 10:00 -- the anchor arrives with no activity completing, and the plan
+    # resumes anyway.
+    step(game, chars, state, 720, **common)
+    assert chars["Ada"].agent.schedule.stop_index == 1
+    assert state["Ada"]["waiting_for_anchor"] is False
+    assert state["Ada"]["stop_since"] == 720
