@@ -64,9 +64,13 @@ inputs:
     type: boolean
     description: >
       Has the anchor hour already arrived? True renders "due now" instead of a
-      start time, because the retry that ends a hold is skipped while the agent
-      performs something else -- so a passed anchor is reachable, and printing
-      "starting at 10 AM" at 10:05 would be the #812 false-time-word class.
+      start time. No in-loop render ever sets this true: any agent that
+      reaches a decide already had `advance()` attempted the same tick, and
+      its refusal implies the anchor is still ahead. This is defence in depth
+      for a #366 straggler decide thread building its observation from a
+      stale snapshot while the schedule is mutated underneath it, not the
+      common case -- kept because printing "starting at 10 AM" at 10:05 would
+      be the #812 false-time-word class if that path is ever hit.
 sample:
   time: Monday 12:05 PM
   place: Houston Hall

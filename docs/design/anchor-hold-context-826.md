@@ -115,15 +115,35 @@ clause is the sentence Maya read as debt:
 Your plan's current stop: {{ activity }} at {{ place }}{% if minutes %} (planned ~{{ minutes }} min){% endif %}.
 {%- if finished %} You have already finished this stop.
   {%- if next_place %} Your next stop is {{ next_activity }} at {{ next_place }}
-    {%- if next_due %}, due now.{% else %}, starting at {{ next_hour }}.{% endif %}
+    {%- if next_due %}, due now.{% else %}, starting at {{ next_hour }} ({{ next_in }} min from now).{% endif %}
   {%- endif %}
 {%- elif elapsed %} This has been your current stop for {{ elapsed }} min.{% endif %}
 ```
 
-The `next_due` branch is reachable and load-bearing: the retry below is skipped
-while an agent is performing something else, so a passed anchor can still be
-current, and printing "starting at 2 PM" at 2:30 PM would be exactly the #812
-false-time-word class.
+The `({{ next_in }} min from now)` clause is not decorative. The offline A/B
+in `task-6-report.md` replayed Maya's 13:03 decide with two fixed arms, both
+carrying `finished=True`: the arm with the "finished" sentence alone still
+chose `travel(Van Pelt Library)` — her actual 62-minute leg — while only the
+arm that also named the next stop and its start time chose
+`travel(College Hall)`, the correct next commitment. One decide's worth of
+prompt-level evidence, not a live-run result, but enough to call the
+next-stop-with-time clause load-bearing and the "finished" sentence
+insufficient by itself.
+
+`next_due` (and the `next_hour is None` suppression in `cognition.py`) do
+*not* fire on any in-loop render: the retry gate (`not performing and not
+conversing`, §6 below) is a strict superset of `due` membership (which adds
+`not path`), and `performing` is cleared before the retry runs — so any
+agent whose decide reaches this block already had `advance(hour_at(step))`
+attempted on that same tick. A flag surviving to a decide therefore implies
+`advance()` refused, which implies `current_hour < start_hour`, which forces
+`next_due == False` and `next_hour is not None`. Both guards stay anyway, as
+defence in depth for a #366 straggler decide thread that builds its
+observation from an earlier snapshot while the main thread mutates the
+schedule underneath it (already-accepted torn perception) — the one path
+left that could still hand a render a passed anchor or a stripped
+`start_hour`. Four lines that prevent "starting at 2 PM" at 2:05 PM and
+"starting at None" are cheap insurance against that path.
 
 Per the repo's prompt convention, the same change updates the
 `decide_context.prompty` row of
