@@ -267,3 +267,46 @@ def test_step_advances_a_held_pointer_for_an_agent_that_walked_away():
     assert chars["Ada"].agent.schedule.stop_index == 1
     assert state["Ada"]["waiting_for_anchor"] is False
     assert state["Ada"]["stop_since"] == 720
+
+
+def test_step_decides_with_the_advanced_pointer_when_the_agent_is_stationary():
+    """The batch-5 shape exactly: the agent already arrived (empty path,
+    not performing) and stood still while the anchor hour came and went. This
+    pins *why* the retry sits before `due` is built, not just that it fires:
+    a pointer that advances this tick must be visible to the decide that
+    happens later in the very same tick, or the agent decides against the
+    stop it already finished."""
+    game, chars = build_world(None, [_persona()], _LOCATIONS)
+    attach_agents(chars, [_persona()], llm_client=None)
+    state = _state()
+    state["Ada"].update(
+        performing=False,
+        perform_until=None,
+        waiting_for_anchor=True,
+        path=[],
+    )
+    common = {
+        "order": ["Ada"],
+        "world_map": None,
+        "emoji": {"Ada": "📖"},
+        "clock": SimClock(datetime.datetime(2023, 2, 13, 8, 0)),
+    }
+
+    # 10:00 -- the anchor is due, and the agent never moved, so nothing but
+    # the new block can advance the pointer this tick.
+    step(game, chars, state, 720, **common)
+    assert chars["Ada"].agent.schedule.stop_index == 1
+    assert state["Ada"]["waiting_for_anchor"] is False
+    assert state["Ada"]["stop_since"] == 720
+
+    # The decide phase runs later in this SAME step() call, and reads the
+    # schedule's CURRENT stop -- so if it acted on the second stop's activity
+    # ("meeting") rather than the held one ("reading"), the pointer must
+    # already have advanced by the time `due` was built and decide ran. This
+    # is what makes the test about placement, not just about advancing: move
+    # the new block below the `due` append and the pointer still advances,
+    # but one tick too late for this decide to see it. `st["desc"]` is
+    # unambiguous evidence -- it is stamped straight from the parsed
+    # `perform <activity>` command's own activity property, so it names
+    # whichever stop the decide actually chose.
+    assert state["Ada"]["desc"] == "meeting @ None"
