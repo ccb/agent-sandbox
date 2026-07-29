@@ -292,7 +292,7 @@ def test_decide_timeout_writes_one_failure_memory_and_the_late_answer_adds_none(
     assert stepper.state[hung]["performing"]  # the late answer landed
     assert len(timeout_memories(hung)) == 1
     texts = [r.text for r in stepper.chars[hung].agent.memory.records]
-    assert "I am pondering the day." in texts  # the applied answer's memory
+    assert "I was pondering the day." in texts  # the applied answer's memory
 
 
 def test_decide_threads_cap_bounds_concurrent_decides():

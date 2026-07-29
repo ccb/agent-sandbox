@@ -22,8 +22,9 @@ inputs:
       The actions to show, newest first, each {minutes, text}. `minutes` is how
       long ago it happened; 0 renders as "just now". `text` is the memory
       record verbatim -- these are the agent's own words, not prose to rewrite,
-      so perform's present tense ("I am ...") is left as reflection.prompty
-      wrote it.
+      so whatever reflection.prompty wrote is passed through unchanged. Every
+      reflection branch is past tense (#851 fixed the one that was not), which
+      is what makes it safe to stamp a "how long ago" prefix onto it here.
 sample:
   actions:
     - minutes: 57
