@@ -15,7 +15,9 @@ Run with::
     uv run pytest tests/test_reflection.py -v
 """
 
-from text_adventure_games.memory import DEFAULT_MAX_RECORDS, AgentMemory, MemoryKind
+from types import SimpleNamespace
+
+from text_adventure_games.memory import AgentMemory, MemoryKind
 from text_adventure_games.npc import maybe_reflect
 from text_adventure_games.reflection import (
     DEFAULT_REFLECTION_THRESHOLD,
@@ -165,79 +167,41 @@ def test_reflect_drops_empty_inference():
     assert created == []
 
 
-# --- plan memories are intentions, not experience (issue #777) ---------------
+# --- temporal provenance (issues #777 / #815) -------------------------------
 
 
-def test_reflection_input_excludes_plan_memories():
-    # Regression for #777: the t0 day-plan (and #778's conversation commitments)
-    # land in the stream as PLAN records -- *intentions*, not lived experience.
-    # Shown to the reflector, they let an agent "conclude" things about stops it
-    # has not reached (Sofia reflected on her scheduled dinner queasiness at
-    # 08:27, mid-stop-0). Neither the question seed nor the per-question
-    # supporting retrieval may put a plan record in front of the reflector.
+def test_reflection_input_includes_plan_memories():
+    # #815 re-admits plans so the model can reason forward over intentions.
     mem = _stream()
-    mem.add_plan(
+    plan = mem.add_plan(
         "Plan: settle in for dinner with Maria at the hall, then head home",
         turn=8,
         importance=8.0,
     )
-    reflector = _FakeReflector(["What should I make of Maria?"])
+    reflector = _FakeReflector(["What are my dinner intentions with Maria?"])
     reflect(mem, reflector, turn=9)
 
-    shown = [r for call in reflector.questions_calls for r in call] + [
-        r for _, records in reflector.infer_calls for r in records
-    ]
-    assert shown  # the pass really ran over records
-    assert all(r.kind is not MemoryKind.PLAN for r in shown)
-
-
-def test_plan_records_do_not_shrink_the_supporting_set():
-    # #805 review: plans must be excluded *inside* retrieval (slots backfilled),
-    # not stripped from its top-k output. Eight importance-8.0 commitments (the
-    # #778 stream shape) out-rank every observation, so a post-filter hands the
-    # reflector an empty supporting set and the pass silently goes dark; with
-    # the ranking-side filter the observations fill all max_records slots.
-    mem = _stream()
-    for i in range(8):
-        mem.add_plan(f"Plan: stop {i} with Maria", turn=8, importance=8.0)
-    reflector = _FakeReflector(["What should I make of Maria?"])
-    created = reflect(mem, reflector, turn=9)
-
-    assert created  # the pass still produces a reflection
-    (_, supporting), *_ = reflector.infer_calls
-    assert len(supporting) == DEFAULT_MAX_RECORDS  # full width, no lost slots
-    assert all(r.kind is not MemoryKind.PLAN for r in supporting)
-
-
-def test_plan_records_do_not_shrink_the_seed_window():
-    # Same shape for the question seed: filter, then slice. Plans clustered at
-    # the stream's tail must not eat the window -- older lived records backfill
-    # it, so the reflector still sees recent_window records.
-    mem = _stream(n=3)
-    for i in range(4):
-        mem.add_plan(f"Plan: stop {i}", turn=3, importance=8.0)
-    reflector = _FakeReflector(["What should I make of Maria?"])
-    created = reflect(mem, reflector, turn=4, recent_window=4)
-
-    assert created  # slice-then-filter left an empty seed and no reflection
     (seed,) = reflector.questions_calls
-    assert [r.kind for r in seed] == [MemoryKind.OBSERVATION] * 3
+    (_, supporting), *_ = reflector.infer_calls
+    assert plan in seed
+    assert plan in supporting
 
 
-def test_reflection_never_cites_an_unlived_plan_stop():
-    # The live-run shape from #777: the ONLY mention of the day's distinctive
-    # final stop is the plan record itself. MockReflector.infer summarizes the
-    # records it is shown, so if the plan leaks into the supporting set, its
-    # text leaks straight into the written reflection.
-    mem = _stream()
-    mem.add_plan(
-        "Today's stops end with feeling queasy at dinner with Maria",
-        turn=8,
-        importance=8.0,
+def test_plan_only_stream_can_reflect():
+    mem = AgentMemory()
+    plan = mem.add_plan(
+        "Plan: visit Maria at the hall tomorrow",
+        turn=0,
+        importance=DEFAULT_REFLECTION_THRESHOLD,
     )
-    created = reflect(mem, MockReflector(), turn=9)
-    assert created  # observations alone still yield a reflection
-    assert all("queasy" not in r.text for r in created)
+    reflector = _FakeReflector(["What do I intend to do with Maria?"])
+
+    assert should_reflect(mem)
+    created = reflect(mem, reflector, turn=1)
+
+    assert created
+    assert reflector.questions_calls == [[plan]]
+    assert reflector.infer_calls[0][1] == [plan]
 
 
 # --- MockReflector ----------------------------------------------------------
@@ -268,6 +232,17 @@ def test_mock_reflector_is_deterministic_end_to_end():
     assert created_a and created_a[0].kind is MemoryKind.REFLECTION
 
 
+def test_mock_reflector_preserves_plan_as_intention_without_prompt_markers():
+    mem = AgentMemory()
+    plan = mem.add_plan("visit Maria tomorrow", turn=0, importance=8.0)
+
+    result = MockReflector().infer("What comes next?", [plan])
+
+    assert result is not None
+    assert "intended: visit Maria tomorrow" in result.text
+    assert "[intended]" not in result.text
+
+
 # --- LLMReflector (scripted client) -----------------------------------------
 
 
@@ -279,10 +254,12 @@ class _ScriptedClient:
         self.by_tool = by_tool
         self.calls = []
         self.user_by_tool = {}
+        self.messages_by_tool = {}
 
     def call_tool(self, messages, tool, max_tokens=256, temperature=0.0):
         self.calls.append(tool["name"])
         self.user_by_tool[tool["name"]] = messages[-1]["content"] if messages else ""
+        self.messages_by_tool[tool["name"]] = list(messages)
         return self.by_tool.get(tool["name"])
 
     def chat(self, *args, **kwargs):
@@ -316,6 +293,109 @@ def test_llm_reflector_questions_and_inference():
     assert result.text == "Maria is passionate about the library project."
     # Citations 1 and 3 map to the 1st and 3rd supporting records' ids.
     assert result.evidence_ids == [supporting[0].id, supporting[2].id]
+
+
+def test_llm_reflector_numbers_records_with_temporal_provenance():
+    mem = AgentMemory()
+    records = [
+        mem.add_observation("I attended the lecture.", turn=0),
+        mem.add_chat("Professor Tanaka invited me to office hours.", turn=1),
+        mem.add_reflection("Professor Tanaka seems supportive.", turn=2),
+        mem.add_plan("Visit office hours tomorrow.", turn=3),
+        SimpleNamespace(text="legacy record with no kind"),
+        SimpleNamespace(text="record from a future kind", kind="dream"),
+    ]
+
+    assert LLMReflector._numbered(records) == (
+        "1. [lived] I attended the lecture.\n"
+        "2. [conversation] Professor Tanaka invited me to office hours.\n"
+        "3. [inferred] Professor Tanaka seems supportive.\n"
+        "4. [intended] Visit office hours tomorrow.\n"
+        "5. [lived] legacy record with no kind\n"
+        "6. [memory] record from a future kind"
+    )
+
+
+class _TemporalContractClient:
+    """A deterministic stand-in that exposes whether #815's prompt contract
+    distinguishes a future invitation from a completed office-hours visit."""
+
+    def __init__(self):
+        self.messages_by_tool = {}
+
+    def call_tool(self, messages, tool, max_tokens=256, temperature=0.0):
+        name = tool["name"]
+        self.messages_by_tool[name] = list(messages)
+        if name == SALIENT_QUESTIONS_TOOL["name"]:
+            return {"questions": ["What happened with Professor Tanaka's invitation?"]}
+        if name == INSIGHT_TOOL["name"]:
+            system = messages[0]["content"]
+            user = messages[-1]["content"]
+            contract_present = (
+                "[conversation]" in user
+                and "Never treat a future event" in system
+                and "unless a [lived] record explicitly confirms it" in system
+            )
+            if contract_present:
+                return {
+                    "insight": (
+                        "Professor Tanaka invited me to office hours; the visit "
+                        "has not been established as completed."
+                    ),
+                    "evidence": [1],
+                }
+            return {
+                "insight": "I visited Professor Tanaka during office hours.",
+                "evidence": [1],
+            }
+        return None
+
+
+def test_chat_invitation_is_not_reflected_as_a_completed_visit():
+    # Verbatim relationship note from the R9 cassette cited by #815. It is a
+    # CHAT record even though it contains a future invitation.
+    mem = AgentMemory()
+    note = mem.add_chat(
+        "Professor Tanaka is welcoming and passionate about physics, especially "
+        "gravitational waves. He invited me to visit his office hours if I have "
+        "questions after the lecture. He also mentioned the Kamin Gallery as "
+        "worth checking out. He seems like a great resource for learning more "
+        "about the topics that interest me.",
+        turn=0,
+        importance=8.0,
+        partner="Professor Tanaka",
+    )
+    client = _TemporalContractClient()
+
+    created = reflect(mem, LLMReflector(client), turn=1)
+
+    assert created
+    assert "invited me to office hours" in created[0].text
+    assert "I visited" not in created[0].text
+    infer_user = client.messages_by_tool[INSIGHT_TOOL["name"]][-1]["content"]
+    assert f"1. [conversation] {note.text}" in infer_user
+
+
+def test_llm_reflector_strips_echoed_prompt_markers_from_insight():
+    client = _ScriptedClient(
+        {
+            SALIENT_QUESTIONS_TOOL["name"]: {"questions": ["What do I intend?"]},
+            INSIGHT_TOOL["name"]: {
+                "insight": (
+                    "[inferred] I remain [intended] to visit after the "
+                    "[conversation] invitation."
+                ),
+                "evidence": [1],
+            },
+        }
+    )
+    mem = _stream()
+
+    created = reflect(mem, LLMReflector(client), turn=8)
+
+    assert created
+    assert created[0].text == "I remain to visit after the invitation."
+    assert "[" not in created[0].text and "]" not in created[0].text
 
 
 def test_llm_reflector_full_flow_writes_back():
