@@ -32,16 +32,20 @@ dance for $0, so a typo costs nothing.
 * `runA/` — `config-applied.json`, `usage.json`, `live-final.json`, `run_id.txt`.
   The run directory itself (`frames.jsonl`, `cassette.jsonl`, 85 MB) is
   git-ignored, as in every previous batch.
-* `thrash_kind.py` — splits `arrived_then_departed` into same-place oscillation
-  (#849) and genuine cross-building retargeting (#826). This is the split #850
-  asks `analyze_run.py` to adopt. **Note the prefix trap it documents**: a
-  sub-place drops its building's qualifier, so `"Van Pelt — Moelis Reading Room"`
-  reduces to `"Van Pelt"` and never equals `"Van Pelt Library"` — compare with a
-  two-way `startswith`, not `==`. Scoring that wrong cost me two miscounted
-  events in the first published table.
-* `walk_legs.py` — longest unbroken walk and the still-walking-at-the-end tail
-  per agent. The second number is the one that shows #826's motivating trace is
-  fixed: Priya 135 min in the baseline, 0 here.
+Every number below comes out of the maintained analyzer — this batch shipped two
+scratch scripts (`thrash_kind.py`, `walk_legs.py`) and #850 folded both into
+`analyze_run.py` in #854, so they were deleted rather than left to rot:
+
+```bash
+uv run python godot-generative-agents/tools/analyze_run.py run-20260728-211113-e68900
+```
+
+Its `thrash` and `legs` lines print the split and the walk tails directly. The
+trap the scratch split documented is now pinned by a test in there: a sub-place
+drops its building's qualifier, so `"Van Pelt — Moelis Reading Room"` reduces to
+`"Van Pelt"` and never *equals* `"Van Pelt Library"` — compare with a two-way
+`startswith`, not `==`. Scoring that wrong cost two miscounted events in the
+first published table.
 
 ## Headline
 
@@ -51,8 +55,13 @@ dance for $0, so a typo costs nothing.
 | — same-place oscillation (#849) | 17 | 19 |
 | — genuine retarget (#826) | 3 | 3 |
 | longest abandoned leg | 57 min | 62 min |
-| still walking when the day ends | 135 min | **0** |
+| still walking when the day ends | 135 min | **4 min** (Mateo) |
 | cost / calls | $9.81 / 1081 | $6.08 / 683 |
+
+The last row was first published as `0`, a rounding artefact off a coarse scan;
+`analyze_run.py` reports Mateo mid-leg at the final frame, 29 steps ≈ 4 min.
+Corrected on #826 and #760, and #826's regression guard reads as a ceiling
+rather than a literal zero because of it.
 
 #826's acceptance test was re-specified on the strength of this run: the
 combined counter is dominated by #849 in both runs, so it cannot arbitrate #826.
