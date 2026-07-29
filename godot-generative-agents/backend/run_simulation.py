@@ -456,8 +456,21 @@ def step(
                 # #826's own warning signal.
                 st["waiting_for_anchor"] = False
             elif (
-                not st["performing"] and not st.get("conversing") and clock is not None
+                not st["path"]
+                and not st["performing"]
+                and not st.get("conversing")
+                and clock is not None
             ):
+                # The same three-part gate `due` uses below, `not st["path"]`
+                # included (#868). Without it a *walking* agent's pointer moved
+                # mid-leg and `stop_since` was stamped there, so the elapsed
+                # clock started on a stop the agent had not reached and was
+                # walking away from. In batch 6 Maya was told she had been on a
+                # Houston Hall coffee break for 15 minutes in a building she had
+                # never entered, and turned around five steps from the door she
+                # was walking to -- the mirror of the bug #862 fixed. A held
+                # pointer resumes when the agent is somewhere it can act on it.
+                #
                 # advance() does not mutate when it refuses, so re-asking on the
                 # same tick the flag was set is harmless. Called as a statement
                 # rather than as the last term of the `and` chain above: the two
@@ -743,9 +756,22 @@ def step(
                         schedule_steps = schedule.steps
                         if schedule_steps is not None:
                             st["perform_until"] = step_idx + schedule_steps
-                        elif matched or clock is None:
-                            # On-plan stay-put (or offline, no clock to bound with):
-                            # settle here for the rest of the run, as before.
+                        elif clock is None or (matched and not schedule.has_next):
+                            # On-plan stay-put on the LAST stop (or offline, with no
+                            # clock to bound with): settle here for the rest of the
+                            # run, as before.
+                            #
+                            # #865: `matched` alone was the condition, and the
+                            # comment above it already said this is "correct for an
+                            # on-plan end-of-day stop" -- but nothing checked that
+                            # the stop *was* the last one. Every authored persona
+                            # puts its only duration-less stop last (35 of 35), so
+                            # authored data never reached the gap and the bake is
+                            # unaffected; the LLM planner is under no such rule, and
+                            # a duration-less stop mid-schedule froze the agent for
+                            # the rest of the run with no way to re-decide. A frozen
+                            # agent silently flatters every behavioral metric --
+                            # it cannot thrash, so #826's own count reads as a pass.
                             st["perform_until"] = None
                         else:
                             # Off-plan with no bound anywhere: cap it so the brain
