@@ -1622,12 +1622,10 @@ def apply_conversation_outcome(
     # test_reflection_and_plan_records_are_not_rescored). Written anyway so that
     # widening that kind filter can't silently re-guess an authored importance.
     #
-    # No reflection-cadence side effect: AgentMemory._add deliberately skips
-    # PLAN records when accruing importance_since_reflection (#777 -- the
-    # reflection pass filters plans from its inputs, so letting them pay into
-    # its trigger bought real LLM reflection calls over evidence that hadn't
-    # moved). A conversation therefore contributes 8.0 toward the 30.0
-    # threshold via the relationship note above, not 16.0.
+    # #815: reflection now sees this PLAN as an explicitly tagged intention, so
+    # it pays into importance_since_reflection again. A conversation with both
+    # a relationship note and a commitment contributes 16.0 toward the default
+    # 30.0 reflection threshold (8.0 from each record).
     if has_commitment:
         intent = agent.memory.add_plan(
             render("commitment_memory", other=partner_name, commitment=detail),
