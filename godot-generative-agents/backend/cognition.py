@@ -2312,9 +2312,11 @@ def _credit_stop_for_conversation(char, st) -> bool:
     """A real conversation held while settled completes the agent's current
     scheduled stop (issue #778; place requirement dropped by #831).
 
-    ``schedule.advance()`` fires from exactly one place -- ``run_simulation``'s
-    latch-expiry pre-pass -- and (before #831) only for a settle at the
-    scheduled place. A *dropped* ``talk_to`` (no partner, busy, on cooldown) is
+    ``schedule.advance()`` fires from three places -- ``run_simulation``'s
+    latch-expiry pre-pass (the crediting one this docstring is about), its
+    #826 anchor-hold retry, and ``serve_penn``'s resume fast-forward (#870) --
+    and (before #831) the pre-pass credited only a settle at the scheduled
+    place. A *dropped* ``talk_to`` (no partner, busy, on cooldown) is
     an instantaneous command that routes through ``settle_after_dead_talk``,
     which sets ``credit_stop = False`` (#689, correctly: a *dead* talk
     completed nothing). This sets the pre-pass's own ``credit_stop`` flag

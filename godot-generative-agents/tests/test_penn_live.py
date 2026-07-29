@@ -585,6 +585,26 @@ def test_fast_forward_schedule_cursor():
     assert sched.stop_index == 1
 
 
+def test_fast_forward_respects_a_future_anchor():
+    # #870: this was the one advance() call site that ignored start_hour, so
+    # a resume could park the pointer on a stop hours before its pinned time.
+    # With the resume hour threaded through, the #838 gate holds at the first
+    # future anchor...
+    stops = _authored(10, 20, None)
+    stops[1]["start_hour"] = 13
+    sched = ScheduleMockClient(stops)
+    _fast_forward_schedule(sched, 30, current_hour=11)
+    assert sched.stop_index == 0
+    # ...crosses it once the resume clock has reached it...
+    sched = ScheduleMockClient([dict(s) for s in stops])
+    _fast_forward_schedule(sched, 30, current_hour=13)
+    assert sched.stop_index == 2
+    # ...and the no-hour default keeps the old dwell-only behavior.
+    sched = ScheduleMockClient([dict(s) for s in stops])
+    _fast_forward_schedule(sched, 30)
+    assert sched.stop_index == 2
+
+
 def test_stepper_resumes_a_persisted_run(tmp_path):
     # The #543 story: a run's process dies (the row is orphaned at "running"),
     # a new process adopts it and the day carries on where the store left off.
