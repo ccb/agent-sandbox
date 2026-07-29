@@ -7,6 +7,7 @@ import { LlmCallLog } from "./LlmCallLog";
 import { MostTakenActions } from "./MostTakenActions";
 import { RunSocialCard, SocialSummary, socialView } from "./RunSocialCard";
 import { SpritePreview } from "./SpritePreview";
+import { WishFeed } from "./WishFeed";
 import "./AgentPanel.css"; // the llm-log row/pill styles LlmCallLog renders with
 import "./LlmDashboard.css";
 
@@ -295,6 +296,12 @@ export function LlmDashboard({
           baked replay's events through the cursor, or the live feed's
           game_event rows — so it renders in replay mode too, unlike EventFeed. */}
       <MostTakenActions replay={replay} live={live} replayStep={replayStep} />
+
+      {/* The wish demand feed (#873): the run's ActionWish rows (#621/#622) in
+          their own panel — dual-source like the action tally above, so a baked
+          replay's wishes display too (EventFeed below is live-only and buries
+          wishes among game events). */}
+      <WishFeed replay={replay} live={live} replayStep={replayStep} />
 
       {/* The run's social opportunity (#795/#819): live-only — replays carry
           no /usage, and RunSocialCard hides itself when an older backend
