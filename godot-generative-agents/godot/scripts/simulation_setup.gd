@@ -53,6 +53,7 @@ var _brain_opt: OptionButton = null
 var _plan_opt: OptionButton = null
 var _plan_hint: Label = null
 var _effort_opt: OptionButton = null
+var _model_opt: OptionButton = null
 var _steps_spin: SpinBox = null
 var _tick_spin: SpinBox = null
 var _cost_spin: SpinBox = null
@@ -61,10 +62,11 @@ var _cost_spin: SpinBox = null
 var _brains: Array = []
 var _plans: Array = []
 var _efforts: Array = []
+var _models: Array = []
 var _knobs_current: Dictionary = {}
 var _knobs_defaults: Dictionary = {}
 var _initial := {
-	"brain": "mock", "plan": "auto", "effort": "default",
+	"brain": "mock", "plan": "auto", "effort": "default", "model": "",
 	"steps": 0, "tick_seconds": 0.0, "max_cost": 0.0,
 }
 
@@ -187,6 +189,8 @@ func _set_busy(busy: bool) -> void:
 		_plan_opt.disabled = busy
 	if _effort_opt != null:
 		_effort_opt.disabled = busy
+	if _model_opt != null:
+		_model_opt.disabled = busy
 	if _steps_spin != null:
 		_steps_spin.editable = not busy
 	if _tick_spin != null:
@@ -278,6 +282,7 @@ func _render_config(data: Dictionary) -> void:
 	_brains = data.get("brains", [])
 	_plans = data.get("plans", [])
 	_efforts = data.get("efforts", [])
+	_models = data.get("models", [])
 	var knobs: Dictionary = data.get("knobs", {})
 	_knobs_current = knobs.get("current", {})
 	_knobs_defaults = knobs.get("defaults", {})
@@ -286,6 +291,7 @@ func _render_config(data: Dictionary) -> void:
 		"brain": str(run.get("brain", "mock")),
 		"plan": str(run.get("plan_request", run.get("plan", "auto"))),
 		"effort": str(run.get("effort", "default")),
+		"model": str(run.get("model", "")) if run.get("model") != null else "",
 		"steps": int(run.get("steps", 0)),
 		"tick_seconds": float(run.get("tick_seconds", 0.0)),
 		# `max_cost` is null on a free brain; get()'s default only applies to a
@@ -433,6 +439,36 @@ func _render_config(data: Dictionary) -> void:
 		_brain_opt.item_selected.connect(_update_effort_row.unbind(1))
 		_update_effort_row()
 
+	# The model row (#887): WHICH model the paid brain drives, so a saved run's
+	# model can be asked for again instead of the fresh server silently resolving
+	# its world YAML's default. Same shape as the depth row; the vocabulary is the
+	# server's priced-model list (plus its own current value), and a pre-#887
+	# backend advertises none and so gets no row.
+	_model_opt = null
+	if not _models.is_empty():
+		var model_row := HBoxContainer.new()
+		model_row.add_theme_constant_override("separation", 8)
+		var model_cap := Label.new()
+		model_cap.text = "Model (llm only)"
+		model_cap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		model_row.add_child(model_cap)
+		_model_opt = OptionButton.new()
+		for m in _models:
+			_model_opt.add_item(str(m))
+		var mi := (_models as Array).find(_initial.model)
+		if mi < 0:
+			# Unlike the depth's "default", falling back to item 0 would CHANGE
+			# the model rather than pick an inert value -- so keep `initial` in
+			# step with the selection, or an untouched form would post a model the
+			# server never named.
+			mi = 0
+			_initial.model = str(_models[0])
+		_model_opt.select(mi)
+		model_row.add_child(_model_opt)
+		_form_box.add_child(model_row)
+		_brain_opt.item_selected.connect(_update_model_row.unbind(1))
+		_update_model_row()
+
 	_steps_spin = _spin_row("Steps", 1, 1000000, 1, float(_initial.steps))
 	# Floor > 0: POST /config's tick_seconds is Field(gt=0), so a 0 would 422.
 	# step 0.05 (not 0.1): a SpinBox snaps to `min + round((v-min)/step)*step`, and
@@ -488,6 +524,29 @@ func _update_effort_row() -> void:
 		_effort_opt.set_item_disabled(i, not paid and str(_efforts[i]) != "default")
 	if not paid and _selected_effort() != "default" and default_idx >= 0:
 		_effort_opt.select(default_idx)
+
+
+func _selected_model() -> String:
+	if _model_opt == null or _model_opt.selected < 0:
+		return str(_initial.model)
+	return str(_models[_model_opt.selected])
+
+
+# Keep the model row consistent with the selected brain (#887): a model is a
+# paid-brain setting (the server 400s one on a free brain), so under a free brain
+# grey out everything except the server's own current model and snap the selection
+# back to it -- leaving the form "unchanged", which posts no model at all.
+# Deliberately per-ITEM, not `_model_opt.disabled`: that flag belongs to
+# _set_busy, and driving it from here would fight the busy/idle cycle.
+func _update_model_row() -> void:
+	if _model_opt == null:
+		return
+	var paid := _selected_brain() == "llm"
+	var initial_idx := (_models as Array).find(str(_initial.model))
+	for i in range(_models.size()):
+		_model_opt.set_item_disabled(i, not paid and i != initial_idx)
+	if not paid and _selected_model() != str(_initial.model) and initial_idx >= 0:
+		_model_opt.select(initial_idx)
 
 
 # Keep the planner row consistent with the selected brain (#791): the `llm`
@@ -591,6 +650,26 @@ func _apply_seed(seed: Dictionary) -> void:
 				)
 		else:
 			unmet.append("thinking depth '%s' not offered here" % effort)
+	# The saved model (#887) -- the whole reason this seed couldn't reproduce a run
+	# before: the block recorded `brain: "llm"` and nothing about WHICH model, so a
+	# Sonnet run came back on whatever the fresh server's YAML pinned. null here is
+	# a free-brain run (it drove no model), which is not a miss.
+	var model := str(seed.get("model", "")) if seed.get("model") != null else ""
+	if model != "" and _model_opt != null:
+		var midx := (_models as Array).find(model)
+		if midx >= 0:
+			_model_opt.select(midx)
+			_update_model_row()
+			if _selected_model() != model:
+				unmet.append(
+					"model '%s' needs the llm brain here -- kept '%s'"
+					% [model, _selected_model()]
+				)
+		else:
+			# The saved model isn't priced on this build (or isn't offered at all),
+			# so the dropdown can't ask for it -- say so rather than run the
+			# server's default under a "re-ran your setup" status line.
+			unmet.append("model '%s' not offered here" % model)
 	var run: Variant = seed.get("run")
 	if typeof(run) == TYPE_DICTIONARY:
 		var r := run as Dictionary
@@ -611,6 +690,7 @@ func _apply_seed(seed: Dictionary) -> void:
 	# before #845) skips the branch above entirely, leaving the levels enabled
 	# under a free brain. No-op when there is no effort row.
 	_update_effort_row()
+	_update_model_row()  # same, for the model row (#887)
 	if unmet.is_empty():
 		_set_status("Pre-filled from a saved run. Adjust anything, then Start.", false)
 	else:
@@ -718,6 +798,8 @@ func _on_start_pressed() -> void:
 		"initial_plan": str(_initial.plan) if _plan_opt != null else "",
 		"effort": _selected_effort() if _effort_opt != null else "",
 		"initial_effort": str(_initial.effort) if _effort_opt != null else "",
+		"model": _selected_model() if _model_opt != null else "",
+		"initial_model": str(_initial.model) if _model_opt != null else "",
 		"steps": int(_steps_spin.value),
 		"initial_steps": int(_initial.steps),
 		"tick": float(_tick_spin.value),

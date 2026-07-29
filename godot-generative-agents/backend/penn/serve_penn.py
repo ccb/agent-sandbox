@@ -86,7 +86,7 @@ from text_adventure_games.recording import (
     seed_world,
 )
 from text_adventure_games.transcript import RunRecord, file_sha256, git_sha
-from text_adventure_games.usage import UsageLedger
+from text_adventure_games.usage import PRICES, UsageLedger
 
 # The bake's full campus day (generate_penn_replay.DEFAULT_STEPS): long enough
 # for every authored meeting to convene and the whole cast to finish its rounds.
@@ -213,11 +213,38 @@ def _is_paid(llm) -> bool:
     return isinstance(llm, dict)
 
 
+def _model_choices(current=None) -> list[str]:
+    """The models the config surface offers (#887): every PRICED Anthropic model,
+    plus *current* when it isn't one of them.
+
+    Priced, because an unpriced model costs ``$0`` with a one-time warning
+    (``usage.price``) -- a run driven by one reports no spend at all, which is a
+    silent lie in a manifest and useless as a budget ceiling. The CLI keeps its
+    escape hatch (``--model`` accepts anything, for a model too new to be priced);
+    this narrower surface is what the GUI and HTTP clients pick from.
+
+    *current* rides along so the dropdown can always represent the value it is
+    showing: a server launched on an unpriced ``--model`` must be able to display
+    that model rather than silently snapping the form to a different one.
+    """
+    choices = {m for m in PRICES if m.startswith("claude-")}
+    if current:
+        choices.add(current)
+    return sorted(choices)
+
+
 def _effort_of(llm) -> str:
     """The thinking depth *llm* requests, as a wire value (#845): a member of
     ``EFFORT_LEVELS``, or ``"default"`` for none -- which is every free brain,
     since effort is a paid-brain setting."""
     return (llm.get("effort") or "default") if _is_paid(llm) else "default"
+
+
+def _model_of(llm) -> str | None:
+    """The model *llm* drives (#887), or ``None`` for a free brain -- which drives
+    no model at all. Not to be confused with ``PennStepper._effective_model``,
+    which answers "what WOULD this run drive" for the config surface."""
+    return llm.get("model") if _is_paid(llm) else None
 
 
 def _resolve_cognition_tools(flag: bool, sim_config, llm) -> bool:
@@ -1696,6 +1723,31 @@ class PennStepper:
         start = datetime.datetime.fromisoformat(SIM_START)
         return str(start + datetime.timedelta(seconds=self.num_steps * SEC_PER_STEP))
 
+    def _llm_resolve_base(self):
+        """The llm settings a brain change re-resolves from (#845).
+
+        NOT the raw world YAML: the YAML pins one model at no thinking depth, so
+        resolving from it discarded the launch ``--model`` / ``--effort`` /
+        ``--model-for`` overrides on every brain change -- a "re-run this setup"
+        that quietly moved a Sonnet-at-medium run onto the YAML's Haiku.
+        ``resolve_llm`` starts from ``dict(world_llm or {})``, so a resolved dict
+        feeds it unchanged. The YAML is still the base on a server that has never
+        run a paid brain -- it is where provider/model come from at all.
+
+        Read by ``describe_config`` too (#887), so the model GET /config reports
+        and the model a POST would resolve to cannot drift.
+        """
+        if _is_paid(self.llm):
+            return self.llm
+        return self._paid_llm_base or self.world.llm
+
+    def _effective_model(self) -> str:
+        """The model this run would drive (#887): whatever ``_llm_resolve_base``
+        names, or the fallback ``resolve_llm`` itself would apply. Concrete even
+        on a free brain, where it means "the model a switch to llm would use" --
+        which is what makes an untouched dropdown safe to leave unsent."""
+        return (self._llm_resolve_base() or {}).get("model") or DEFAULT_LLM_MODEL
+
     def describe_config(self) -> dict:
         """The pre-run config surface GET /config serves (#732); read-only.
 
@@ -1734,6 +1786,11 @@ class PennStepper:
             # "default" (= send no thinking config). Advertised like `brains` and
             # `plans` so a client hard-codes no level list.
             "efforts": list(EFFORT_CHOICES),
+            # The model vocabulary (#887): priced Anthropic models, so a saved
+            # run's model can be asked for again on a fresh server instead of
+            # silently resolving the world YAML's. See _model_choices for why it
+            # is the priced set and not free text.
+            "models": _model_choices(self._effective_model()),
             "run": {
                 "brain": self._brain_name(),
                 "plan": self.plan_mode,
@@ -1746,6 +1803,10 @@ class PennStepper:
                 # is inert), so an untouched dropdown truthfully means "keep the
                 # session's depth" under the only-send-changed contract.
                 "effort": _effort_of(self.llm),
+                # The model in force (#887) -- concrete even on a free brain (the
+                # one a switch to llm would use), so an untouched dropdown
+                # truthfully means "keep the session's model".
+                "model": self._effective_model(),
                 "steps": self.num_steps,
                 "stop_time": self._stop_time(),
                 "max_cost": self.ledger.max_cost_usd,
@@ -1759,6 +1820,7 @@ class PennStepper:
         brain: str | None = None,
         plan: str | None = None,
         effort: str | None = None,
+        model: str | None = None,
         sim_config: dict | None = None,
         steps: int | None = None,
         max_cost: float | None = None,
@@ -1806,23 +1868,8 @@ class PennStepper:
             if max_cost is not None and brain != "llm":
                 raise ValueError("max_cost needs the llm brain")
             try:
-                # Re-resolve from the session's OWN last paid resolution, not the
-                # raw world YAML (#845): the YAML pins one model at no thinking
-                # depth, so resolving from it discarded the launch --model /
-                # --effort / --model-for overrides on every brain change -- a
-                # "re-run this setup" that quietly moved a Sonnet-at-medium run
-                # onto the YAML's Haiku. resolve_llm starts from
-                # `dict(world_llm or {})`, so a resolved dict feeds it unchanged.
-                # The YAML is still the base on a server that has never run a
-                # paid brain -- it is where provider/model come from at all.
                 new_llm = resolve_llm(
-                    (
-                        self.llm
-                        if _is_paid(self.llm)
-                        else (self._paid_llm_base or self.world.llm)
-                    ),
-                    brain,
-                    max_cost=max_cost,
+                    self._llm_resolve_base(), brain, max_cost=max_cost
                 )
                 if _is_paid(new_llm):
                     # create_llm_client imports anthropic lazily -- _init_brain
@@ -1867,6 +1914,22 @@ class PennStepper:
                 # already has -- so unlike a level it is never an error, and a
                 # client that switches to mock can send it along with the brain.
                 new_llm = {k: v for k, v in new_llm.items() if k != "effort"}
+        # The model (#887), same shape and same llm-brain rule as the depth above.
+        # Restricted to the advertised choices -- a typo here would otherwise run
+        # a whole paid day against a model that prices at $0, so the manifest
+        # would report a Sonnet showcase run as free. There is no "default"
+        # sentinel: a model always has a concrete value (`run.model`), so
+        # "unchanged" is what an untouched form sends -- nothing.
+        if model is not None:
+            choices = _model_choices(self._effective_model())
+            if model not in choices:
+                raise ValueError(
+                    f"unknown model {model!r}: this surface offers "
+                    f"{', '.join(choices)} (the CLI's --model takes any id)"
+                )
+            if not _is_paid(new_llm):
+                raise ValueError("model needs the llm brain")
+            new_llm = dict(new_llm, model=model)
         # The planner (#787). Resolved against the brain THIS apply lands on,
         # not the one the server launched with: the config session is the run's
         # setup authority, so switching to mock must drop an auto-resolved llm
@@ -1906,7 +1969,10 @@ class PennStepper:
         # AnthropicClient._effort), so without this the new depth would show up in
         # meta()/the manifest and nowhere on the wire.
         effort_changed = _effort_of(self.llm) != _effort_of(new_llm)
-        if brain is not None or plan_changed or effort_changed:
+        # ...and a model change, for the same reason (#887): AnthropicClient reads
+        # `config.model` once, in __init__.
+        model_changed = _model_of(self.llm) != _model_of(new_llm)
+        if brain is not None or plan_changed or effort_changed or model_changed:
             # A plan change alone still needs the brain rebuilt: the planner
             # client is constructed there, so turning the planner on (or off)
             # without this would leave plan_mode saying "llm" and every agent
@@ -1954,6 +2020,11 @@ class PennStepper:
             # no thinking config, so a re-run seed can reproduce THAT too
             # instead of inheriting whatever depth the next server launched with.
             "effort": _effort_of(self.llm),
+            # The model this run drives (#887), or None on a free brain. THE piece
+            # that made a cross-process re-run impossible: the block recorded
+            # `brain: "llm"` and nothing else, so a fresh server resolved its own
+            # world YAML and a saved Sonnet run came back on Haiku.
+            "model": _model_of(self.llm),
             "sim_config": self._sim_config_for_manifest(),
             "run": {
                 "steps": self.num_steps,

@@ -201,6 +201,12 @@ class ConfigRequest(BaseModel):
         "'auto' (llm under the llm brain, schedule otherwise), 'schedule' "
         "(the authored YAML day), or 'llm' (model-authored, llm brain only)",
     )
+    model: str | None = Field(
+        default=None,
+        description="the model to drive (#887): one of GET /config's `models` -- "
+        "the priced Anthropic models, so a run's spend can't silently price at "
+        "$0. llm brain only",
+    )
     effort: str | None = Field(
         default=None,
         description="adaptive thinking depth (#845): one of GET /config's "
@@ -1249,8 +1255,8 @@ def create_app(
         cast/knobs/brain through the stepper's reset path and echo what was
         applied. Accepted only while paused at tick 0 (409 after the run
         starts); bad input (empty cast, unknown persona id, unknown or
-        unavailable brain, an llm planner or a thinking depth on a free brain,
-        an unknown effort level, bad sim_config) is a 400. Followers see the same
+        unavailable brain, an llm planner or a thinking depth or a model on a
+        free brain, an unknown effort level or model, bad sim_config) is a 400. Followers see the same
         status(reason="reset") + run_id record every world rebuild publishes."""
         apply_config = getattr(stepper, "apply_config", None)
         if controller is None or apply_config is None:
@@ -1282,6 +1288,7 @@ def create_app(
                     brain=req.brain,
                     plan=req.plan,
                     effort=req.effort,
+                    model=req.model,
                     sim_config=req.sim_config,
                     steps=req.steps,
                     max_cost=req.max_cost,
