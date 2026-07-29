@@ -251,7 +251,19 @@ def test_decide_timeout_writes_one_failure_memory_and_the_late_answer_adds_none(
         world=build_penn_world(),
         llm=llm,
         decide_workers=8,
-        decide_timeout=0.2,
+        # 1.0 s, not 0.2: this test asserts BOTH that the gated agent times out
+        # AND that the healthy ones don't, so the budget has to actually separate
+        # "hung" from "merely slow". At 0.2 s it didn't -- a healthy decide is
+        # microseconds of gated fake plus a real prompt/perception/retrieval pass,
+        # and on a 2-vCPU CI runner (8 decide threads on 2 cores) that pass can
+        # exceed 0.2 s, so a healthy agent wrote its own timeout memory and the
+        # "everyone else" assertion below failed. It fired on ~1 run in 4, on
+        # whichever Python version lost the coin flip -- 3.11 and 3.13 both seen,
+        # on this test's own branch and on an unmodified main.
+        # Free to raise: the gated agent blocks on gate.wait(timeout=5), so it
+        # blows ANY budget under ~5 s. Costs ~0.8 s of wall clock on the one tick
+        # that waits the budget out. Keep it well under that 5 s gate deadline.
+        decide_timeout=1.0,
     )
     hung = stepper.order[0]
     gates[hung] = threading.Event()
@@ -263,7 +275,7 @@ def test_decide_timeout_writes_one_failure_memory_and_the_late_answer_adds_none(
             if _TIMEOUT_PHRASE in r.text
         ]
 
-    # Tick 1: the gated decide blows its 0.2 s budget -> exactly one failure
+    # Tick 1: the gated decide blows its budget -> exactly one failure
     # memory, keyed to where the agent stood, at #636's failure conventions
     # (importance 3.0, unlocked -- only the pre-score floor).
     stepper.tick()
