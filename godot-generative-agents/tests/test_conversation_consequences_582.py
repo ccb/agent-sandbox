@@ -34,10 +34,23 @@ def test_outcome_tool_schema_shape():
     tool = cognition.CONVERSATION_OUTCOME_TOOL
     assert tool["name"] == "conversation_outcome"
     props = tool["parameters"]["properties"]
-    assert set(props) == {"plans_changed", "commitment", "relationship_note"}
+    assert set(props) == {
+        "plans_changed",
+        "commitment",
+        "commitment_timing",
+        "relationship_note",
+    }
     assert props["plans_changed"]["type"] == "boolean"
-    # Only the yes/no gate is required; the two strings are optional.
-    assert tool["parameters"]["required"] == ["plans_changed"]
+    assert props["commitment_timing"]["enum"] == [
+        "immediate",
+        "scheduled",
+        "unspecified",
+    ]
+    # Timing is always classified; the two note strings remain optional.
+    assert tool["parameters"]["required"] == [
+        "plans_changed",
+        "commitment_timing",
+    ]
 
 
 def test_outcome_prompt_renders_partner_and_transcript():
@@ -57,8 +70,12 @@ def test_outcome_prompt_renders_partner_and_transcript():
         "\n"
         "Reflect on the conversation and record its outcome. Did it change what "
         "you plan to do for the rest of the day -- for example, an agreement to "
-        "be somewhere at a certain time? And is there anything about Ayesha Khan "
-        "worth remembering afterward?"
+        "be somewhere at a certain time? Classify when a concrete commitment "
+        "starts: immediate only when you agreed to begin as soon as this "
+        'conversation ends ("now", "right now", "let\'s go"); scheduled for a '
+        "later time or delay; unspecified otherwise. Immediate is a behavioral "
+        "promise, not a synonym for important. And is there anything about "
+        "Ayesha Khan worth remembering afterward?"
     )
 
 
@@ -151,6 +168,7 @@ def test_agreement_revises_plan_and_writes_relationship_note():
         {
             "plans_changed": True,
             "commitment": "meet Ayesha at the Library at 2pm",
+            "commitment_timing": "scheduled",
             "relationship_note": "Ayesha is a kindred spirit about robotics.",
         }
     )
@@ -161,7 +179,8 @@ def test_agreement_revises_plan_and_writes_relationship_note():
         maria, "Ayesha Khan", "Maria Lopez: Library at 2?\nAyesha Khan: Yes.", step=7
     )
 
-    assert changed is True
+    assert changed.changed is True
+    assert changed.immediate_next is False
     # One outcome call, forced onto the outcome tool.
     assert [c["tool"] for c in brain.calls] == ["conversation_outcome"]
     # The revision fired with the CONVERSATION reason and the commitment as detail.
@@ -197,7 +216,7 @@ def test_relationship_note_without_plan_change():
         maria, "Ayesha Khan", "Maria Lopez: Hey!\nAyesha Khan: Been a while!", step=2
     )
 
-    assert changed is False
+    assert changed.changed is False
     assert planner.triggers == []  # no revision offered
     notes = [
         r
@@ -221,7 +240,7 @@ def test_small_talk_changes_nothing():
         step=3,
     )
 
-    assert changed is False
+    assert changed.changed is False
     assert planner.triggers == []  # no revision offered
     assert maria.agent.memory.records == []  # no note written
 
@@ -241,7 +260,8 @@ def test_none_and_non_dict_results_are_safe_no_ops():
     for result in (None, "oops", 42):
         planner = _RecordingPlanner()
         maria = _agent_with(_OutcomeBrain(result), planner)
-        assert cognition.apply_conversation_outcome(maria, "X", "t", step=0) is False
+        result = cognition.apply_conversation_outcome(maria, "X", "t", step=0)
+        assert result == cognition.PlanRevisionResult()
         assert planner.triggers == []
         assert maria.agent.memory.records == []
 
@@ -249,7 +269,10 @@ def test_none_and_non_dict_results_are_safe_no_ops():
 def test_client_without_call_tool_is_a_no_op():
     planner = _RecordingPlanner()
     maria = _agent_with(brain=object(), planner=planner)  # no call_tool attr
-    assert cognition.apply_conversation_outcome(maria, "X", "t", step=0) is False
+    assert (
+        cognition.apply_conversation_outcome(maria, "X", "t", step=0)
+        == cognition.PlanRevisionResult()
+    )
     assert planner.triggers == []
     assert maria.agent.memory.records == []
 
@@ -294,6 +317,7 @@ class _ConvoThenOutcomeBrain:
             return {
                 "plans_changed": True,
                 "commitment": "meet at the Library",
+                "commitment_timing": "scheduled",
                 "relationship_note": "A good friend from the cafe.",
             }
         # The engine's dialogue seam (Agent.converse) forces the "speak" tool.

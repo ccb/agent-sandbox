@@ -157,6 +157,7 @@ def test_commitment_lands_even_though_the_planner_is_a_no_op():
         {
             "plans_changed": True,
             "commitment": "grab food with Ayesha, leaving right now",
+            "commitment_timing": "immediate",
         }
     )
     planner = _NoOpPlanner()
@@ -166,7 +167,8 @@ def test_commitment_lands_even_though_the_planner_is_a_no_op():
         maria, "Ayesha Khan", "Maria Lopez: Food?\nAyesha Khan: Now!", step=263
     )
 
-    assert changed is False  # the planner proposed no change -- as in the live run
+    assert changed.changed is False  # planner proposed no change, as in live run
+    assert changed.immediate_next is False
     assert planner.triggers[0].reason == cognition.CONVERSATION  # still offered
     assert len(_plans(maria)) == 1  # ...and the intention survived anyway
 

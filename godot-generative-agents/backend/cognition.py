@@ -28,7 +28,7 @@ from dataclasses import dataclass, replace
 from text_adventure_games import conversation as convo
 from text_adventure_games.llm_client import MockReActClient, run_tool_loop
 from text_adventure_games.memory import MemoryKind
-from text_adventure_games.planning import RevisionTrigger
+from text_adventure_games.planning import IMMEDIATE_URGENCY, RevisionTrigger
 from text_adventure_games.npc import (
     COGNITION_BUDGET,
     LLMAgent,
@@ -94,6 +94,9 @@ def _consult_entry(summary: str) -> dict:
 # engine's RevisionTrigger.reason is a plain string (planning.py), so an
 # agreement reached in dialogue needs no engine change to reach a planner.
 CONVERSATION = "conversation"
+COMMITMENT_IMMEDIATE = IMMEDIATE_URGENCY
+COMMITMENT_SCHEDULED = "scheduled"
+COMMITMENT_UNSPECIFIED = "unspecified"
 
 # React-or-continue (issue #370). A backend-local revision reason, like
 # CONVERSATION/DEVIATED: an agent chose "replan" when it noticed someone
@@ -115,10 +118,11 @@ _CONVERSING_MARKER = "you are in a conversation"
 RELATIONSHIP_NOTE_IMPORTANCE = 8.0
 
 # The post-conversation outcome tool (#582): one structured call per participant
-# after a meeting. plans_changed gates a plan revision; the two strings are
-# optional (small talk fills neither). Normalized {name, description, parameters}
-# -- the shape llm_client.call_tool translates per provider, like the planner's
-# tools.
+# after a meeting. plans_changed gates a plan revision; commitment_timing tells
+# the executor whether a concrete agreement starts at the first action boundary
+# after playback (#829); the two note strings are optional (small talk fills
+# neither). Normalized {name, description, parameters} -- the shape
+# llm_client.call_tool translates per provider, like the planner's tools.
 CONVERSATION_OUTCOME_TOOL = {
     "name": "conversation_outcome",
     "description": (
@@ -143,6 +147,22 @@ CONVERSATION_OUTCOME_TOOL = {
                     "and when. Omit if nothing changed."
                 ),
             },
+            "commitment_timing": {
+                "type": "string",
+                "enum": [
+                    COMMITMENT_IMMEDIATE,
+                    COMMITMENT_SCHEDULED,
+                    COMMITMENT_UNSPECIFIED,
+                ],
+                "description": (
+                    "When the concrete commitment starts. immediate only when "
+                    "you agreed to begin as soon as this conversation ends "
+                    "(now/right now/let's go); scheduled for a later time or "
+                    "delay; unspecified when there is no concrete timing or "
+                    "plans did not change. Immediate is a behavioral promise, "
+                    "not a synonym for important."
+                ),
+            },
             "relationship_note": {
                 "type": "string",
                 "description": (
@@ -151,7 +171,7 @@ CONVERSATION_OUTCOME_TOOL = {
                 ),
             },
         },
-        "required": ["plans_changed"],
+        "required": ["plans_changed", "commitment_timing"],
     },
 }
 
@@ -1529,14 +1549,30 @@ def observe_and_decide(
     return agent.decide(observation)
 
 
-def maybe_revise_plan(char, trigger, clock=None) -> bool:
+@dataclass(frozen=True)
+class PlanRevisionResult:
+    """What committing a planner proposal changed (#829).
+
+    ``immediate_next`` is deliberately narrower than ``changed``: it is true
+    only when an immediate trigger produced and committed a real first tail
+    stop. Callers use it as authority to end the current activity; a durable
+    commitment memory alone must never interrupt execution.
+    """
+
+    changed: bool = False
+    immediate_next: bool = False
+
+
+def maybe_revise_plan(char, trigger, clock=None) -> PlanRevisionResult:
     """Offer the agent's planner a chance to re-plan the rest of its day.
 
     The step loop calls this at a revision trigger (issue #83, design doc §8): an
     action that failed the precondition gate, or the agent running behind its
     schedule. It hands the trigger to ``planner.revise``; if that proposes a
     *changed* plan, it commits the revised tail onto the running schedule and
-    stashes the new plan on the agent. Returns ``True`` iff the plan changed.
+    stashes the new plan on the agent. Returns a :class:`PlanRevisionResult`;
+    most trigger sites ignore it, while conversation outcomes use
+    ``immediate_next`` to preempt only after a usable next stop was committed.
 
     **The executed/current stop is never disturbed** (design invariant §8). The
     loop, not the planner, is the authority on how far the agent has got: this
@@ -1553,32 +1589,52 @@ def maybe_revise_plan(char, trigger, clock=None) -> bool:
     planner = getattr(agent, "planner", None)
     plan = getattr(agent, "plan", None)
     if planner is None or plan is None:
-        return False
+        return PlanRevisionResult()
+    # The schedule driver, not the planner's possibly stale plan, owns the real
+    # execution boundary. Tell the planner where it is before asking for a
+    # revision, then re-apply the same boundary below as defense in depth.
+    after = getattr(agent.schedule, "stop_index", -1)
+    if isinstance(trigger, RevisionTrigger):
+        trigger = replace(trigger, current_stop_index=after)
     proposed = planner.revise(plan, trigger, agent.memory, clock)
     if proposed is plan or proposed == plan:
-        return False
+        return PlanRevisionResult()
     # Re-anchor: keep the stops the agent has executed or is performing (ground
     # truth from the schedule driver), take only the planner's stops past the
     # current one. Pacing lives on agent.schedule -- the mock client that drives
     # advance()/steps even when a real LLM is the decision brain (Phase A).
-    after = getattr(agent.schedule, "stop_index", -1)
+    proposed_tail = list(proposed.stops[after + 1 :])
+    immediate = (
+        getattr(trigger, "urgency", "normal") == IMMEDIATE_URGENCY
+        and proposed.immediate_next
+        and bool(proposed_tail)
+    )
+    if immediate and proposed_tail:
+        # #838 treats start_hour as a hard "not before" gate. The first tail
+        # stop is due now by the planner's structural proposal marker, so clear
+        # any stale/future anchor.
+        proposed_tail[0] = replace(proposed_tail[0], start_hour=None)
     guarded = replace(
         proposed,
-        stops=plan.stops[: after + 1] + proposed.stops[after + 1 :],
+        stops=plan.stops[: after + 1] + proposed_tail,
         revision=plan.revision + 1,
+        immediate_next=False,
     )
     if guarded.stops == plan.stops:
-        return False  # only higher-level reasoning moved; schedule is unchanged
+        return PlanRevisionResult()  # only higher-level reasoning moved
     agent.plan = guarded
     agent.schedule.replace_schedule(
         [stop.to_schedule_entry() for stop in guarded.stops]
     )
-    return True
+    return PlanRevisionResult(
+        changed=True,
+        immediate_next=immediate,
+    )
 
 
 def apply_conversation_outcome(
     char, partner_name: str, transcript: str, step: int, clock=None
-) -> bool:
+) -> PlanRevisionResult:
     """One post-conversation outcome pass for a single participant (issue #582).
 
     After a meeting actually happened, ask *char*'s brain -- via the
@@ -1605,13 +1661,14 @@ def apply_conversation_outcome(
     and inert when the brain can't tool-call, or returns nothing usable -- the
     same graceful contract the planner and decide paths follow -- which is also
     why the mock bake (no conversation, so this is never reached) is unchanged.
-    Returns whether the plan changed.
+    Returns the committed revision result. ``immediate_next`` is the narrow
+    authority the conversation lifecycle uses to end a settled current stop.
     """
     agent = char.agent
     client = getattr(agent, "llm_client", None)
     call = getattr(client, "call_tool", None)
     if not callable(call):
-        return False
+        return PlanRevisionResult()
     # Attribute the call to this speaker (usage.py); "role" labels the monitor
     # line. Stamped right before the (sequential) call, so a shared client is
     # attributed correctly per participant.
@@ -1635,7 +1692,7 @@ def apply_conversation_outcome(
     # pass agent.temperature). Don't "fix" this to agent.temperature.
     result = call(messages, CONVERSATION_OUTCOME_TOOL, max_tokens=agent.max_tokens)
     if not isinstance(result, dict):
-        return False
+        return PlanRevisionResult()
     note = result.get("relationship_note")
     if isinstance(note, str) and note.strip():
         note_record = agent.memory.add_chat(
@@ -1652,7 +1709,7 @@ def apply_conversation_outcome(
     # revision; the schema declares plans_changed as a required boolean, so a
     # strict provider always sends one.
     if result.get("plans_changed") is not True:
-        return False
+        return PlanRevisionResult()
     commitment = result.get("commitment")
     has_commitment = isinstance(commitment, str) and bool(commitment.strip())
     detail = commitment.strip() if has_commitment else transcript
@@ -1688,7 +1745,17 @@ def apply_conversation_outcome(
             importance=RELATIONSHIP_NOTE_IMPORTANCE,
         )
         intent.metadata[_IMPORTANCE_LOCKED] = True
-    return maybe_revise_plan(char, RevisionTrigger(CONVERSATION, step, detail), clock)
+    timing = result.get("commitment_timing")
+    urgency = (
+        COMMITMENT_IMMEDIATE
+        if has_commitment and timing == COMMITMENT_IMMEDIATE
+        else "normal"
+    )
+    return maybe_revise_plan(
+        char,
+        RevisionTrigger(CONVERSATION, step, detail, urgency=urgency),
+        clock,
+    )
 
 
 def score_new_memories(char, step: int) -> None:
@@ -2217,23 +2284,28 @@ def _on_pair_cooldown(cooldowns, key, step: int, cooldown_steps: int) -> bool:
     return step - last < windows * cooldown_steps
 
 
-def _finish_conversation(a, b, convo_obj, step, cooldowns, clock) -> int:
+def _finish_conversation(
+    a, b, convo_obj, step, cooldowns, clock
+) -> tuple[int, dict[str, PlanRevisionResult]]:
     """End-of-conversation bookkeeping: record the pair cooldown and run the
-    #582 outcome pass for each participant. Returns 1 if the conversation
-    produced any lines (a real meeting), else 0 -- so a mock/empty conversation
-    sets no cooldown and counts for nothing.
+    #582 outcome pass for each participant. Returns ``(completed, revisions)``:
+    completed is 1 for a real meeting and 0 for an empty/mock exchange;
+    revisions maps participant names to their committed plan results so the
+    caller that owns runtime state can apply #829 preemption.
 
     The cooldown entry carries the running conversation count with it, which is
     what escalates the pair's next window (:func:`_on_pair_cooldown`, #803)."""
     if not convo_obj.happened:
-        return 0
+        return 0, {}
     key = frozenset((a.name, b.name))
     _, held = _pair_convos(cooldowns, key)
     cooldowns[key] = (step, held + 1)
     transcript = convo_obj.transcript()
-    apply_conversation_outcome(a, b.name, transcript, step, clock=clock)
-    apply_conversation_outcome(b, a.name, transcript, step, clock=clock)
-    return 1
+    revisions = {
+        a.name: apply_conversation_outcome(a, b.name, transcript, step, clock=clock),
+        b.name: apply_conversation_outcome(b, a.name, transcript, step, clock=clock),
+    }
+    return 1, revisions
 
 
 def _credit_stop_for_conversation(char, st) -> bool:
@@ -2294,6 +2366,21 @@ def _credit_stop_for_conversation(char, st) -> bool:
     return True
 
 
+def _expire_immediate_commitments(state, revisions, step: int) -> set[str]:
+    """Expire settled latches whose valid immediate tails were committed (#829).
+
+    Returns the names changed for focused tests/diagnostics. A reactive
+    mid-walk participant has no activity latch, so it keeps its path and waits
+    for a separately designed interruption policy.
+    """
+    expired = set()
+    for name, revision in revisions.items():
+        if revision.immediate_next and state[name].get("performing"):
+            state[name]["perform_until"] = step
+            expired.add(name)
+    return expired
+
+
 def _advance_conversation(
     game,
     ac,
@@ -2347,10 +2434,17 @@ def _advance_conversation(
         # schedule) is no longer load-bearing, just kept for its own sake.
         for nm in (ac.a, ac.b):
             _credit_stop_for_conversation(chars[nm], state[nm])
-    delta = _finish_conversation(
+    delta, revisions = _finish_conversation(
         chars[ac.a], chars[ac.b], ac.convo, step, cooldowns, clock
     )
     if ac.convo.happened:
+        # #829: an immediate commitment may end a settled activity early only
+        # after its valid next stop has been committed. Do not advance here:
+        # playback keeps `conversing` true, then the normal latch-expiry
+        # pre-pass consumes this conversation's existing credit exactly once.
+        # A reactive mid-walk conversation has no activity latch and remains
+        # deliberately non-preemptive.
+        _expire_immediate_commitments(state, revisions, step)
         ac.hold_until = step + len(ac.convo.lines) * line_playback_steps
         state[ac.a]["conversing"] = True
         state[ac.b]["conversing"] = True
