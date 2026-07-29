@@ -338,6 +338,39 @@ def test_config_serves_the_asked_for_plan():
     assert client.get("/config").json()["run"]["plan_request"] == "schedule"
 
 
+def test_effort_is_advertised_and_paid_brain_only():
+    # #845: thinking depth joins the config surface as a vocabulary + a current
+    # value, so a client hard-codes no level list and an untouched dropdown means
+    # "keep the session's depth". It is a paid-brain setting: a free brain reports
+    # "default" and refuses a level rather than accepting an inert one.
+    stepper = _mock_stepper()
+    cfg = stepper.describe_config()
+    assert cfg["efforts"] == ["default", "low", "medium", "high", "xhigh", "max"]
+    assert cfg["run"]["effort"] == "default"
+    with pytest.raises(ValueError, match="needs the llm brain"):
+        stepper.apply_config(effort="high")
+    with pytest.raises(ValueError, match="unknown effort"):
+        stepper.apply_config(effort="nonsense")
+    # guard-before-teardown: both rejections left the stepper serving
+    assert stepper.tick() is not None
+    # "default" on a free brain is a no-op, not an error -- it asks for exactly
+    # what a free brain already has, so a re-run seed can send it unconditionally.
+    assert stepper.apply_config(effort="default")["effort"] == "default"
+
+
+def test_post_config_accepts_the_effort_knob():
+    client, stepper = _client()
+    body = client.get("/config").json()
+    assert "medium" in body["efforts"]
+    assert body["run"]["effort"] == "default"
+    # A depth with no paid brain to think with is a 400, not a 500 (the plan
+    # knob's rule) -- this also pins that req.effort reaches apply_config at all.
+    resp = client.post("/config", json={"effort": "high"})
+    assert resp.status_code == 400
+    assert "llm brain" in resp.json()["detail"]
+    assert client.post("/config", json={"effort": "nonsense"}).status_code == 400
+
+
 def test_create_run_drops_a_prior_applied_config(tmp_path):
     stepper = _mock_stepper(run_store=RunStore(tmp_path / "runs"))
     stepper.apply_config(cast=["diego"])

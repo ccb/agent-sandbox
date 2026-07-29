@@ -119,6 +119,13 @@ TIER_ROLES = frozenset(
 # startup from the CLI, the world YAML, and POST /config alike.
 EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
 
+# The WIRE vocabulary the config surface advertises (#845): the levels above plus
+# an explicit "default" for unset. POST /config's contract is "omit = keep
+# current", so without a sentinel there is no way to ask for no thinking config at
+# all -- and a re-run of a run that requested none has to be able to say so.
+# "default" is this file's existing word for None (see _fmt_or_default).
+EFFORT_CHOICES = ("default", *EFFORT_LEVELS)
+
 # Mid-run brain-outage threshold (#745): after this many CONSECUTIVE failed
 # real-brain calls (error rows in the ledger with no genuine answer between
 # them), the next tick() raises BrainOutage instead of burning more paid,
@@ -204,6 +211,13 @@ def _is_paid(llm) -> bool:
     """True only for a real, paying LLM config (a dict). None (mock) and the
     SCRIPTED sentinel are free."""
     return isinstance(llm, dict)
+
+
+def _effort_of(llm) -> str:
+    """The thinking depth *llm* requests, as a wire value (#845): a member of
+    ``EFFORT_LEVELS``, or ``"default"`` for none -- which is every free brain,
+    since effort is a paid-brain setting."""
+    return (llm.get("effort") or "default") if _is_paid(llm) else "default"
 
 
 def _resolve_cognition_tools(flag: bool, sim_config, llm) -> bool:
@@ -781,6 +795,14 @@ class PennStepper:
         # What POST /config applied, or None for an unconfigured server; when
         # set, _store_manifest records it as the manifest's `config` block (#732).
         self._applied_config = None
+        # The last PAID resolution this session made (#845), or None on a server
+        # that has never run a paid brain. apply_config re-resolves a brain change
+        # from this rather than from the world YAML, so the launch --model /
+        # --effort / --model-for overrides survive a free-brain detour instead of
+        # silently reverting to the YAML's pinned model at no thinking depth.
+        # Never cleared -- that is the point (mirrors _launch_num_steps: a value
+        # the run was launched with that must not leak away).
+        self._paid_llm_base = None
         self._init_brain(llm)
         self._build(world, resume_run_id=resume_run_id)
 
@@ -793,6 +815,10 @@ class PennStepper:
         new brain's clients must not reuse the old model's.
         """
         self.llm = llm
+        if _is_paid(llm):
+            # Remember what a paid brain resolved to (#845), so a later
+            # apply_config can re-resolve from it (see __init__).
+            self._paid_llm_base = dict(llm)
         # The real-brain clients (issue #261): one shared by decide + converse,
         # one for reflection -- separate instances so the request monitor can
         # tag each role exactly, all recording into self.ledger. Built once
@@ -1704,6 +1730,10 @@ class PennStepper:
             # `run.plan` here is just the initial resolved value, not the reason
             # the client can avoid re-deriving.
             "plans": ["auto", "schedule", "llm"],
+            # The thinking-depth vocabulary (#845), including the explicit
+            # "default" (= send no thinking config). Advertised like `brains` and
+            # `plans` so a client hard-codes no level list.
+            "efforts": list(EFFORT_CHOICES),
             "run": {
                 "brain": self._brain_name(),
                 "plan": self.plan_mode,
@@ -1711,6 +1741,11 @@ class PennStepper:
                 # setup screen defaults its dropdown to this, so an untouched
                 # dropdown truthfully means "keep the session's request".
                 "plan_request": self._plan_mode_flag,
+                # The thinking depth in force (#845), as a member of `efforts`:
+                # "default" when none is requested (or on a free brain, where it
+                # is inert), so an untouched dropdown truthfully means "keep the
+                # session's depth" under the only-send-changed contract.
+                "effort": _effort_of(self.llm),
                 "steps": self.num_steps,
                 "stop_time": self._stop_time(),
                 "max_cost": self.ledger.max_cost_usd,
@@ -1723,6 +1758,7 @@ class PennStepper:
         cast: list[str] | None = None,
         brain: str | None = None,
         plan: str | None = None,
+        effort: str | None = None,
         sim_config: dict | None = None,
         steps: int | None = None,
         max_cost: float | None = None,
@@ -1770,7 +1806,24 @@ class PennStepper:
             if max_cost is not None and brain != "llm":
                 raise ValueError("max_cost needs the llm brain")
             try:
-                new_llm = resolve_llm(self.world.llm, brain, max_cost=max_cost)
+                # Re-resolve from the session's OWN last paid resolution, not the
+                # raw world YAML (#845): the YAML pins one model at no thinking
+                # depth, so resolving from it discarded the launch --model /
+                # --effort / --model-for overrides on every brain change -- a
+                # "re-run this setup" that quietly moved a Sonnet-at-medium run
+                # onto the YAML's Haiku. resolve_llm starts from
+                # `dict(world_llm or {})`, so a resolved dict feeds it unchanged.
+                # The YAML is still the base on a server that has never run a
+                # paid brain -- it is where provider/model come from at all.
+                new_llm = resolve_llm(
+                    (
+                        self.llm
+                        if _is_paid(self.llm)
+                        else (self._paid_llm_base or self.world.llm)
+                    ),
+                    brain,
+                    max_cost=max_cost,
+                )
                 if _is_paid(new_llm):
                     # create_llm_client imports anthropic lazily -- _init_brain
                     # is the first place that actually happens, which is AFTER
@@ -1795,6 +1848,25 @@ class PennStepper:
             if not _is_paid(new_llm):
                 raise ValueError("max_cost needs the llm brain")
             new_llm = dict(new_llm, max_cost_usd=max_cost)
+        # Thinking depth (#845), applied against the brain THIS apply lands on --
+        # so it works whether or not `brain` rode along, and so the llm-brain rule
+        # is checked once (the same shape as max_cost above). "default" is the
+        # explicit "no thinking config", the only way to clear a launch --effort.
+        if effort is not None:
+            if effort not in EFFORT_CHOICES:
+                raise ValueError(
+                    f"unknown effort {effort!r}: valid levels are "
+                    f"{', '.join(EFFORT_CHOICES)}"
+                )
+            if effort != "default":
+                if not _is_paid(new_llm):
+                    raise ValueError("effort needs the llm brain")
+                new_llm = dict(new_llm, effort=effort)
+            elif _is_paid(new_llm):
+                # "default" asks for no thinking config, which a free brain
+                # already has -- so unlike a level it is never an error, and a
+                # client that switches to mock can send it along with the brain.
+                new_llm = {k: v for k, v in new_llm.items() if k != "effort"}
         # The planner (#787). Resolved against the brain THIS apply lands on,
         # not the one the server launched with: the config session is the run's
         # setup authority, so switching to mock must drop an auto-resolved llm
@@ -1829,7 +1901,12 @@ class PennStepper:
         plan_changed = new_plan_mode != self.plan_mode
         self._plan_mode_flag = new_plan_flag
         self.plan_mode = new_plan_mode
-        if brain is not None or plan_changed:
+        # An effort change alone needs the brain rebuilt too (#845): the clients
+        # read the depth once, at construction (LlmConfig.effort ->
+        # AnthropicClient._effort), so without this the new depth would show up in
+        # meta()/the manifest and nowhere on the wire.
+        effort_changed = _effort_of(self.llm) != _effort_of(new_llm)
+        if brain is not None or plan_changed or effort_changed:
             # A plan change alone still needs the brain rebuilt: the planner
             # client is constructed there, so turning the planner on (or off)
             # without this would leave plan_mode saying "llm" and every agent
@@ -1872,6 +1949,11 @@ class PennStepper:
             # so a saved run's re-run seed reproduces the request rather than
             # freezing the resolution.
             "plan_request": self._plan_mode_flag,
+            # The thinking depth this run will think at (#845) -- a brain
+            # property, like `brain` itself, not a run control. "default" means
+            # no thinking config, so a re-run seed can reproduce THAT too
+            # instead of inheriting whatever depth the next server launched with.
+            "effort": _effort_of(self.llm),
             "sim_config": self._sim_config_for_manifest(),
             "run": {
                 "steps": self.num_steps,
@@ -2550,6 +2632,13 @@ def reproduce_run(store: RunStore, run_id: str) -> ReproResult:
     the mock, so it could only diverge. It now replays out of the same cassette
     as every other call (see the replay branch in ``_init_brain``), which is
     what lets ``--plan llm`` be the live default without giving up #715.
+
+    The manifest's ``model`` and ``effort`` (#845) are deliberately NOT
+    reconstructed: ``recording.request_key`` hashes only the method, messages and
+    sampling params, and thinking depth is applied further down, inside
+    ``AnthropicClient._sampling_kwargs``. So neither reaches a cassette key and
+    byte-identity here is indifferent to both. Reproducing a run's thinking depth
+    is the *config* re-run's job (``apply_config``'s ``effort``), not this one's.
     """
     row = store.get_run(run_id)
     if row is None:

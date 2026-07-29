@@ -77,6 +77,18 @@ func _initialize() -> void:
 	_check(RunRow.config_summary(mocktemp) == "1 persona(s) · mock",
 		"mock-brain run omits temp even when one was recorded")
 
+	# Thinking depth (#845): shown when a level was requested, hidden when the run
+	# asked for none ("default") and on a free brain, where it was inert.
+	var deep := {"config": {"cast": ["a"], "brain": "llm", "effort": "medium"}}
+	_check(RunRow.config_summary(deep) == "1 persona(s) · llm · effort medium",
+		"llm run advertises its thinking depth")
+	var nodepth := {"config": {"cast": ["a"], "brain": "llm", "effort": "default"}}
+	_check(RunRow.config_summary(nodepth) == "1 persona(s) · llm",
+		"a run that requested no depth says nothing")
+	var mockdepth := {"config": {"cast": ["a"], "brain": "mock", "effort": "high"}}
+	_check(RunRow.config_summary(mockdepth) == "1 persona(s) · mock",
+		"mock-brain run omits effort even when one was recorded")
+
 	if _failures == 0:
 		print("test_run_row: all checks passed")
 	quit(1 if _failures > 0 else 0)
