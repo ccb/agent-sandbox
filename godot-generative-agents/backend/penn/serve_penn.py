@@ -492,21 +492,24 @@ class LiveMeetingInjector:
             m["state"], m["start"] = self.ARMED, -1
 
 
-def _fast_forward_schedule(schedule, step_idx: int) -> None:
+def _fast_forward_schedule(schedule, step_idx: int, current_hour=None) -> None:
     """Point *schedule* (a ``ScheduleMockClient``) at the stop a resumed day
     should be working on at *step_idx* (#543).
 
     Only authored dwell times are budgeted -- the steps an agent spent walking
     between stops aren't stored anywhere -- so this is a deliberate
-    approximation that can land a stop early relative to the original day. A
-    ``steps: None`` stop ("stay here for the rest of the day") always holds,
-    and a schedule that runs out settles on its last stop, exactly like the
-    live loop's own ``advance()`` handling.
+    approximation whose drift is bounded by *current_hour*: passing the resume
+    clock lets ``advance()``'s #838 hour gate refuse the first stop whose
+    ``start_hour`` is still in the future, so the pointer can drift only
+    within the unanchored stretch it is resumed into, never past an anchor
+    (#870). A ``steps: None`` stop ("stay here for the rest of the day")
+    always holds, and a schedule that runs out settles on its last stop,
+    exactly like the live loop's own ``advance()`` handling.
     """
     elapsed = 0
     while schedule.steps is not None and elapsed + schedule.steps <= step_idx:
         elapsed += schedule.steps
-        if not schedule.advance():
+        if not schedule.advance(current_hour):
             break
 
 
@@ -1369,7 +1372,12 @@ class PennStepper:
             # Elapsed-on-stop (#580) restarts at the resume point: the
             # fast-forwarded schedule below IS the stop the agent is on now.
             self.state[name]["stop_since"] = self._step_idx
-            _fast_forward_schedule(agent.schedule, self._step_idx)
+            # The resume hour rides along so the fast-forward respects the
+            # same #838 anchor gate as the live loop -- without it this was
+            # the one advance() call site that ignored start_hour (#870).
+            _fast_forward_schedule(
+                agent.schedule, self._step_idx, self.clock.hour_at(self._step_idx)
+            )
             records = self.run_store.hydrated_records(run_id, name)
             if records:
                 # Replace the fresh seeds wholesale: the stored stream already
