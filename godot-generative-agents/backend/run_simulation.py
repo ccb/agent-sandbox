@@ -77,7 +77,15 @@ DEVIATED = "deviated"
 
 
 def _decide_for(
-    game, char, step_idx, retrieval, clock=None, stop_since=0, deciding_sink=None
+    game,
+    char,
+    step_idx,
+    retrieval,
+    clock=None,
+    stop_since=0,
+    waiting=False,
+    *,
+    deciding_sink=None,
 ):
     """Stamp the agent's LLM-usage context, then observe + decide (one call).
 
@@ -87,7 +95,8 @@ def _decide_for(
     client -- under a real brain the live server gives every agent its own
     instance precisely so concurrent stamps can't clobber each other.
     ``clock`` and ``stop_since`` (the step the agent's current schedule stop
-    began) feed the decide-context block (#580) in the prompt.
+    began) feed the decide-context block (#580) in the prompt. ``waiting``
+    says the current stop is finished but its pointer is held (#826).
     """
     # Attribute this LLM call to the persona and step (usage.py). The
     # "role" key is read by the terminal request monitor (llm_monitor)
@@ -111,6 +120,7 @@ def _decide_for(
             retrieval=retrieval,
             clock=clock,
             stop_since=stop_since,
+            waiting=waiting,
         )
     finally:
         if deciding_sink is not None:
@@ -395,6 +405,14 @@ def step(
             waiting_for_anchor = (
                 credited and not advanced and char.agent.schedule.has_next
             )
+            # Set only when the hold is observed, never cleared here: `credited`
+            # is a shared flag that an unrelated dead-talk settle
+            # (cognition.settle_after_dead_talk) sets False, and recomputing
+            # from it would report "no hold" while the pointer still sits on a
+            # finished stop. The clear belongs to the paths where the pointer
+            # really moves -- the `if advanced:` branch below.
+            if waiting_for_anchor:
+                st["waiting_for_anchor"] = True
             # Settling here for the rest of the run is the end-of-day rule, and
             # the mock bake rests on it -- but it belongs to an agent that
             # genuinely finished its LAST scheduled stop, not to one that
@@ -413,9 +431,42 @@ def step(
                 # pointer stands still claims a stop just became current when it
                 # had been current all along.
                 st["stop_since"] = step_idx
+                # The pointer moved, so whatever hold was recorded is over.
+                st["waiting_for_anchor"] = False
             if not done_for_the_day:
                 st["performing"] = False
             st["perform_until"] = None
+
+        # #826: a hold must end when its reason does. The block above retries a
+        # held pointer only when an activity *completes*, so an agent that walked
+        # off instead can sit on a finished stop long after its anchor hour
+        # arrives -- batch 5 had one parked on a completed coffee break for
+        # 2 h 15 m. Retrying here needs no completion, only that the agent is
+        # not mid-activity or mid-conversation.
+        if st.get("waiting_for_anchor"):
+            if not char.agent.schedule.has_next:
+                # No next stop means no anchor is coming, so the hold has no
+                # reason left. Reachable: maybe_revise_plan commits
+                # `plan.stops[: after + 1] + proposed.stops[after + 1 :]`, so a
+                # revision proposing fewer stops than that protected prefix
+                # leaves the pointer on the last stop. advance() would then
+                # refuse forever on `next_stop is None`, and a flag that can
+                # never clear makes decide_context_block call the stop finished
+                # for the rest of the run -- dropping the elapsed clause that is
+                # #826's own warning signal.
+                st["waiting_for_anchor"] = False
+            elif (
+                not st["performing"] and not st.get("conversing") and clock is not None
+            ):
+                # advance() does not mutate when it refuses, so re-asking on the
+                # same tick the flag was set is harmless. Called as a statement
+                # rather than as the last term of the `and` chain above: the two
+                # writes below belong to the pointer *moving*, and a condition
+                # appended after a mutating call would advance the pointer while
+                # skipping them -- the pointer/clock desync #826 forbids.
+                if char.agent.schedule.advance(clock.hour_at(step_idx)):
+                    st["stop_since"] = step_idx
+                    st["waiting_for_anchor"] = False
 
         if not st["path"] and not st["performing"] and not st.get("conversing"):
             due.append(name)
@@ -450,6 +501,7 @@ def step(
                 retrieval,
                 clock=clock,
                 stop_since=state[name].get("stop_since", 0),
+                waiting=state[name].get("waiting_for_anchor", False),
                 deciding_sink=deciding_sink,
             )
         if futs:
@@ -527,6 +579,7 @@ def step(
                     retrieval,
                     clock=clock,
                     stop_since=st.get("stop_since", 0),
+                    waiting=st.get("waiting_for_anchor", False),
                     deciding_sink=deciding_sink,
                 )
             )
@@ -1048,6 +1101,11 @@ def simulate(
             # nothing. Defaults True so a never-performed agent's first advance
             # is safe.
             "credit_stop": True,
+            # Is a credited stop's pointer being held by the next stop's
+            # start_hour? (#826, #838) Read by the decide-context block so the
+            # prompt can say the stop is finished. False for a fresh agent: it
+            # has completed nothing yet, so nothing is being held.
+            "waiting_for_anchor": False,
             # Pinned while a multi-tick conversation runs (issue #371): step()'s
             # pre-pass skips schedule-advance/decision/movement for a conversing
             # agent, so the meeting isn't interrupted. Stays set through the

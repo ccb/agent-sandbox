@@ -10,6 +10,7 @@ Fully offline. Run from the repo root::
     uv run pytest godot-generative-agents/tests/test_decide_context.py -v
 """
 
+import concurrent.futures
 import datetime
 import sys
 from pathlib import Path
@@ -559,6 +560,217 @@ def test_an_offplan_travel_drops_the_furniture_hint():
         ("T:Library:desks", None),  # off-plan -> hint dropped
         ("T:Cafe:counter", "T:Cafe:counter:armchair"),  # on-plan -> hint kept
     ]
+
+
+def _held_agent():
+    """Ada, mid-plan, with a second stop anchored to 10:00."""
+    game, chars = build_world(None, _personas(), LOCATIONS)
+    attach_agents(chars, _personas(), llm_client=None)
+    agent = chars["Ada"].agent
+    agent.schedule.schedule.append(
+        {
+            "place": "Library",
+            "activity": "meeting a friend",
+            "emoji": "\U0001f4d6",
+            "steps": 30,
+            "start_hour": 10,
+        }
+    )
+    return agent
+
+
+def test_a_held_stop_reports_itself_finished_and_names_the_next_one():
+    agent = _held_agent()
+    clock = SimClock(START)
+
+    # step 180 == 08:30, and the next stop is anchored at 10:00.
+    assert decide_context_block(agent, 180, clock, stop_since=0, waiting=True) == (
+        "Right now it is Monday 08:30 AM.\n"
+        "Your plan's current stop: reading a novel at Cafe."
+        " You have already finished this stop."
+        " Your next stop is meeting a friend at Library,"
+        " starting at 10 AM (90 min from now)."
+    )
+
+
+def test_a_passed_anchor_says_due_now_instead_of_a_future_time():
+    agent = _held_agent()
+    clock = SimClock(START)
+
+    # step 750 == 10:05: the anchor has passed, so a "starting at 10 AM" clause
+    # would be a false time word (#812).
+    assert decide_context_block(agent, 750, clock, stop_since=0, waiting=True) == (
+        "Right now it is Monday 10:05 AM.\n"
+        "Your plan's current stop: reading a novel at Cafe."
+        " You have already finished this stop."
+        " Your next stop is meeting a friend at Library, due now."
+    )
+
+
+def test_an_unheld_stop_still_renders_exactly_todays_elapsed_clause():
+    agent = _held_agent()
+    clock = SimClock(START)
+
+    assert decide_context_block(agent, 180, clock, stop_since=0) == (
+        "Right now it is Monday 08:30 AM.\n"
+        "Your plan's current stop: reading a novel at Cafe."
+        " This has been your current stop for 30 min."
+    )
+
+
+def test_a_held_stop_with_no_anchored_next_stop_omits_the_next_sentence():
+    # #826 fix round 1: a DEVIATED revision (cognition.maybe_revise_plan) can
+    # replace the tail after stop_index while a hold stands -- Task 2's
+    # test_hold_survives_schedule_replacement pins that the flag correctly
+    # stays True in that state. If the replacement next stop carries no
+    # start_hour, there is no anchor hour to report, so the "finished"
+    # sentence must stand alone rather than render "starting at None".
+    agent = _held_agent()
+    del agent.schedule.schedule[-1]["start_hour"]
+    clock = SimClock(START)
+
+    assert decide_context_block(agent, 180, clock, stop_since=0, waiting=True) == (
+        "Right now it is Monday 08:30 AM.\n"
+        "Your plan's current stop: reading a novel at Cafe."
+        " You have already finished this stop."
+    )
+
+
+def test_a_start_hour_that_is_not_a_real_hour_omits_the_next_sentence():
+    """``start_hour`` reaches here raw. planner.py keeps whatever the model
+    wrote (its own comment: "kept raw ... there is nothing to guard here",
+    because ``_anchor_correction`` only *skips validating* an out-of-window
+    anchor, it never drops the field), so a 99 or a -1 arrives intact -- and
+    ``advance()`` refuses every real hour against it, which makes the hold
+    permanent and this render the agent's context all run. Unguarded,
+    ``_hour_words(99)`` is "3 PM" beside "5445 min from now": two different
+    times in the one sentence whose whole job is saying when to be where, the
+    false-time-word class #812 exists to prevent.
+
+    Mutation check: widen the guard back to ``next_hour is None`` and this goes
+    RED with the 3 PM / 5445 min sentence."""
+    clock = SimClock(START)
+    for hour in (99, -1, 24):
+        agent = _held_agent()
+        agent.schedule.schedule[-1]["start_hour"] = hour
+
+        assert decide_context_block(agent, 180, clock, stop_since=0, waiting=True) == (
+            "Right now it is Monday 08:30 AM.\n"
+            "Your plan's current stop: reading a novel at Cafe."
+            " You have already finished this stop."
+        ), f"start_hour={hour} leaked into the prompt"
+
+
+# ---------------------------------- the hold reaches step()'s real prompt
+#
+# The two families above pin the state machine (a completed, anchor-held stop
+# sets ``waiting_for_anchor``) and the renderer (a ``waiting`` flag produces
+# the "already finished" sentence) separately -- nothing joins them. `step()`
+# passes ``waiting=`` into every decide from two kwarg sites (run_simulation.py:
+# the serial fallback ~line 567, the #366 parallel submit ~line 489), and
+# dropping either one silently leaves every other test green. These two tests
+# drive `step()` itself, with a real `MockLlmClient` brain, and inspect the
+# actual prompt text the brain received.
+
+
+def _held_persona():
+    """Ada, mid-plan: her current Cafe stop is about to be credited, and a
+    second stop (Library, "meeting a friend") is anchored at 10 AM -- so
+    crediting the Cafe stop before 10 AM must hold the pointer rather than
+    advance it."""
+    persona = _personas()[0]
+    persona["schedule"].append(
+        {
+            "place": "Library",
+            "activity": "meeting a friend",
+            "emoji": "\U0001f4d6",
+            "steps": 30,
+            "start_hour": 10,
+        }
+    )
+    return persona
+
+
+def _held_step_state():
+    return {
+        "Ada": {
+            "tile": (0, 0),
+            "path": [],
+            "pron": "\U0001f4d6",
+            "desc": "reading a novel",
+            "performing": True,
+            "perform_until": 1,  # already elapsed by step 180
+            "reasoning": "(reading)",
+            "memories": [],
+            "chat": None,
+            "stop_since": 0,
+            "credit_stop": True,
+            "conversing": False,
+        }
+    }
+
+
+def test_step_serial_decide_carries_the_hold_into_the_prompt():
+    # Through the serial kwarg site (run_simulation.py ~line 567). Mutation
+    # check: hard-coding `waiting=False` at that site turns this red.
+    persona = _held_persona()
+    brain = MockLlmClient(tool_calls_responses=[_perform_call("meeting a friend")])
+    game, chars = build_world(None, [persona], LOCATIONS)
+    attach_agents(chars, [persona], llm_client=brain)
+    state = _held_step_state()
+    common = dict(
+        order=["Ada"],
+        world_map=None,
+        emoji={"Ada": "\U0001f4d6"},
+        clock=SimClock(START),
+    )
+
+    # Step 180 == 08:30: the reading stop's activity completes and is
+    # credited, but the next stop's 10 AM anchor is not due -- so this one
+    # tick both sets the hold (the pre-pass) AND decides against it (the
+    # agent is now idle: not performing, no path), because the pre-pass runs
+    # before `due` is built.
+    step(game, chars, state, 180, **common)
+
+    assert state["Ada"]["waiting_for_anchor"] is True
+    user = brain.tool_calls_log[0]["messages"][-1]["content"]
+    assert "You have already finished this stop." in user
+    # The discriminator: this clause only renders when `waiting` reached the
+    # prompt as False (or never arrived), so its ABSENCE is what proves the
+    # flag traveled through the kwarg rather than the sentence appearing for
+    # some unrelated reason.
+    assert "This has been your current stop for" not in user
+
+
+def test_step_parallel_decide_carries_the_hold_into_the_prompt():
+    # Same scenario, through the #366 parallel kwarg site (~line 489): a real
+    # decide_executor, so the decision travels through decide_executor.submit
+    # instead of the inline `_decide_for` call. Mutation check: hard-coding
+    # `waiting=False` at that site turns this red.
+    persona = _held_persona()
+    brain = MockLlmClient(tool_calls_responses=[_perform_call("meeting a friend")])
+    game, chars = build_world(None, [persona], LOCATIONS)
+    attach_agents(chars, [persona], llm_client=brain)
+    state = _held_step_state()
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    try:
+        common = dict(
+            order=["Ada"],
+            world_map=None,
+            emoji={"Ada": "\U0001f4d6"},
+            clock=SimClock(START),
+            decide_executor=executor,
+            decide_timeout=5.0,
+            decide_pending={},
+        )
+        step(game, chars, state, 180, **common)
+    finally:
+        executor.shutdown(wait=True)
+
+    assert state["Ada"]["waiting_for_anchor"] is True
+    user = brain.tool_calls_log[0]["messages"][-1]["content"]
+    assert "You have already finished this stop." in user
+    assert "This has been your current stop for" not in user
 
 
 def test_live_mock_decide_request_carries_the_block():
