@@ -544,7 +544,8 @@ def _longest_increasing(values: list[int]) -> int:
     """Length of the longest strictly increasing subsequence.
 
     Unlike deduplicating before measuring progress, this preserves a later
-    valid visit when the same stop was also visited prematurely.
+    in-order visit when the same stop was visited prematurely. O(n^2), fine for
+    a day's worth of segments.
     """
     if not values:
         return 0
@@ -677,9 +678,9 @@ class HeuristicJudge:
         """Did the agent get through its plan, in the plan's order?
 
         *progress*: how far through the schedule the day actually got -- the
-        longest in-order run of DISTINCT matched stops, over the number of
-        stops. *order*: of every matched segment, the fraction that appears in
-        schedule order (longest non-decreasing run of stop indices).
+        longest strictly increasing subsequence of matched stops, over the
+        number of stops. *order*: of every matched segment, the fraction that
+        appears in schedule order (longest non-decreasing run of stop indices).
 
         The two multiply, so a day has to both advance and stay in sequence.
         Progress alone would miss a shuffled day -- a scrambled run reaches the

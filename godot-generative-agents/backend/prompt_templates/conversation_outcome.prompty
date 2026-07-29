@@ -25,4 +25,4 @@ You just finished talking with {{ partner }}. Here is what was said:
 
 {{ transcript }}
 
-Reflect on the conversation and record its outcome. Did it change what you plan to do for the rest of the day -- for example, an agreement to be somewhere at a certain time? And is there anything about {{ partner }} worth remembering afterward?
+Reflect on the conversation and record its outcome. Did it change what you plan to do for the rest of the day -- for example, an agreement to be somewhere at a certain time? Classify when a concrete commitment starts: immediate only when you agreed to begin as soon as this conversation ends ("now", "right now", "let's go"); scheduled for a later time or delay; unspecified otherwise. Immediate is a behavioral promise, not a synonym for important. And is there anything about {{ partner }} worth remembering afterward?
