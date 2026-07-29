@@ -96,9 +96,9 @@ The same path `stop_since` takes today, which is the complete set of sites —
 found by grepping `stop_since` **inward**, the enumeration discipline #826 got
 wrong twice:
 
-- `_decide_one` signature `:80` and its docstring `:89`
-- the `observe_and_decide` call `:113`
-- both decide sites: parallel `:452`, serial `:529`
+- `_decide_for` signature `:79` and its docstring `:89`
+- the `observe_and_decide` call `:107`
+- both decide sites, at their `stop_since=` kwarg: parallel `:452`, serial `:529`
 
 ### 4. `decide_context_block(..., waiting=False)` (`cognition.py:1182`)
 
