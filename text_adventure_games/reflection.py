@@ -13,14 +13,12 @@ It is deliberately **distinct from the Reflect step in ``npc.py``** (issue #4):
 that one reflects on a single command *failure* to pick a better next action.
 This is *periodic memory synthesis* -- it fires on a cadence (when accumulated
 importance crosses a threshold; see :func:`should_reflect`) and reasons over the
-recent stream of records, not one failed command. ``"plan"`` records -- the t0
-day plan, #778's conversation commitments -- are kept out of both of its
-inputs, because reflecting over intentions as if they had happened lets an
-agent "remember" its own future (#777). The guard is by *kind*, so it is not
-airtight: a future commitment restated inside a CHAT relationship note (#785
-stores those as ``"chat"`` precisely so reflection sees them) still reaches the
-reflector. Tagging inputs by tense so the model can reason *forward* over
-intentions -- #777's option (b) -- is the follow-up that would close that gap.
+recent stream of records, not one failed command. Those records mix lived
+observations, conversation notes, prior inferences, and plans. Each is therefore
+shown to the LLM with a temporal marker, so it can reason forward over intentions
+without "remembering" its own future (#777 / #815). In particular, a future
+invitation inside a CHAT relationship note is context from a conversation that
+happened, not evidence that the invited event happened.
 
 Following the same restraint as ``memory.py`` and ``planning.py``, this module is
 **pure orchestration with no engine imports**: it reads and writes an
@@ -54,8 +52,8 @@ from . import prompt_templates
 # --- Reflection tuning (docs/design/agent-memory.md §7) ----------------------
 # Reflect once accumulated importance since the last reflection crosses this.
 # The paper's scale; AgentMemory.importance_since_reflection sums the 1-10
-# poignancy of every *lived* record added since the last reflect() reset --
-# plan records don't pay in, since this pass can't see them (#777).
+# poignancy of every record added since the last reflect() reset. Plans pay in
+# because the pass can now see them as explicitly tagged intentions (#815).
 DEFAULT_REFLECTION_THRESHOLD = 30.0
 # How many of the most recent records seed the "what's salient?" question step.
 DEFAULT_RECENT_WINDOW = 50
@@ -64,6 +62,56 @@ DEFAULT_MAX_QUESTIONS = 3
 # Synthesized thoughts are fairly salient by default (mid 1-10 scale), so they
 # surface in later retrievals without drowning out momentous raw observations.
 DEFAULT_REFLECTION_IMPORTANCE = 6.0
+
+# Prompt-only temporal provenance. Values are plain strings because this module
+# deliberately stays duck-typed and import-free with respect to ``MemoryKind``.
+_KIND_MARKERS = {
+    "observation": "lived",
+    "chat": "conversation",
+    "reflection": "inferred",
+    "plan": "intended",
+}
+_MARKER_TOKENS = tuple(f"[{marker}]" for marker in (*_KIND_MARKERS.values(), "memory"))
+_NATURAL_KINDS = {
+    "observation": "experienced",
+    "chat": "conversation",
+    "reflection": "previously inferred",
+    "plan": "intended",
+}
+
+
+def _kind_value(record):
+    """Return a duck-typed record kind as its plain string value."""
+    kind = getattr(record, "kind", None)
+    return getattr(kind, "value", kind)
+
+
+def _record_marker(record) -> str:
+    """Temporal marker for one LLM input record.
+
+    Kind-less legacy records retain the historical assumption that their text
+    describes lived experience. A present-but-unknown future kind gets the
+    neutral ``memory`` marker instead of being overclassified.
+    """
+    kind = _kind_value(record)
+    if kind is None:
+        return "lived"
+    return _KIND_MARKERS.get(kind, "memory")
+
+
+def _natural_kind(record) -> str:
+    """Readable temporal prefix for deterministic MockReflector output."""
+    kind = _kind_value(record)
+    if kind is None:
+        return "experienced"
+    return _NATURAL_KINDS.get(kind, "memory")
+
+
+def _without_prompt_markers(text: str) -> str:
+    """Remove prompt-only marker tokens if a model echoes them into its insight."""
+    for marker in _MARKER_TOKENS:
+        text = text.replace(marker, "")
+    return " ".join(text.split())
 
 
 @dataclass
@@ -102,9 +150,10 @@ class Reflector(Protocol):
        one-line inference?
 
     ``records`` are passed by duck typing (each item exposes ``.text`` / ``.id`` /
-    ``.actor``, and -- since #777 -- ``.kind``, which :func:`reflect` reads to
-    keep plan records out of the pass; a record without a ``kind`` attribute is
-    treated as lived), so this module keeps zero engine imports.
+    ``.actor`` and, when available, ``.kind``). :class:`LLMReflector` reads kind
+    to mark the record as lived / conversation / inferred / intended; a record
+    without kind keeps the historical lived default. This module therefore keeps
+    zero engine imports.
     """
 
     def salient_questions(self, records) -> list[str]:
@@ -126,34 +175,13 @@ def should_reflect(memory, threshold: float = DEFAULT_REFLECTION_THRESHOLD) -> b
     """Has enough importance accrued since the last reflection to reflect again?
 
     Reads ``memory.importance_since_reflection`` -- the running sum
-    ``AgentMemory`` keeps of every *lived* record's importance since the last
-    :func:`reflect` reset; plan records don't accrue, because the pass they
-    would trigger is not allowed to see them (#777) -- and compares it to
-    ``threshold``. The cadence is "salience-driven, not clock-driven": a quiet
-    stretch of mundane observations reflects rarely, a burst of momentous
-    events reflects soon after.
+    ``AgentMemory`` keeps of every record's importance since the last
+    :func:`reflect` reset -- and compares it to ``threshold``. The cadence is
+    "salience-driven, not clock-driven": a quiet stretch of mundane memories
+    reflects rarely, a burst of momentous observations or intentions reflects
+    soon after.
     """
     return getattr(memory, "importance_since_reflection", 0.0) >= threshold
-
-
-# Plan records are *intentions*, not lived experience: the day's authored plan
-# and conversation commitments (#778) both land in the stream as kind "plan",
-# and a reflector shown them will happily draw past-tense conclusions about
-# stops the agent has not reached (#777: Sofia "remembered" her scheduled
-# dinner queasiness at 08:27, four hours early). The reflection pass therefore
-# keeps plans out of both of its inputs -- the seed window (filtered *before*
-# slicing, so the window stays full width) and the supporting retrieval (via
-# ``retrieve(exclude_kinds=...)``, filtered inside the ranking so a plan's
-# slot backfills with the next-best lived record rather than vanishing).
-# Compared by value ("plan") because ``MemoryKind`` is a str Enum and this
-# module deliberately imports nothing from the rest of the engine (see module
-# docstring).
-_PLAN_KIND = "plan"
-
-
-def _lived(records) -> list:
-    """Only the records that describe experience, not intention."""
-    return [r for r in records if getattr(r, "kind", None) != _PLAN_KIND]
 
 
 def reflect(
@@ -169,18 +197,14 @@ def reflect(
 
     The paper's flow (docs/design/agent-memory.md §7):
 
-    1. Take the ``recent_window`` most recent *lived* records as the seed.
-       ``"plan"`` records are intentions rather than experience (#777), and
-       they are dropped *before* the window is sliced, so the seed stays
-       ``recent_window`` wide instead of shrinking wherever plans cluster.
+    1. Take the ``recent_window`` most recent records as the seed. Plans remain
+       in the window and are presented as explicitly tagged intentions (#815).
     2. Ask the ``reflector`` for the salient questions they raise (capped at
        ``max_questions``).
     3. For each question, *retrieve* the memories that best support it (a
        read-only retrieval -- ``touch=False`` -- so reflecting never disturbs the
-       recency the decision loop depends on). ``"plan"`` records are excluded
-       inside the retrieval ranking (``exclude_kinds``), so each one's slot is
-       backfilled by the next-best lived record and the evidence set keeps its
-       full ``max_records`` width.
+       recency the decision loop depends on). All kinds remain eligible; the
+       reflector preserves their temporal meaning instead of discarding plans.
     4. Ask the ``reflector`` for one grounded inference per question.
     5. Store each inference as a ``MemoryKind.REFLECTION`` record citing its
        supporting memory ids.
@@ -193,7 +217,7 @@ def reflect(
     won't be re-hit every turn; reflection just waits for importance to build
     again.
     """
-    recent = _lived(memory.records)[-recent_window:]
+    recent = memory.records[-recent_window:]
     if not recent:
         memory.importance_since_reflection = 0.0
         return []
@@ -203,9 +227,7 @@ def reflect(
     for question in questions:
         # Read-only: gathering grounds for a thought must not bump recency, or a
         # reflection pass would quietly reshuffle what the next decision retrieves.
-        supporting = memory.retrieve(
-            query=question, turn=turn, touch=False, exclude_kinds=(_PLAN_KIND,)
-        )
+        supporting = memory.retrieve(query=question, turn=turn, touch=False)
         if not supporting:
             continue
         result = reflector.infer(question, supporting)
@@ -226,7 +248,7 @@ def reflect(
         )
     # Step 6: reset *after* adding, so the reflections' own importance (which
     # add_reflection accrued) is discarded from the accumulator -- the next pass
-    # measures only genuinely new experience (design doc §7, step 6).
+    # measures only genuinely new memories (design doc §7, step 6).
     memory.importance_since_reflection = 0.0
     return created
 
@@ -276,7 +298,9 @@ class MockReflector:
         thought in."""
         if not records:
             return None
-        snippets = "; ".join(r.text.rstrip(".") for r in records[:3])
+        snippets = "; ".join(
+            f"{_natural_kind(r)}: {r.text.rstrip('.')}" for r in records[:3]
+        )
         text = f'Reflecting on "{question}" — lately: {snippets}.'
         return Reflection(
             text=text,
@@ -323,7 +347,10 @@ INSIGHT_TOOL = {
         "properties": {
             "insight": {
                 "type": "string",
-                "description": "one short sentence inferred from the memories",
+                "description": (
+                    "one short sentence inferred from the memories; preserve "
+                    "their temporal status and omit bracketed record markers"
+                ),
             },
             "evidence": {
                 "type": "array",
@@ -363,10 +390,11 @@ class LLMReflector:
 
     def salient_questions(self, records) -> list[str]:
         user = (
-            "Here are recent things you have experienced:\n"
+            "Here are recent memory records:\n"
             f"{self._numbered(records)}\n"
             "Given only these, what are the most salient high-level questions you "
-            "could now answer about yourself, others, or your situation?"
+            "could now answer about yourself, others, your situation, or your "
+            "intentions?"
         )
         result = self._call(user, SALIENT_QUESTIONS_TOOL)
         questions = result.get("questions") if isinstance(result, dict) else None
@@ -389,9 +417,12 @@ class LLMReflector:
         text = result.get("insight")
         if not isinstance(text, str) or not text.strip():
             return None
+        text = _without_prompt_markers(text)
+        if not text:
+            return None
         evidence = self._map_evidence(result.get("evidence"), records)
         return Reflection(
-            text=text.strip(),
+            text=text,
             evidence_ids=evidence or [r.id for r in records],
             importance=DEFAULT_REFLECTION_IMPORTANCE,
         )
@@ -400,9 +431,12 @@ class LLMReflector:
 
     @staticmethod
     def _numbered(records) -> str:
-        """A 1-based numbered list of record texts -- the model cites by number,
-        and :meth:`_map_evidence` maps those numbers back to real record ids."""
-        return "\n".join(f"{i}. {r.text}" for i, r in enumerate(records, start=1))
+        """A numbered, temporally marked list -- the model cites by number, and
+        :meth:`_map_evidence` maps those numbers back to real record ids."""
+        return "\n".join(
+            f"{i}. [{_record_marker(r)}] {r.text}"
+            for i, r in enumerate(records, start=1)
+        )
 
     @staticmethod
     def _map_evidence(evidence, records) -> list[int]:

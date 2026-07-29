@@ -283,9 +283,8 @@ class AgentMemory:
         # thing leaves view, so re-entering a room re-notices it.
         self._perceived: set[str] = set()
         # Importance accrued since the last reflection; reflection (a later
-        # stage) fires when this crosses a threshold, then resets it. Only
-        # *lived* records pay in -- ``_add`` skips PLAN records, which the
-        # reflection pass can't see (#777).
+        # stage) fires when this crosses a threshold, then resets it. Every
+        # record pays in: reflection can see plans as tagged intentions (#815).
         self.importance_since_reflection = 0.0
         self._next_id = 0
 
@@ -316,13 +315,7 @@ class AgentMemory:
         )
         self._next_id += 1
         self.records.append(record)
-        # Plan records are intentions, not experience, and the reflection pass
-        # filters them from its inputs (#777) -- so they don't pay into its
-        # trigger either. Otherwise a plan-dense stretch (#778 writes one
-        # commitment per conversation) fires a paid reflection pass over
-        # evidence the pass isn't allowed to see.
-        if kind is not MemoryKind.PLAN:
-            self.importance_since_reflection += importance
+        self.importance_since_reflection += importance
         return record
 
     def add_observation(
@@ -638,11 +631,9 @@ class AgentMemory:
         excluded record's slot is backfilled by the next-best match and
         ``max_records`` still means what it says -- unlike filtering the
         returned list, which silently thins the result. Kinds are compared by
-        value (``MemoryKind`` is a str Enum), so a caller that deliberately
-        imports nothing from the engine -- ``reflection.py``, which passes
-        ``("plan",)`` because intentions aren't lived experience (#777) -- can
-        use plain strings. The default ``()`` excludes nothing, preserving the
-        historical behavior exactly.
+        value (``MemoryKind`` is a str Enum), so duck-typed callers can use
+        plain strings without importing the enum. The default ``()`` excludes
+        nothing, preserving the historical behavior exactly.
 
         Set ``touch=False`` for a *read-only* retrieval that does not bump
         ``last_accessed_turn`` -- for inspecting or comparing what would surface
