@@ -13,6 +13,7 @@ second copy to drift.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -24,10 +25,11 @@ from text_adventure_games import npc
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SNIPPET_DIR = REPO_ROOT / "godot-generative-agents/web/src/components/home/snippets"
 
-# snippet file -> (engine file it quotes, substrings that must still exist there)
+# snippet file -> (engine file, header of the block it quotes, anchors)
 QUOTED = {
     "gate.py": (
         "text_adventure_games/reactions.py",
+        "class GatedEffect:",
         [
             "def __call__",
             "_preconditions_passed",
@@ -37,10 +39,12 @@ QUOTED = {
     ),
     "drop.py": (
         "text_adventure_games/actions/things.py",
+        "class Drop(base.Action):",
         ["class Drop", "was_matched", "is_worn", "carried_items", "discard_item"],
     ),
     "check_out_book.py": (
         "godot-generative-agents/backend/actions.py",
+        "class CheckOutBook(base.Action):",
         [
             "class CheckOutBook",
             "REQUIRED_AFFORDANCES",
@@ -49,6 +53,19 @@ QUOTED = {
         ],
     ),
 }
+
+
+def _enclosing_block(source: str, header: str) -> str:
+    """The source of the top-level block introduced by *header*.
+
+    Anchors are checked against this slice rather than the whole file: these are
+    multi-class modules, and a sibling class using the same helper name would
+    otherwise keep a stale snippet's pin green.
+    """
+    start = source.index(header)
+    rest = source[start + len(header) :]
+    dedent = re.search(r"^\S", rest, re.M)  # next line starting in column 0
+    return header + (rest[: dedent.start()] if dedent else rest)
 
 
 @pytest.fixture(scope="module")
@@ -86,16 +103,19 @@ def test_every_snippet_file_exists():
     assert {p.name for p in SNIPPET_DIR.iterdir() if p.is_file()} >= expected
 
 
-@pytest.mark.parametrize("snippet,source,anchors", [
-    (name, src, anchors) for name, (src, anchors) in QUOTED.items()
-])
-def test_quoted_snippet_anchors_still_exist(snippet, source, anchors):
-    """Each quoted snippet names the engine file it came from; every anchor it
-    relies on must still be there. This is what a rename trips."""
+@pytest.mark.parametrize(
+    "snippet,source,header,anchors",
+    [(name, src, header, anchors) for name, (src, header, anchors) in QUOTED.items()],
+)
+def test_quoted_snippet_anchors_still_exist(snippet, source, header, anchors):
+    """Each quoted snippet names the engine file and block it came from; every
+    anchor it relies on must still be there -- in that block, not just
+    somewhere in the file. This is what a rename OR a rewrite trips."""
     engine_src = (REPO_ROOT / source).read_text()
+    block = _enclosing_block(engine_src, header)
     snippet_src = (SNIPPET_DIR / snippet).read_text()
     for anchor in anchors:
-        assert anchor in engine_src, f"{anchor!r} gone from {source}"
+        assert anchor in block, f"{anchor!r} gone from {header} in {source}"
         assert anchor in snippet_src, f"{anchor!r} missing from {snippet}"
 
 
