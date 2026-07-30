@@ -183,13 +183,38 @@ class Travel(base.Action):
         self.destination = self._match_destination(command)
 
     def _match_destination(self, command: str):
-        """Longest location name appearing in the command (case-insensitive)."""
+        """Longest location name appearing in the command (case-insensitive).
+
+        A building's rooms are named ``<short building> — <room>`` ("Van Pelt
+        — Study Booths"), so a model rephrasing a room with the building's
+        full name spliced in ("Van Pelt Library — Study Booths") contains the
+        *building's* name but not the room's, and the longest-substring scan
+        walks the agent to the building anchor — the lobby, 80 tiles from the
+        room (#904). When the command also names a room's distinctive suffix
+        (the part after the dash) inside the matched building, the room is
+        what was meant.
+        """
         cmd = command.lower()
         best = None
         for name, loc in self.game.locations.items():
             if name.lower() in cmd and (best is None or len(name) > len(best.name)):
                 best = loc
-        return best
+        if best is None:
+            return None
+        best_parent = _tile_address_parent(best)
+        room, room_suffix = None, ""
+        for name, loc in self.game.locations.items():
+            if loc is best or "—" not in name:
+                continue
+            suffix = name.split("—")[-1].strip().lower()
+            if (
+                suffix
+                and suffix in cmd
+                and len(suffix) > len(room_suffix)
+                and _tile_address_parent(loc) == best_parent
+            ):
+                room, room_suffix = loc, suffix
+        return room or best
 
     def check_preconditions(self) -> bool:
         if not self.was_matched(self.character, "No one is traveling."):
