@@ -19,6 +19,9 @@
      fallbacks for platforms that don't ship it. All local, so the page still
      needs no font download. */
   --nrf-font: Palatino, "Palatino Linotype", "Palatino LT STD", "Book Antiqua", Georgia, serif;
+  /* The contents nav and the left margin the page opens for it (see .nrf-toc). */
+  --nrf-toc-w: 12rem;
+  --nrf-gutter: 15.5rem;
 
   min-height: 100%;
   background: #fff;
@@ -59,6 +62,63 @@
 .nrf-narrow {
   max-width: 100%;
   margin: 0 auto;
+}
+
+/* --- the sticky contents nav ---
+   Fixed in the page's left margin rather than laid out beside the prose: the
+   sections are siblings of the hero and the footer, so a real two-column grid
+   would mean wrapping all of them in a column wrapper. `.nrf` opens a gutter for
+   it on wide screens (below the breakpoint there is no room, and the nav is
+   dropped) — the footer's near-white background stops at that gutter, which is
+   invisible against the page and sits behind the nav anyway. */
+.nrf-toc {
+  display: none;
+}
+.nrf-toc-heading {
+  margin: 0 0 0.55rem 0.9rem;
+  color: #8c8c8c;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.nrf-toc-list {
+  margin: 0;
+  padding: 0;
+  /* The hairline the active marker rides on. */
+  border-left: 1px solid #e4e4e4;
+  list-style: none;
+}
+.nrf-toc-link {
+  display: block;
+  margin-left: -1px; /* so the 2px marker covers the hairline instead of nudging it */
+  padding: 0.26rem 0 0.26rem 0.9rem;
+  border-left: 2px solid transparent;
+  color: #7d7d7d;
+  font-size: 0.86rem;
+  line-height: 1.35;
+  text-decoration: none;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+.nrf-toc-link:hover {
+  color: var(--nrf-heading);
+}
+.nrf-toc-link.is-sub {
+  padding-left: 1.7rem;
+  font-size: 0.8rem;
+}
+/* Colour and the marker only — no weight change, which would reflow the entry. */
+.nrf-toc-link.is-active {
+  color: var(--nrf-heading);
+  border-left-color: var(--nrf-heading);
+}
+/* Anchor targets: a heading jumped to shouldn't land flush against the top of
+   the scroll container. */
+.nrf-teaser,
+.nrf-title {
+  scroll-margin-top: 1.5rem;
 }
 
 /* --- titles (Bulma .title / .subtitle) --- */
@@ -376,6 +436,25 @@
 }
 .nrf-footer a:hover {
   text-decoration: underline;
+}
+
+/* --- wide screens: room for the contents nav in the left margin --- */
+@media (min-width: 1024px) {
+  .nrf {
+    padding-left: var(--nrf-gutter);
+  }
+  .nrf-toc {
+    display: block;
+    position: fixed;
+    top: 4rem;
+    left: 1.75rem;
+    z-index: 5; /* under the enlarged-replay scrim (40) */
+    width: var(--nrf-toc-w);
+    /* Taller than the window on a short one: scroll it, not the page. */
+    max-height: calc(100vh - 8rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
 }
 
 /* --- small screens --- */

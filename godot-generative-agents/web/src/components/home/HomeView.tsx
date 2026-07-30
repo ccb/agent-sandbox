@@ -2,7 +2,7 @@
 // together with the link buttons that use it. Re-enable this import when you
 // re-enable that block.
 // import type { ReactNode } from "react";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, type MouseEvent, Suspense, useEffect, useRef, useState } from "react";
 import { GodotCanvas } from "../GodotCanvas";
 import { TeX } from "./TeX";
 import "./home.css";
@@ -258,6 +258,113 @@ const CodeIcon = (
 const REPO_URL = "https://github.com/ccb/agent-sandbox";
 
 /**
+ * The contents nav, in page order — `id` matches the element it points at (a
+ * section for the demo, otherwise the heading itself) and `sub` marks a
+ * subsection of the entry above it. `toc.test.ts` pins every id to a real target
+ * in this file. Keep the order in sync with the DOM: the scroll-spy below relies
+ * on it.
+ */
+export const TOC: { id: string; label: string; sub?: true }[] = [
+  { id: "demo", label: "Demo" },
+  { id: "abstract", label: "Abstract" },
+  { id: "architecture", label: "How an agent works" },
+  { id: "world", label: "The world and its clock", sub: true },
+  { id: "memory", label: "Memory and retrieval", sub: true },
+  { id: "importance", label: "Importance and reflection", sub: true },
+  { id: "planning", label: "Planning", sub: true },
+  { id: "conversations", label: "Conversations", sub: true },
+  { id: "action-gate", label: "The action gate", sub: true },
+  { id: "decision", label: "Inside a decision" },
+  { id: "limitations", label: "Limitations" },
+  { id: "acknowledgements", label: "Acknowledgements" },
+  { id: "references", label: "References" },
+  { id: "BibTeX", label: "BibTeX" },
+];
+
+// How long a clicked entry outranks the scroll-spy — long enough to cover the
+// smooth scroll it started (browsers pick their own duration; ~500ms is typical).
+const JUMP_PIN_MS = 1000;
+
+/**
+ * A sticky table of contents in the page's left margin. Clicking scrolls the
+ * target into view directly instead of following the `href`, so the URL keeps no
+ * `#hash`; the `href` stays for what a real link gives us (focus, Enter,
+ * open-in-new-tab).
+ */
+function TableOfContents() {
+  const [active, setActive] = useState("");
+  // A clicked entry wins over the spy for a moment: the smooth scroll drags other
+  // headings through the band on its way, and the last entries can never win the
+  // band race at all (see below), so their highlight is the click's to set.
+  const pinnedUntil = useRef(0);
+
+  useEffect(() => {
+    // Active = the last target to cross a band across the top fifth of the
+    // viewport. Nothing in the band (mid-way through a long section) leaves the
+    // previous entry lit, which is what a reader expects. `.view-home` fills the
+    // viewport exactly, so the default root is the right one even though the
+    // document itself never scrolls.
+    //
+    // ponytail: a target in the final viewport (References, BibTeX) can never
+    // reach that band — the container runs out of scroll room first — so
+    // free-scrolling to the very bottom leaves the previous entry lit. Clicking
+    // them is covered by the pin; add a scrolled-to-the-end rule if the scroll
+    // path starts to matter.
+    const inBand = new Map<string, boolean>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) inBand.set(entry.target.id, entry.isIntersecting);
+        if (Date.now() < pinnedUntil.current) return;
+        const first = TOC.find((s) => inBand.get(s.id));
+        if (first) setActive(first.id);
+      },
+      { rootMargin: "0px 0px -80% 0px" },
+    );
+    for (const { id } of TOC) {
+      const el = document.getElementById(id);
+      if (el) observer.observe(el);
+    }
+    return () => observer.disconnect();
+  }, []);
+
+  const jump = (event: MouseEvent<HTMLAnchorElement>, id: string) => {
+    const target = document.getElementById(id);
+    if (!target) return; // nothing to scroll to: let the href do whatever it does
+    event.preventDefault();
+    target.scrollIntoView({
+      // Chrome honours prefers-reduced-motion for CSS smooth scrolling but not
+      // for a behavior passed here, so ask for the right one.
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      block: "start",
+    });
+    setActive(id);
+    pinnedUntil.current = Date.now() + JUMP_PIN_MS;
+  };
+
+  return (
+    <nav className="nrf-toc" aria-label="Table of contents">
+      <p className="nrf-toc-heading">Contents</p>
+      <ul className="nrf-toc-list">
+        {TOC.map((entry) => (
+          <li key={entry.id}>
+            <a
+              href={`#${entry.id}`}
+              onClick={(e) => jump(e, entry.id)}
+              className={`nrf-toc-link${entry.sub ? " is-sub" : ""}${
+                active === entry.id ? " is-active" : ""
+              }`}
+              aria-current={active === entry.id ? "true" : undefined}
+            >
+              {entry.label}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+
+/**
  * The public landing page (#879), styled after the Nerfies academic
  * project-page template (https://github.com/nerfies/nerfies.github.io).
  *
@@ -271,6 +378,8 @@ const REPO_URL = "https://github.com/ccb/agent-sandbox";
 export function HomeView() {
   return (
     <div className="nrf">
+      <TableOfContents />
+
       {/* ===== Hero: title, authors, affiliations, links ===== */}
       <section className="nrf-hero">
         <div className="nrf-hero-body">
@@ -326,7 +435,7 @@ export function HomeView() {
           out to a standalone #game page) =====
           TODO(#881): embed the captioned demo video here once it's published.
           TODO(#878): swap in a still from the selected showcase run meanwhile. */}
-      <section className="nrf-teaser">
+      <section className="nrf-teaser" id="demo">
         <div className="nrf-container">
           <p className="nrf-subtitle nrf-centered nrf-teaser-cap">
             Five LLM-driven agents plan, remember, and converse their way through a twelve-hour day
@@ -341,7 +450,9 @@ export function HomeView() {
       <section className="nrf-section">
         <div className="nrf-container">
           <div className="nrf-narrow nrf-centered">
-            <h2 className="nrf-title nrf-title-3">Abstract</h2>
+            <h2 className="nrf-title nrf-title-3" id="abstract">
+              Abstract
+            </h2>
             <div className="nrf-content nrf-justified">
               <p>
                 We place five generative agents — characters driven by a large language model, with
@@ -369,9 +480,13 @@ export function HomeView() {
       <section className="nrf-section">
         <div className="nrf-container">
           <div className="nrf-narrow">
-            <h2 className="nrf-title nrf-title-3 nrf-centered">How an agent works</h2>
+            <h2 className="nrf-title nrf-title-3 nrf-centered" id="architecture">
+              How an agent works
+            </h2>
             <div className="nrf-content nrf-justified">
-              <h3 className="nrf-title nrf-title-4">The world and its clock</h3>
+              <h3 className="nrf-title nrf-title-4" id="world">
+                The world and its clock
+              </h3>
               <p>
                 The world advances in discrete ticks of ten in-game seconds, so an hour is 360 ticks
                 and the showcase's twelve-hour day is 4,320. On each tick, every agent that is not
@@ -388,7 +503,9 @@ export function HomeView() {
                 becomes an observation in its memory stream.
               </p>
 
-              <h3 className="nrf-title nrf-title-4">Memory and retrieval</h3>
+              <h3 className="nrf-title nrf-title-4" id="memory">
+                Memory and retrieval
+              </h3>
               <p>
                 Everything an agent experiences — observations, its own actions and failures, lines
                 of dialogue, plans, reflections — is a timestamped record with an importance score.
@@ -409,7 +526,9 @@ export function HomeView() {
                 returning to stay warm while the rest fade.
               </p>
 
-              <h3 className="nrf-title nrf-title-4">Importance and reflection</h3>
+              <h3 className="nrf-title nrf-title-4" id="importance">
+                Importance and reflection
+              </h3>
               <p>
                 New memories are rated for poignancy by the language model on a 1 (utterly mundane)
                 to 10 (momentous) scale, in one batched, temperature-zero call per agent per tick. A
@@ -427,7 +546,9 @@ export function HomeView() {
                 decisions can build on conclusions, not just raw observations.
               </p>
 
-              <h3 className="nrf-title nrf-title-4">Planning</h3>
+              <h3 className="nrf-title nrf-title-4" id="planning">
+                Planning
+              </h3>
               <p>
                 Each agent starts its day by decomposing intentions hierarchically: a day outline,
                 refined into hourly blocks, refined into minute-level stops — each stop a real
@@ -438,7 +559,9 @@ export function HomeView() {
                 reacts to something it perceives.
               </p>
 
-              <h3 className="nrf-title nrf-title-4">Conversations</h3>
+              <h3 className="nrf-title nrf-title-4" id="conversations">
+                Conversations
+              </h3>
               <p>
                 When two agents are close, free, and interested, they open a conversation that
                 unfolds one line per tick, up to six exchanges — dialogue takes simulated time
@@ -451,7 +574,9 @@ export function HomeView() {
                 day.
               </p>
 
-              <h3 className="nrf-title nrf-title-4">The action gate</h3>
+              <h3 className="nrf-title nrf-title-4" id="action-gate">
+                The action gate
+              </h3>
               <p>
                 Every decision — whether it arrives as a typed tool call from the model or as plain
                 text — is reassembled into a command and pushed through the engine's parser, where
@@ -468,7 +593,9 @@ export function HomeView() {
       <section className="nrf-section">
         <div className="nrf-container">
           <div className="nrf-narrow">
-            <h2 className="nrf-title nrf-title-3 nrf-centered">Inside a decision</h2>
+            <h2 className="nrf-title nrf-title-3 nrf-centered" id="decision">
+              Inside a decision
+            </h2>
             <div className="nrf-content nrf-justified">
               <p>
                 None of the steps above is a single monolithic prompt. One decision is a chain: the
@@ -494,7 +621,9 @@ export function HomeView() {
       <section className="nrf-section">
         <div className="nrf-container">
           <div className="nrf-narrow">
-            <h2 className="nrf-title nrf-title-3 nrf-centered">Limitations</h2>
+            <h2 className="nrf-title nrf-title-3 nrf-centered" id="limitations">
+              Limitations
+            </h2>
             <div className="nrf-content nrf-justified">
               <p>
                 This is a small research prototype, and it is honest about it. The generative
@@ -517,7 +646,9 @@ export function HomeView() {
       <section className="nrf-section">
         <div className="nrf-container">
           <div className="nrf-narrow">
-            <h2 className="nrf-title nrf-title-3 nrf-centered">Acknowledgements</h2>
+            <h2 className="nrf-title nrf-title-3 nrf-centered" id="acknowledgements">
+              Acknowledgements
+            </h2>
             <div className="nrf-content nrf-justified">
               <p>
                 This project was carried out through the Penn Undergraduate Research Mentoring
@@ -545,7 +676,9 @@ export function HomeView() {
       <section className="nrf-section">
         <div className="nrf-container">
           <div className="nrf-narrow">
-            <h2 className="nrf-title nrf-title-3 nrf-centered">References</h2>
+            <h2 className="nrf-title nrf-title-3 nrf-centered" id="references">
+              References
+            </h2>
             <div className="nrf-content">
               <p>
                 Joon Sung Park, Joseph C. O'Brien, Carrie J. Cai, Meredith Ringel Morris, Percy
@@ -561,9 +694,11 @@ export function HomeView() {
       </section>
 
       {/* ===== BibTeX ===== */}
-      <section className="nrf-section" id="BibTeX">
+      <section className="nrf-section">
         <div className="nrf-container nrf-content">
-          <h2 className="nrf-title nrf-title-3">BibTeX</h2>
+          <h2 className="nrf-title nrf-title-3" id="BibTeX">
+            BibTeX
+          </h2>
           <pre className="nrf-pre">
             <code>{`@misc{king2026penncampusagents,
   title  = {Penn Campus: Generative Agents in a Simulated World},
