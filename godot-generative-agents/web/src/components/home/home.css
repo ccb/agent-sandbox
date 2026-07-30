@@ -470,6 +470,74 @@
   text-align: left;
 }
 
+/* --- code snippets (Implementation section) --- */
+:root {
+  --nrf-code-keyword: #a626a4; /* def, class, return, if, not, in */
+  --nrf-code-string: #50a14f;
+  --nrf-code-function: #4078f2;
+  --nrf-code-comment: #9aa0a6;
+  --nrf-code-punct: #6a6a6a;
+  --nrf-code-number: #b76b01;
+}
+.nrf-code {
+  margin: 1.5rem 0;
+}
+/* The snippet reuses .nrf-pre's frame (see the BibTeX block above); this only
+   adds the parts a code listing needs on top of it. */
+.nrf-code .nrf-pre {
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+.nrf-code-caption {
+  margin: 0.5rem 0 0;
+  color: #6a6a6a;
+  font-size: 0.85rem;
+  font-style: italic;
+  text-align: left;
+}
+.nrf-code .token.keyword,
+.nrf-code .token.boolean {
+  color: var(--nrf-code-keyword);
+}
+.nrf-code .token.string {
+  color: var(--nrf-code-string);
+}
+.nrf-code .token.function,
+.nrf-code .token.class-name,
+.nrf-code .token.property {
+  color: var(--nrf-code-function);
+}
+.nrf-code .token.comment {
+  color: var(--nrf-code-comment);
+  font-style: italic;
+}
+.nrf-code .token.punctuation,
+.nrf-code .token.operator {
+  color: var(--nrf-code-punct);
+}
+.nrf-code .token.number {
+  color: var(--nrf-code-number);
+}
+
+/* Declaration beside its derived tool. Side by side when there's room; stacked
+   below, like the page's other figures. Each pane scrolls inside itself (via
+   .nrf-pre's overflow-x) so a long line never widens the page. */
+.nrf-panes {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+.nrf-panes .nrf-code {
+  min-width: 0; /* let a grid child shrink instead of forcing the row wider */
+  margin: 0;
+}
+@media screen and (min-width: 900px) {
+  .nrf-panes {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 /* --- footer (Bulma .footer) --- */
 .nrf-footer {
   padding: 2.5rem 1.5rem 3rem;
