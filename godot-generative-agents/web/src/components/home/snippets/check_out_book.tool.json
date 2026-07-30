@@ -1,0 +1,25 @@
+{
+  "name": "check_out_book",
+  "description": "Check out a library book from the shelf",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "reasoning": {
+        "type": "string",
+        "description": "one short sentence explaining the choice"
+      },
+      "book": {
+        "type": "string",
+        "description": "the exact name of the book to check out",
+        "enum": [
+          "book shelf",
+          "campus history book",
+          "star atlas"
+        ]
+      }
+    },
+    "required": [
+      "book"
+    ]
+  }
+}
