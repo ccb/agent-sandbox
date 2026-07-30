@@ -68,6 +68,11 @@
 .nrf-title-3 {
   font-size: 2rem;
 }
+/* Subsection heading inside a narrative section (Bulma .title.is-4-ish). */
+.nrf-title-4 {
+  margin: 2rem 0 0.75rem;
+  font-size: 1.35rem;
+}
 .nrf-subtitle {
   color: var(--nrf-text);
   font-size: 1.25rem;
@@ -101,6 +106,19 @@
   text-decoration: none;
 }
 .nrf-authors a:hover {
+  text-decoration: underline;
+}
+.nrf-advisor {
+  margin-top: 0.4rem;
+  color: #555;
+  font-family: var(--nrf-title-font);
+  font-size: 1.05rem;
+}
+.nrf-advisor a {
+  color: var(--nrf-link);
+  text-decoration: none;
+}
+.nrf-advisor a:hover {
   text-decoration: underline;
 }
 
@@ -171,6 +189,18 @@
 }
 .nrf-content a:hover {
   text-decoration: underline;
+}
+
+/* --- display math (plain HTML sub/sup — COOP/COEP rules out CDN KaTeX) --- */
+.nrf-math {
+  margin: 0 0 1em;
+  padding: 0.35em 0;
+  overflow-x: auto;
+  text-align: center;
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-size: 1.1rem;
+  white-space: nowrap;
 }
 
 /* --- BibTeX block (Bulma pre) --- */
