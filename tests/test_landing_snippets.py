@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import re
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -119,6 +120,54 @@ def test_quoted_snippet_anchors_still_exist(snippet, source, header, anchors):
         assert anchor in snippet_src, f"{anchor!r} missing from {snippet}"
 
 
+@pytest.mark.parametrize(
+    "snippet,source,header",
+    [(name, src, header) for name, (src, header, _) in QUOTED.items()],
+)
+def test_every_quoted_line_is_real_engine_source(snippet, source, header):
+    """No line of a quoted snippet may be invented.
+
+    The anchors above are identifiers, so they cannot see a rewritten string
+    literal. That gap shipped once: drop.py's ``parser.fail`` message and its
+    success message had both been reworded down to one-liners while every
+    anchor stayed green, so the public page showed code the engine does not
+    contain. This checks whole lines instead -- each one must appear, stripped,
+    in the block being quoted. Trimming lines out is still allowed (that is
+    what "abridged" in the caption means); rewriting one is not.
+    """
+    block = _enclosing_block((REPO_ROOT / source).read_text(), header)
+    real = {line.strip() for line in block.splitlines() if line.strip()}
+    missing = [
+        line.strip()
+        for line in (SNIPPET_DIR / snippet).read_text().splitlines()
+        if line.strip()
+        and not line.strip().startswith("#")
+        and line.strip() not in real
+    ]
+    assert not missing, f"{snippet} lines absent from {header} in {source}: {missing}"
+
+
+def test_gate_snippet_is_verbatim_engine_source():
+    """gate.py is pinned by equality rather than by anchors or a line count.
+
+    The prose calls the gate "five lines", and neither weaker check guards
+    that: adding a hook or a ``try`` inside ``__call__`` would leave every
+    anchor green, and the *snippet* would still be five lines, while the page's
+    central claim quietly stopped matching the engine. Equality subsumes both.
+
+    ``__call__`` is the last member of ``GatedEffect``, so the inner
+    ``_enclosing_block`` call runs off the end of the class -- which is why the
+    trailing blank lines are normalized away. A method added after it would be
+    over-included and fail here loudly, which is the safe direction.
+    """
+    engine_src = (REPO_ROOT / "text_adventure_games/reactions.py").read_text()
+    gated = _enclosing_block(engine_src, "class GatedEffect:")
+    call = _enclosing_block(gated, "    def __call__(self):")
+    assert (
+        textwrap.dedent(call).rstrip() + "\n" == (SNIPPET_DIR / "gate.py").read_text()
+    )
+
+
 def test_tool_schema_pane_matches_a_live_tools_for_call(offered_tools):
     """The JSON pane is what a Penn agent at the book stacks really receives.
 
@@ -130,8 +179,17 @@ def test_tool_schema_pane_matches_a_live_tools_for_call(offered_tools):
 
 
 def test_the_library_menu_is_narrowed_by_affordance(offered_tools):
-    """The section's prose claims 7 verbs at the book stacks out of the cast's
-    11. Pin both numbers so the prose can't go stale."""
+    """The section's prose claims 7 of the cast's 11 Penn verbs survive the
+    affordance check at the book stacks. Pin both numbers so it can't go stale.
+
+    SCOPE: this pins the affordance-curation demonstration -- ``tools_for``
+    restricted to ``PENN_ACTION_VERBS`` -- and NOT the live sim's wiring. A
+    running sim goes through ``cognition.attach_agents`` ->
+    ``action_tools_for``, which prepends ``travel`` and ``perform`` (13
+    ``action_names``) and drops ``talk_to`` when nobody is co-located, offering
+    8 tools here rather than 7. The prose is worded to claim only what this call
+    measures; do not read these numbers as the agent's complete live menu.
+    """
     assert len(PENN_ACTION_VERBS) == 11
     assert sorted(t["name"] for t in offered_tools) == [
         "check_out_book",

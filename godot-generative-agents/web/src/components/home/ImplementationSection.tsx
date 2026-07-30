@@ -24,7 +24,7 @@ export const SNIPPETS = {
     code: dropCode,
     lang: "python",
     caption:
-      "text_adventure_games/actions/things.py — abridged: docstrings and one duplicate branch removed",
+      "text_adventure_games/actions/things.py — abridged: docstrings, aliases, a duplicate is_wielded branch, and the constructor that assigns self.item and self.location",
   },
   declaration: {
     code: checkOutBookCode,
@@ -71,7 +71,7 @@ export function ImplementationSection() {
               The precondition gate
             </h3>
             <p>
-              Every change to the world passes through five lines. An action checks its
+              Every action a character takes passes through five lines. An action checks its
               preconditions; only if they hold does it apply its effects.
             </p>
             <CodeBlock {...SNIPPETS.gate} />
@@ -106,10 +106,10 @@ export function ImplementationSection() {
             <p>Three things follow from that declaration.</p>
             <p>
               <strong>The menu is curated by place.</strong> Declaring an affordance means the verb
-              is offered only where something carrying that property is in scope. Standing at the
-              book stacks, this agent's menu is seven verbs; <em>study</em>, <em>eat</em>,{" "}
-              <em>activate</em> and <em>deactivate</em> are simply absent, because nothing there
-              affords them. The cast's full list runs to eleven.
+              is offered only where something carrying that property is in scope. Of the eleven
+              Penn-specific verbs this cast declares, seven survive the affordance check at the book
+              stacks; <em>study</em>, <em>eat</em>, <em>activate</em> and <em>deactivate</em> are
+              simply absent, because nothing there affords them.
             </p>
             <p>
               <strong>The arguments are bounded by perception.</strong> The typed <code>item</code>{" "}
@@ -136,9 +136,11 @@ export function ImplementationSection() {
             <p>
               Pass it to the game as <code>custom_actions=[Nap]</code> and it becomes three things
               at once: a command a human player can type, an option a scripted NPC can take, and a
-              typed tool in every agent's menu — offered only where there is a bench to sit on. The
-              full engine reference, generated from these same sources, is at{" "}
-              <a href="docs/">the documentation site</a>.
+              typed tool in every agent's menu — offered only where there is a bench to sit on. That
+              last one is the engine's default wiring; a simulation that curates its own verb list,
+              as this one does, names the verb there instead. The full engine reference, generated
+              from these same sources, is at{" "}
+              <a href={`${import.meta.env.BASE_URL}docs/`}>the documentation site</a>.
             </p>
           </div>
         </div>
