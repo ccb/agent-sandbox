@@ -262,7 +262,17 @@ func _build_panel() -> void:
 
 	# Live is the primary path now, so land the keyboard in the backend field:
 	# typing a URL and pressing Enter connects (text_submitted -> _on_connect_pressed).
-	_url_edit.grab_focus()
+	#
+	# Not on the web, though. There the canvas is embedded in the landing page
+	# (web/src/components/home/HomeView.tsx), and a focused LineEdit switches on
+	# Godot's browser IME shim, which re-focuses a hidden contenteditable <div>
+	# beside the canvas every 100 ms for as long as the field holds focus. That
+	# steals focus back from the page the reader is actually reading: their text
+	# selection collapses and the browser scrolls the canvas back into view. A
+	# reader who wants the field can click it; nobody arrives at a blog post
+	# wanting to type into an embedded demo.
+	if not OS.has_feature("web"):
+		_url_edit.grab_focus()
 
 
 func _ribbon(text: String) -> Label:
