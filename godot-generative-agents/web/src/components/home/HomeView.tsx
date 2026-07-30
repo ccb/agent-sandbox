@@ -342,9 +342,15 @@ export function HomeView() {
                 Program (PURM), advised by{" "}
                 <a href="https://www.cis.upenn.edu/~ccb/">Chris Callison-Burch</a>. It builds on the{" "}
                 <code>agent-sandbox</code> multi-agent simulation framework and the text-adventure
-                engine from Chris Callison-Burch's interactive-fiction course materials, and we
-                thank the framework's broader contributors. Character sprite art is from the{" "}
-                <em>Cute Fantasy</em> pack by Kenmi. Campus geography is derived from{" "}
+                engine from{" "}
+                <a href="https://interactive-fiction-class.org/homeworks/text-adventure-game/text-adventure-game.html">
+                  Chris Callison-Burch's interactive-fiction course materials
+                </a>
+                , and we thank the framework's broader contributors. We are particularly grateful to{" "}
+                <a href="https://github.com/MaEnqiMark">Mark Ma</a> for his work on the{" "}
+                <code>text_adventure_games</code> library — the engine every agent in this
+                simulation acts through. Character sprite art is from the <em>Cute Fantasy</em> pack
+                by Kenmi. Campus geography is derived from{" "}
                 <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> data.
               </p>
             </div>
