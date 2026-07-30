@@ -42,6 +42,21 @@ function loadEngineScript(): Promise<void> {
   });
 }
 
+/**
+ * Pin `preventScroll` onto an element's own `focus()`.
+ *
+ * The engine focuses the canvas on every press, and while an in-game text field
+ * holds focus it re-focuses a hidden `contenteditable` div it appends beside the
+ * canvas. On the landing page the canvas sits inside a long scrolling article,
+ * so each of those calls scrolls the reader back to the demo. `preventScroll` is
+ * the platform's own opt-out and the engine never passes it — so pin it on here,
+ * which covers every call site inside the engine without patching its bundle.
+ */
+export function focusWithoutScroll(el: { focus: (options?: FocusOptions) => void }) {
+  const focus = el.focus.bind(el);
+  el.focus = (options?: FocusOptions) => focus({ ...options, preventScroll: true });
+}
+
 export function GodotCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [status, setStatus] = useState("Loading engine…");
@@ -56,6 +71,7 @@ export function GodotCanvas() {
         if (cancelled) return;
         const canvas = canvasRef.current;
         if (!canvas || !window.Engine) return;
+        focusWithoutScroll(canvas);
 
         engine = new window.Engine({
           // Base path for the engine's sibling files (index.wasm, index.pck, …).
@@ -73,6 +89,18 @@ export function GodotCanvas() {
         });
         setStatus("Starting…");
         await engine.startGame();
+        // The IME div only exists once the engine's display server is up.
+        //
+        // ponytail: this takes the *scroll* out of the engine's focus calls, not
+        // the focus grab itself — Godot's IME shim re-focuses this div every
+        // 100 ms and never clears that timer on blur, so a reader who clicks
+        // into a text field inside the demo still loses selections made
+        // elsewhere on the page until they click back out of it. The menu no
+        // longer focuses a field on its own (main_menu.gd), which is what made
+        // this reachable without asking. If it starts to matter, drop the timer
+        // by patching the export shell rather than guessing from out here.
+        const ime = canvas.parentElement?.querySelector<HTMLElement>("div.ime");
+        if (ime) focusWithoutScroll(ime);
         if (!cancelled) setStatus("");
       } catch (err) {
         if (!cancelled) {
