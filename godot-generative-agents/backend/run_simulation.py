@@ -77,6 +77,26 @@ def _resting_pron(char, schedule, matched, name, emoji):
 DEVIATED = "deviated"
 
 
+def _walking_minutes_left(st, char, clock):
+    """Minutes to arrival when the agent is mid-walk toward its CURRENT
+    scheduled stop, else ``None`` (#916).
+
+    Batch 11's only criterion-1 breach: 70 minutes into a correct 68-minute
+    leg (post-#904 walks reach real rooms, so long legs are common now), the
+    #580 elapsed clause read as "the session ran long and is over" and the
+    agent turned around 11 tiles from the door. Walking toward the plan is
+    the opposite of the neglect that clause exists to expose, and the loop
+    can tell the two apart. A walk AWAY from the plan keeps the neglect
+    semantics unchanged.
+    """
+    if clock is None or not st.get("path"):
+        return None
+    schedule = getattr(getattr(char, "agent", None), "schedule", None)
+    if st.get("walk_target") != getattr(schedule, "destination", None):
+        return None
+    return max(1, clock.minutes_for_steps(len(st["path"])))
+
+
 def _decide_for(
     game,
     char,
@@ -86,6 +106,7 @@ def _decide_for(
     stop_since=0,
     waiting=False,
     act_since=None,
+    walking=None,
     *,
     deciding_sink=None,
 ):
@@ -124,6 +145,7 @@ def _decide_for(
             stop_since=stop_since,
             waiting=waiting,
             act_since=act_since,
+            walking=walking,
         )
     finally:
         if deciding_sink is not None:
@@ -542,6 +564,7 @@ def step(
                 stop_since=state[name].get("stop_since", 0),
                 waiting=state[name].get("waiting_for_anchor", False),
                 act_since=state[name].get("act_since"),
+                walking=_walking_minutes_left(state[name], chars[name], clock),
                 deciding_sink=deciding_sink,
             )
         if futs:
@@ -621,6 +644,7 @@ def step(
                     stop_since=st.get("stop_since", 0),
                     waiting=st.get("waiting_for_anchor", False),
                     act_since=st.get("act_since"),
+                    walking=_walking_minutes_left(st, char, clock),
                     deciding_sink=deciding_sink,
                 )
             )
@@ -712,6 +736,13 @@ def step(
                     )
                     st["pron"] = WALK_EMOJI
                     st["desc"] = f"walking to {dest.name} @ {address}"
+                    # #916: a walk is not the held activity. Reset the #905
+                    # stamp so the hold clause can't fire mid-walk on the
+                    # stale pre-walk activity property, and record the walk's
+                    # target so the decide context can price the arrival
+                    # instead of reading the walk as time spent on the stop.
+                    st["act_text"] = None
+                    st["walk_target"] = dest.name
                 elif (
                     command.startswith("perform")
                     or (clock is not None and _settles_in_place(game, command))
