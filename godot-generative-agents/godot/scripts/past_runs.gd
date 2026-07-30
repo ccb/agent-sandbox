@@ -41,7 +41,14 @@ func _ready() -> void:
 	_token = LaunchConfig.live_token
 	_build_ui()
 	_http = HTTPRequest.new()
-	_http.timeout = 10.0
+	# "open"/"export" download a whole replay — tens of MB for a full 5-agent
+	# day. Without use_threads the body drains on the main thread one chunk per
+	# frame (~4 MB/s at 64 KiB × 60 fps), so a big replay blew the old 10 s
+	# timeout as "Couldn't reach the backend". Threaded + 1 MiB chunks, the same
+	# body arrives in about a second; 30 s still catches a genuinely hung server.
+	_http.use_threads = true
+	_http.download_chunk_size = 1 << 20
+	_http.timeout = 30.0
 	_http.request_completed.connect(_on_http_completed)
 	add_child(_http)
 	_fetch_runs()
