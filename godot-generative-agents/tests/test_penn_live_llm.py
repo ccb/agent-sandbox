@@ -800,6 +800,52 @@ def test_llm_plan_mode_authors_each_agents_day(monkeypatch):
         assert [s.place for s in agent.plan.stops] == ["Houston Hall"]
 
 
+def test_the_planner_is_never_offered_an_unwalkable_place(monkeypatch):
+    # #906: "Penn campus" (the addressless hub) is a real Location, so it
+    # passed validate_stops and was advertised in "Known places:" -- but a
+    # travel there grounds to no tile, and the agent stands motionless
+    # narrating the trip ("walking home @ None" for 303 min in batch 10).
+    stepper = _llm_stepper(monkeypatch, plan="llm")
+    for name in stepper.order:
+        known = stepper.chars[name].agent.planner.known_places
+        assert "Penn campus" not in known
+        assert "Houston Hall" in known  # walkable places all stay on offer
+
+
+def test_a_model_stop_at_the_hub_is_dropped_from_the_plan(monkeypatch):
+    class _HubPlanningBrain(_ScriptedBrain):
+        def call_tool(self, messages, tool, max_tokens=256, temperature=0.0):
+            if tool["name"] != "minute_plan":
+                return super().call_tool(messages, tool, max_tokens, temperature)
+            self.tool_calls.append(tool["name"])
+            result = {
+                "stops": [
+                    {
+                        "place": "Houston Hall",
+                        "activity": "eating lunch",
+                        "emoji": "\U0001f37d️",
+                        "minutes": 10,
+                    },
+                    # Theo's batch-10 evening tail: a stop at the hub.
+                    {
+                        "place": "Penn campus",
+                        "activity": "head home for the night",
+                        "emoji": "\U0001f319",
+                        "minutes": 10,
+                    },
+                ]
+            }
+            self._record(messages, result)
+            return result
+
+    stepper = _llm_stepper(monkeypatch, plan="llm", brain_cls=_HubPlanningBrain)
+    for name in stepper.order:
+        agent = stepper.chars[name].agent
+        # The walkable stop survives (the day is still model-authored); the
+        # hub stop is validated away instead of parking the agent at nowhere.
+        assert [s.place for s in agent.plan.stops] == ["Houston Hall"]
+
+
 def test_schedule_plan_mode_keeps_the_mock_planner(monkeypatch):
     stepper = _llm_stepper(monkeypatch)  # default plan="schedule"
     assert stepper.planner_client is None
