@@ -188,6 +188,51 @@
   font-size: 1.05em;
 }
 
+/* --- embedded figure (the prompt-chain visualizer) --- */
+.nrf-figure {
+  margin: 1.5rem 0 0;
+}
+/* The visualizer is `height: 100%` and dark-themed, so the frame gives it a
+   definite height and clips it to a light-page figure. */
+.nrf-figure-frame {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  height: 520px;
+  border: 1px solid #dcdcdc;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.nrf-figure-idle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--nrf-light);
+  color: #6a6a6a;
+  font: inherit;
+  font-size: 0.95rem;
+}
+.nrf-figure-button {
+  cursor: pointer;
+}
+.nrf-figure-button:hover {
+  background: #ececec;
+  color: var(--nrf-heading);
+}
+.nrf-figcaption {
+  margin-top: 0.6rem;
+  color: #6a6a6a;
+  font-size: 0.9rem;
+  text-align: left;
+}
+/* Shown only where the figure itself is hidden — see the media query below. */
+.nrf-figure-note {
+  display: none;
+  margin: 1.5rem 0 0;
+  color: #6a6a6a;
+  font-size: 0.95rem;
+}
+
 /* --- BibTeX block (Bulma pre) --- */
 .nrf-pre {
   margin: 0;
@@ -232,5 +277,13 @@
   /* Justified text on a phone-width measure is mostly gaps. */
   .nrf-justified {
     text-align: left;
+  }
+  /* A node graph beside a prompt panel has nowhere to go at this width, so the
+     figure steps aside for a note rather than rendering unusably. */
+  .nrf-figure {
+    display: none;
+  }
+  .nrf-figure-note {
+    display: block;
   }
 }

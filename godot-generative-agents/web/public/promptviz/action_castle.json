@@ -302,8 +302,8 @@
           "duration_label": "Duration:"
         }
       },
-      "raw_source": "You are an NPC in a text adventure game.\n{%- if persona %}\nPersona: {{ persona }}\n{%- endif %}\n{%- if goals_block %}\nGoals:\n{{ goals_block }}\n{%- endif %}\n{%- if include_instruction %}\nBased on your persona, goals, and the current situation, choose a single game command to execute. Reply with exactly three lines:\n{{ reasoning_label }} <one short sentence explaining your choice>\n{{ action_label }} <the command, e.g. 'attack player', 'go north', 'take sword'>\n{{ duration_label }} <estimated in-game minutes this action takes, e.g. 5>\n{%- endif %}\n",
-      "rendered": "You are an NPC in a text adventure game.\nPersona: I am the troll. I guard the drawbridge.\nGoals:\nShort-term:\n  - keep the player off the bridge\nBased on your persona, goals, and the current situation, choose a single game command to execute. Reply with exactly three lines:\nReasoning: <one short sentence explaining your choice>\nAction: <the command, e.g. 'attack player', 'go north', 'take sword'>\nDuration: <estimated in-game minutes this action takes, e.g. 5>"
+      "raw_source": "You are an NPC in a text adventure game.\n{%- if persona %}\nPersona: {{ persona }}\n{%- endif %}\n{%- if goals_block %}\nGoals:\n{{ goals_block }}\n{%- endif %}\n{%- if include_instruction %}\nBased on your persona, goals, and the current situation, choose a single game command to execute. Reply with exactly three lines:\n{{ reasoning_label }} <one short sentence explaining your choice>\n{{ action_label }} <the command, e.g. 'attack player', 'go north', 'take sword'>\n{{ duration_label }} <estimated in-game minutes this action takes, e.g. 5>\nIf no available command can accomplish what you need, your Action may be: propose <what you need> because <why> \u2014 this records your request for the world's designers.\n{%- endif %}\n",
+      "rendered": "You are an NPC in a text adventure game.\nPersona: I am the troll. I guard the drawbridge.\nGoals:\nShort-term:\n  - keep the player off the bridge\nBased on your persona, goals, and the current situation, choose a single game command to execute. Reply with exactly three lines:\nReasoning: <one short sentence explaining your choice>\nAction: <the command, e.g. 'attack player', 'go north', 'take sword'>\nDuration: <estimated in-game minutes this action takes, e.g. 5>\nIf no available command can accomplish what you need, your Action may be: propose <what you need> because <why> \u2014 this records your request for the world's designers."
     },
     "match_intent": {
       "id": "match_intent",
@@ -313,12 +313,17 @@
       "description": "LlmParser.determine_intent() LLM fallback -- fires only when keyword matching can't map the Action line to a known command.",
       "frontmatter": {
         "name": "match_intent",
-        "description": "Parser system instructions for matching a user's input to the closest known action (LlmParser.determine_intent's LLM fallback). The numbered list of command descriptions is appended by LlmParser._pick_option.",
+        "description": "Parser system instructions for matching a user's input to the closest known action (LlmParser.determine_intent's LLM fallback). The numbered list of command descriptions is appended by LlmParser._pick_option. For agent-driven actors (#621) allow_none adds the licensing sentence for the \"none of these commands fit the input\" decline option the parser appends to that list.",
         "model_api": "",
-        "inputs": {},
+        "inputs": {
+          "allow_none": {
+            "type": "bool",
+            "description": "True when the option list carries the decline option (agent-driven actors); adds the sentence licensing the model to pick it. Defaults falsy: the human-player rendering is byte-identical to the pre-#621 one."
+          }
+        },
         "sample": {}
       },
-      "raw_source": "You are the parser for a text adventure game. For a user input, say which of the commands it most closely matches. The commands are:\n",
+      "raw_source": "You are the parser for a text adventure game. For a user input, say which of the commands it most closely matches.{% if allow_none %} If none of them fit what the input asks for, choose the option that says none of these commands fit the input.{% endif %} The commands are:\n",
       "rendered": "You are the parser for a text adventure game. For a user input, say which of the commands it most closely matches. The commands are:"
     },
     "match_character": {

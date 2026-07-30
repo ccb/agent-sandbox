@@ -323,13 +323,13 @@
       "description": "planner.LLMPlanner._day_outline() -- real model call (#83), only with a live client. Sketches the day as a few broad blocks. Shares the plan_system message; the day's persona + memory ride in the user message (assembled in code).",
       "frontmatter": {
         "name": "plan_system",
-        "description": "System message for the LLM daily planner (backend/planner.py, LLMPlanner, issue #83). Shared across the three-level decomposition -- day outline -> hourly -> minute stops -- and the revise pass. Unlike the other gen-agents templates (which hold memory content), this IS a real model prompt: it tells the model to plan in character for a Smallville resident. The per-level user message (persona text, memory block, hour window, prior level) is assembled in code, like other observation scaffolding (issue #145).",
+        "description": "System message for the LLM daily planner (backend/planner.py, LLMPlanner, issue #83). Shared across the three-level decomposition -- day outline -> hourly -> minute stops -- and the revise pass. Unlike the other gen-agents templates (which hold memory content), this IS a real model prompt: it tells the model to plan in character for a Penn campus resident. The per-level user message (persona text, memory block, hour window, prior level) is assembled in code, like other observation scaffolding (issue #145).",
         "model_api": "",
         "inputs": {},
         "sample": {}
       },
-      "raw_source": "You are planning one day for a resident of the town of Smallville. Plan in character, grounded in who they are and what they remember.\n",
-      "rendered": "You are planning one day for a resident of the town of Smallville. Plan in character, grounded in who they are and what they remember."
+      "raw_source": "You are planning one day for a resident of the Penn campus. Plan in character, grounded in who they are and what they remember.\n",
+      "rendered": "You are planning one day for a resident of the Penn campus. Plan in character, grounded in who they are and what they remember."
     },
     "plan_hourly": {
       "id": "plan_hourly",
@@ -339,13 +339,13 @@
       "description": "planner.LLMPlanner._hourly() -- expands the day outline into one line per in-game hour (bounded to the run's clock window).",
       "frontmatter": {
         "name": "plan_system",
-        "description": "System message for the LLM daily planner (backend/planner.py, LLMPlanner, issue #83). Shared across the three-level decomposition -- day outline -> hourly -> minute stops -- and the revise pass. Unlike the other gen-agents templates (which hold memory content), this IS a real model prompt: it tells the model to plan in character for a Smallville resident. The per-level user message (persona text, memory block, hour window, prior level) is assembled in code, like other observation scaffolding (issue #145).",
+        "description": "System message for the LLM daily planner (backend/planner.py, LLMPlanner, issue #83). Shared across the three-level decomposition -- day outline -> hourly -> minute stops -- and the revise pass. Unlike the other gen-agents templates (which hold memory content), this IS a real model prompt: it tells the model to plan in character for a Penn campus resident. The per-level user message (persona text, memory block, hour window, prior level) is assembled in code, like other observation scaffolding (issue #145).",
         "model_api": "",
         "inputs": {},
         "sample": {}
       },
-      "raw_source": "You are planning one day for a resident of the town of Smallville. Plan in character, grounded in who they are and what they remember.\n",
-      "rendered": "You are planning one day for a resident of the town of Smallville. Plan in character, grounded in who they are and what they remember."
+      "raw_source": "You are planning one day for a resident of the Penn campus. Plan in character, grounded in who they are and what they remember.\n",
+      "rendered": "You are planning one day for a resident of the Penn campus. Plan in character, grounded in who they are and what they remember."
     },
     "plan_minute": {
       "id": "plan_minute",
@@ -355,13 +355,13 @@
       "description": "planner.LLMPlanner._minute() -- turns the hourly plan into concrete {place, activity} stops, validated against known places. revise() re-runs this level on a trigger.",
       "frontmatter": {
         "name": "plan_system",
-        "description": "System message for the LLM daily planner (backend/planner.py, LLMPlanner, issue #83). Shared across the three-level decomposition -- day outline -> hourly -> minute stops -- and the revise pass. Unlike the other gen-agents templates (which hold memory content), this IS a real model prompt: it tells the model to plan in character for a Smallville resident. The per-level user message (persona text, memory block, hour window, prior level) is assembled in code, like other observation scaffolding (issue #145).",
+        "description": "System message for the LLM daily planner (backend/planner.py, LLMPlanner, issue #83). Shared across the three-level decomposition -- day outline -> hourly -> minute stops -- and the revise pass. Unlike the other gen-agents templates (which hold memory content), this IS a real model prompt: it tells the model to plan in character for a Penn campus resident. The per-level user message (persona text, memory block, hour window, prior level) is assembled in code, like other observation scaffolding (issue #145).",
         "model_api": "",
         "inputs": {},
         "sample": {}
       },
-      "raw_source": "You are planning one day for a resident of the town of Smallville. Plan in character, grounded in who they are and what they remember.\n",
-      "rendered": "You are planning one day for a resident of the town of Smallville. Plan in character, grounded in who they are and what they remember."
+      "raw_source": "You are planning one day for a resident of the Penn campus. Plan in character, grounded in who they are and what they remember.\n",
+      "rendered": "You are planning one day for a resident of the Penn campus. Plan in character, grounded in who they are and what they remember."
     },
     "seed_plan": {
       "id": "seed_plan",
@@ -457,8 +457,8 @@
           "duration_label": "Duration:"
         }
       },
-      "raw_source": "You are an NPC in a text adventure game.\n{%- if persona %}\nPersona: {{ persona }}\n{%- endif %}\n{%- if goals_block %}\nGoals:\n{{ goals_block }}\n{%- endif %}\n{%- if include_instruction %}\nBased on your persona, goals, and the current situation, choose a single game command to execute. Reply with exactly three lines:\n{{ reasoning_label }} <one short sentence explaining your choice>\n{{ action_label }} <the command, e.g. 'attack player', 'go north', 'take sword'>\n{{ duration_label }} <estimated in-game minutes this action takes, e.g. 5>\n{%- endif %}\n",
-      "rendered": "You are an NPC in a text adventure game.\nPersona: I am Diego Torres, a graduate student in architecture at Penn. I spend long hours in the Meyerson Hall studio.\nGoals:\nShort-term:\n  - work on the studio model in Meyerson Hall\nBased on your persona, goals, and the current situation, choose a single game command to execute. Reply with exactly three lines:\nReasoning: <one short sentence explaining your choice>\nAction: <the command, e.g. 'attack player', 'go north', 'take sword'>\nDuration: <estimated in-game minutes this action takes, e.g. 5>"
+      "raw_source": "You are an NPC in a text adventure game.\n{%- if persona %}\nPersona: {{ persona }}\n{%- endif %}\n{%- if goals_block %}\nGoals:\n{{ goals_block }}\n{%- endif %}\n{%- if include_instruction %}\nBased on your persona, goals, and the current situation, choose a single game command to execute. Reply with exactly three lines:\n{{ reasoning_label }} <one short sentence explaining your choice>\n{{ action_label }} <the command, e.g. 'attack player', 'go north', 'take sword'>\n{{ duration_label }} <estimated in-game minutes this action takes, e.g. 5>\nIf no available command can accomplish what you need, your Action may be: propose <what you need> because <why> \u2014 this records your request for the world's designers.\n{%- endif %}\n",
+      "rendered": "You are an NPC in a text adventure game.\nPersona: I am Diego Torres, a graduate student in architecture at Penn. I spend long hours in the Meyerson Hall studio.\nGoals:\nShort-term:\n  - work on the studio model in Meyerson Hall\nBased on your persona, goals, and the current situation, choose a single game command to execute. Reply with exactly three lines:\nReasoning: <one short sentence explaining your choice>\nAction: <the command, e.g. 'attack player', 'go north', 'take sword'>\nDuration: <estimated in-game minutes this action takes, e.g. 5>\nIf no available command can accomplish what you need, your Action may be: propose <what you need> because <why> \u2014 this records your request for the world's designers."
     },
     "dialogue": {
       "id": "dialogue",
@@ -496,12 +496,16 @@
       "description": "cognition.remember_outcome() -- the persona's own action, recorded as a first-person observation memory. Memory text (no model call).",
       "frontmatter": {
         "name": "reflection",
-        "description": "A persona's own successful action, recorded as a first-person observation memory (backend/cognition.py, remember_outcome). The command verb selects the phrasing: arriving somewhere, doing an activity, drinking (with a sick variant for contaminated water, #300), or a quoted fallback for any other command. The memory's importance is chosen in Python (it is data, not text), so only the wording lives here.",
+        "description": "A persona's own successful action, recorded as a first-person observation memory (backend/cognition.py, remember_outcome). The command verb selects the phrasing: arriving somewhere, doing an activity, drinking (with a sick variant for contaminated water, #300), idling (if chosen as a settled-wait #614), agent-initiated talk_to (with an optional topic, #614), studying or eating (#615), checking out or reading a library book (#616, the read phrasing quoting the book's content when there is any), or a quoted fallback for any other command. A failed/blocked attempt (#636) is recorded instead as I tried to \"<command>\" but it didn't work: <reason> -- the failed flag overrides the verb-selected phrasing. The reason clause is dropped when the parser left no message (run_simulation then passes the command back as the reason, so \"reason == command\" reads as \"no reason available\"). A timed-out decide (#758) is recorded as I was thinking about what to do at <place> but couldn't decide in time. -- there is no command on that path (nothing was chosen), so the timed_out flag overrides everything else; the \"at <place>\" clause is dropped when the agent stands nowhere. The memory's importance is chosen in Python (it is data, not text), so only the wording lives here.",
         "model_api": "",
         "inputs": {
           "verb": {
             "type": "string",
-            "description": "The command verb -- \"travel\", \"perform\", \"drink\", or anything else."
+            "description": "The command verb -- \"travel\", \"perform\", \"drink\", \"boil\", \"wait\", \"talk_to\", \"study\", \"eat\", \"check_out_book\", \"read\", or anything else."
+          },
+          "person": {
+            "type": "string",
+            "description": "Who was talked to (used when verb == \"talk_to\")."
           },
           "location": {
             "type": "string",
@@ -509,19 +513,51 @@
           },
           "activity": {
             "type": "string",
-            "description": "What the persona is doing (used when verb == \"perform\")."
+            "description": "What the persona did, as a gerund phrase (used when verb == \"perform\"); rendered past tense (\"I was <activity>.\","
           },
           "item": {
             "type": "string",
-            "description": "What was drunk (used when verb == \"drink\")."
+            "description": "What was drunk (verb == \"drink\"), eaten (verb == \"eat\"), checked out, or read (verb == \"check_out_book\" or \"read\")."
+          },
+          "content": {
+            "type": "string",
+            "description": "The book's read_text, quoted in the read memory (verb == \"read\"; empty when the thing carried no text)."
           },
           "sick": {
             "type": "boolean",
             "description": "Whether this drink just sickened the persona (verb == \"drink\")."
           },
+          "recovered": {
+            "type": "boolean",
+            "description": "Whether this drink just cured the persona's sickness (verb == \"drink\","
+          },
+          "topic": {
+            "type": "string",
+            "description": "What was brought up (verb == \"talk_to\") or studied (verb == \"study\"); may be empty."
+          },
+          "minutes": {
+            "type": "integer",
+            "description": "How many in-game minutes the study took (verb == \"study\","
+          },
           "command": {
             "type": "string",
             "description": "The raw command, quoted verbatim in the fallback (any other verb)."
+          },
+          "failed": {
+            "type": "boolean",
+            "description": "Whether this records a failed/blocked attempt (#636); selects the failure phrasing, overriding verb."
+          },
+          "reason": {
+            "type": "string",
+            "description": "The parser's fail message for the blocked attempt (verb-agnostic; used when failed is true,"
+          },
+          "timed_out": {
+            "type": "boolean",
+            "description": "Whether this records a decide that blew its wall-clock budget (#758); overrides every other phrasing (a timeout has no command or verb)."
+          },
+          "place": {
+            "type": "string",
+            "description": "Where the persona stood while deciding (used when timed_out is true,"
           }
         },
         "sample": {
@@ -530,10 +566,11 @@
           "activity": "",
           "item": "cup of murky water",
           "sick": true,
+          "recovered": false,
           "command": ""
         }
       },
-      "raw_source": "{%- if verb == \"travel\" -%}\nI traveled to {{ location }}.\n{%- elif verb == \"perform\" -%}\nI am {{ activity }}.\n{%- elif verb == \"drink\" and sick -%}\nI drank the {{ item }} and now I feel terribly sick.\n{%- elif verb == \"drink\" -%}\nI drank the {{ item }}.\n{%- else -%}\nI did \"{{ command }}\".\n{%- endif -%}\n",
+      "raw_source": "{%- if timed_out and place -%}\nI was thinking about what to do at {{ place }} but couldn't decide in time.\n{%- elif timed_out -%}\nI was thinking about what to do but couldn't decide in time.\n{%- elif failed and reason and reason != command -%}\nI tried to \"{{ command }}\" but it didn't work: {{ reason }}\n{%- elif failed -%}\nI tried to \"{{ command }}\" but it didn't work.\n{%- elif verb == \"travel\" -%}\nI traveled to {{ location }}.\n{%- elif verb == \"perform\" -%}\nI was {{ activity }}.\n{%- elif verb == \"drink\" and sick -%}\nI drank the {{ item }} and now I feel terribly sick.\n{%- elif verb == \"drink\" and recovered -%}\nI drank the {{ item }}, and the sickness has finally passed -- I feel much better.\n{%- elif verb == \"drink\" -%}\nI drank the {{ item }}.\n{%- elif verb == \"boil\" -%}\nI boiled the water to make it safe to drink.\n{%- elif verb == \"wait\" -%}\nI waited; nothing needed doing.\n{%- elif verb == \"talk_to\" and topic -%}\nI went to talk to {{ person }} about {{ topic }}.\n{%- elif verb == \"talk_to\" -%}\nI went to talk to {{ person }}.\n{%- elif verb == \"study\" and topic -%}\nI studied {{ topic }} for {{ minutes }} minutes.\n{%- elif verb == \"study\" -%}\nI studied for {{ minutes }} minutes.\n{%- elif verb == \"eat\" -%}\nI ate the {{ item }}.\n{%- elif verb == \"check_out_book\" -%}\nI checked out {{ item }} from the library.\n{%- elif verb == \"read\" and content -%}\nI read {{ item }}. It said: \"{{ content }}\"\n{%- elif verb == \"read\" -%}\nI read {{ item }}.\n{%- else -%}\nI did \"{{ command }}\".\n{%- endif -%}\n",
       "rendered": "I drank the cup of murky water and now I feel terribly sick."
     },
     "reflect": {
@@ -544,13 +581,13 @@
       "description": "reflection.reflect() / LLMReflector (#84) -- when accumulated importance crosses a threshold, synthesize higher-level insights from recent memories. Real model call (live client only); the numbered memory window rides in the user message.",
       "frontmatter": {
         "name": "reflect_system",
-        "description": "System message for LLM-driven periodic reflection (text_adventure_games/ reflection.py, LLMReflector). Shared by both reflection steps -- asking for the salient high-level questions a window of memories raises, and inferring one grounded insight per question. The per-call user message (the numbered memory window + the step instruction) is assembled in code, like other observation scaffolding (issue #145).",
+        "description": "System message for LLM-driven periodic reflection (text_adventure_games/ reflection.py, LLMReflector). Shared by both reflection steps -- asking for the salient high-level questions a window of memories raises, and inferring one grounded insight per question while preserving each record's temporal status (issue #815). The per-call user message (the marked, numbered memory window + the step instruction) is assembled in code, like other observation scaffolding (issue #145).",
         "model_api": "",
         "inputs": {},
         "sample": {}
       },
-      "raw_source": "You are reflecting on your own recent experiences to form higher-level insights about yourself, the people around you, and your situation. Ground every insight only in the memories you are given.\n",
-      "rendered": "You are reflecting on your own recent experiences to form higher-level insights about yourself, the people around you, and your situation. Ground every insight only in the memories you are given."
+      "raw_source": "You are reflecting on recent memory records to form higher-level insights about yourself, the people around you, your situation, and your intentions.\n\nEach numbered record has a temporal marker:\n- [lived] describes something you experienced or did.\n- [conversation] describes a conversation that happened, but its text may mention invitations, commitments, or other future events that have not happened.\n- [inferred] is a prior higher-level conclusion, not a new firsthand event.\n- [intended] is a plan or commitment that may not have happened.\n- [memory] has unknown temporal status.\n\nNever treat a future event mentioned in any record as completed unless a [lived] record explicitly confirms it. Preserve these distinctions in your reasoning, but do not include the bracketed marker tokens in your insight. Ground every insight only in the memory records you are given.\n",
+      "rendered": "You are reflecting on recent memory records to form higher-level insights about yourself, the people around you, your situation, and your intentions.\n\nEach numbered record has a temporal marker:\n- [lived] describes something you experienced or did.\n- [conversation] describes a conversation that happened, but its text may mention invitations, commitments, or other future events that have not happened.\n- [inferred] is a prior higher-level conclusion, not a new firsthand event.\n- [intended] is a plan or commitment that may not have happened.\n- [memory] has unknown temporal status.\n\nNever treat a future event mentioned in any record as completed unless a [lived] record explicitly confirms it. Preserve these distinctions in your reasoning, but do not include the bracketed marker tokens in your insight. Ground every insight only in the memory records you are given."
     }
   }
 }

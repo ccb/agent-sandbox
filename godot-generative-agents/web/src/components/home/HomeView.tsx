@@ -2,8 +2,49 @@
 // together with the link buttons that use it. Re-enable this import when you
 // re-enable that block.
 // import type { ReactNode } from "react";
+import { lazy, Suspense, useState } from "react";
 import { TeX } from "./TeX";
 import "./home.css";
+
+// Lazy: the visualizer pulls in Cytoscape (~430 kB), and it only mounts when a
+// reader asks for it (see PromptChainFigure), so that weight never lands on a
+// visitor who just reads the page.
+const PromptChainView = lazy(() =>
+  import("../promptviz/PromptChainView").then((m) => ({ default: m.PromptChainView })),
+);
+
+/**
+ * The prompt-chain visualizer, framed as a figure. It used to be its own page
+ * (`#prompts`); folding it in here costs nothing on load because it stays
+ * behind a click — the diagram is an aside to the architecture section above,
+ * not something every visitor needs fetched.
+ */
+function PromptChainFigure() {
+  const [shown, setShown] = useState(false);
+  return (
+    <figure className="nrf-figure">
+      {shown ? (
+        <Suspense fallback={<div className="nrf-figure-frame nrf-figure-idle">Loading…</div>}>
+          <div className="nrf-figure-frame">
+            <PromptChainView />
+          </div>
+        </Suspense>
+      ) : (
+        <button
+          type="button"
+          className="nrf-figure-frame nrf-figure-idle nrf-figure-button"
+          onClick={() => setShown(true)}
+        >
+          Load the interactive diagram
+        </button>
+      )}
+      <figcaption className="nrf-figcaption">
+        Each node is one step of a decision; color marks whether it calls the model or gates it
+        without one. Click a node to read the prompt template behind it.
+      </figcaption>
+    </figure>
+  );
+}
 
 /**
  * Every formula on the page, in one place. JSX below references these by name,
@@ -301,6 +342,29 @@ export function HomeView() {
                 can trigger a plan revision, so agents learn from what the world refuses.
               </p>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ===== Prompt chains (folded in from the retired #prompts page) ===== */}
+      <section className="nrf-section">
+        <div className="nrf-container">
+          <div className="nrf-narrow">
+            <h2 className="nrf-title nrf-title-3 nrf-centered">Inside a decision</h2>
+            <div className="nrf-content nrf-justified">
+              <p>
+                None of the steps above is a single monolithic prompt. One decision is a chain: the
+                agent's observation and retrieved memories are assembled into context, the model is
+                asked for an action, its answer is parsed back into a command, and the world's
+                precondition gate has the last word. The diagram below is generated from the
+                engine's own chain specifications and prompt templates, so it stays in step with the
+                code rather than being drawn by hand.
+              </p>
+            </div>
+            <PromptChainFigure />
+            <p className="nrf-figure-note">
+              The interactive diagram needs a wider screen than this one.
+            </p>
           </div>
         </div>
       </section>

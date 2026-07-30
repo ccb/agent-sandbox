@@ -184,15 +184,6 @@
   visibility: hidden;
 }
 
-/* The prompt views (chains graph, reader) are opaque dark overlays, mounted only
-   when active (App.tsx), so they just need a layer above the canvas. */
-.view-prompts,
-.view-reader {
-  z-index: 2;
-  overflow: hidden;
-  background: #0d1117;
-}
-
 /* The landing page: an opaque white overlay (mounted only when active) that owns
    its own vertical scroll, like the live dashboard. */
 .view-home {

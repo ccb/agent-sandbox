@@ -1,5 +1,5 @@
-import { Activity, BookOpen, FileText, Gamepad2, Home, Menu, Share2 } from "lucide-react";
-import { lazy, type ReactNode, Suspense, useEffect, useRef, useState } from "react";
+import { Activity, FileText, Gamepad2, Home, Menu } from "lucide-react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { AgentCardModal } from "./components/AgentCardModal";
 import { GodotCanvas } from "./components/GodotCanvas";
 import { HomeView } from "./components/home/HomeView";
@@ -9,36 +9,19 @@ import { initialApiBase, useLive } from "./useLive";
 import { useReplay, useReplayStep } from "./useReplay";
 import "./App.css";
 
-// Lazy-loaded: the prompt-chain view pulls in Cytoscape (~430 kB), which only
-// the Prompt-chains tab needs. Splitting it keeps that weight out of the initial
-// bundle until someone opens the tab.
-const PromptChainView = lazy(() =>
-  import("./components/promptviz/PromptChainView").then((m) => ({
-    default: m.PromptChainView,
-  })),
-);
+type View = "home" | "game" | "llm";
 
-// The Prompts reader is its own lazy chunk — it's just a table + modal, so it
-// doesn't pull in Cytoscape the way the chains view does.
-const PromptReaderView = lazy(() =>
-  import("./components/promptviz/PromptReaderView").then((m) => ({
-    default: m.PromptReaderView,
-  })),
-);
-
-type View = "home" | "game" | "llm" | "prompts" | "reader";
-
-// Pages selected by the URL hash (#home / #game / #llm / #prompts / #reader) so
-// each is a real, shareable location and the back button works — no router
-// needed. The Nerfies-style project page is the landing view; every other view is
-// one explicit hop away via the menu. `#agents` (the old agent-cards page, folded
-// into the live dashboard in #528) redirects here so existing links keep working.
+// Pages selected by the URL hash (#home / #game / #llm) so each is a real,
+// shareable location and the back button works — no router needed. The
+// Nerfies-style project page is the landing view; every other view is one
+// explicit hop away via the menu. Two retired hashes fall through to the landing
+// page: `#agents` (the old agent-cards page, folded into the live dashboard in
+// #528) and `#prompts` (the prompt-chain visualizer, now a figure on the landing
+// page itself), so existing links still land somewhere sensible.
 function viewFromHash(): View {
   const hash = window.location.hash.replace("#", "");
   if (hash === "game") return "game";
   if (hash === "llm" || hash === "agents") return "llm";
-  if (hash === "prompts") return "prompts";
-  if (hash === "reader") return "reader";
   return "home";
 }
 
@@ -48,8 +31,6 @@ function viewFromHash(): View {
 const ICON_HOME = <Home className="nav-icon" size={16} aria-hidden />;
 const ICON_GAME = <Gamepad2 className="nav-icon" size={16} aria-hidden />;
 const ICON_LLM = <Activity className="nav-icon" size={16} aria-hidden />;
-const ICON_CHAINS = <Share2 className="nav-icon" size={16} aria-hidden />;
-const ICON_READER = <BookOpen className="nav-icon" size={16} aria-hidden />;
 const ICON_DOCS = <FileText className="nav-icon" size={16} aria-hidden />;
 
 // The navigable views, grouped into labeled sections for the dropdown menu.
@@ -64,13 +45,6 @@ const NAV_SECTIONS: { heading: string; items: NavItem[] }[] = [
     items: [
       { view: "game", label: "Game view", icon: ICON_GAME },
       { view: "llm", label: "Live dashboard", icon: ICON_LLM },
-    ],
-  },
-  {
-    heading: "Prompts",
-    items: [
-      { view: "prompts", label: "Prompt chains", icon: ICON_CHAINS },
-      { view: "reader", label: "Prompt reader", icon: ICON_READER },
     ],
   },
 ];
@@ -283,25 +257,6 @@ export default function App() {
         {view === "home" && (
           <section className="view view-home">
             <HomeView />
-          </section>
-        )}
-
-        {/* Mounted only when active: Cytoscape needs a sized container at init,
-            and (unlike the Godot canvas) this view has no reason to stay alive
-            in the background. */}
-        {view === "prompts" && (
-          <section className="view view-prompts">
-            <Suspense fallback={<div className="pcv-loading">Loading…</div>}>
-              <PromptChainView />
-            </Suspense>
-          </section>
-        )}
-
-        {view === "reader" && (
-          <section className="view view-reader">
-            <Suspense fallback={<div className="pcv-loading">Loading…</div>}>
-              <PromptReaderView />
-            </Suspense>
           </section>
         )}
       </main>
