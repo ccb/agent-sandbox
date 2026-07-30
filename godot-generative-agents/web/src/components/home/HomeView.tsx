@@ -39,6 +39,15 @@ function PromptChainFigure() {
           <Suspense fallback={<div className="nrf-figure-frame nrf-figure-idle">Loading…</div>}>
             <div className="nrf-figure-frame">
               <PromptChainView />
+              <button
+                type="button"
+                className="nrf-figure-expand"
+                onClick={expand}
+                aria-label="Enlarge the diagram"
+                title="Enlarge"
+              >
+                ⤢
+              </button>
             </div>
           </Suspense>
         ) : (
@@ -51,13 +60,8 @@ function PromptChainFigure() {
           </button>
         )}
         <figcaption className="nrf-figcaption">
-          <span>
-            Each node is one step of a decision; color marks whether it calls the model or gates it
-            without one. Click a node to read the prompt template behind it.
-          </span>
-          <button type="button" className="nrf-figure-expand" onClick={expand}>
-            Enlarge ⤢
-          </button>
+          Each node is one step of a decision; color marks whether it calls the model or gates it
+          without one. Click a node to read the prompt template behind it.
         </figcaption>
       </figure>
 
@@ -82,8 +86,10 @@ function PromptChainFigure() {
             type="button"
             className="nrf-modal-close"
             onClick={() => dialogRef.current?.close()}
+            aria-label="Close the enlarged diagram"
+            title="Close"
           >
-            Close ✕
+            ✕
           </button>
         </div>
       </dialog>

@@ -195,6 +195,7 @@
 /* The visualizer is `height: 100%` and dark-themed, so the frame gives it a
    definite height and clips it to a light-page figure. */
 .nrf-figure-frame {
+  position: relative; /* anchors the enlarge button over the diagram */
   box-sizing: border-box;
   display: block;
   width: 100%;
@@ -220,28 +221,10 @@
   color: var(--nrf-heading);
 }
 .nrf-figcaption {
-  display: flex;
-  align-items: flex-start;
-  gap: 1rem;
   margin-top: 0.6rem;
   color: #6a6a6a;
   font-size: 0.9rem;
   text-align: left;
-}
-.nrf-figure-expand {
-  flex: none;
-  padding: 0.25em 0.9em;
-  background: #fff;
-  color: var(--nrf-heading);
-  border: 1px solid #cfcfcf;
-  border-radius: 9999px;
-  font: inherit;
-  font-size: 0.85rem;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.nrf-figure-expand:hover {
-  background: var(--nrf-light);
 }
 
 /* --- the enlarged figure (native <dialog>: backdrop + Esc come free) --- */
@@ -269,22 +252,37 @@
   color: #8b949e;
   font-size: 0.95rem;
 }
+/* Icon-only controls sitting on the visualizer's own dark top bar: enlarge in
+   the inline figure, close in the enlarged one. Same corner, same treatment. */
+.nrf-figure-expand,
 .nrf-modal-close {
   position: absolute;
   top: 7px;
   right: 10px;
   z-index: 1; /* over the visualizer's own top bar */
-  padding: 0.2em 0.8em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
   background: #21262d;
   color: #c9d1d9;
   border: 1px solid #30363d;
-  border-radius: 9999px;
-  font: inherit;
-  font-size: 0.8rem;
+  border-radius: 7px;
+  /* The page is Palatino; these glyphs want the UI stack. */
+  font:
+    14px / 1 system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
   cursor: pointer;
 }
+.nrf-figure-expand:hover,
 .nrf-modal-close:hover {
   background: #30363d;
+  color: #fff;
 }
 /* Shown only where the figure itself is hidden — see the media query below. */
 .nrf-figure-note {
