@@ -32,17 +32,27 @@ _MAX_WAVES = 4000
 
 def path_finder_v2(a, start, end, collision_block_char, verbose=False):
     def make_step(m, k):
+        # Returns whether the wave reached any new tile: once a wave changes
+        # nothing the frontier is exhausted, and the target is unreachable --
+        # without this an unreachable target (a walled-off pocket, #904) spins
+        # all _MAX_WAVES full-grid scans before giving up.
+        grew = False
         for i in range(len(m)):
             for j in range(len(m[i])):
                 if m[i][j] == k:
                     if i > 0 and m[i - 1][j] == 0 and a[i - 1][j] == 0:
                         m[i - 1][j] = k + 1
+                        grew = True
                     if j > 0 and m[i][j - 1] == 0 and a[i][j - 1] == 0:
                         m[i][j - 1] = k + 1
+                        grew = True
                     if i < len(m) - 1 and m[i + 1][j] == 0 and a[i + 1][j] == 0:
                         m[i + 1][j] = k + 1
+                        grew = True
                     if j < len(m[i]) - 1 and m[i][j + 1] == 0 and a[i][j + 1] == 0:
                         m[i][j + 1] = k + 1
+                        grew = True
+        return grew
 
     new_maze = []
     for row in a:
@@ -67,7 +77,8 @@ def path_finder_v2(a, start, end, collision_block_char, verbose=False):
     except_handle = _MAX_WAVES
     while m[end[0]][end[1]] == 0:
         k += 1
-        make_step(m, k)
+        if not make_step(m, k):
+            break
 
         if except_handle == 0:
             break
