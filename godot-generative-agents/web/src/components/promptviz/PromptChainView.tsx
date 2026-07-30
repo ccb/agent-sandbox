@@ -8,12 +8,14 @@ import "./promptviz.css";
 // keeps it correct if the app is ever served under a sub-path.
 const PROMPTVIZ_BASE = `${import.meta.env.BASE_URL}promptviz/`;
 
+// Filtered to the kinds a chain actually uses, so the legend never advertises a
+// node shape that isn't on screen.
 const LEGEND = [
   { kind: "start", label: "start" },
-  { kind: "decision", label: "decision (LLM)" },
-  { kind: "parse", label: "parse (LLM)" },
-  { kind: "narrate", label: "narrate (LLM)" },
-  { kind: "gate", label: "gate (no LLM)" },
+  { kind: "decision", label: "model call" },
+  { kind: "parse", label: "parse (model call)" },
+  { kind: "narrate", label: "memory / context text (no model call)" },
+  { kind: "gate", label: "control point (no model call)" },
 ];
 
 /**
@@ -71,6 +73,8 @@ export function PromptChainView() {
   }, [chainId]);
 
   const detail = chain && selectedNode ? (chain.prompts[selectedNode] ?? null) : null;
+  const kindsShown = new Set<string>(chain?.elements.nodes.map((n) => n.data.kind));
+  const legend = LEGEND.filter((item) => kindsShown.has(item.kind));
 
   return (
     <div className="pcv">
@@ -81,20 +85,24 @@ export function PromptChainView() {
           </span>
           <span className="pcv-name">Prompt Chain Visualizer</span>
         </div>
-        <div className="pcv-controls">
-          <label htmlFor="pcv-chain-select">chain</label>
-          <select
-            id="pcv-chain-select"
-            value={chainId ?? ""}
-            onChange={(e) => setChainId(e.target.value)}
-          >
-            {(chains ?? []).map((c) => (
-              <option key={c.id} value={c.id} title={c.description}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* Only worth a picker when there's something to pick between — the
+            site ships the Penn cognition chain alone. */}
+        {(chains?.length ?? 0) > 1 && (
+          <div className="pcv-controls">
+            <label htmlFor="pcv-chain-select">chain</label>
+            <select
+              id="pcv-chain-select"
+              value={chainId ?? ""}
+              onChange={(e) => setChainId(e.target.value)}
+            >
+              {(chains ?? []).map((c) => (
+                <option key={c.id} value={c.id} title={c.description}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </header>
 
       <main className="pcv-layout">
@@ -103,7 +111,7 @@ export function PromptChainView() {
           {!error && !chain && <div className="pcv-status">Loading…</div>}
           {chain && <PromptChainGraph elements={chain.elements} onSelectNode={setSelectedNode} />}
           <ul className="pcv-legend" aria-label="legend">
-            {LEGEND.map((item) => (
+            {legend.map((item) => (
               <li key={item.kind}>
                 <span className={`pcv-swatch k-${item.kind}`} />
                 {item.label}

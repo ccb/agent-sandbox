@@ -23,6 +23,14 @@
   left: 0;
   width: 100% !important;
   height: 100% !important;
+  /* …but the drawing buffer is the WINDOW's shape (canvasResizePolicy: 2 is
+     `wantsFullWindow` in the engine: it sizes the buffer to window.innerWidth/
+     innerHeight), while the box above is the frame's shape. Without this the
+     browser scales one into the other non-uniformly and the campus comes out
+     stretched — ~30% horizontally in the landing page's figure. A <canvas> is a
+     replaced element, so object-fit applies: `contain` keeps the scale uniform
+     and letterboxes the difference instead of distorting it. */
+  object-fit: contain;
 }
 
 .status {

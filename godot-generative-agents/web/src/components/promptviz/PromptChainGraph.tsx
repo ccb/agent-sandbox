@@ -29,7 +29,13 @@ export function PromptChainGraph({ elements, onSelectNode }: Props) {
       container,
       elements: { nodes: elements.nodes, edges: elements.edges },
       style: cyStyle(),
-      wheelSensitivity: 0.25,
+      // Every pan/zoom frame otherwise re-rasterizes ~34 wrapped node labels and
+      // ~46 autorotated edge labels at retina density, which is what made
+      // dragging feel sticky. Cytoscape can redraw a cached texture during the
+      // gesture instead and re-sharpen on release.
+      textureOnViewport: true,
+      // No wheelSensitivity override: the old 0.25 quartered every wheel tick,
+      // so zooming took four times as much scrolling as it should have.
       minZoom: 0.2,
       maxZoom: 2.5,
     });
