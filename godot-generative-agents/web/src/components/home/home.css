@@ -220,10 +220,71 @@
   color: var(--nrf-heading);
 }
 .nrf-figcaption {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
   margin-top: 0.6rem;
   color: #6a6a6a;
   font-size: 0.9rem;
   text-align: left;
+}
+.nrf-figure-expand {
+  flex: none;
+  padding: 0.25em 0.9em;
+  background: #fff;
+  color: var(--nrf-heading);
+  border: 1px solid #cfcfcf;
+  border-radius: 9999px;
+  font: inherit;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.nrf-figure-expand:hover {
+  background: var(--nrf-light);
+}
+
+/* --- the enlarged figure (native <dialog>: backdrop + Esc come free) --- */
+.nrf-modal {
+  width: min(1500px, 94vw);
+  height: 88vh;
+  padding: 0;
+  background: #0d1117; /* matches .pcv so the frame reads as one surface */
+  border: 1px solid #30363d;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.nrf-modal::backdrop {
+  background: rgba(0, 0, 0, 0.62);
+}
+.nrf-modal-body {
+  position: relative;
+  height: 100%;
+}
+.nrf-modal-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #8b949e;
+  font-size: 0.95rem;
+}
+.nrf-modal-close {
+  position: absolute;
+  top: 7px;
+  right: 10px;
+  z-index: 1; /* over the visualizer's own top bar */
+  padding: 0.2em 0.8em;
+  background: #21262d;
+  color: #c9d1d9;
+  border: 1px solid #30363d;
+  border-radius: 9999px;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.nrf-modal-close:hover {
+  background: #30363d;
 }
 /* Shown only where the figure itself is hidden — see the media query below. */
 .nrf-figure-note {

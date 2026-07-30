@@ -2,7 +2,7 @@
 // together with the link buttons that use it. Re-enable this import when you
 // re-enable that block.
 // import type { ReactNode } from "react";
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useRef, useState } from "react";
 import { TeX } from "./TeX";
 import "./home.css";
 
@@ -21,28 +21,73 @@ const PromptChainView = lazy(() =>
  */
 function PromptChainFigure() {
   const [shown, setShown] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  // A native <dialog> brings the backdrop, Esc-to-close, focus trap and top-layer
+  // stacking with it, so the only state here is whether to mount the (heavy)
+  // second graph — `onClose` covers every way the dialog can be dismissed.
+  const expand = () => {
+    setExpanded(true);
+    dialogRef.current?.showModal();
+  };
+
   return (
-    <figure className="nrf-figure">
-      {shown ? (
-        <Suspense fallback={<div className="nrf-figure-frame nrf-figure-idle">Loading…</div>}>
-          <div className="nrf-figure-frame">
-            <PromptChainView />
-          </div>
-        </Suspense>
-      ) : (
-        <button
-          type="button"
-          className="nrf-figure-frame nrf-figure-idle nrf-figure-button"
-          onClick={() => setShown(true)}
-        >
-          Load the interactive diagram
-        </button>
-      )}
-      <figcaption className="nrf-figcaption">
-        Each node is one step of a decision; color marks whether it calls the model or gates it
-        without one. Click a node to read the prompt template behind it.
-      </figcaption>
-    </figure>
+    <>
+      <figure className="nrf-figure">
+        {shown ? (
+          <Suspense fallback={<div className="nrf-figure-frame nrf-figure-idle">Loading…</div>}>
+            <div className="nrf-figure-frame">
+              <PromptChainView />
+            </div>
+          </Suspense>
+        ) : (
+          <button
+            type="button"
+            className="nrf-figure-frame nrf-figure-idle nrf-figure-button"
+            onClick={() => setShown(true)}
+          >
+            Load the interactive diagram
+          </button>
+        )}
+        <figcaption className="nrf-figcaption">
+          <span>
+            Each node is one step of a decision; color marks whether it calls the model or gates it
+            without one. Click a node to read the prompt template behind it.
+          </span>
+          <button type="button" className="nrf-figure-expand" onClick={expand}>
+            Enlarge ⤢
+          </button>
+        </figcaption>
+      </figure>
+
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: the keyboard path is <dialog>'s own Esc handler, which fires onClose */}
+      <dialog
+        ref={dialogRef}
+        className="nrf-modal"
+        onClose={() => setExpanded(false)}
+        // Clicking the backdrop targets the dialog itself; anything inside the
+        // body stops short of it.
+        onClick={(e) => {
+          if (e.target === dialogRef.current) dialogRef.current?.close();
+        }}
+      >
+        <div className="nrf-modal-body">
+          {expanded && (
+            <Suspense fallback={<div className="nrf-modal-loading">Loading…</div>}>
+              <PromptChainView />
+            </Suspense>
+          )}
+          <button
+            type="button"
+            className="nrf-modal-close"
+            onClick={() => dialogRef.current?.close()}
+          >
+            Close ✕
+          </button>
+        </div>
+      </dialog>
+    </>
   );
 }
 
