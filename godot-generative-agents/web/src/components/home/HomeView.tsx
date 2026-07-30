@@ -263,6 +263,9 @@ export const TEX = {
   // Conversations
   talkCount: "n",
   cooldown: String.raw`\min(n, 3) \times 90`,
+
+  // Acknowledgements
+  colRow: String.raw`(x, y) = (\text{col}, \text{row})`,
 };
 
 // The Paper / arXiv / Video / Code buttons in the hero are commented out until
@@ -750,6 +753,39 @@ export function HomeView() {
                 by Kenmi. Campus geography is derived from{" "}
                 <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> data.
               </p>
+              <p>
+                Beyond the architecture it describes, this project reuses code and data formats from
+                the{" "}
+                <a href="https://github.com/joonspk-research/generative_agents">
+                  open-source release
+                </a>{" "}
+                accompanying Park et al. (Apache License 2.0; author Joon Sung Park). The
+                breadth-first grid path-finder that walks a sprite around walls (
+                <code>backend/path_finder.py</code>) is vendored from that repository's{" "}
+                <code>path_finder.py</code>, with only a raised search cap, an early exit for
+                unreachable targets, and its single numpy call replaced. Our spatial layer (
+                <code>backend/world_map.py</code>) follows their <code>maze.py</code>: the same
+                tile-matrix CSV layers, the same <code>world:sector:arena:object</code> address
+                scheme, the same <TeX>{TEX.colRow}</TeX> convention, and the same tile-radius notion
+                of what an agent can see — which is why our OSM-derived campus is emitted into that
+                format, and why a persona's authored spatial knowledge loads from files shaped like
+                theirs. The replay files a run bakes for the viewer keep the layout their web
+                frontend replayed. The cognitive machinery itself — retrieval scoring, poignancy,
+                reflection, hierarchical planning — is our own implementation, written from the
+                paper.
+              </p>
+              <p>
+                Two further works shaped the design. From <em>ReAct</em> (Yao et al.) comes the
+                shape of a single decision: the agent states its reasoning before naming its action,
+                and a rejected action returns as an observation to reason about rather than as an
+                error — the retry described above. From <em>ScienceWorld</em> (Wang et al.) comes a
+                discipline about verbs. A world change an agent wants is not a verb it gets to
+                invoke; it is a consequence of dumb primitives applied in the right place, which is
+                why an agent toggles a stove rather than calling <em>boil</em>, and why the tool
+                menu is derived from affordances in scope. That work is also our reference point for
+                grading agents on task completion, an interface this prototype has designed but not
+                yet built.
+              </p>
             </div>
           </div>
         </div>
@@ -769,7 +805,26 @@ export function HomeView() {
                 <a href="https://dl.acm.org/doi/10.1145/3586183.3606763">
                   Generative Agents: Interactive Simulacra of Human Behavior
                 </a>
-                . In <em>Proceedings of UIST '23</em>.
+                . In <em>Proceedings of UIST '23</em>. Source code:{" "}
+                <a href="https://github.com/joonspk-research/generative_agents">
+                  joonspk-research/generative_agents
+                </a>{" "}
+                (Apache License 2.0).
+              </p>
+              <p>
+                Ruoyao Wang, Peter Jansen, Marc-Alexandre Côté, and Prithviraj Ammanabrolu. 2022.{" "}
+                <a href="https://aclanthology.org/2022.emnlp-main.775/">
+                  ScienceWorld: Is your Agent Smarter than a 5th Grader?
+                </a>{" "}
+                In <em>Proceedings of EMNLP 2022</em>.
+              </p>
+              <p>
+                Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik Narasimhan, and
+                Yuan Cao. 2023.{" "}
+                <a href="https://arxiv.org/abs/2210.03629">
+                  ReAct: Synergizing Reasoning and Acting in Language Models
+                </a>
+                . In <em>Proceedings of ICLR 2023</em>.
               </p>
             </div>
           </div>
