@@ -239,6 +239,16 @@
 .nrf-content a:hover {
   text-decoration: underline;
 }
+/* Inline code in prose (a filename, an identifier). Same face as the blocks
+   below, but scaled: Palatino's x-height is far smaller than any monospace
+   face's — the reason .nrf sets 17px in the first place — so code left at 1em
+   reads visibly bigger and heavier than the words around it. 0.86em lines the
+   two x-heights up. `pre > code` is excluded: the BibTeX and snippet blocks set
+   their own size. */
+.nrf-content :not(pre) > code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.86em;
+}
 
 /* --- display math (KaTeX, bundled locally — see TeX.tsx) --- */
 .nrf-math {
