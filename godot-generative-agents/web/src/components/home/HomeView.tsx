@@ -2,7 +2,8 @@
 // together with the link buttons that use it. Re-enable this import when you
 // re-enable that block.
 // import type { ReactNode } from "react";
-import { lazy, Suspense, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { GodotCanvas } from "../GodotCanvas";
 import { TeX } from "./TeX";
 import "./home.css";
 
@@ -12,6 +13,75 @@ import "./home.css";
 const PromptChainView = lazy(() =>
   import("../promptviz/PromptChainView").then((m) => ({ default: m.PromptChainView })),
 );
+
+/**
+ * The Godot replay, embedded where the "Open the replay demo" button used to
+ * link out to a standalone `#game` page. Like the prompt-chain figure it stays
+ * behind a click — the engine is a multi-megabyte WebAssembly download that a
+ * reader hasn't asked for — and it enlarges into an overlay.
+ *
+ * Unlike that figure, enlarging here is a CSS class rather than a `<dialog>`
+ * with a second mount: there can only ever be ONE engine instance (one `#canvas`
+ * and one WASM heap), and the canvas must never unmount or collapse to zero
+ * size, since `canvasResizePolicy: 2` would shrink its framebuffer with it. So
+ * the same frame grows in place and the engine keeps running through it.
+ */
+function ReplayFigure() {
+  const [shown, setShown] = useState(false);
+  const [enlarged, setEnlarged] = useState(false);
+
+  // Esc closes the overlay — what `<dialog>` gives the chain figure for free.
+  useEffect(() => {
+    if (!enlarged) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setEnlarged(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [enlarged]);
+
+  return (
+    <figure className={`nrf-figure nrf-figure--replay${enlarged ? " is-enlarged" : ""}`}>
+      {shown ? (
+        <>
+          {enlarged && (
+            <button
+              type="button"
+              className="nrf-scrim"
+              onClick={() => setEnlarged(false)}
+              aria-label="Close the enlarged replay"
+            />
+          )}
+          <div className="nrf-figure-frame">
+            <GodotCanvas />
+            <button
+              type="button"
+              className="nrf-figure-expand"
+              onClick={() => setEnlarged((on) => !on)}
+              aria-label={enlarged ? "Shrink the replay" : "Enlarge the replay"}
+              title={enlarged ? "Shrink" : "Enlarge"}
+            >
+              {enlarged ? "✕" : "⤢"}
+            </button>
+          </div>
+        </>
+      ) : (
+        <button
+          type="button"
+          className="nrf-figure-frame nrf-figure-idle nrf-figure-button"
+          onClick={() => setShown(true)}
+        >
+          Open the replay demo →
+        </button>
+      )}
+      <figcaption className="nrf-figcaption">
+        A full twelve-hour run, replayed deterministically in the browser — the same Godot viewer
+        that runs natively, exported to WebAssembly. Drag to pan and scroll to zoom; the sidebar
+        follows an agent or opens its state in detail.
+      </figcaption>
+    </figure>
+  );
+}
 
 /**
  * The prompt-chain visualizer, framed as a figure. It used to be its own page
@@ -34,7 +104,7 @@ function PromptChainFigure() {
 
   return (
     <>
-      <figure className="nrf-figure">
+      <figure className="nrf-figure nrf-figure--chain">
         {shown ? (
           <Suspense fallback={<div className="nrf-figure-frame nrf-figure-idle">Loading…</div>}>
             <div className="nrf-figure-frame">
@@ -252,7 +322,8 @@ export function HomeView() {
         </div>
       </section>
 
-      {/* ===== Teaser: summary + link into the replay =====
+      {/* ===== Teaser: summary + the replay itself (it used to be a button linking
+          out to a standalone #game page) =====
           TODO(#881): embed the captioned demo video here once it's published.
           TODO(#878): swap in a still from the selected showcase run meanwhile. */}
       <section className="nrf-teaser">
@@ -262,11 +333,7 @@ export function HomeView() {
             on a faithful tile map of Penn's campus — and every run replays deterministically, right
             in your browser.
           </p>
-          <div className="nrf-links">
-            <a className="nrf-button" href="#game">
-              <span>Open the replay demo →</span>
-            </a>
-          </div>
+          <ReplayFigure />
         </div>
       </section>
 

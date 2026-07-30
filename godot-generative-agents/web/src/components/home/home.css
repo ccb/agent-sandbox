@@ -188,8 +188,11 @@
   font-size: 1.05em;
 }
 
-/* --- embedded figure (the prompt-chain visualizer) --- */
+/* --- embedded figures (the replay, the prompt-chain visualizer) --- */
 .nrf-figure {
+  /* One frame height, shared by the frame and by the placeholder the figure holds
+     open while an enlarged frame is out of flow (see .is-enlarged below). */
+  --nrf-frame-h: 520px;
   margin: 1.5rem 0 0;
 }
 /* The visualizer is `height: 100%` and dark-themed, so the frame gives it a
@@ -199,7 +202,7 @@
   box-sizing: border-box;
   display: block;
   width: 100%;
-  height: 520px;
+  height: var(--nrf-frame-h);
   border: 1px solid #dcdcdc;
   border-radius: 10px;
   overflow: hidden;
@@ -225,6 +228,38 @@
   color: #6a6a6a;
   font-size: 0.9rem;
   text-align: left;
+}
+
+/* --- the enlarged replay figure ---
+   The Godot canvas cannot be re-mounted into a <dialog> the way the chain
+   diagram is (one engine, one canvas — see ReplayFigure), so the frame itself is
+   lifted to a fixed overlay and the engine keeps running inside it. The figure
+   holds the frame's height open so the page behind doesn't collapse and reflow.
+   html/body are `overflow: hidden` (index.css), so nothing here can scroll the
+   document. */
+.nrf-figure--replay.is-enlarged {
+  height: var(--nrf-frame-h);
+}
+.nrf-figure--replay.is-enlarged .nrf-figure-frame {
+  position: fixed;
+  inset: 5vh 3vw;
+  z-index: 41; /* over .nrf-scrim */
+  width: auto;
+  height: auto;
+  border-color: #30363d;
+  border-radius: 12px;
+  box-shadow: 0 24px 60px rgb(0 0 0 / 45%);
+}
+/* A plain backdrop that happens to be clickable — a <button> so the click and
+   the keyboard focus come from the element instead of a handler on a <div>. */
+.nrf-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  padding: 0;
+  background: rgb(0 0 0 / 62%);
+  border: none;
+  cursor: default;
 }
 
 /* --- the enlarged figure (native <dialog>: backdrop + Esc come free) --- */
@@ -338,11 +373,15 @@
     text-align: left;
   }
   /* A node graph beside a prompt panel has nowhere to go at this width, so the
-     figure steps aside for a note rather than rendering unusably. */
-  .nrf-figure {
+     chain figure steps aside for a note rather than rendering unusably. The
+     replay figure is just a canvas and stays. */
+  .nrf-figure--chain {
     display: none;
   }
   .nrf-figure-note {
     display: block;
+  }
+  .nrf-figure--replay {
+    --nrf-frame-h: 300px;
   }
 }
