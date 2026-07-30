@@ -387,7 +387,18 @@ export function HomeView() {
             <h1 className="nrf-title nrf-title-1">
               Penn Campus: Generative Agents in a Simulated World
             </h1>
-            <p className="nrf-venue">PURM 2026 · University of Pennsylvania</p>
+            <p className="nrf-venue">
+              PURM 2026 · University of Pennsylvania
+              {/* Decorative: the line right beside it already names the
+                  university, so alt is empty rather than repeating it. */}
+              <img
+                className="nrf-shield"
+                src={`${import.meta.env.BASE_URL}upenn-shield.svg`}
+                alt=""
+                width={144}
+                height={161}
+              />
+            </p>
 
             <div className="nrf-authors">
               <span className="nrf-author-block">
