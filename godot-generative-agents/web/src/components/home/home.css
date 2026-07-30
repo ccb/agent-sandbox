@@ -298,6 +298,48 @@
   text-align: left;
 }
 
+/* The legend's hide/show. The disclosure arrow is the browser's own marker — it
+   already rotates on open and follows the caption's text color. */
+.nrf-legend-toggle {
+  margin-top: 0.35rem;
+}
+.nrf-legend-toggle > summary {
+  width: fit-content;
+  cursor: pointer;
+}
+
+/* The sidebar-button legend under the replay (see SIDEBAR_LEGEND). Two columns so
+   the glyphs line up in a strip and the wrapped text stays clear of them; the
+   icon column is sized for the widest cell, which is the "Track" word rather
+   than any 32 px icon. */
+.nrf-legend {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.35rem 0.6rem;
+  align-items: center;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.nrf-legend li {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+.nrf-legend-icon {
+  /* The source PNGs are 32 px pixel art from the viewer's own buttons: scale them
+     down to caption size without the browser's smoothing blurring the outlines. */
+  width: 20px;
+  height: 20px;
+  justify-self: center;
+  image-rendering: pixelated;
+}
+.nrf-legend-glyph {
+  justify-self: center;
+  color: var(--nrf-heading);
+  font-weight: 600;
+}
+
 /* The replay frame is sized by ratio rather than by --nrf-frame-h: the sim is
    designed at 1920x1080 and Godot scales that frame with
    `stretch/aspect="keep"`, so a 16:9 box leaves its letterboxing (almost)
