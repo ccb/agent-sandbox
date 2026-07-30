@@ -2,7 +2,41 @@
 // together with the link buttons that use it. Re-enable this import when you
 // re-enable that block.
 // import type { ReactNode } from "react";
+import { TeX } from "./TeX";
 import "./home.css";
+
+/**
+ * Every formula on the page, in one place. JSX below references these by name,
+ * and `formulas.test.ts` renders each one to catch a malformed literal before
+ * it reaches the site.
+ */
+export const TEX = {
+  // The world and its clock
+  tileSelf: "p",
+  tileOther: "p'",
+  radius: "r = 8",
+  perception: String.raw`\lVert p - p' \rVert_\infty = \max\bigl(|\Delta x|, |\Delta y|\bigr) \le r`,
+
+  // Memory and retrieval
+  query: "q",
+  tick: "t",
+  retrieval: String.raw`s(m, q, t) \;=\; \alpha_{\mathrm{rec}}\, \gamma^{\,t - a(m)} \;+\; \alpha_{\mathrm{imp}}\, \frac{i(m)}{10} \;+\; \alpha_{\mathrm{rel}}\, \mathrm{rel}(q, m)`,
+  decay: String.raw`\gamma = 0.95`,
+  lastAccess: "a(m)",
+  importanceRange: String.raw`i(m) \in [1, 10]`,
+  weights: String.raw`\alpha_{\mathrm{rec}} = \alpha_{\mathrm{imp}} = \alpha_{\mathrm{rel}} = 1`,
+  unitRange: "[0, 1]",
+  cosine: String.raw`\mathrm{rel}(q, m) = \tfrac{1}{2}\bigl(1 + \cos(v_q, v_m)\bigr)`,
+
+  // Importance and reflection
+  threshold: String.raw`\theta = 30`,
+  reflection: String.raw`\sum_{m \,\in\, M_{\text{new}}} i(m) \;\ge\; \theta`,
+  newMemories: String.raw`M_{\text{new}}`,
+
+  // Conversations
+  talkCount: "n",
+  cooldown: String.raw`\min(n, 3) \times 90`,
+};
 
 // The Paper / arXiv / Video / Code buttons in the hero are commented out until
 // the video (#881) and the public repository (#884, scheduled 2026-08-14)
@@ -185,12 +219,11 @@ export function HomeView() {
                 mid-walk, settled into an activity, or mid-conversation makes a decision; decisions
                 are then resolved in a fixed order, so two agents contending for the same resource
                 settle deterministically. An agent perceives the world through a limited window: it
-                observes a thing at tile <em>p′</em> from its own tile <em>p</em> only when the two
-                are within a Chebyshev radius <em>r</em> = 8,
+                observes a thing at tile <TeX>{TEX.tileOther}</TeX> from its own tile{" "}
+                <TeX>{TEX.tileSelf}</TeX> only when the two are within a Chebyshev radius{" "}
+                <TeX>{TEX.radius}</TeX>,
               </p>
-              <div className="nrf-math">
-                ‖p − p′‖<sub>∞</sub> = max(|Δx|, |Δy|) ≤ r,
-              </div>
+              <TeX display>{TEX.perception}</TeX>
               <p>
                 and anything newly entering that window — an event, or another agent's arrival —
                 becomes an observation in its memory stream.
@@ -202,21 +235,19 @@ export function HomeView() {
                 of dialogue, plans, reflections — is a timestamped record with an importance score.
                 When the agent must decide, it cannot see the whole stream; it retrieves the records
                 that score highest under a weighted sum of recency, importance, and relevance to the
-                current situation <em>q</em> at tick <em>t</em>:
+                current situation <TeX>{TEX.query}</TeX> at tick <TeX>{TEX.tick}</TeX>:
               </p>
-              <div className="nrf-math">
-                s(m, q, t) = α<sub>rec</sub> · γ<sup>t − a(m)</sup> + α<sub>imp</sub> · i(m) / 10 +
-                α<sub>rel</sub> · rel(q, m)
-              </div>
+              <TeX display>{TEX.retrieval}</TeX>
               <p>
-                with decay γ = 0.95 per tick since the record was last accessed (<em>a(m)</em>),
-                importance <em>i(m)</em> ∈ [1, 10] normalized to unit range, and all weights α = 1.
-                Relevance is keyword overlap between the query and the record by default; when an
-                embedding backend is configured it becomes cosine similarity rescaled to the same
-                [0, 1] range, rel(q, m) = (1 + cos(v<sub>q</sub>, v<sub>m</sub>)) / 2. The top six
-                records within a ~800-token budget are surfaced into the decision prompt. Retrieval
-                refreshes a record's last-accessed time, so memories the agent keeps returning to
-                stay warm while the rest fade.
+                with decay <TeX>{TEX.decay}</TeX> per tick since the record was last accessed (
+                <TeX>{TEX.lastAccess}</TeX>), importance <TeX>{TEX.importanceRange}</TeX> normalized
+                to unit range, and all weights <TeX>{TEX.weights}</TeX>. Relevance is keyword
+                overlap between the query and the record by default; when an embedding backend is
+                configured it becomes cosine similarity rescaled to the same{" "}
+                <TeX>{TEX.unitRange}</TeX> range, <TeX>{TEX.cosine}</TeX>. The top six records
+                within a budget of roughly 800 tokens are surfaced into the decision prompt.
+                Retrieval refreshes a record's last-accessed time, so memories the agent keeps
+                returning to stay warm while the rest fade.
               </p>
 
               <h3 className="nrf-title nrf-title-4">Importance and reflection</h3>
@@ -225,12 +256,11 @@ export function HomeView() {
                 to 10 (momentous) scale, in one batched, temperature-zero call per agent per tick. A
                 few signals the model cannot infer from text — like falling ill, or a commitment
                 made in conversation — carry fixed scores instead. Reflection is triggered by
-                accumulated salience rather than by the clock: once the summed importance of
-                memories since the last reflection crosses a threshold θ = 30,
+                accumulated salience rather than by the clock: once the summed importance of the
+                memories <TeX>{TEX.newMemories}</TeX> accrued since the last reflection crosses a
+                threshold <TeX>{TEX.threshold}</TeX>,
               </p>
-              <div className="nrf-math">
-                Σ<sub>m since last reflection</sub> i(m) ≥ θ,
-              </div>
+              <TeX display>{TEX.reflection}</TeX>
               <p>
                 the agent asks itself up to three salient questions about its recent experience,
                 answers each from retrieved evidence, and writes the inferences back into memory as
@@ -257,8 +287,9 @@ export function HomeView() {
                 what was agreed, what it means for their relationship, and whether their plans
                 should change; commitments and relationship notes are written to memory with high
                 importance so they survive retrieval competition. A pair that has already talked{" "}
-                <em>n</em> times waits min(n, 3) × 90 ticks before starting again, which keeps two
-                friendly agents from looping the same greeting all day.
+                <TeX>{TEX.talkCount}</TeX> times waits <TeX>{TEX.cooldown}</TeX> ticks before
+                starting again, which keeps two friendly agents from looping the same greeting all
+                day.
               </p>
 
               <h3 className="nrf-title nrf-title-4">The action gate</h3>

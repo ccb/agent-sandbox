@@ -191,16 +191,20 @@
   text-decoration: underline;
 }
 
-/* --- display math (plain HTML sub/sup — COOP/COEP rules out CDN KaTeX) --- */
+/* --- display math (KaTeX, bundled locally — see TeX.tsx) --- */
 .nrf-math {
-  margin: 0 0 1em;
-  padding: 0.35em 0;
+  margin: 1.5rem 0;
+  /* A long formula scrolls inside its own box rather than widening the page. */
   overflow-x: auto;
-  text-align: center;
-  font-family: Georgia, "Times New Roman", serif;
-  font-style: italic;
-  font-size: 1.1rem;
-  white-space: nowrap;
+  overflow-y: hidden;
+  padding: 0.25rem 0;
+}
+.nrf-math .katex-display {
+  margin: 0; /* spacing is owned by .nrf-math above */
+}
+/* KaTeX defaults to 1.21em, which oversizes math set inline in a paragraph. */
+.nrf-content .katex {
+  font-size: 1.05em;
 }
 
 /* --- BibTeX block (Bulma pre) --- */
