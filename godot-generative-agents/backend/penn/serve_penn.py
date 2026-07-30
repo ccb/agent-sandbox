@@ -1185,7 +1185,14 @@ class PennStepper:
             # can't reach a stop it pinned to a clock hour) that can precede (not
             # skip) the budget ceiling; the next tick catches it.
             planner_client=self.planner_client,
-            location_names=frozenset(loc["name"] for loc in self.world.locations),
+            # Only walkable places are plannable (#906): the addressless campus
+            # hub ("Penn campus") is a real Location, so it passed
+            # validate_stops and was advertised in "Known places:" -- but a
+            # travel there grounds to no tile, and the agent stands motionless
+            # narrating the trip ("walking home @ None", 303 min in batch 10).
+            location_names=frozenset(
+                loc["name"] for loc in self.world.locations if loc.get("address")
+            ),
             clock=self.clock,
             # #795: what a walk actually costs, so the planner can budget for it
             # instead of guessing. Computed from this world's map, so a different
