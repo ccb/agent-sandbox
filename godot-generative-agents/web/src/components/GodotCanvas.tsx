@@ -42,13 +42,53 @@ function loadEngineScript(): Promise<void> {
   });
 }
 
+/**
+ * Stop the engine's `focus()` calls from taking the surrounding page over.
+ *
+ * The engine focuses the canvas on every press, and while an in-game text field
+ * holds focus, its browser IME shim re-focuses a hidden `contenteditable` div it
+ * appends beside the canvas — every 100 ms, on an interval it never clears. When
+ * that div blurs the shim hands focus straight back to the canvas, at which point
+ * the still-focused field re-arms the shim: a loop the page cannot win.
+ *
+ * On the landing page the canvas sits inside a long article, where that costs the
+ * reader their scroll position (the canvas gets scrolled back into view) and any
+ * drag-selection, which dies the moment focus moves mid-gesture. A double-click
+ * still selects, being atomic — which is exactly how the bug presented.
+ *
+ * So two rules for the engine's focus calls, applied to the elements it targets:
+ * never scroll (`preventScroll` is the platform's own opt-out, which the engine
+ * doesn't pass), and don't focus at all while `blocked()` — the reader is working
+ * somewhere else on the page. Both live on elements we own or that the engine
+ * appends to ours, so the engine bundle stays untouched.
+ */
+export function tameFocus(el: { focus: (options?: FocusOptions) => void }, blocked: () => boolean) {
+  const focus = el.focus.bind(el);
+  el.focus = (options?: FocusOptions) => {
+    if (blocked()) return;
+    focus({ ...options, preventScroll: true });
+  };
+}
+
 export function GodotCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState("Loading engine…");
 
   useEffect(() => {
     let engine: GodotEngine | undefined;
     let cancelled = false;
+
+    // Latched, not per-gesture: once the reader presses outside the demo they're
+    // reading the page, and the engine has no business pulling focus back until
+    // they press inside it again. Registered here rather than at module scope so
+    // the click that mounted us — on the "Open the replay demo" button, which the
+    // canvas replaces — isn't the press it latches on.
+    let readerIsElsewhere = false;
+    const onPointerDown = (e: PointerEvent) => {
+      readerIsElsewhere = !wrapRef.current?.contains(e.target as Node);
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
 
     (async () => {
       try {
@@ -56,6 +96,7 @@ export function GodotCanvas() {
         if (cancelled) return;
         const canvas = canvasRef.current;
         if (!canvas || !window.Engine) return;
+        tameFocus(canvas, () => readerIsElsewhere);
 
         engine = new window.Engine({
           // Base path for the engine's sibling files (index.wasm, index.pck, …).
@@ -73,6 +114,11 @@ export function GodotCanvas() {
         });
         setStatus("Starting…");
         await engine.startGame();
+        // The IME div only exists once the engine's display server is up. It's the
+        // shim's 100 ms timer that targets this one, so taming it is what actually
+        // breaks the loop; taming the canvas above stops the handover that re-arms it.
+        const ime = canvas.parentElement?.querySelector<HTMLElement>("div.ime");
+        if (ime) tameFocus(ime, () => readerIsElsewhere);
         if (!cancelled) setStatus("");
       } catch (err) {
         if (!cancelled) {
@@ -84,6 +130,7 @@ export function GodotCanvas() {
 
     return () => {
       cancelled = true;
+      document.removeEventListener("pointerdown", onPointerDown, true);
       try {
         engine?.requestQuit?.();
       } catch {
@@ -93,7 +140,7 @@ export function GodotCanvas() {
   }, []);
 
   return (
-    <div className={styles.wrap}>
+    <div ref={wrapRef} className={styles.wrap}>
       <canvas ref={canvasRef} id="canvas" className={styles.canvas}>
         Your browser does not support the canvas element.
       </canvas>
