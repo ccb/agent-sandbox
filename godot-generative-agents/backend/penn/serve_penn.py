@@ -1606,6 +1606,10 @@ class PennStepper:
                     # runs on the same model at different effort are different
                     # experiments, so the manifest has to tell them apart.
                     "effort": self.llm.get("effort"),
+                    # The #368 per-role tiering map (already merged with
+                    # --model-for): without it a tiered run's manifest would
+                    # claim every role ran on "model". None when untiered.
+                    "models": self.llm.get("models"),
                 }
                 if _is_paid(self.llm)
                 else None

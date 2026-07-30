@@ -199,6 +199,21 @@ def test_apply_config_sets_the_thinking_depth(monkeypatch, tmp_path):
     assert stepper._llm_config.effort is None
 
 
+def test_manifest_records_the_tiering_map(monkeypatch, tmp_path):
+    # #368/#845 companion: a tiered run's manifest must say WHICH roles ran on
+    # which model, or it claims every role ran on `model`. None when untiered.
+    tiering = {"converse": "claude-haiku-4-5", "score": "claude-haiku-4-5"}
+    stepper = _effort_stepper(
+        monkeypatch, run_store=RunStore(tmp_path / "runs"), models=tiering
+    )
+    assert stepper.meta()["llm"]["models"] == tiering
+    manifest = stepper.run_store.get_run(stepper.run_id)["manifest"]
+    assert manifest["llm"]["models"] == tiering
+
+    untiered = _effort_stepper(monkeypatch)
+    assert untiered.meta()["llm"]["models"] is None
+
+
 def test_a_brain_re_resolve_keeps_the_launch_model_and_depth(monkeypatch):
     # #845: apply_config used to re-resolve a brain change from the world YAML,
     # which pins claude-haiku-4-5 at no thinking depth -- so a free-brain detour
@@ -758,6 +773,8 @@ def test_real_brain_is_wired_and_the_injector_stands_down(monkeypatch):
         # None, not absent: the run's provenance should say "no thinking depth
         # was requested" rather than leave a reader guessing which it was (#845).
         "effort": None,
+        # Same rule for the #368 tiering map: None says "untiered".
+        "models": None,
     }
     # The ledger is armed with the config's ceiling and shared by every client.
     assert stepper.ledger.max_cost_usd == 5.0
