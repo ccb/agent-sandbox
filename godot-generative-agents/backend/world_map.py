@@ -21,8 +21,6 @@ import json
 import os
 from collections import deque
 
-from . import path_finder
-
 
 class WorldMap:
     """Loads a world's maze CSVs and resolves addresses to tiles + paths."""
@@ -238,15 +236,39 @@ class WorldMap:
     def walk_path(
         self, from_tile: tuple[int, int], address: str
     ) -> list[tuple[int, int]]:
-        """Tile-by-tile path from ``from_tile`` to the nearest walkable tile of
-        ``address``, excluding the starting tile. Empty if the address is unknown
-        or already reached."""
-        targets = [t for t in self.tiles_for(address) if not self.is_blocked(t)]
-        if not targets:
+        """Tile-by-tile path from ``from_tile`` to the nearest *reachable*
+        walkable tile of ``address``, excluding the starting tile. Empty if the
+        address is unknown, already reached, or unreachable.
+
+        Descends the same multi-source BFS field :meth:`walk_steps_from`
+        prices with, instead of BFS-ing to the Euclidean-closest tile: on the
+        real campus an address's closest tile can sit in a walled-off pocket
+        (Van Pelt's Study Booths, #904), where the old routing returned an
+        empty path and the agent "arrived" without ever moving.
+        """
+        if address not in self._distance_fields:
+            self._distance_fields[address] = self._bfs_field(address)
+        field = self._distance_fields[address]
+        if field is None:
             return []
-        target = path_finder.closest_coordinate(tuple(from_tile), targets)
-        path = path_finder.path_finder(self.collision, tuple(from_tile), target, 1)
-        return [tuple(t) for t in path[1:]]
+        x, y = from_tile
+        d = field[y][x]
+        if d <= 0:
+            return []  # already on a destination tile (0) or unreachable (-1)
+        path = []
+        while d > 0:
+            for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
+                if (
+                    0 <= nx < self.width
+                    and 0 <= ny < self.height
+                    and field[ny][nx] == d - 1
+                ):
+                    x, y, d = nx, ny, d - 1
+                    path.append((x, y))
+                    break
+            else:  # pragma: no cover - a BFS field always steps down somewhere
+                return []
+        return path
 
 
 # --------------------------------------------------------------------------
