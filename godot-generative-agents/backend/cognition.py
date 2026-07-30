@@ -229,6 +229,15 @@ EVENT_IMPORTANCE = 4.0
 # serialization, the reflection filters, or the viewer has to learn about it.
 ACTION_TAG = "action"
 RECENT_ACTIONS_MAX = 3
+# #905: minutes one unchanged activity must hold before the decide context
+# says so. An open-ended wait premised on a person ("waiting for Theo") decays
+# with every minute that person doesn't show, but nothing in the prompt ever
+# said "you have been doing exactly this for 5 hours" -- the agent re-chose a
+# 340-minute wait one plausible decision at a time. ponytail: 90 min is a
+# calibration knob -- wide enough that a long study block isn't nagged,
+# narrow enough that a dead afternoon gets one true sentence in time to save
+# most of it.
+SAME_ACT_CONTEXT_MIN = 90
 # #826 review (minor 6): most record text is a short authored reflection.prompty
 # sentence, but the `read` verb embeds an item's whole `read_text` -- authored
 # world data of arbitrary length that could carry a newline -- straight into the
@@ -1218,6 +1227,29 @@ def _hour_words(hour: int) -> str:
     return f"{hour % 12 or 12} {'AM' if hour < 12 else 'PM'}"
 
 
+def _absent_person(game, char, activity: str | None):
+    """The first name of a cast member ``activity`` mentions who is NOT here.
+
+    #905's missing observation: "waiting for theo" while Theo is neither
+    co-located nor ever going to send a perceivable departure event. A
+    first-name word match against the cast is deliberately simple -- it only
+    ever adds one true clause to the #905 hold sentence, and a miss just
+    means the clause is omitted.
+    """
+    if not activity:
+        return None
+    text = activity.lower()
+    location = getattr(char, "location", None)
+    here = set(getattr(location, "characters", {}) or {})
+    for name in getattr(game, "characters", {}) or {}:
+        if name == char.name or name in here:
+            continue
+        first = name.split()[0]
+        if len(first) >= 3 and re.search(rf"\b{re.escape(first.lower())}\b", text):
+            return first
+    return None
+
+
 def decide_context_block(
     agent,
     step: int,
@@ -1225,6 +1257,9 @@ def decide_context_block(
     stop_since: int = 0,
     waiting: bool = False,
     day_steps: int | None = None,
+    act_since: int | None = None,
+    activity_text: str | None = None,
+    absent: str | None = None,
 ) -> str:
     """Render the always-on decide context (issue #580), or ``""``.
 
@@ -1257,6 +1292,16 @@ def decide_context_block(
     know the time and every walk's price but not that the world stops at the
     run boundary -- batch 8's criterion-2 breach was an agent starting a
     ~50-minute walk 23 minutes before an end nothing had told it about.
+
+    ``act_since``/``activity_text``/``absent`` (#905): the step the agent's
+    current *performed activity* text last changed, that text, and a named
+    person it mentions who is not co-located. Past ``SAME_ACT_CONTEXT_MIN``
+    minutes the block states the hold -- purely factual, no directive -- so
+    an open-ended wait ("reviewing problems while waiting for theo", 340 min
+    in batch 10) finally has its decayed premise in the prompt instead of
+    being re-chosen one plausible decision at a time. Distinct from
+    ``elapsed``, which clocks the *schedule stop*: Maya's wait was a
+    deviation, held across two different stops.
     """
     schedule = getattr(agent, "schedule", None)
     if clock is None or schedule is None:
@@ -1291,11 +1336,19 @@ def decide_context_block(
                 else end.strftime("%I:%M %p").lstrip("0")
             )
             day_end_in = remaining
+    held = None
+    if act_since is not None and activity_text:
+        held_min = clock.minutes_for_steps(max(0, step - act_since))
+        if held_min >= SAME_ACT_CONTEXT_MIN:
+            held = held_min
     return render(
         "decide_context",
         time=now.strftime("%A %I:%M %p"),
         place=schedule.destination,
         activity=schedule.activity,
+        held=held,
+        held_activity=activity_text if held else None,
+        absent=absent if held else None,
         minutes=clock.minutes_for_steps(steps) if steps is not None else None,
         elapsed=clock.minutes_for_steps(max(0, step - stop_since)),
         finished=bool(waiting),
@@ -1444,7 +1497,15 @@ def walk_minutes_line(game, char, clock) -> str:
 
 
 def observe_and_decide(
-    game, char, step: int, retrieval=None, *, clock=None, stop_since=0, waiting=False
+    game,
+    char,
+    step: int,
+    retrieval=None,
+    *,
+    clock=None,
+    stop_since=0,
+    waiting=False,
+    act_since=None,
 ):
     """Build ``char``'s observation, fold in memory, and ask its agent to decide.
 
@@ -1533,6 +1594,7 @@ def observe_and_decide(
     # AFTER the environment text (the mock brain reads only the first line)
     # and AFTER the retrieve above ran on the plain `base` -- the block must
     # never shift which memories surface, because frames embed that list.
+    activity_now = char.get_property("activity") if act_since is not None else None
     context = decide_context_block(
         agent,
         step,
@@ -1543,6 +1605,12 @@ def observe_and_decide(
         # stamp pattern): only the loop's callers know it, and actions and
         # this block both read it off the shared object (#891).
         day_steps=getattr(game, "sim_day_steps", None),
+        # #905: how long the current performed activity has been held, and a
+        # named no-show it is premised on. Threaded only by the live step
+        # loop, like clock -- the bake and offline tests pass none.
+        act_since=act_since,
+        activity_text=activity_now,
+        absent=_absent_person(game, char, activity_now),
     )
     if context:
         base = f"{base}\n\n{context}"

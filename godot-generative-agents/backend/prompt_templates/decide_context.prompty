@@ -86,6 +86,26 @@ inputs:
       Whole minutes from now until day_end. Explicit for the same reason as
       next_in -- the model should not have to do clock arithmetic to learn
       whether a walk fits in the day.
+  held:
+    type: integer
+    description: >
+      Minutes the agent's current PERFORMED activity text has gone unchanged
+      (#905). Set only past cognition.SAME_ACT_CONTEXT_MIN, so a normal study
+      block is never nagged. Distinct from elapsed, which clocks the schedule
+      stop: a re-chosen off-plan wait ("reviewing problems while waiting for
+      theo", 340 min in #760 batch 10) never shows up in elapsed at all. The
+      sentence is deliberately factual with no directive -- the model decides
+      whether the hold is still worth it.
+  held_activity:
+    type: string
+    description: The unchanged activity text itself, quoted back verbatim.
+  absent:
+    type: string
+    description: >
+      First name of a cast member held_activity mentions who is NOT here
+      (#905): a person-contingent wait decays with every minute the person
+      doesn't show, but their absence is otherwise only ever the absence of
+      an observation. Omitted when the activity names no absent person.
 sample:
   time: Monday 12:05 PM
   place: Houston Hall
@@ -95,4 +115,4 @@ sample:
   finished: false
 ---
 Right now it is {{ time }}.
-Your plan's current stop: {{ activity }} at {{ place }}{% if minutes %} (planned ~{{ minutes }} min){% endif %}.{% if finished %} You have already finished this stop.{% if next_place %} Your next stop is {{ next_activity }} at {{ next_place }}{% if next_due %}, due now.{% else %}, starting at {{ next_hour }} ({{ next_in }} min from now).{% endif %}{% endif %}{% elif elapsed %} This has been your current stop for {{ elapsed }} min.{% endif %}{% if day_end %} The day ends at {{ day_end }} ({{ day_end_in }} min from now).{% endif %}
+Your plan's current stop: {{ activity }} at {{ place }}{% if minutes %} (planned ~{{ minutes }} min){% endif %}.{% if finished %} You have already finished this stop.{% if next_place %} Your next stop is {{ next_activity }} at {{ next_place }}{% if next_due %}, due now.{% else %}, starting at {{ next_hour }} ({{ next_in }} min from now).{% endif %}{% endif %}{% elif elapsed %} This has been your current stop for {{ elapsed }} min.{% endif %}{% if held %} You have been doing exactly this -- "{{ held_activity }}" -- for {{ held }} min{% if absent %}, and {{ absent }} is not here{% endif %}.{% endif %}{% if day_end %} The day ends at {{ day_end }} ({{ day_end_in }} min from now).{% endif %}
