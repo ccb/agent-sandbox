@@ -1,9 +1,9 @@
 import { CodeBlock } from "./CodeBlock";
 import checkOutBookCode from "./snippets/check_out_book.py?raw";
 import checkOutBookTool from "./snippets/check_out_book.tool.json?raw";
-import dropCode from "./snippets/drop.py?raw";
+import checkOutBookGateCode from "./snippets/check_out_book_gate.py?raw";
 import gateCode from "./snippets/gate.py?raw";
-import napCode from "./snippets/nap.py?raw";
+import myVerbCode from "./snippets/my_verb.py?raw";
 
 /**
  * Every snippet on the page, loaded from the real files under snippets/.
@@ -20,11 +20,11 @@ export const SNIPPETS = {
     lang: "python",
     caption: "text_adventure_games/reactions.py — GatedEffect.__call__, verbatim",
   },
-  drop: {
-    code: dropCode,
+  gateExample: {
+    code: checkOutBookGateCode,
     lang: "python",
     caption:
-      "text_adventure_games/actions/things.py — abridged: docstrings, aliases, a duplicate is_wielded branch, and the constructor that assigns self.item and self.location",
+      "godot-generative-agents/backend/actions.py — CheckOutBook's gate and effects, verbatim; the constructor and its _match_book helper are cut, which is why self.book and self.character appear unassigned",
   },
   declaration: {
     code: checkOutBookCode,
@@ -36,10 +36,10 @@ export const SNIPPETS = {
     lang: "json",
     caption: "the tool as generated for an agent in Van Pelt — Book Stacks",
   },
-  nap: {
-    code: napCode,
+  myVerb: {
+    code: myVerbCode,
     lang: "python",
-    caption: "a complete custom verb",
+    caption: "a commented template for a custom verb",
   },
 } satisfies Record<string, { code: string; lang: "python" | "json"; caption: string }>;
 
@@ -81,8 +81,11 @@ export function ImplementationSection() {
               is parsed into one of these objects, and then either passes or does not — the model is
               never holding the pen.
             </p>
-            <p>Here is a real one, with its docstrings trimmed away:</p>
-            <CodeBlock {...SNIPPETS.drop} />
+            <p>
+              Here is a real one — the verb a student uses to borrow a library book from the shelf,
+              which you will meet again in a moment from the other side:
+            </p>
+            <CodeBlock {...SNIPPETS.gateExample} />
             <p>
               Preconditions are ordinary predicates and effects are ordinary mutation. There is no
               rules engine to misconfigure and nothing to reach around. A rejected action is not
@@ -96,8 +99,9 @@ export function ImplementationSection() {
             </h3>
             <p>
               The model is not asked "what do you do?" and parsed hopefully. It receives one typed
-              tool per verb, derived from the same registry the gate reads. This declaration is the
-              whole definition of the library's checkout verb:
+              tool per verb, derived from the same registry the gate reads. That is the same verb
+              from the inside. From the outside, its declaration is all the engine needs to build
+              the tool the model is offered:
             </p>
             <div className="nrf-panes">
               <CodeBlock {...SNIPPETS.declaration} />
@@ -132,14 +136,14 @@ export function ImplementationSection() {
               The framework exists so that other people can build simulations on it, which means
               adding to the world has to be cheap. A new verb is one class:
             </p>
-            <CodeBlock {...SNIPPETS.nap} />
+            <CodeBlock {...SNIPPETS.myVerb} />
             <p>
-              Pass it to the game as <code>custom_actions=[Nap]</code> and it becomes three things
-              at once: a command a human player can type, an option a scripted NPC can take, and a
-              typed tool in every agent's menu — offered only where there is a bench to sit on. That
-              last one is the engine's default wiring; a simulation that curates its own verb list,
-              as this one does, names the verb there instead. The full engine reference, generated
-              from these same sources, is at{" "}
+              Pass it to the game as <code>custom_actions=[MyVerb]</code> and it becomes three
+              things at once: a command a human player can type, an option a scripted NPC can take,
+              and a typed tool in every agent's menu — offered only where the declared affordance is
+              in scope. That last one is the engine's default wiring; a simulation that curates its
+              own verb list, as this one does, names the verb there instead. The full engine
+              reference, generated from these same sources, is at{" "}
               <a href={`${import.meta.env.BASE_URL}docs/`}>the documentation site</a>.
             </p>
           </div>

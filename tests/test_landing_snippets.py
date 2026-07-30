@@ -38,11 +38,6 @@ QUOTED = {
             "apply_effects",
         ],
     ),
-    "drop.py": (
-        "text_adventure_games/actions/things.py",
-        "class Drop(base.Action):",
-        ["class Drop", "was_matched", "is_worn", "carried_items", "discard_item"],
-    ),
     "check_out_book.py": (
         "godot-generative-agents/backend/actions.py",
         "class CheckOutBook(base.Action):",
@@ -51,6 +46,16 @@ QUOTED = {
             "REQUIRED_AFFORDANCES",
             "book_shelf",
             "ARGUMENTS_SCHEMA",
+        ],
+    ),
+    "check_out_book_gate.py": (
+        "godot-generative-agents/backend/actions.py",
+        "class CheckOutBook(base.Action):",
+        [
+            "checked_out_by",
+            "already checked out by",
+            "add_to_inventory",
+            "library_book",
         ],
     ),
 }
@@ -100,7 +105,7 @@ def offered_tools(agent_at_the_book_stacks):
 
 def test_every_snippet_file_exists():
     """A missing snippet must fail loudly here rather than skip."""
-    expected = set(QUOTED) | {"nap.py", "check_out_book.tool.json"}
+    expected = set(QUOTED) | {"my_verb.py", "check_out_book.tool.json"}
     assert {p.name for p in SNIPPET_DIR.iterdir() if p.is_file()} >= expected
 
 
@@ -203,17 +208,20 @@ def test_the_library_menu_is_narrowed_by_affordance(offered_tools):
 
 
 def test_example_verb_compiles_against_the_real_base_class():
-    """nap.py is a reader's copy-paste template, so it must actually work: it
-    imports the real Action and every helper it calls must exist."""
+    """my_verb.py is a reader's fill-in-the-blank template, so it must still
+    actually work: it imports the real Action and every helper it calls must
+    exist. It is not runnable against any shipped world -- no ``my_affordance``
+    exists anywhere -- and that is fine: the point is that the shape compiles
+    against the real base class, not that the placeholder affordance resolves."""
     from text_adventure_games.actions.base import Action
 
     namespace: dict = {}
-    src = (SNIPPET_DIR / "nap.py").read_text()
-    exec(compile(src, "nap.py", "exec"), namespace)  # noqa: S102
+    src = (SNIPPET_DIR / "my_verb.py").read_text()
+    exec(compile(src, "my_verb.py", "exec"), namespace)  # noqa: S102
 
-    nap = namespace["Nap"]
-    assert issubclass(nap, Action)
-    assert nap.ACTION_NAME == "nap"
-    assert nap.REQUIRED_AFFORDANCES == ("bench",)
+    my_verb = namespace["MyVerb"]
+    assert issubclass(my_verb, Action)
+    assert my_verb.ACTION_NAME == "my_verb"
+    assert my_verb.REQUIRED_AFFORDANCES == ("my_affordance",)
     for helper in ("acting_character", "has_affordance_in_scope"):
-        assert hasattr(nap, helper), f"Action lost {helper}()"
+        assert hasattr(my_verb, helper), f"Action lost {helper}()"
