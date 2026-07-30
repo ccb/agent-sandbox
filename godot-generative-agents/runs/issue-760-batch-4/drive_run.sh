@@ -89,6 +89,16 @@ START=$(date +%s)
 
 # Poll until the day ends: the loop pauses itself at --steps and on a tripped
 # budget, so "paused && (step>=steps || over_budget)" is the terminal state.
+#
+# One more pause is NOT terminal by those two arms: the engine auto-pauses
+# after consecutive LLM errors (the #260 resilience path — batch C-OFF hit it
+# when the workspace API limit ran out mid-run, #926). Waiting that out would
+# spin forever, so paused with the step frozen for 6 straight polls (~60s)
+# aborts instead: artifacts still get captured below, and the non-zero exit
+# tells a calling batch script to stop.
+LAST_STEP=-1
+STALL=0
+ABORTED=
 while :; do
   sleep 10
   LIVE=$(curl -sf "$BASE/live" || true)
@@ -101,6 +111,18 @@ while :; do
   if [[ "$PAUSED" == "true" ]] && { [[ "$OVER" == "true" ]] || (( STEP >= STEPS )); }; then
     echo; break
   fi
+  if [[ "$PAUSED" == "true" && "$STEP" == "$LAST_STEP" ]]; then
+    STALL=$((STALL + 1))
+  else
+    STALL=0
+  fi
+  LAST_STEP=$STEP
+  if (( STALL >= 6 )); then
+    echo
+    echo "   paused mid-run at step $STEP/$STEPS with no progress -- error-pause (#926), aborting"
+    ABORTED=1
+    break
+  fi
 done
 
 # BEFORE shutdown: the ledger is in-process only.
@@ -111,4 +133,8 @@ echo "   cost=\$$(jq -r '.total_cost_usd' "$OUT/usage.json") calls=$(jq -r '.cal
 curl -sf -X POST "$BASE/shutdown" >/dev/null || true
 sleep 2
 echo "$RUN_ID" > "$OUT/run_id.txt"
+if [[ -n "$ABORTED" ]]; then
+  echo "== $LABEL ABORTED (error-pause, #926) -> $OUT"
+  exit 1
+fi
 echo "== $LABEL done -> $OUT"
