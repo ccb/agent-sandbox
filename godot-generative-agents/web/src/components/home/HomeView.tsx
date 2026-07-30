@@ -344,10 +344,11 @@ export function HomeView() {
                 <code>agent-sandbox</code> multi-agent simulation framework and the text-adventure
                 engine from{" "}
                 <a href="https://interactive-fiction-class.org/homeworks/text-adventure-game/text-adventure-game.html">
-                  Chris Callison-Burch's interactive-fiction course materials
+                  Chris Callison-Burch's CIS 7000 - <i>Interactive Fiction and Text Generation</i>{" "}
+                  course materials
                 </a>
-                , and we thank the framework's broader contributors. We are particularly grateful to{" "}
-                <a href="https://github.com/MaEnqiMark">Mark Ma</a> for his work on the{" "}
+                , and we thank the framework's broader contributors. We are grateful to{" "}
+                <a href="https://github.com/MaEnqiMark">Mark Ma</a> for his contributions to the{" "}
                 <code>text_adventure_games</code> library — the engine every agent in this
                 simulation acts through. Character sprite art is from the <em>Cute Fantasy</em> pack
                 by Kenmi. Campus geography is derived from{" "}
