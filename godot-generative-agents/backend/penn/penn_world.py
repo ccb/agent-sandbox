@@ -498,37 +498,39 @@ def make_meal(name: str, description: str, examine: str) -> Item:
 
 
 def _furnish_meals(game) -> None:
-    """Stock Houston Hall with EDIBLE meals (#615). An EDIBLE thing in scope is
-    exactly what makes the engine's `eat` (declared `(Property.EDIBLE,)` in
-    #612) offered -- so agents can eat here and only here. Meals live in the
-    building-level "Houston Hall" location, next to the boil props, for the
-    same reason those do (see the world-YAML comment): schedule stops that act
-    on them must target "Houston Hall" itself. Gated on the authored `dining`
-    arena tag (#613): a world that doesn't tag the hall -- the isolated boil
-    scenario (#299/#301), whose one resident lives in Houston Hall and must
-    keep a decision surface of only the drink/boil arc -- gets no meals, so
-    `eat` is never offered there."""
-    hall = game.locations.get("Houston Hall")
-    if hall is None or not hall.get_property("dining"):
-        return
-    for name, description, examine in (
-        (
-            "sandwich",
-            "a wrapped sandwich",
-            "A turkey club off the Houston Hall food-court counter.",
-        ),
-        (
-            "bowl of soup",
-            "a bowl of lentil soup",
-            "Steaming lentil soup from the Houston Hall food court.",
-        ),
-        (
-            "apple",
-            "a red apple",
-            "A crisp apple from the fruit basket by the register.",
-        ),
-    ):
-        hall.add_item(make_meal(name, description, examine))
+    """Stock every ``dining``-tagged location with EDIBLE meals (#615). An
+    EDIBLE thing in scope is exactly what makes the engine's `eat` (declared
+    `(Property.EDIBLE,)` in #612) offered -- so agents can eat at dining spots
+    and only there. Per-location stocking (#907): meals used to live only in
+    the building-level "Houston Hall", so an agent whose travel grounded to a
+    named room inside it (the Reception Hall food court) stood surrounded by
+    fictional food it could neither see nor `get`, and retried invented item
+    names across two buildings before giving up. Gated on the authored
+    `dining` tag (#613): a world that doesn't tag any hall -- the isolated
+    boil scenario (#299/#301), whose one resident lives in Houston Hall and
+    must keep a decision surface of only the drink/boil arc -- gets no meals,
+    so `eat` is never offered there."""
+    for location in game.locations.values():
+        if not location.get_property("dining"):
+            continue
+        for name, description, examine in (
+            (
+                "sandwich",
+                "a wrapped sandwich",
+                "A turkey club off the Houston Hall food-court counter.",
+            ),
+            (
+                "bowl of soup",
+                "a bowl of lentil soup",
+                "Steaming lentil soup from the Houston Hall food court.",
+            ),
+            (
+                "apple",
+                "a red apple",
+                "A crisp apple from the fruit basket by the register.",
+            ),
+        ):
+            location.add_item(make_meal(name, description, examine))
 
 
 def make_library_shelf() -> Item:
