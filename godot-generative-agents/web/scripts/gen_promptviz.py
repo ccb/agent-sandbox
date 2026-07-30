@@ -35,10 +35,11 @@ from text_adventure_games.promptviz.app import _graph_elements  # noqa: E402
 from text_adventure_games.promptviz.spec import ChainSpec, load_spec  # noqa: E402
 from text_adventure_games.promptviz.templates import node_prompt  # noqa: E402
 
-# Chain specs to dump. action_castle ships inside promptviz; the cognition chain
-# lives with the generative-agents backend.
+# Chain specs to dump. Only the Penn sim's own cognition chain ships on the site
+# -- promptviz also carries an action_castle chain, but that describes the
+# text-adventure demo, not this simulation. Run the Flask app against it directly
+# if you want to see it.
 SPECS = [
-    REPO_ROOT / "text_adventure_games" / "promptviz" / "chains" / "action_castle.yaml",
     REPO_ROOT
     / "godot-generative-agents"
     / "backend"
