@@ -1128,6 +1128,22 @@ _OMITS_SAMPLING_PARAMS = (
     "claude-mythos-5",
 )
 
+# Adaptive thinking + effort exist only on Sonnet/Opus 4.6 and newer; Haiku 4.5
+# and older models reject both with a 400 ("adaptive thinking is not supported
+# on this model"). A tiered run (#368) can route one role's calls to such a
+# model while the run-level --effort stands, so the gate is per call, on the
+# model the call actually routes to.
+_SUPPORTS_ADAPTIVE_EFFORT = (
+    "claude-opus-4-6",
+    "claude-opus-4-7",
+    "claude-opus-4-8",
+    "claude-opus-5",
+    "claude-sonnet-4-6",
+    "claude-sonnet-5",
+    "claude-fable-5",
+    "claude-mythos-5",
+)
+
 # `max_tokens` caps thinking AND the visible reply together. Our call sites are
 # sized for a no-thinking reply (decide 128, reflect 400, plan 700), so a
 # thinking model would spend the whole budget reasoning and return no tool_use
@@ -1151,6 +1167,8 @@ def _sampling_kwargs(client, model: str, max_tokens: int, temperature: float) ->
     """
     # getattr: adapters are also built via __new__ in tests, as elsewhere here.
     effort = getattr(client, "_effort", None)
+    if effort and not str(model or "").startswith(_SUPPORTS_ADAPTIVE_EFFORT):
+        effort = None  # this call routed to a model that would 400 on it
     if not (effort or _omits_sampling_params(model)):
         return {"max_tokens": max_tokens, "temperature": temperature}
     kwargs: dict = {"max_tokens": max(max_tokens, _THINKING_MIN_MAX_TOKENS)}
@@ -1200,8 +1218,10 @@ class AnthropicClient:
         max_tokens: int = 256,
         temperature: float = 0.0,
     ) -> str | None:
+        # Outside the try: the error row below must name the model this call
+        # actually routed to (#368), not the adapter's base model.
+        model = _tiered_model(self)
         try:
-            model = _tiered_model(self)
             system_text, chat_messages = _split_anthropic_messages(messages)
 
             if self._verbose:
@@ -1253,7 +1273,7 @@ class AnthropicClient:
                 getattr(self, "ledger", None),
                 getattr(self, "context", {}),
                 "anthropic",
-                getattr(self, "_model", "anthropic"),
+                model,
                 None,
                 messages,
                 None,
@@ -1271,8 +1291,9 @@ class AnthropicClient:
         max_tokens: int = 256,
         temperature: float = 0.0,
     ) -> "ToolCallResult | None":
+        # Outside the try: see chat() -- the error row names the routed model.
+        model = _tiered_model(self)
         try:
-            model = _tiered_model(self)
             anthropic_tools = [_to_anthropic_tool(t) for t in tools]
 
             def once(msgs):
@@ -1331,7 +1352,7 @@ class AnthropicClient:
                 getattr(self, "ledger", None),
                 getattr(self, "context", {}),
                 "anthropic",
-                getattr(self, "_model", "anthropic"),
+                model,
                 None,
                 messages,
                 None,
