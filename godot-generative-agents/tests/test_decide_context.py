@@ -177,6 +177,76 @@ def test_short_holds_and_untracked_activities_stay_silent():
     assert "doing exactly this" not in untracked
 
 
+def test_walking_replaces_the_elapsed_clause(monkeypatch=None):
+    # #916: 70 min into a correct 68-min leg, "this has been your current
+    # stop for 130 min" read as "the session ran long and is over" and the
+    # agent turned around 11 tiles from the door. Mid-walk toward the plan,
+    # the honest sentence is how far from arrival you are.
+    _game, ada = _world()
+    text = decide_context_block(ada.agent, 606, SimClock(START), 6, walking=12)
+    assert text.endswith("You are walking there now, about 12 min from arrival.")
+    assert "current stop for" not in text
+
+
+def test_walking_minutes_left_prices_only_the_on_plan_walk():
+    from backend.run_simulation import _walking_minutes_left
+
+    _game, ada = _world()  # scheduled destination: Cafe
+    clock = SimClock(START)
+    st = {"path": [(0, i) for i in range(60)], "walk_target": "Cafe"}
+    assert _walking_minutes_left(st, ada, clock) == 10  # 60 steps -> 10 min
+    # A walk AWAY from the plan keeps the neglect semantics: no clause.
+    assert _walking_minutes_left(dict(st, walk_target="Library"), ada, clock) is None
+    # Settled (path exhausted) or offline (no clock): nothing to price.
+    assert _walking_minutes_left(dict(st, path=[]), ada, clock) is None
+    assert _walking_minutes_left(st, ada, None) is None
+
+
+def test_travel_resets_the_905_stamp():
+    # #916: the walk is not the held activity. Without the reset, an agent
+    # walking for 90+ min carried its stale pre-walk activity into the hold
+    # clause -- "you have been doing exactly this (reviewing with priya) for
+    # 123 min, and Priya is not here" -- while mid-walk to a class.
+    from backend.run_simulation import step
+
+    class _TwoTileWalk:
+        def walk_path(self, start, address, furniture=None):
+            return [(0, 1), (0, 2)]
+
+    personas = _personas()
+    brain = MockLlmClient(tool_calls_responses=[TRAVEL])
+    game, chars = build_world(None, personas, LOCATIONS)
+    attach_agents(chars, personas, llm_client=brain)
+    state = {
+        "Ada": {
+            "tile": (0, 0),
+            "path": [],
+            "pron": "\U0001f4d6",
+            "desc": "waking up",
+            "performing": False,
+            "perform_until": None,
+            "reasoning": "",
+            "memories": [],
+            "chat": None,
+            "stop_since": 0,
+            "act_text": "reviewing diagrams with priya",
+            "act_since": 0,
+        }
+    }
+    step(
+        game,
+        chars,
+        state,
+        0,
+        order=["Ada"],
+        world_map=_TwoTileWalk(),
+        emoji={"Ada": "\U0001f4d6"},
+        clock=SimClock(START),
+    )
+    assert state["Ada"]["act_text"] is None
+    assert state["Ada"]["walk_target"] == "Cafe"
+
+
 def test_absent_person_matches_a_named_no_show():
     from backend.cognition import _absent_person
 

@@ -1260,6 +1260,7 @@ def decide_context_block(
     act_since: int | None = None,
     activity_text: str | None = None,
     absent: str | None = None,
+    walking: int | None = None,
 ) -> str:
     """Render the always-on decide context (issue #580), or ``""``.
 
@@ -1292,6 +1293,14 @@ def decide_context_block(
     know the time and every walk's price but not that the world stops at the
     run boundary -- batch 8's criterion-2 breach was an agent starting a
     ~50-minute walk 23 minutes before an end nothing had told it about.
+
+    ``walking`` (#916) is the whole-minute walk remaining when the agent is
+    mid-walk *toward the current scheduled stop* -- it replaces the elapsed
+    clause, whose number otherwise reads as time already spent at the stop:
+    70 minutes into a correct 68-minute leg, batch 11's Tanaka concluded her
+    session "ran well past its planned time" and turned around 11 tiles from
+    the door. A walk away from the plan threads ``None`` and keeps the
+    neglect semantics unchanged.
 
     ``act_since``/``activity_text``/``absent`` (#905): the step the agent's
     current *performed activity* text last changed, that text, and a named
@@ -1349,6 +1358,7 @@ def decide_context_block(
         held=held,
         held_activity=activity_text if held else None,
         absent=absent if held else None,
+        walking=walking,
         minutes=clock.minutes_for_steps(steps) if steps is not None else None,
         elapsed=clock.minutes_for_steps(max(0, step - stop_since)),
         finished=bool(waiting),
@@ -1506,6 +1516,7 @@ def observe_and_decide(
     stop_since=0,
     waiting=False,
     act_since=None,
+    walking=None,
 ):
     """Build ``char``'s observation, fold in memory, and ask its agent to decide.
 
@@ -1611,6 +1622,9 @@ def observe_and_decide(
         act_since=act_since,
         activity_text=activity_now,
         absent=_absent_person(game, char, activity_now),
+        # #916: mid-walk toward the current stop, say how far from arrival
+        # instead of letting elapsed read as time already spent at the stop.
+        walking=walking,
     )
     if context:
         base = f"{base}\n\n{context}"
