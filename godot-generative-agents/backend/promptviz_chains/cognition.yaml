@@ -1,102 +1,220 @@
-# Prompt-chain spec for the generative-agents cognition (the UPenn campus sim).
+# Prompt-chain spec for the Penn campus generative-agents simulation.
+#
+# This is the chain the Godot sim actually runs (backend/cognition.py,
+# planner.py, run_simulation.py plus the engine pieces they reuse). It is the
+# only chain the web companion ships -- the Action Castle chain describes the
+# text-adventure demo, not this simulation.
 #
 # Run the visualizer from the repo root (backend is an installed package):
 #
 #   python -m text_adventure_games.promptviz.app \
-#     --spec backend/promptviz_chains/cognition.yaml
+#     --spec godot-generative-agents/backend/promptviz_chains/cognition.yaml
 #
-# This chain spans BOTH template packages: the gen-agents memory/belief templates
-# (`backend.prompt_templates`, the default below) AND the engine cognition a
-# persona reuses once a live LLM is wired in (`text_adventure_games.
-# prompt_templates`, set per-node via `templates:`). Nodes whose box is green hold
-# agent-generated *memory* text (the mock writes them and never calls a model);
-# blue boxes are *real model prompts* that fire only with a live client
-# (LLM_PROVIDER set): the daily planner (#83), the decision brain (#168), periodic
-# reflection (#84), and dialogue (#86).
+# The chain spans BOTH template packages: the sim's own templates
+# (`backend.prompt_templates`, the default below) and the engine cognition a
+# persona reuses (`text_adventure_games.prompt_templates`, set per-node via
+# `templates:`).
+#
+# Reading the colors:
+#   blue (decision)  a real model call -- fires only with a live provider
+#   green (narrate)  memory or context text rendered from a template, no model call
+#   grey (gate/start) a control point: no prompt, no model call
+#
+# Under the default mock brain every blue node is skipped: attach_agents sets
+# `brain = llm_client or schedule`, and each call site gates on the brain not
+# being the schedule mock. The green text is still written, which is what keeps
+# the offline replay bake byte-identical.
 name: cognition
 description: >-
-  A persona's day with a live LLM: generate a plan (day -> hourly ->
-  minute), seed beliefs + plan into memory, then each step perceive, retrieve,
-  decide, maybe converse, remember, and periodically reflect. Click a node to read
-  its prompt. With the default mock brain the blue prompts aren't sent (the mock
-  decides from location alone), but the green memory text is still written.
+  One Penn resident's simulated day. Before the clock starts, memories are
+  seeded and a day plan is decomposed day -> hourly -> minute. Then each tick:
+  perceive, retrieve, assemble context, decide through typed per-action tools,
+  pass the precondition gate, remember the outcome, score its poignancy, and
+  periodically reflect. Meeting someone can open a conversation, whose outcome
+  can revise the rest of the plan. Click a node to read its prompt.
 templates: backend.prompt_templates
 _engine: &engine text_adventure_games.prompt_templates
 
 nodes:
+  # --- bootstrap: seed memory, then plan the day -------------------------
   - id: day_start
     label: Day start (t=0)
     kind: start
     description: >-
-      Simulation bootstrap (run_simulation.simulate / attach_agents). Beliefs and
-      a day plan are prepared before the step loop begins.
+      run_simulation.simulate() -> cognition.attach_agents(). Memories are
+      seeded and the day is planned before the step loop begins.
+
+  - id: seed_relationships
+    label: Seed relationships
+    kind: narrate
+    template: relationship_memory
+    description: >-
+      seed.relationship_statements() -- who this persona already knows, written
+      into BOTH ends of each pair so neither meets a stranger (#779). Memory
+      text, no model call.
 
   - id: seed_knowledge
-    label: Seed spatial knowledge
+    label: Seed spatial beliefs
     kind: narrate
     template: spatial_knowledge
     description: >-
-      seed.seed_spatial_knowledge() -- each place a persona knows up front becomes
-      a Belief. Memory text (no model call), written before planning so a generative
-      planner can reason over it.
+      seed.seed_spatial_knowledge() -- each campus place the persona knows up
+      front becomes a Belief, written before planning so the planner can reason
+      over it. Memory text, no model call.
+
+  - id: seed_events
+    label: Seed public events
+    kind: narrate
+    template: public_event
+    description: >-
+      cognition.attach_agents() -- announcements every resident hears about
+      (a lecture, a closure). Only seeded on model-planned runs, since a
+      scripted schedule cannot react to them. Memory text, no model call.
 
   - id: plan_day
     label: "Plan: day outline"
     kind: decision
     template: plan_system
     description: >-
-      planner.LLMPlanner._day_outline() -- real model call (#83), only with a live
-      client. Sketches the day as a few broad blocks. Shares the plan_system message;
-      the day's persona + memory ride in the user message (assembled in code).
+      planner.LLMPlanner._day_outline() -- sketches the day as a few broad
+      blocks. Real model call, structured through DAY_OUTLINE_TOOL; the persona
+      and memory ride in the user message, assembled in code.
 
   - id: plan_hourly
     label: "Plan: hourly"
     kind: decision
     template: plan_system
     description: >-
-      planner.LLMPlanner._hourly() -- expands the day outline into one line per
-      in-game hour (bounded to the run's clock window).
+      planner._hourly() -- expands the outline into one line per in-game hour,
+      bounded to the run's clock window. Structured through HOURLY_TOOL.
 
   - id: plan_minute
     label: "Plan: minute stops"
     kind: decision
     template: plan_system
     description: >-
-      planner.LLMPlanner._minute() -- turns the hourly plan into concrete
-      {place, activity} stops, validated against known places. revise() re-runs this
-      level on a trigger.
+      planner._minute() -- turns each hour into concrete {place, activity,
+      minutes} stops via MINUTE_TOOL. Stops are validated against real place
+      names, so a hallucinated location is dropped before it reaches the world.
+
+  - id: plan_anchor_fix
+    label: "Plan: anchor correction"
+    kind: decision
+    template: plan_system
+    description: >-
+      planner._anchor_correction() re-does the model's own clock arithmetic
+      against median travel time. If a stop pinned to an hour cannot be reached
+      even optimistically, the plan goes back once with the first offending
+      anchor named (#821). One corrective round; the answer is taken as-is.
 
   - id: seed_plan
     label: Seed day plan
     kind: narrate
     template: plan_memory
     description: >-
-      cognition.attach_agents() -- the day's PLAN memory (destination +
-      whole-day itinerary), seeded at t=0. Memory text (no model call).
+      cognition.attach_agents() -- the finished itinerary written into memory as
+      a PLAN record, so the agent can recall its own intentions. Memory text,
+      no model call.
+
+  # --- each tick: perceive -> retrieve -> assemble context ---------------
+  - id: tick_start
+    label: Tick start (10s)
+    kind: start
+    description: >-
+      run_simulation.step(). One tick is ten in-game seconds; 360 make an hour.
+      Agents that are walking, settled, or mid-conversation skip the decision.
 
   - id: perceive
     label: Perceive
     kind: gate
     description: >-
-      memory.ingest_events() -- co-located world events become private
-      observations. No model call (the ReAct "Observe" step).
+      memory.perceive() -- events in view and newly-arrived neighbours become
+      observations. Vision is Chebyshev radius 8; a neighbour already in view is
+      not re-logged. No model call.
 
   - id: retrieve
     label: Retrieve memories
     kind: gate
     description: >-
-      memory.retrieve() -- scores the memory stream by recency / importance /
-      relevance and returns the top-k. No model call.
+      memory.retrieve() -- scores the stream by recency, importance and
+      relevance and returns the top six within a token budget. No chat call
+      (an embedding backend, if configured, is called here for relevance).
 
-  - id: decide
-    label: Decide (ReAct brain)
+  - id: ctx_decide_context
+    label: "Context: time + current stop"
+    kind: narrate
+    template: decide_context
+    description: >-
+      cognition.decide_context_block() -- the clock, the stop the agent is
+      committed to, how long it has been there, and near the end of the day how
+      long is left (#891). Rendered text, no model call.
+
+  - id: ctx_recent_actions
+    label: "Context: recent actions"
+    kind: narrate
+    template: recent_actions
+    description: >-
+      cognition.recent_actions_block() -- the agent's own last three actions, so
+      it can tell "I just arrived" from "I have been here an hour" (#826).
+
+  - id: ctx_nearby
+    label: "Context: nearby affordances"
+    kind: narrate
+    template: nearby_affordances
+    description: >-
+      cognition.nearby_affordances_line() -- what is worth doing near here.
+      Real-brain only: the mock never sees it, which keeps the bake identical.
+
+  - id: ctx_walk_minutes
+    label: "Context: walk costs"
+    kind: narrate
+    template: walk_minutes
+    description: >-
+      cognition.walk_minutes_line() -- how many in-game minutes each candidate
+      destination costs, so travel is chosen with its price visible.
+
+  # --- decide, then face the gate ----------------------------------------
+  - id: decide_cognition
+    label: Consult own memory
     kind: decision
     template: npc_decision
     templates: *engine
     description: >-
-      LLMAgent.decide() -- the real decision brain (#168 Phase A): with a live
-      client it chooses travel/perform via the engine's npc_decision prompt. The
-      default mock ignores this prompt and decides from the current location.
+      npc.cognition_toolset() -- before committing, the agent may call recall,
+      query_knowledge or read_plan against its own memory. Off by default;
+      budgeted at two calls per decision. Same system message as the decision
+      itself.
+    example_vars:
+      persona: I am Diego Torres, a graduate student in architecture at Penn. I spend long hours in the Meyerson Hall studio.
+      goals_block: "Short-term:\n  - work on the studio model in Meyerson Hall"
+      include_instruction: false
+
+  - id: decide_action
+    label: Decide (typed action tools)
+    kind: decision
+    template: npc_decision
+    templates: *engine
+    description: >-
+      cognition.decide_with_action_tools() -- the real decision. The agent is
+      offered one typed tool per verb it may actually use, built from each
+      action's own argument schema, with travel destinations as an enum of real
+      venues. The tool call is reassembled into a command string, so the model
+      never touches world state. This template is the system half; the
+      observation and context blocks are the user half.
+    example_vars:
+      persona: I am Diego Torres, a graduate student in architecture at Penn. I spend long hours in the Meyerson Hall studio.
+      goals_block: "Short-term:\n  - work on the studio model in Meyerson Hall"
+      include_instruction: false
+
+  - id: decide_freetext
+    label: "Fallback: free-text ReAct"
+    kind: decision
+    template: npc_decision
+    templates: *engine
+    description: >-
+      npc._decide_freetext() -- only when the structured call returns nothing.
+      Here the instruction block IS included, because without a tool schema the
+      Reasoning / Action / Duration format is the output contract.
     example_vars:
       persona: I am Diego Torres, a graduate student in architecture at Penn. I spend long hours in the Meyerson Hall studio.
       goals_block: "Short-term:\n  - work on the studio model in Meyerson Hall"
@@ -105,56 +223,217 @@ nodes:
       action_label: "Action:"
       duration_label: "Duration:"
 
-  - id: dialogue
-    label: Converse
-    kind: decision
-    template: npc_dialogue
-    templates: *engine
+  - id: route_command
+    label: Precondition gate
+    kind: gate
     description: >-
-      conversation.converse() / LLMAgent (#86) -- when two residents are co-located,
-      each speaks a line in turn via the engine's npc_dialogue prompt. Real model
-      call (live client only).
-    example_vars:
-      persona: I am Diego Torres, a graduate student in architecture at Penn. I spend long hours in the Meyerson Hall studio.
-      goals_block: ""
+      parser.parse_command() -- the classical planning gate. The action's
+      preconditions are checked before its effects apply; a rejected action
+      changes nothing. No model call.
 
+  # --- remember, score, reflect ------------------------------------------
   - id: remember
-    label: Remember (reflection)
+    label: Remember the outcome
     kind: narrate
     template: reflection
     description: >-
-      cognition.remember_outcome() -- the persona's own action, recorded as
-      a first-person observation memory. Memory text (no model call).
+      cognition.remember_outcome() -- the action written back in first person,
+      one branch per verb. A gate-blocked action is remembered too, at higher
+      importance, so the agent learns what the world refuses (#636).
 
-  - id: reflect
-    label: Reflect (synthesis)
+  - id: score_importance
+    label: Score poignancy (1-10)
+    kind: decision
+    template: importance_score
+    description: >-
+      cognition.score_new_memories() -- one batched call per agent per tick
+      rating each new memory from 1 (mundane) to 10 (momentous), at temperature
+      zero. A few ground-truth signals the model cannot see from text are locked
+      and skipped. The score feeds the reflection threshold.
+
+  - id: reflect_gate
+    label: Reflection due?
+    kind: gate
+    description: >-
+      reflection.should_reflect() -- fires when importance accumulated since the
+      last reflection crosses 30. Salience-driven, not clock-driven. No model
+      call.
+
+  - id: reflect_questions
+    label: Salient questions
     kind: decision
     template: reflect_system
     templates: *engine
     description: >-
-      reflection.reflect() / LLMReflector (#84) -- when accumulated importance
-      crosses a threshold, synthesize higher-level insights from recent memories.
-      Real model call (live client only); the numbered memory window rides in the
-      user message.
+      reflection.LLMReflector.salient_questions() -- given the last fifty
+      records, what should this agent be asking itself? Capped at three
+      questions; the memory window rides in the user message.
+
+  - id: reflect_infer
+    label: Infer an insight
+    kind: decision
+    template: reflect_system
+    templates: *engine
+    description: >-
+      reflection.infer() -- one call per question, answered only from memories
+      retrieved for it. The insight is written back as a REFLECTION record
+      citing the records it came from, so later decisions build on conclusions
+      rather than raw observation.
+
+  - id: revise_plan
+    label: Revise the plan
+    kind: decision
+    template: plan_system
+    description: >-
+      planner.revise() -- re-runs the minute level from the current stop with
+      what changed. Five things can trigger it, shown on the incoming edges. An
+      immediate commitment uses IMMEDIATE_REVISION_TOOL instead, which preempts
+      whatever the agent had settled into.
+
+  # --- react-or-continue --------------------------------------------------
+  - id: react_scan
+    label: Proximity scan
+    kind: gate
+    description: >-
+      cognition.maybe_react() -- edge-triggered: only pairs that just came into
+      mutual view are considered, and each agent is rate-capped per hour. Off by
+      default. No model call.
+
+  - id: encounter_memory
+    label: Encounter memory
+    kind: narrate
+    template: encounter
+    description: >-
+      cognition.maybe_react() -- noticing someone is itself a memory, written at
+      most once per pair per cooldown window. Memory text, no model call.
+
+  - id: react_choice
+    label: React or continue?
+    kind: decision
+    template: react
+    description: >-
+      cognition._consult_react() -- greet them, replan around them, or carry on.
+      Structured through REACT_TOOL at temperature zero. The rule tier above it
+      is free; only a pair that survives every rule reaches the model.
+
+  # --- conversation --------------------------------------------------------
+  - id: pair_scan
+    label: Pair up
+    kind: gate
+    description: >-
+      cognition.maybe_converse() -- both parties settled, neither walking or
+      busy, and the pair off cooldown. A pair that has already talked n times
+      waits min(n,3) x 90 ticks, so friends do not loop one greeting all day
+      (#803). An explicit talk_to request is handled first. No model call.
+
+  - id: place_grounding
+    label: "Context: where we are"
+    kind: narrate
+    template: place_grounding
+    templates: *engine
+    description: >-
+      conversation.place_grounding() -- the real place the two are standing in
+      and the places they have each been, fed into the dialogue observation so
+      talk stays grounded in campus geography rather than invented rooms (#780).
+
+  - id: dialogue_line
+    label: Speak one line
+    kind: decision
+    template: npc_decision
+    templates: *engine
+    description: >-
+      npc._converse_structured() -- one line per tick, up to six exchanges, so
+      dialogue costs simulated time instead of resolving instantly. The line
+      comes back through a typed speak tool; this template is the system half.
+    example_vars:
+      persona: I am Diego Torres, a graduate student in architecture at Penn. I spend long hours in the Meyerson Hall studio.
+      goals_block: ""
+      include_instruction: false
+
+  - id: convo_outcome
+    label: What came of it?
+    kind: decision
+    template: conversation_outcome
+    description: >-
+      cognition.apply_conversation_outcome() -- one call per participant at
+      temperature zero: what was agreed, what it means for the relationship,
+      and whether the plan should change. This is what makes a conversation
+      have consequences rather than being decoration (#582).
+
+  - id: commitment_memory
+    label: Commitment
+    kind: narrate
+    template: commitment_memory
+    description: >-
+      cognition.apply_conversation_outcome() -- an agreement written as a PLAN
+      memory at high importance, before the plan is revised, so it survives even
+      when the planner is a no-op. Memory text, no model call.
 
 edges:
-  - { from: day_start, to: seed_knowledge, label: seed beliefs }
-  - { from: seed_knowledge, to: plan_day, label: generate the day }
+  # bootstrap
+  - { from: day_start, to: seed_relationships, label: seed memory }
+  - { from: seed_relationships, to: seed_knowledge, label: known places }
+  - { from: seed_knowledge, to: seed_events, label: announcements }
+  - { from: seed_events, to: plan_day, label: plan the day }
   - { from: plan_day, to: plan_hourly, label: decompose }
   - { from: plan_hourly, to: plan_minute, label: decompose }
-  - { from: plan_minute, to: seed_plan, label: seed plan into memory }
-  - { from: seed_plan, to: perceive, label: begin step loop }
-  - { from: perceive, to: retrieve, label: observe }
-  - { from: retrieve, to: decide, label: top-k memories }
-  - { from: decide, to: dialogue, label: if co-located }
-  - { from: decide, to: remember, label: act, then remember }
-  - { from: dialogue, to: remember, label: remember the chat }
-  - { from: remember, to: reflect, label: importance crossed threshold }
-  - { from: reflect, to: perceive, label: next step }
-  - { from: remember, to: perceive, label: next step }
+  - { from: plan_minute, to: plan_anchor_fix, label: anchor unreachable }
+  - { from: plan_minute, to: seed_plan, label: plan accepted }
+  - { from: plan_anchor_fix, to: seed_plan, label: corrected once }
+  - { from: seed_plan, to: tick_start, label: start the clock }
+
+  # perceive -> context -> decide
+  - { from: tick_start, to: perceive, label: agent is due }
+  - { from: perceive, to: retrieve, label: observations }
+  - { from: retrieve, to: ctx_decide_context, label: top-k memories }
+  - { from: ctx_decide_context, to: ctx_recent_actions, label: assemble }
+  - { from: ctx_recent_actions, to: ctx_nearby, label: assemble }
+  - { from: ctx_nearby, to: ctx_walk_minutes, label: assemble }
+  - { from: ctx_walk_minutes, to: decide_action, label: the observation }
+  - { from: decide_action, to: decide_cognition, label: consult memory first }
+  - { from: decide_cognition, to: decide_action, label: answer in hand }
+  - { from: decide_action, to: decide_freetext, label: no tool call came back }
+  - { from: decide_action, to: route_command, label: command string }
+  - { from: decide_freetext, to: route_command, label: parsed command }
+
+  # gate -> remember -> score -> reflect
+  - { from: route_command, to: remember, label: effects applied }
+  - {
+      from: route_command,
+      to: remember,
+      label: preconditions failed,
+      condition: precondition_failure,
+    }
+  - { from: remember, to: score_importance, label: new memories }
+  - { from: score_importance, to: reflect_gate, label: importance updated }
+  - { from: reflect_gate, to: reflect_questions, label: "sum >= 30" }
+  - { from: reflect_questions, to: reflect_infer, label: up to 3 questions }
+  - { from: reflect_infer, to: tick_start, label: insight remembered }
+  - { from: reflect_gate, to: react_scan, label: not yet }
+
+  # replanning
+  - { from: tick_start, to: revise_plan, label: behind schedule }
   - {
       from: remember,
-      to: plan_minute,
-      label: "revise (behind schedule / action failed)",
+      to: revise_plan,
+      label: acted off-plan,
       condition: replan,
     }
+  - { from: revise_plan, to: tick_start, label: new stops }
+
+  # react
+  - { from: react_scan, to: encounter_memory, label: newly in view }
+  - { from: encounter_memory, to: react_choice, label: past the rule tier }
+  - { from: react_choice, to: revise_plan, label: replan around them }
+  - { from: react_choice, to: pair_scan, label: greet them }
+  - { from: react_scan, to: pair_scan, label: nobody new }
+
+  # conversation
+  - { from: pair_scan, to: place_grounding, label: pair settled }
+  - { from: place_grounding, to: dialogue_line, label: grounded observation }
+  - { from: dialogue_line, to: dialogue_line, label: their turn (<= 6) }
+  - { from: dialogue_line, to: convo_outcome, label: conversation ended }
+  - { from: convo_outcome, to: commitment_memory, label: something agreed }
+  - { from: convo_outcome, to: revise_plan, label: plans changed }
+  - { from: commitment_memory, to: tick_start, label: next tick }
+  - { from: pair_scan, to: tick_start, label: nobody to talk to }

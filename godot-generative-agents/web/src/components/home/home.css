@@ -2,10 +2,11 @@
    (https://github.com/nerfies/nerfies.github.io). The original is built on
    Bulma + Font Awesome + Google Fonts over CDNs; the companion runs cross-origin
    isolated (COOP/COEP), which blocks cross-origin subresources, so we reproduce
-   the relevant Bulma values inline and use system fonts + inline SVG icons. All
-   rules are scoped under .nrf so this dark-on-the-rest-of-the-app page can't
-   leak its styles. Numbers mirror Bulma's defaults (title sizes, button shape,
-   container width, footer background) to keep the look faithful. */
+   the relevant Bulma values inline and use locally-available fonts + inline SVG
+   icons. All rules are scoped under .nrf so this dark-on-the-rest-of-the-app
+   page can't leak its styles. The type is Palatino throughout and the container
+   is wider than Bulma's desktop default; the rest (button shape, footer
+   background) still mirrors Bulma. */
 .nrf {
   --nrf-text: #4a4a4a; /* Bulma body color */
   --nrf-heading: #363636; /* Bulma .title color */
@@ -14,93 +15,171 @@
   --nrf-dark-hover: #2b2b2b;
   --nrf-light: #f5f5f5;
   --nrf-footer-bg: #fafafa;
-  /* 'Google Sans' / 'Noto Sans' are used by Nerfies but aren't bundled here;
-     fall back to a clean system stack so the page needs no font download. */
-  --nrf-title-font:
-    "Google Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --nrf-body-font:
-    "Noto Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* Palatino throughout — headings and body — with the usual old-style-serif
+     fallbacks for platforms that don't ship it. All local, so the page still
+     needs no font download. */
+  --nrf-font: Palatino, "Palatino Linotype", "Palatino LT STD", "Book Antiqua", Georgia, serif;
+  /* The contents nav and the left margin the page opens for it (see .nrf-toc). */
+  --nrf-toc-w: 12rem;
+  --nrf-gutter: 15.5rem;
 
   min-height: 100%;
   background: #fff;
   color: var(--nrf-text);
-  font-family: var(--nrf-body-font);
-  font-size: 16px;
-  line-height: 1.5;
+  font-family: var(--nrf-font);
+  /* Palatino has a small x-height, so it wants a touch more size than the
+     16px sans it replaces. */
+  font-size: 17px;
+  line-height: 1.55;
   text-align: left;
 }
 
 /* --- layout --- */
 .nrf-container {
-  max-width: 960px; /* Bulma .container.is-max-desktop */
+  /* Wider than Bulma's 960px desktop container: the text column now runs about
+     80% of a laptop screen instead of half of it, so prose breaks far less. */
+  box-sizing: border-box;
+  max-width: 1180px;
   margin: 0 auto;
   padding: 0 1.5rem;
 }
 .nrf-section {
-  padding: 3rem 1.5rem;
+  padding: 2rem 1.5rem;
 }
 .nrf-hero-body {
-  padding: 3rem 1.5rem;
+  padding: 2.5rem 1.5rem 0.5rem;
 }
 .nrf-centered {
   text-align: center;
 }
 .nrf-justified {
   text-align: justify;
+  /* Justifying a wide measure without hyphenation opens rivers of whitespace. */
+  hyphens: auto;
 }
-/* Bulma .column.is-four-fifths, centered (the abstract column). */
+/* The content column. Its width is the container's — kept as a hook so a
+   section can be narrowed again without touching the markup. */
 .nrf-narrow {
-  max-width: 80%;
+  max-width: 100%;
   margin: 0 auto;
+}
+
+/* --- the sticky contents nav ---
+   Fixed in the page's left margin rather than laid out beside the prose: the
+   sections are siblings of the hero and the footer, so a real two-column grid
+   would mean wrapping all of them in a column wrapper. `.nrf` opens a gutter for
+   it on wide screens (below the breakpoint there is no room, and the nav is
+   dropped) — the footer's near-white background stops at that gutter, which is
+   invisible against the page and sits behind the nav anyway. */
+.nrf-toc {
+  display: none;
+}
+.nrf-toc-heading {
+  margin: 0 0 0.55rem 0.9rem;
+  color: #8c8c8c;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.nrf-toc-list {
+  margin: 0;
+  padding: 0;
+  /* The hairline the active marker rides on. */
+  border-left: 1px solid #e4e4e4;
+  list-style: none;
+}
+.nrf-toc-link {
+  display: block;
+  margin-left: -1px; /* so the 2px marker covers the hairline instead of nudging it */
+  padding: 0.26rem 0 0.26rem 0.9rem;
+  border-left: 2px solid transparent;
+  color: #7d7d7d;
+  font-size: 0.86rem;
+  line-height: 1.35;
+  text-decoration: none;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+.nrf-toc-link:hover {
+  color: var(--nrf-heading);
+}
+.nrf-toc-link.is-sub {
+  padding-left: 1.7rem;
+  font-size: 0.8rem;
+}
+/* Colour and the marker only — no weight change, which would reflow the entry. */
+.nrf-toc-link.is-active {
+  color: var(--nrf-heading);
+  border-left-color: var(--nrf-heading);
+}
+/* Anchor targets: a heading jumped to shouldn't land flush against the top of
+   the scroll container. */
+.nrf-teaser,
+.nrf-title {
+  scroll-margin-top: 1.5rem;
 }
 
 /* --- titles (Bulma .title / .subtitle) --- */
 .nrf-title {
-  margin: 0 0 1.5rem;
+  margin: 0 0 0.9rem;
   color: var(--nrf-heading);
-  font-family: var(--nrf-title-font);
   font-weight: 600;
-  line-height: 1.125;
+  line-height: 1.15;
 }
 .nrf-title-1 {
-  font-size: 3rem;
+  font-size: 2.3rem;
 }
 .nrf-title-3 {
-  font-size: 2rem;
+  font-size: 1.6rem;
+}
+/* Subsection heading inside a narrative section (Bulma .title.is-4-ish). */
+.nrf-title-4 {
+  margin: 1.6rem 0 0.5rem;
+  font-size: 1.15rem;
 }
 .nrf-subtitle {
   color: var(--nrf-text);
-  font-size: 1.25rem;
+  font-size: 1.1rem;
   font-weight: 400;
-  line-height: 1.25;
+  line-height: 1.4;
 }
 
-/* --- hero: authors + affiliations + links --- */
+/* --- hero: venue, authors, advisor --- */
 .nrf-venue {
-  margin: 0 0 1.5rem;
+  margin: 0 0 0.7rem;
   color: #555;
-  font-family: var(--nrf-title-font);
-  font-size: 1.1rem;
-  font-weight: 700;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+/* The Penn shield, set beside the venue line. `width: auto` against the intrinsic
+   144x161 keeps its ratio; the baseline nudge is by eye against Palatino's caps. */
+.nrf-shield {
+  height: 1.5em;
+  width: auto;
+  margin-left: 0.5em;
+  vertical-align: -0.45em;
 }
 .nrf-authors {
-  font-family: var(--nrf-title-font);
-  font-size: 1.25rem;
-  line-height: 1.6;
-}
-.nrf-affiliations {
-  margin-top: 0.4rem;
-  font-family: var(--nrf-title-font);
-  font-size: 1.25rem;
+  font-size: 1.1rem;
+  line-height: 1.4;
 }
 .nrf-author-block {
   display: inline-block;
 }
-.nrf-authors a {
+.nrf-advisor {
+  margin-top: 0.2rem;
+  color: #555;
+  font-size: 1rem;
+}
+.nrf-authors a,
+.nrf-advisor a {
   color: var(--nrf-link);
   text-decoration: none;
 }
-.nrf-authors a:hover {
+.nrf-authors a:hover,
+.nrf-advisor a:hover {
   text-decoration: underline;
 }
 
@@ -110,7 +189,7 @@
   flex-wrap: wrap;
   gap: 0.75rem;
   justify-content: center;
-  margin-top: 1.6rem;
+  margin-top: 1.2rem;
 }
 .nrf-button {
   display: inline-flex;
@@ -122,7 +201,7 @@
   color: #fff;
   border: 1px solid transparent;
   border-radius: 9999px;
-  font-family: var(--nrf-body-font);
+  font-family: var(--nrf-font);
   font-size: 1rem;
   line-height: 1.5;
   text-decoration: none;
@@ -135,25 +214,13 @@
   color: #fff;
 }
 
-/* --- teaser placeholder --- */
+/* --- teaser: one-line summary + the call into the replay --- */
 .nrf-teaser {
-  padding: 0 1.5rem 1rem;
-}
-.nrf-teaser-box {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  aspect-ratio: 16 / 9;
-  margin: 0 auto;
-  max-width: 960px;
-  border: 1px solid #dcdcdc;
-  border-radius: 10px;
-  background: var(--nrf-light);
-  color: #7a7a7a;
-  font-size: 0.95rem;
+  padding: 0 1.5rem 0.5rem;
 }
 .nrf-teaser-cap {
-  margin: 1.25rem 0 0;
+  margin: 0.5rem auto 0;
+  max-width: 46em; /* the summary reads better on a shorter measure than the body prose */
 }
 
 /* --- content / abstract typography (Bulma .content) --- */
@@ -173,6 +240,179 @@
   text-decoration: underline;
 }
 
+/* --- display math (KaTeX, bundled locally — see TeX.tsx) --- */
+.nrf-math {
+  margin: 1.5rem 0;
+  /* A long formula scrolls inside its own box rather than widening the page. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25rem 0;
+}
+.nrf-math .katex-display {
+  margin: 0; /* spacing is owned by .nrf-math above */
+}
+/* KaTeX defaults to 1.21em, which oversizes math set inline in a paragraph. */
+.nrf-content .katex {
+  font-size: 1.05em;
+}
+
+/* --- embedded figures (the replay, the prompt-chain visualizer) --- */
+.nrf-figure {
+  /* Default frame height. The chain diagram has no natural aspect ratio, so it
+     just takes this; the replay overrides it with 16:9 (see below). */
+  --nrf-frame-h: 520px;
+  margin: 1.5rem 0 0;
+}
+/* The visualizer is `height: 100%` and dark-themed, so the frame gives it a
+   definite height and clips it to a light-page figure. */
+.nrf-figure-frame {
+  position: relative; /* anchors the enlarge button over the diagram */
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  height: var(--nrf-frame-h);
+  border: 1px solid #dcdcdc;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.nrf-figure-idle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--nrf-light);
+  color: #6a6a6a;
+  font: inherit;
+  font-size: 0.95rem;
+}
+.nrf-figure-button {
+  cursor: pointer;
+}
+.nrf-figure-button:hover {
+  background: #ececec;
+  color: var(--nrf-heading);
+}
+.nrf-figcaption {
+  margin-top: 0.6rem;
+  color: #6a6a6a;
+  font-size: 0.9rem;
+  text-align: left;
+}
+
+/* The replay frame is sized by ratio rather than by --nrf-frame-h: the sim is
+   designed at 1920x1080 and Godot scales that frame with
+   `stretch/aspect="keep"`, so a 16:9 box leaves its letterboxing (almost)
+   nothing to trim. A fixed height gave the figure an aspect of ~2.18 and wasted
+   a wide black band down either side. */
+.nrf-figure--replay .nrf-figure-frame {
+  height: auto;
+  aspect-ratio: 16 / 9;
+}
+
+/* --- the enlarged replay figure ---
+   The Godot canvas cannot be re-mounted into a <dialog> the way the chain
+   diagram is (one engine, one canvas — see ReplayFigure), so the frame itself is
+   lifted to a fixed overlay and the engine keeps running inside it. The figure
+   holds the frame's height open so the page behind doesn't collapse and reflow —
+   at the same 16:9, so the placeholder is exactly as tall as the frame was (the
+   figcaption is the only in-flow child left and is far shorter, so the ratio
+   wins). html/body are `overflow: hidden` (index.css), so nothing here can
+   scroll the document. */
+.nrf-figure--replay.is-enlarged {
+  height: auto;
+  aspect-ratio: 16 / 9;
+}
+.nrf-figure--replay.is-enlarged .nrf-figure-frame {
+  position: fixed;
+  inset: 5vh 3vw;
+  z-index: 41; /* over .nrf-scrim */
+  width: auto;
+  height: auto;
+  /* Four insets fully determine this box, so the 16:9 ratio above can't apply —
+     say so rather than leave a declaration that silently does nothing. The
+     overlay takes the viewport's shape and the canvas's object-fit letterboxes
+     the difference. */
+  aspect-ratio: auto;
+  border-color: #30363d;
+  border-radius: 12px;
+  box-shadow: 0 24px 60px rgb(0 0 0 / 45%);
+}
+/* A plain backdrop that happens to be clickable — a <button> so the click and
+   the keyboard focus come from the element instead of a handler on a <div>. */
+.nrf-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  padding: 0;
+  background: rgb(0 0 0 / 62%);
+  border: none;
+  cursor: default;
+}
+
+/* --- the enlarged figure (native <dialog>: backdrop + Esc come free) --- */
+.nrf-modal {
+  width: min(1500px, 94vw);
+  height: 88vh;
+  padding: 0;
+  background: #0d1117; /* matches .pcv so the frame reads as one surface */
+  border: 1px solid #30363d;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.nrf-modal::backdrop {
+  background: rgba(0, 0, 0, 0.62);
+}
+.nrf-modal-body {
+  position: relative;
+  height: 100%;
+}
+.nrf-modal-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #8b949e;
+  font-size: 0.95rem;
+}
+/* Icon-only controls sitting on the visualizer's own dark top bar: enlarge in
+   the inline figure, close in the enlarged one. Same corner, same treatment. */
+.nrf-figure-expand,
+.nrf-modal-close {
+  position: absolute;
+  top: 7px;
+  right: 10px;
+  z-index: 1; /* over the visualizer's own top bar */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background: #21262d;
+  color: #c9d1d9;
+  border: 1px solid #30363d;
+  border-radius: 7px;
+  /* The page is Palatino; these glyphs want the UI stack. */
+  font:
+    14px / 1 system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  cursor: pointer;
+}
+.nrf-figure-expand:hover,
+.nrf-modal-close:hover {
+  background: #30363d;
+  color: #fff;
+}
+/* Shown only where the figure itself is hidden — see the media query below. */
+.nrf-figure-note {
+  display: none;
+  margin: 1.5rem 0 0;
+  color: #6a6a6a;
+  font-size: 0.95rem;
+}
+
 /* --- BibTeX block (Bulma pre) --- */
 .nrf-pre {
   margin: 0;
@@ -190,7 +430,7 @@
 
 /* --- footer (Bulma .footer) --- */
 .nrf-footer {
-  padding: 3rem 1.5rem 4rem;
+  padding: 2.5rem 1.5rem 3rem;
   background: var(--nrf-footer-bg);
   text-align: center;
 }
@@ -206,13 +446,54 @@
   text-decoration: underline;
 }
 
+/* --- wide screens: room for the contents nav in the left margin --- */
+@media (min-width: 1024px) {
+  .nrf {
+    padding-left: var(--nrf-gutter);
+  }
+  /* The gutter is padding on .nrf, so every section's background — and only the
+     footer has one — would stop at it and leave a white notch down the left of
+     the footer. Span the footer back across the gutter and put the width back as
+     padding, which keeps its content aligned with the sections above. */
+  .nrf-footer {
+    margin-left: calc(-1 * var(--nrf-gutter));
+    padding-left: calc(1.5rem + var(--nrf-gutter));
+  }
+  .nrf-toc {
+    display: block;
+    position: fixed;
+    top: 4rem;
+    left: 1.75rem;
+    z-index: 5; /* under the enlarged-replay scrim (40) */
+    width: var(--nrf-toc-w);
+    /* Taller than the window on a short one: scroll it, not the page. */
+    max-height: calc(100vh - 8rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
 /* --- small screens --- */
 @media (max-width: 768px) {
   .nrf-title-1 {
-    font-size: 2.2rem;
+    font-size: 1.75rem;
   }
-  .nrf-narrow,
   .nrf-footer-content {
     max-width: 100%;
   }
+  /* Justified text on a phone-width measure is mostly gaps. */
+  .nrf-justified {
+    text-align: left;
+  }
+  /* A node graph beside a prompt panel has nowhere to go at this width, so the
+     chain figure steps aside for a note rather than rendering unusably. The
+     replay figure is just a canvas and stays. */
+  .nrf-figure--chain {
+    display: none;
+  }
+  .nrf-figure-note {
+    display: block;
+  }
+  /* The replay frame is sized by its 16:9 ratio, not --nrf-frame-h, so it scales
+     down with the viewport on its own — nothing to override here. */
 }
