@@ -45,6 +45,7 @@ from .cognition import (
     remember_outcome,
     score_new_memories,
     settle_after_dead_talk,
+    settle_after_instant_stop_work,
 )
 from backend.drives import accrue_thirst
 from .sim_clock import SimClock
@@ -167,6 +168,19 @@ def _settles_in_place(game, command: str) -> bool:
     duration verb never needs a hand-edit here."""
     action = game.parser.actions.get(command.split(" ", 1)[0])
     return "duration_minutes" in (getattr(action, "ARGUMENTS_SCHEMA", None) or {})
+
+
+def _stop_has_authored_commands(schedule) -> bool:
+    """Does the schedule's CURRENT stop carry authored #300 ``commands``?
+
+    Same access pattern as actions.anchor_travel_refusal. Read off the stop
+    entry (not ``_commands_used``), so a commands stop never latches through
+    the #896 hook at all -- the mock issues authored commands one per tick
+    before a terminal ``perform``, and latching on any of them would skip the
+    rest (Sofia's get/drink/boil arc, world_data_upenn.yaml)."""
+    entries = getattr(schedule, "schedule", None) or []
+    index = getattr(schedule, "stop_index", 0)
+    return bool(0 <= index < len(entries) and entries[index].get("commands"))
 
 
 def _decision_trace(agent, command: str, ok: bool) -> list:
@@ -807,6 +821,22 @@ def step(
                     st["desc"] = f"{activity} @ {where}"
                     if is_talk:
                         settle_after_dead_talk(st, step_idx, cog.dead_talk_settle_steps)
+                    elif (
+                        # #896: an instantaneous verb that satisfied the
+                        # scheduled stop must still earn the stop its credit,
+                        # or the pointer pins on the finished stop and the
+                        # agent re-decides against it every tick. Settle for
+                        # the stop's authored steps with the credit set; the
+                        # existing pre-pass consumes it like any perform.
+                        clock is not None  # clockless bake: byte-identical
+                        and matched
+                        and schedule.steps is not None  # stay-put last stop
+                        # Already credited, held by a #838 anchor: re-latching
+                        # a full dwell would block the #826 hold-retry.
+                        and not st.get("waiting_for_anchor")
+                        and not _stop_has_authored_commands(schedule)
+                    ):
+                        settle_after_instant_stop_work(st, step_idx, schedule.steps)
             elif command:
                 # The agent chose a command but it failed the precondition gate.
                 reason = getattr(game.parser, "last_fail_message", "") or command
