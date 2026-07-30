@@ -2209,6 +2209,25 @@ def settle_after_dead_talk(st: dict, step: int, steps: int) -> None:
     st["perform_until"] = step + steps
 
 
+def settle_after_instant_stop_work(st: dict, step: int, steps: int) -> None:
+    """Settle after an instantaneous verb satisfied the scheduled stop (#896).
+
+    A stop whose activity resolves through an instantaneous verb (#300
+    get/drink, #616 check_out_book -- no ``duration_minutes`` in the schema,
+    so no perform latch) used to leave ``performing`` False forever: the
+    pointer advances only in the pre-pass that consumes an expired latch, so
+    the finished stop pinned and the agent re-decided against it every tick
+    (Maya: 16 ``check_out_book`` calls on one library stop). Same family
+    pattern as :func:`settle_after_dead_talk`, credit flipped -- this settle
+    completed the stop's real work, so its expiry must credit the stop and
+    move the pointer. ``steps`` is the stop's authored ``schedule.steps``,
+    trusted as-is like the perform branch's.
+    """
+    st["performing"] = True
+    st["credit_stop"] = True
+    st["perform_until"] = step + steps
+
+
 def settle_after_opened_talk(st: dict, step: int) -> bool:
     """Give a successful ``talk_to`` initiator a consumable stop credit (#837).
 
