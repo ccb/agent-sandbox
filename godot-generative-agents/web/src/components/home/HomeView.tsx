@@ -344,7 +344,7 @@ export function HomeView() {
                 <code>agent-sandbox</code> multi-agent simulation framework and the text-adventure
                 engine from{" "}
                 <a href="https://interactive-fiction-class.org/homeworks/text-adventure-game/text-adventure-game.html">
-                  Chris Callison-Burch's CIS 7000 - <i>Interactive Fiction and Text Generation</i>{" "}
+                  Chris Callison-Burch's CIS 7000 – <em>Interactive Fiction and Text Generation</em>{" "}
                   course materials
                 </a>
                 , and we thank the framework's broader contributors. We are grateful to{" "}
