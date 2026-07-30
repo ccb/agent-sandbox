@@ -161,6 +161,61 @@ def test_effort_applies_to_the_tiered_model_not_the_default():
     assert create.calls[1]["temperature"] == 0.7
 
 
+@pytest.mark.parametrize("method", ["chat", "call_tools"])
+def test_effort_is_dropped_for_a_role_tiered_to_haiku(method):
+    """Haiku 4.5 rejects adaptive thinking AND effort with a 400. A tiered run
+    (#368) with a run-level --effort routes e.g. converse to Haiku; the effort
+    config must follow the model the call routes to, or every such call fails
+    (batch 10: 'adaptive thinking is not supported on this model')."""
+    create = _CaptureCreate(_response())
+    client = _anthropic(create, model="claude-sonnet-5", effort="medium")
+    client._models_by_role = {"converse": "claude-haiku-4-5"}
+    client.context["role"] = "converse"
+
+    if method == "chat":
+        client.chat(MSG, max_tokens=128, temperature=0.7)
+    else:
+        client.call_tools(MSG, [TOOL], max_tokens=128, temperature=0.7)
+
+    sent = create.calls[0]
+    assert sent["model"] == "claude-haiku-4-5"
+    assert "thinking" not in sent
+    assert "output_config" not in sent
+    # Haiku still takes sampling params: the pre-effort payload, unchanged.
+    assert sent["temperature"] == 0.7
+    assert sent["max_tokens"] == 128
+
+
+def test_effort_still_applies_to_untiered_roles_in_the_same_run():
+    """The same client keeps thinking on the base Sonnet model."""
+    create = _CaptureCreate(_response())
+    client = _anthropic(create, model="claude-sonnet-5", effort="medium")
+    client._models_by_role = {"converse": "claude-haiku-4-5"}
+    client.context["role"] = "decide"
+    client.chat(MSG, max_tokens=128, temperature=0.7)
+    sent = create.calls[0]
+    assert sent["model"] == "claude-sonnet-5"
+    assert sent["thinking"] == {"type": "adaptive"}
+    assert sent["output_config"] == {"effort": "medium"}
+
+
+def test_error_row_names_the_routed_model():
+    """The #745 error row (and so the monitor line) must name the model the
+    call actually routed to -- batch 10's failing Haiku converse calls were
+    logged as claude-sonnet-5, which pointed the diagnosis at the wrong tier."""
+
+    def boom(**kwargs):
+        raise RuntimeError("nope")
+
+    client = _anthropic(boom, model="claude-sonnet-5")
+    client._models_by_role = {"converse": "claude-haiku-4-5"}
+    client.context["role"] = "converse"
+    assert client.chat(MSG, max_tokens=128) is None
+    assert client.call_tools(MSG, [TOOL], max_tokens=128) is None
+    models = [r.usage.model for r in client.ledger.records if r.error]
+    assert models == ["claude-haiku-4-5", "claude-haiku-4-5"]
+
+
 # --- reading a thinking reply -------------------------------------------------
 
 
