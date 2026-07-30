@@ -85,6 +85,7 @@ def _decide_for(
     clock=None,
     stop_since=0,
     waiting=False,
+    act_since=None,
     *,
     deciding_sink=None,
 ):
@@ -122,6 +123,7 @@ def _decide_for(
             clock=clock,
             stop_since=stop_since,
             waiting=waiting,
+            act_since=act_since,
         )
     finally:
         if deciding_sink is not None:
@@ -539,6 +541,7 @@ def step(
                 clock=clock,
                 stop_since=state[name].get("stop_since", 0),
                 waiting=state[name].get("waiting_for_anchor", False),
+                act_since=state[name].get("act_since"),
                 deciding_sink=deciding_sink,
             )
         if futs:
@@ -617,6 +620,7 @@ def step(
                     clock=clock,
                     stop_since=st.get("stop_since", 0),
                     waiting=st.get("waiting_for_anchor", False),
+                    act_since=st.get("act_since"),
                     deciding_sink=deciding_sink,
                 )
             )
@@ -744,6 +748,13 @@ def step(
                     # advance again for the rest of the run.
                     st["credit_stop"] = True
                     activity = char.get_property("activity") or "spending time"
+                    # #905: consecutive settles on the SAME activity text share
+                    # one start step, so the decide context can state how long
+                    # this exact activity has been held (a re-chosen wait is
+                    # invisible to stop_since, which clocks the schedule stop).
+                    if activity != st.get("act_text"):
+                        st["act_text"] = activity
+                        st["act_since"] = step_idx
                     if not matched:
                         # Off-plan: let the planner rewrite the stale tail so the
                         # written plan (and #580's context block / read_plan)

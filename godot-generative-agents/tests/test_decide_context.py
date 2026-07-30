@@ -121,7 +121,115 @@ def test_block_reads_the_clock_and_current_stop():
     )
 
 
+def test_block_states_a_long_same_activity_hold():
+    # #905: a re-chosen wait never shows up in `elapsed` (which clocks the
+    # schedule stop), so a 340-minute "waiting for theo" read as a fresh,
+    # plausible decision every tick. Past SAME_ACT_CONTEXT_MIN the block
+    # states the hold -- factually, with no directive.
+    _game, ada = _world()
+    # act unchanged for 600 steps = 100 min; the stop itself is 1 min old.
+    text = decide_context_block(
+        ada.agent,
+        606,
+        SimClock(START),
+        600,
+        act_since=6,
+        activity_text="reviewing problems while waiting for theo",
+    )
+    assert text.endswith(
+        ' You have been doing exactly this -- "reviewing problems while '
+        'waiting for theo" -- for 100 min.'
+    )
+
+
+def test_block_names_the_no_show_person():
+    _game, ada = _world()
+    text = decide_context_block(
+        ada.agent,
+        606,
+        SimClock(START),
+        600,
+        act_since=6,
+        activity_text="waiting for theo",
+        absent="Theo",
+    )
+    assert text.endswith(
+        ' You have been doing exactly this -- "waiting for theo" -- for '
+        "100 min, and Theo is not here."
+    )
+
+
+def test_short_holds_and_untracked_activities_stay_silent():
+    _game, ada = _world()
+    # 500 steps = 83 min: under the 90-min gate, a study block isn't nagged.
+    below = decide_context_block(
+        ada.agent,
+        500,
+        SimClock(START),
+        0,
+        act_since=0,
+        activity_text="studying",
+        absent="Theo",
+    )
+    assert "doing exactly this" not in below
+    # No act_since threaded (the bake, offline callers): clause never renders.
+    untracked = decide_context_block(ada.agent, 5000, SimClock(START), 0)
+    assert "doing exactly this" not in untracked
+
+
+def test_absent_person_matches_a_named_no_show():
+    from backend.cognition import _absent_person
+
+    personas = _personas() + [
+        {
+            "name": "Theo Tester",
+            "home": "The Green",
+            "persona": "I am Theo.",
+            "emoji": "\U0001f4da",
+            "start_tile": [0, 0],
+            "destination": "Library",
+            "activity": "reading",
+            "schedule": [
+                {
+                    "place": "Library",
+                    "activity": "reading",
+                    "emoji": "\U0001f4da",
+                    "steps": None,
+                }
+            ],
+        }
+    ]
+    game, chars = build_world(None, personas, LOCATIONS)
+    attach_agents(chars, personas)
+    ada, theo = chars["Ada"], chars["Theo Tester"]
+    # Apart: Ada at the Cafe, Theo at the Library.
+    game.locations["Cafe"].add_character(ada)
+    game.locations["Library"].add_character(theo)
+    assert _absent_person(game, ada, "waiting for theo to arrive") == "Theo"
+    assert _absent_person(game, ada, "waiting for the bus") is None
+    assert _absent_person(game, ada, None) is None
+    # Co-located: the person is here, so there is no no-show to report.
+    game.locations["Cafe"].add_character(theo)
+    assert _absent_person(game, ada, "waiting for theo to arrive") is None
+
+
 # ------------------------------------------------- the decide-prompt wiring
+
+
+def test_decide_prompt_states_the_hold():
+    brain = MockLlmClient(tool_calls_responses=[TRAVEL])
+    game, ada = _world(llm_client=brain)
+    ada.set_property("activity", "waiting for the seminar to start")
+
+    observe_and_decide(
+        game, ada, 606, clock=SimClock(START), stop_since=600, act_since=6
+    )
+
+    user = brain.tool_calls_log[0]["messages"][-1]["content"]
+    assert (
+        'You have been doing exactly this -- "waiting for the seminar to '
+        'start" -- for 100 min.'
+    ) in user
 
 
 def test_decide_prompt_carries_the_block_after_the_environment_text():
