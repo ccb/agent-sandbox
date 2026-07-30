@@ -36,6 +36,7 @@ class Get(base.Action):
         for h in self.holders:
             for cname, citem in h.accessible_contents().items():
                 scope.setdefault(cname, citem)
+        self.scope = scope
         self.item = self.parser.match_item(command, scope, hint="thing to get")
         self.source_holder = None
         if self.item is not None and self.item.name not in self.location.items:
@@ -48,6 +49,22 @@ class Get(base.Action):
         """Two characters grabbing for the same item contend over it (#42)."""
         return self.item
 
+    def _nothing_matched_message(self) -> str:
+        """A refusal that says what CAN be picked up here (issue #907).
+
+        A bare "I don't see it." gives an LLM agent nothing to re-plan with:
+        in #760 batch 10 an agent whose plan named food this world doesn't
+        stock retried invented item names across two buildings before giving
+        up. Naming the real choices (or that there are none) lets the first
+        failure end the loop.
+        """
+        gettable = sorted(
+            name for name, item in self.scope.items() if item.get_property("gettable")
+        )
+        if gettable:
+            return "I don't see it. Here you could get: " + ", ".join(gettable) + "."
+        return "I don't see it. There is nothing here to pick up."
+
     def check_preconditions(self) -> bool:
         """
         Preconditions:
@@ -56,7 +73,7 @@ class Get(base.Action):
         * The item must be at the location
         * The item must be gettable
         """
-        if not self.was_matched(self.item, "I don't see it."):
+        if not self.was_matched(self.item, self._nothing_matched_message()):
             # was_matched already reported the failure; don't double-report it.
             return False
         if not self.at(self.character, self.location):

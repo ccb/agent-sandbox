@@ -124,8 +124,12 @@ locations:
 #   "Houston Hall" location, so a stop that runs the murky-water commands must
 #   keep targeting "Houston Hall" itself.
 - name: Houston Hall — Reception Hall
-  description: The reception hall just inside Houston Hall's doors.
+  description: The reception hall just inside Houston Hall's doors, food counters along the wall.
   address: UPenn:Houston Hall:Reception Hall
+  # dining (#907): agents routed to this named room (rather than the
+  # building-level location) must find the same meals -- _furnish_meals
+  # stocks every dining-tagged location.
+  properties: [dining]
 - name: Houston Hall — Billiard Room
   description: The billiard room off the student union's main hall.
   address: UPenn:Houston Hall:Billiard Room

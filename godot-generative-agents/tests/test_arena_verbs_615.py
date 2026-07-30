@@ -421,6 +421,44 @@ def test_houston_hall_meals_support_the_get_eat_two_step():
     assert "sandwich" not in hall.items
 
 
+def test_dining_rooms_are_stocked_like_their_building():
+    # #907: an agent whose travel grounded to "Houston Hall — Reception Hall"
+    # (the named food-court room) found no meals -- even `get sandwich` failed
+    # inside the food court, and the plan's breakfast stop collapsed into
+    # cross-building thrash. Every dining-tagged location is stocked; rooms
+    # without the tag stay bare.
+    from penn_world import build_penn_world
+
+    pw = build_penn_world()
+    game, _chars = pw.build_world_fn(pw.world_map)
+    reception = game.locations["Houston Hall — Reception Hall"]
+    edible = [i for i in reception.items.values() if i.get_property(Property.EDIBLE)]
+    assert sorted(i.name for i in edible) == ["apple", "bowl of soup", "sandwich"]
+    billiard = game.locations["Houston Hall — Billiard Room"]
+    assert not any(i.get_property(Property.EDIBLE) for i in billiard.items.values())
+
+
+def test_get_failure_names_what_is_actually_gettable():
+    # #907, engine side: a bare "I don't see it." gave the model nothing to
+    # re-plan with, so it retried invented item names ("bagel") for half an
+    # hour. The refusal now names the real choices, or that there are none.
+    from penn_world import build_penn_world
+
+    pw = build_penn_world()
+    game, chars = pw.build_world_fn(pw.world_map)
+    char = next(iter(chars.values()))
+    _move(game, char, "Houston Hall — Reception Hall")
+    assert not game.parser.parse_command("get bagel", actor=char)
+    assert game.parser.last_fail_message == (
+        "I don't see it. Here you could get: apple, bowl of soup, sandwich."
+    )
+    _move(game, char, "Houston Hall — Billiard Room")
+    assert not game.parser.parse_command("get bagel", actor=char)
+    assert game.parser.last_fail_message == (
+        "I don't see it. There is nothing here to pick up."
+    )
+
+
 def test_study_offered_in_van_pelt_reading_rooms_only():
     from penn_world import PENN_ACTION_VERBS, build_penn_world
 
