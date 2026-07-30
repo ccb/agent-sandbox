@@ -127,8 +127,8 @@ export function HomeView() {
               </span>
             </div>
 
-            {/* Everyone shares one affiliation, so no superscripts are needed. */}
-            <div className="nrf-affiliations">University of Pennsylvania</div>
+            {/* Everyone shares one affiliation, and the venue line above already
+                names it — so no affiliation line and no superscripts. */}
             <div className="nrf-advisor">
               Advised by <a href="https://www.cis.upenn.edu/~ccb/">Chris Callison-Burch</a>
             </div>
