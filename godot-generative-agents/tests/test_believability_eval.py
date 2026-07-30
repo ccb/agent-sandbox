@@ -1004,6 +1004,13 @@ def test_llm_judge_scores_from_the_model_and_bills_the_ledger():
     assert report["judge"]["max_cost_usd"] == 0.50
     # The judge call asks for the pinned rubric tool.
     assert client.tool_calls[0]["tool"]["name"] == "grade_believability"
+    # Room for five dimensions of step-cited evidence: at 1024 the tool JSON
+    # truncated and every agent silently fell back to the heuristic (#908).
+    assert client.tool_calls[0]["max_tokens"] == 4096
+    # A clean run reports zero fallbacks.
+    assert report["judge"]["scored"] == 2
+    assert report["judge"]["fallbacks"] == 0
+    assert "fell back" not in render_markdown(report)
 
 
 def test_llm_judge_falls_back_to_the_heuristic_on_a_malformed_reply():
@@ -1016,6 +1023,11 @@ def test_llm_judge_falls_back_to_the_heuristic_on_a_malformed_reply():
             ada[dim]["score"] == baseline["agents"]["Ada"]["dimensions"][dim]["score"]
         )
         assert "heuristic" in ada[dim]["note"]
+    # The fallback is tallied and shouted in the header -- a reader must not
+    # trust "Judge: llm" when every score is actually heuristic (#908).
+    assert report["judge"]["scored"] == 2
+    assert report["judge"]["fallbacks"] == 2
+    assert "**2/2 agents fell back to the heuristic**" in render_markdown(report)
 
 
 def test_llm_judge_stops_calling_once_the_ledger_ceiling_is_hit():

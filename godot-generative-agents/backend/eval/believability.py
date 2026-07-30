@@ -1329,17 +1329,24 @@ class LlmJudge:
 
     kind = "llm"
 
-    def __init__(self, client, max_tokens: int = 1024):
+    def __init__(self, client, max_tokens: int = 4096):
+        # 4096: the forced grade_believability call returns five dimensions of
+        # step-cited evidence — at 1024 the tool JSON truncates mid-generation,
+        # fails schema validation, and every agent silently falls back (#908).
         self.client = client
         self.max_tokens = max_tokens
         self.heuristic = HeuristicJudge()
+        self.scored = 0  # agents this judge attempted
+        self.fallbacks = 0  # agents whose whole card fell back to the heuristic
 
     def score_agent(
         self, ev: AgentEvidence, evidence_by_name: dict[str, AgentEvidence]
     ) -> dict[str, DimScore]:
         fallback = self.heuristic.score_agent(ev, evidence_by_name)
+        self.scored += 1
         ledger = getattr(self.client, "ledger", None)
         if ledger is not None and ledger.over_budget():
+            self.fallbacks += 1
             return self._noted(fallback, "judge budget exhausted; heuristic score")
 
         # Attribute the call to this agent in the ledger (usage.py context).
@@ -1361,6 +1368,7 @@ class LlmJudge:
             messages, BELIEVABILITY_TOOL, max_tokens=self.max_tokens
         )
         if not isinstance(reply, dict):
+            self.fallbacks += 1
             return self._noted(
                 fallback, "model declined or replied malformed; heuristic score"
             )
@@ -1411,6 +1419,8 @@ class LlmJudge:
             "kind": self.kind,
             "provider": provider,
             "model": model,
+            "scored": self.scored,
+            "fallbacks": self.fallbacks,
             "calls": len(ledger.records) if ledger is not None else 0,
             "cost_usd": (
                 round(ledger.total_cost_usd(), 6) if ledger is not None else 0.0
@@ -1448,6 +1458,14 @@ def render_markdown(report: dict) -> str:
             f"{judge.get('calls', 0)} calls, ${judge.get('cost_usd', 0.0):.4f} spent"
             f" (ceiling ${judge.get('max_cost_usd'):.2f})"
             if judge["kind"] == "llm" and judge.get("max_cost_usd") is not None
+            else ""
+        )
+        + (
+            # A reader trusting "Judge: llm" must see when the scores are
+            # actually heuristic (#908: 100% silent fallback on truncation).
+            f" -- **{judge['fallbacks']}/{judge.get('scored', 0)} agents "
+            f"fell back to the heuristic**"
+            if judge.get("fallbacks")
             else ""
         ),
         "",
