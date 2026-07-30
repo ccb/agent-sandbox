@@ -308,6 +308,42 @@
   text-align: left;
 }
 
+/* --- the cost-scaling charts (CostSection: hand-rolled SVG panels) --- */
+.nrf-chart {
+  margin: 0;
+}
+.nrf-chart svg {
+  width: 100%;
+  height: auto;
+}
+.nrf-chart text {
+  font-family: var(--nrf-font);
+  font-size: 11px;
+  fill: var(--nrf-text);
+}
+.nrf-chart-axis line {
+  stroke: #b5b5b5;
+  stroke-width: 1;
+}
+.nrf-chart-line {
+  stroke: hsl(204, 86%, 43%);
+  stroke-width: 2;
+}
+.nrf-chart-dot,
+.nrf-chart-bar {
+  fill: hsl(204, 86%, 43%);
+}
+.nrf-chart-range line {
+  stroke: var(--nrf-heading);
+  stroke-width: 1.5;
+}
+.nrf-chart-value {
+  fill: var(--nrf-heading);
+}
+.nrf-chart-xlabel {
+  fill: #6a6a6a;
+}
+
 /* The legend's hide/show. The disclosure arrow is the browser's own marker — it
    already rotates on open and follows the caption's text color. */
 .nrf-legend-toggle {

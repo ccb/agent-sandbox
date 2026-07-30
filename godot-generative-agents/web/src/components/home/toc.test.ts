@@ -1,25 +1,30 @@
 import { describe, expect, it } from "vitest";
-import { TOC } from "./HomeView";
 // The contents nav is a list of ids that must exist as elements on the page. A
 // stale entry is a dead link AND a hole in the scroll-spy, and neither shows up
 // as a type error — so check the source for the target, which needs no DOM.
 // Vite's `?raw` hands the file over as a string; `node:fs` would mean pulling in
 // @types/node just for this test.
 //
-// The page is split across two files: the Implementation section lives in its
-// own component (HomeView.tsx was already 745 lines), so both are searched, and
-// page order is checked against their concatenation in render order.
+// The page is split across several files: the Implementation and Cost sections
+// live in their own components (HomeView.tsx was already 745 lines), so all are
+// searched, and page order is checked against their concatenation in render
+// order.
+import costSource from "./CostSection.tsx?raw";
+import { TOC } from "./HomeView";
 import homeSource from "./HomeView.tsx?raw";
 import implSource from "./ImplementationSection.tsx?raw";
 
-// HomeView renders <ImplementationSection /> partway down, so splicing the
-// component's source in at that call site reproduces the rendered id order.
-const MOUNT = "<ImplementationSection />";
-const source = homeSource.replace(MOUNT, implSource);
+// HomeView renders each section component partway down, so splicing the
+// components' source in at their call sites reproduces the rendered id order.
+const MOUNTS: [string, string][] = [
+  ["<ImplementationSection />", implSource],
+  ["<CostSection />", costSource],
+];
+const source = MOUNTS.reduce((acc, [mount, src]) => acc.replace(mount, src), homeSource);
 
 describe("landing-page contents nav", () => {
-  it("splices the section source in at its mount point", () => {
-    expect(homeSource).toContain(MOUNT);
+  it.each(MOUNTS.map(([mount]) => [mount]))("splices %s in at its mount point", (mount) => {
+    expect(homeSource).toContain(mount);
   });
 
   it.each(TOC.map((e) => [e.id, e.label]))("%s points at a real target", (id) => {
