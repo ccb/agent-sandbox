@@ -15,6 +15,40 @@ const PromptChainView = lazy(() =>
 );
 
 /**
+ * The viewer's sidebar buttons, explained under the demo — their words live in
+ * Godot tooltips, which a reader watching the embed never sees.
+ *
+ * `icon` files are the viewer's own glyphs, exported from the panel that draws
+ * them by `godot/tools/export_sidebar_icons.gd` (so they can't drift); `legend.
+ * test.ts` pins each one to a file that exists. `glyph` rows are the two buttons
+ * the sidebar itself draws as text, and Track's glyph is its own label, so that
+ * row skips the bold repeat. Zoom/reset/home stay in the prose above — this is a
+ * caption, not the manual.
+ */
+export const SIDEBAR_LEGEND: {
+  icon?: string;
+  glyph?: string;
+  label?: string;
+  text: string;
+}[] = [
+  { icon: "heatmap.png", label: "Heatmap", text: "where the agents have spent their time so far" },
+  { icon: "social-graph.png", label: "Social graph", text: "who has talked to whom" },
+  {
+    icon: "day-plans.png",
+    label: "Day plans",
+    text: "each agent's plan against what actually happened",
+  },
+  { icon: "snapshot.png", label: "Snapshot", text: "capture the current campus view" },
+  { icon: "snapshots.png", label: "Snapshots", text: "the captures taken this session" },
+  {
+    glyph: "ⓘ",
+    label: "State Details",
+    text: "one agent's memories, current plan and relationships",
+  },
+  { glyph: "Track", text: "locks the camera to an agent and follows them" },
+];
+
+/**
  * The Godot replay, embedded where the "Open the replay demo" button used to
  * link out to a standalone `#game` page. Like the prompt-chain figure it stays
  * behind a click — the engine is a multi-megabyte WebAssembly download that a
@@ -76,8 +110,38 @@ function ReplayFigure() {
       )}
       <figcaption className="nrf-figcaption">
         A full twelve-hour run, replayed deterministically in the browser — the same Godot viewer
-        that runs natively, exported to WebAssembly. Drag to pan and scroll to zoom; the sidebar
-        follows an agent or opens its state in detail.
+        that runs natively, exported to WebAssembly. Drag to pan and scroll to zoom.
+        {/* <details> brings the disclosure arrow, the click/Enter/Space handling and the
+            expanded/collapsed state with it — none of which is worth reimplementing in
+            React. Open by default: it's a legend for the thing right above it, and a
+            reader who doesn't want it can fold it away. */}
+        <details className="nrf-legend-toggle" open>
+          <summary>What the sidebar's buttons do</summary>
+          <ul className="nrf-legend">
+            {SIDEBAR_LEGEND.map((entry) => (
+              <li key={entry.label ?? entry.glyph}>
+                {entry.icon ? (
+                  <img
+                    className="nrf-legend-icon"
+                    src={`${import.meta.env.BASE_URL}sidebar-icons/${entry.icon}`}
+                    alt=""
+                  />
+                ) : (
+                  <span className="nrf-legend-glyph">{entry.glyph}</span>
+                )}
+                <span>
+                  {entry.label ? (
+                    <>
+                      <b>{entry.label}</b> — {entry.text}
+                    </>
+                  ) : (
+                    entry.text
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </details>
       </figcaption>
     </figure>
   );
