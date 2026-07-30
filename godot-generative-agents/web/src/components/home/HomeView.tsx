@@ -4,6 +4,7 @@
 // import type { ReactNode } from "react";
 import { lazy, type MouseEvent, Suspense, useEffect, useRef, useState } from "react";
 import { GodotCanvas } from "../GodotCanvas";
+import { ImplementationSection } from "./ImplementationSection";
 import { TeX } from "./TeX";
 import "./home.css";
 
@@ -275,6 +276,10 @@ export const TOC: { id: string; label: string; sub?: true }[] = [
   { id: "conversations", label: "Conversations", sub: true },
   { id: "action-gate", label: "The action gate", sub: true },
   { id: "decision", label: "Inside a decision" },
+  { id: "implementation", label: "Implementation" },
+  { id: "the-gate", label: "The precondition gate", sub: true },
+  { id: "verb-to-tool", label: "From verb to tool", sub: true },
+  { id: "your-own-verb", label: "Adding your own verb", sub: true },
   { id: "limitations", label: "Limitations" },
   { id: "acknowledgements", label: "Acknowledgements" },
   { id: "references", label: "References" },
@@ -627,6 +632,9 @@ export function HomeView() {
 
       {/* TODO(#878): selected-run case study goes here — narrative, highlight
           timestamps, and provenance (provider, model, effort, seed, cost). */}
+
+      {/* ===== Implementation: the engine underneath ===== */}
+      <ImplementationSection />
 
       {/* ===== Limitations ===== */}
       <section className="nrf-section">

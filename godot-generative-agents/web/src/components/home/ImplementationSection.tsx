@@ -103,7 +103,7 @@ export function ImplementationSection() {
               <CodeBlock {...SNIPPETS.declaration} />
               <CodeBlock {...SNIPPETS.tool} />
             </div>
-            <p>Three things follow from those twelve lines.</p>
+            <p>Three things follow from that declaration.</p>
             <p>
               <strong>The menu is curated by place.</strong> Declaring an affordance means the verb
               is offered only where something carrying that property is in scope. Standing at the
