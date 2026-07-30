@@ -14,36 +14,11 @@ import "prismjs/components/prism-json";
  * home.css, which keeps them in the landing page's palette. The page is
  * light-only (see theme.css), so there is no dark variant to match.
  *
- * Prism escapes < in the source it tokenizes, but misses some > characters.
- * We post-process to escape > outside of tags, making the HTML safe for
- * dangerouslySetInnerHTML — CodeBlock.test.ts pins that.
+ * Prism escapes the source it tokenizes, which is what makes the
+ * dangerouslySetInnerHTML below safe — CodeBlock.test.ts pins that.
  */
 export function highlight(code: string, lang: "python" | "json"): string {
-  const highlighted = Prism.highlight(code, Prism.languages[lang], lang);
-
-  // Escape > that are outside HTML tags (in text content)
-  let result = "";
-  let inTag = false;
-
-  for (let i = 0; i < highlighted.length; i++) {
-    const char = highlighted[i];
-
-    if (char === "<") {
-      inTag = true;
-      result += char;
-    } else if (char === ">") {
-      if (inTag) {
-        inTag = false;
-        result += char;
-      } else {
-        result += "&gt;";
-      }
-    } else {
-      result += char;
-    }
-  }
-
-  return result;
+  return Prism.highlight(code, Prism.languages[lang], lang);
 }
 
 /**

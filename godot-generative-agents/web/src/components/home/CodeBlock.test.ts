@@ -17,9 +17,12 @@ describe("landing-page code highlighting", () => {
     expect(html).toContain("star atlas");
   });
 
-  it("escapes angle brackets so source can't inject markup", () => {
-    const html = highlight("x = '<script>'", "python");
-    expect(html).not.toContain("<script>");
-    expect(html).toContain("&lt;script&gt;");
+  it("escapes < so source can never inject a tag", () => {
+    const html = highlight("x = '<script>alert(1)</script>'", "python");
+    // `<` is the only character that can open a tag, and Prism escapes it.
+    // A bare `>` is inert in text content, so it may pass through as-is.
+    expect(html).not.toContain("<script");
+    expect(html).not.toContain("</script");
+    expect(html).toContain("&lt;script");
   });
 });
