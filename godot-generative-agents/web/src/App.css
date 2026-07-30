@@ -189,7 +189,11 @@
 .view-home {
   z-index: 2;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  /* `none`, not `contain`: contain stops the scroll chaining but still lets the
+     page rubber-band at either end, and a bounce slides the content off its own
+     background — so the landing page's near-white footer band would part company
+     with the white behind it at the bottom. No bounce, nothing to see. */
+  overscroll-behavior: none;
   background: var(--color-surface);
 }
 

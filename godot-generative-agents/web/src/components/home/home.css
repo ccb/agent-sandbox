@@ -443,6 +443,14 @@
   .nrf {
     padding-left: var(--nrf-gutter);
   }
+  /* The gutter is padding on .nrf, so every section's background — and only the
+     footer has one — would stop at it and leave a white notch down the left of
+     the footer. Span the footer back across the gutter and put the width back as
+     padding, which keeps its content aligned with the sections above. */
+  .nrf-footer {
+    margin-left: calc(-1 * var(--nrf-gutter));
+    padding-left: calc(1.5rem + var(--nrf-gutter));
+  }
   .nrf-toc {
     display: block;
     position: fixed;
