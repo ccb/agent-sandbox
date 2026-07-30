@@ -477,6 +477,25 @@
   color: var(--nrf-code-number);
 }
 
+/* Declaration beside its derived tool. Side by side when there's room; stacked
+   below, like the page's other figures. Each pane scrolls inside itself (via
+   .nrf-pre's overflow-x) so a long line never widens the page. */
+.nrf-panes {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+.nrf-panes .nrf-code {
+  min-width: 0; /* let a grid child shrink instead of forcing the row wider */
+  margin: 0;
+}
+@media screen and (min-width: 900px) {
+  .nrf-panes {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 /* --- footer (Bulma .footer) --- */
 .nrf-footer {
   padding: 2.5rem 1.5rem 3rem;
