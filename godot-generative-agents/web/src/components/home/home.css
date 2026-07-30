@@ -190,8 +190,8 @@
 
 /* --- embedded figures (the replay, the prompt-chain visualizer) --- */
 .nrf-figure {
-  /* One frame height, shared by the frame and by the placeholder the figure holds
-     open while an enlarged frame is out of flow (see .is-enlarged below). */
+  /* Default frame height. The chain diagram has no natural aspect ratio, so it
+     just takes this; the replay overrides it with 16:9 (see below). */
   --nrf-frame-h: 520px;
   margin: 1.5rem 0 0;
 }
@@ -230,15 +230,28 @@
   text-align: left;
 }
 
+/* The replay frame is sized by ratio rather than by --nrf-frame-h: the sim is
+   designed at 1920x1080 and Godot scales that frame with
+   `stretch/aspect="keep"`, so a 16:9 box leaves its letterboxing (almost)
+   nothing to trim. A fixed height gave the figure an aspect of ~2.18 and wasted
+   a wide black band down either side. */
+.nrf-figure--replay .nrf-figure-frame {
+  height: auto;
+  aspect-ratio: 16 / 9;
+}
+
 /* --- the enlarged replay figure ---
    The Godot canvas cannot be re-mounted into a <dialog> the way the chain
    diagram is (one engine, one canvas — see ReplayFigure), so the frame itself is
    lifted to a fixed overlay and the engine keeps running inside it. The figure
-   holds the frame's height open so the page behind doesn't collapse and reflow.
-   html/body are `overflow: hidden` (index.css), so nothing here can scroll the
-   document. */
+   holds the frame's height open so the page behind doesn't collapse and reflow —
+   at the same 16:9, so the placeholder is exactly as tall as the frame was (the
+   figcaption is the only in-flow child left and is far shorter, so the ratio
+   wins). html/body are `overflow: hidden` (index.css), so nothing here can
+   scroll the document. */
 .nrf-figure--replay.is-enlarged {
-  height: var(--nrf-frame-h);
+  height: auto;
+  aspect-ratio: 16 / 9;
 }
 .nrf-figure--replay.is-enlarged .nrf-figure-frame {
   position: fixed;
@@ -246,6 +259,11 @@
   z-index: 41; /* over .nrf-scrim */
   width: auto;
   height: auto;
+  /* Four insets fully determine this box, so the 16:9 ratio above can't apply —
+     say so rather than leave a declaration that silently does nothing. The
+     overlay takes the viewport's shape and the canvas's object-fit letterboxes
+     the difference. */
+  aspect-ratio: auto;
   border-color: #30363d;
   border-radius: 12px;
   box-shadow: 0 24px 60px rgb(0 0 0 / 45%);
@@ -381,7 +399,6 @@
   .nrf-figure-note {
     display: block;
   }
-  .nrf-figure--replay {
-    --nrf-frame-h: 300px;
-  }
+  /* The replay frame is sized by its 16:9 ratio, not --nrf-frame-h, so it scales
+     down with the viewport on its own — nothing to override here. */
 }
