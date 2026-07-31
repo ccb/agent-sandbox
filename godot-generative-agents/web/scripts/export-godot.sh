@@ -24,16 +24,20 @@ fi
 
 mkdir -p "$OUT_DIR"
 
-# The web build boots the landing menu (issue #399), same as the desktop default.
-# We still force it explicitly for the export so the web entry point stays pinned
-# even if the desktop main scene changes, then restore project.godot no matter what
-# happens. (On web the menu's "Open a local file…" button is hidden and the bundled
-# replay is fetched over HTTP — the replay isn't packed into the build.)
+# The web build boots straight into the replay viewer (issue #903), NOT the
+# landing menu the desktop build uses. On the public landing-page figure the menu
+# is a dead click (the reader already asked for the demo) and it surfaces the
+# live-backend and past-runs controls #879 keeps out of public navigation. Forced
+# for the export ONLY -- the committed project.godot and the desktop launch stay
+# menu-first -- and project.godot is restored no matter what happens below. The
+# viewer, launched directly on web, falls through to fetching the bundled replay
+# over HTTP (it isn't packed into the build); the menu stays reachable via the
+# viewer's back button.
 BACKUP="$(mktemp)"
 cp "$PROJECT_FILE" "$BACKUP"
 restore() { cp "$BACKUP" "$PROJECT_FILE"; rm -f "$BACKUP"; }
 trap restore EXIT
-sed -i.bak 's|^run/main_scene=.*|run/main_scene="res://scenes/main_menu.tscn"|' "$PROJECT_FILE"
+sed -i.bak 's|^run/main_scene=.*|run/main_scene="res://scenes/viewer.tscn"|' "$PROJECT_FILE"
 rm -f "$PROJECT_FILE.bak"
 
 echo "==> Importing assets (first run can take a minute)…"
