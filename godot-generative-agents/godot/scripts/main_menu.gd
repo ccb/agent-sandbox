@@ -13,6 +13,12 @@ extends Control
 ##   • Past runs ▸                     — browse a backend's stored runs (#716) and
 ##                                       open / resume / export / delete each
 ##
+## On the web export (#903) the panel is instead reduced to the title and one
+## "▶  Start replay" button: there the canvas is embedded in the public landing
+## page as the demo, and the live-backend / past-runs controls stay out of
+## public navigation (#879) — but the reader still gets an explicit start gate
+## rather than landing mid-scene.
+##
 ## Everything is built in code in _ready() (matching agent_panel.gd's house style),
 ## so the .tscn only carries the themed root. The backdrop is the REAL campus,
 ## rendered once into an off-screen SubViewport the same way minimap.gd builds its
@@ -174,104 +180,110 @@ func _build_panel() -> void:
 	title.add_theme_font_size_override("font_size", 34)
 	col.add_child(title)
 
-	# --- Run a live simulation (the primary path, so it leads the menu) ---
-	col.add_child(_ribbon("RUN A LIVE SIMULATION"))
+	# On web the menu is the public demo's start gate and nothing else (#903):
+	# the title and a single "Start replay" button, none of the live-backend /
+	# past-runs controls #879 keeps out of public navigation. Desktop builds the
+	# full menu below.
+	var web := OS.has_feature("web")
 
-	var url_row := HBoxContainer.new()
-	url_row.add_theme_constant_override("separation", 8)
-	col.add_child(url_row)
-	var url_cap := Label.new()
-	url_cap.text = "Backend"
-	url_cap.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	url_row.add_child(url_cap)
-	_url_edit = LineEdit.new()
-	_url_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_url_edit.text = _default_url()
-	_url_edit.text_submitted.connect(func(_t: String) -> void: _on_connect_pressed())
-	url_row.add_child(_url_edit)
+	if not web:
+		# --- Run a live simulation (the primary path, so it leads the menu) ---
+		col.add_child(_ribbon("RUN A LIVE SIMULATION"))
 
-	var token_row := HBoxContainer.new()
-	token_row.add_theme_constant_override("separation", 8)
-	col.add_child(token_row)
-	var token_cap := Label.new()
-	token_cap.text = "Token"
-	token_cap.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	token_row.add_child(token_cap)
-	_token_edit = LineEdit.new()
-	_token_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_token_edit.secret = true
-	_token_edit.placeholder_text = "optional"
-	_token_edit.text = _default_token()
-	_token_edit.text_submitted.connect(func(_t: String) -> void: _on_connect_pressed())
-	token_row.add_child(_token_edit)
+		var url_row := HBoxContainer.new()
+		url_row.add_theme_constant_override("separation", 8)
+		col.add_child(url_row)
+		var url_cap := Label.new()
+		url_cap.text = "Backend"
+		url_cap.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		url_row.add_child(url_cap)
+		_url_edit = LineEdit.new()
+		_url_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_url_edit.text = _default_url()
+		_url_edit.text_submitted.connect(func(_t: String) -> void: _on_connect_pressed())
+		url_row.add_child(_url_edit)
 
-	_connect_btn = Button.new()
-	_connect_btn.text = "Connect to the backend"
-	_connect_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_connect_btn.pressed.connect(_on_connect_pressed)
-	col.add_child(_connect_btn)
+		var token_row := HBoxContainer.new()
+		token_row.add_theme_constant_override("separation", 8)
+		col.add_child(token_row)
+		var token_cap := Label.new()
+		token_cap.text = "Token"
+		token_cap.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		token_row.add_child(token_cap)
+		_token_edit = LineEdit.new()
+		_token_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_token_edit.secret = true
+		_token_edit.placeholder_text = "optional"
+		_token_edit.text = _default_token()
+		_token_edit.text_submitted.connect(func(_t: String) -> void: _on_connect_pressed())
+		token_row.add_child(_token_edit)
 
-	_live_status = _muted_label("")
-	_live_status.visible = false
-	col.add_child(_live_status)
+		_connect_btn = Button.new()
+		_connect_btn.text = "Connect to the backend"
+		_connect_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_connect_btn.pressed.connect(_on_connect_pressed)
+		col.add_child(_connect_btn)
 
-	# --- Watch a replay (every path that opens a stored/baked run for playback) ---
-	col.add_child(_ribbon("WATCH A REPLAY"))
+		_live_status = _muted_label("")
+		_live_status.visible = false
+		col.add_child(_live_status)
+
+		# --- Watch a replay (every path that opens a stored/baked run) ---
+		col.add_child(_ribbon("WATCH A REPLAY"))
 
 	var bundled_btn := Button.new()
-	bundled_btn.text = "▶  Play the bundled replay"
+	# The one web-visible control carries the showcase copy; desktop keeps the
+	# fuller label since it sits among the other replay sources.
+	bundled_btn.text = "▶  Start replay" if web else "▶  Play the bundled replay"
 	bundled_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bundled_btn.pressed.connect(_on_bundled_pressed)
 	col.add_child(bundled_btn)
 
-	# The boil-water demo (#592) is an optional extra bake, so its button only
-	# appears once that replay has been generated — otherwise it'd be a button that
-	# can only error. (The bundled replay above always shows and explains how to
-	# bake it, because it's the primary entry point.)
-	if FileAccess.file_exists(BOIL_REPLAY):
-		var boil_btn := Button.new()
-		boil_btn.text = "▶  Play the boil-water demo"
-		boil_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		boil_btn.pressed.connect(_on_boil_pressed)
-		col.add_child(boil_btn)
+	if not web:
+		# The boil-water demo (#592) is an optional extra bake, so its button only
+		# appears once that replay has been generated — otherwise it'd be a button
+		# that can only error. (The bundled replay above always shows and explains
+		# how to bake it, because it's the primary entry point.)
+		if FileAccess.file_exists(BOIL_REPLAY):
+			var boil_btn := Button.new()
+			boil_btn.text = "▶  Play the boil-water demo"
+			boil_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			boil_btn.pressed.connect(_on_boil_pressed)
+			col.add_child(boil_btn)
 
-	# The file picker is a native desktop dialog; there's no filesystem to browse
-	# in the browser, so the button only exists on desktop.
-	if not OS.has_feature("web"):
+		# The file picker is a native desktop dialog; there's no filesystem to
+		# browse in the browser anyway.
 		var open_btn := Button.new()
 		open_btn.text = "Open a local replay file…"
 		open_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		open_btn.pressed.connect(_on_open_file_pressed)
 		col.add_child(open_btn)
 
-	# Past runs (#716): open a run stored on a backend as a replay, so it belongs
-	# with the other replay entries. It reads the backend URL/token from the live
-	# form above and stashes the normalized values (via _on_past_runs_pressed) for
-	# past_runs.gd to read back after the scene swap. GET /runs works on any
-	# persisted-store backend (even one with no live loop), so it doesn't probe
-	# /live first -- it just needs a URL entered above.
-	var past_btn := Button.new()
-	past_btn.text = "Past runs ▸"
-	past_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	past_btn.pressed.connect(_on_past_runs_pressed)
-	col.add_child(past_btn)
+		# Past runs (#716): open a run stored on a backend as a replay, so it
+		# belongs with the other replay entries. It reads the backend URL/token
+		# from the live form above and stashes the normalized values (via
+		# _on_past_runs_pressed) for past_runs.gd to read back after the scene
+		# swap. GET /runs works on any persisted-store backend (even one with no
+		# live loop), so it doesn't probe /live first -- it just needs a URL
+		# entered above.
+		var past_btn := Button.new()
+		past_btn.text = "Past runs ▸"
+		past_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		past_btn.pressed.connect(_on_past_runs_pressed)
+		col.add_child(past_btn)
 
 	_replay_hint = _muted_label("")
 	_replay_hint.visible = false
 	col.add_child(_replay_hint)
 
-	# Live is the primary path now, so land the keyboard in the backend field:
-	# typing a URL and pressing Enter connects (text_submitted -> _on_connect_pressed).
-	#
-	# Not on the web, though. There the canvas is embedded in the landing page
-	# (web/src/components/home/HomeView.tsx), and a focused LineEdit switches on
-	# Godot's browser IME shim, which re-focuses a hidden contenteditable <div>
-	# beside the canvas every 100 ms for as long as the field holds focus. That
-	# steals focus back from the page the reader is actually reading: their text
-	# selection collapses and the browser scrolls the canvas back into view. A
-	# reader who wants the field can click it; nobody arrives at a blog post
-	# wanting to type into an embedded demo.
-	if not OS.has_feature("web"):
+	# Live is the primary path on desktop, so land the keyboard in the backend
+	# field: typing a URL and pressing Enter connects (text_submitted ->
+	# _on_connect_pressed). On web the field doesn't exist at all (see above) —
+	# which also retires the old focus hazard here: a focused LineEdit switches
+	# on Godot's browser IME shim, which kept re-focusing a hidden contenteditable
+	# <div> and stealing focus from the landing page embedding the canvas
+	# (web/src/components/home/HomeView.tsx).
+	if not web:
 		_url_edit.grab_focus()
 
 
