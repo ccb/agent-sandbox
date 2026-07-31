@@ -17,21 +17,11 @@ Fully offline (fake clients / mock brain). Run from the repo root::
     uv run pytest godot-generative-agents/tests/test_actor_attribution_847.py -v
 """
 
-import sys
-from pathlib import Path
-
-# Same import shim as test_cognition_wiring.py: the Penn sim modules run as
-# scripts (no package), so tests import them off the sim directory itself.
-_SIM_DIR = (
-    Path(__file__).resolve().parents[2] / "godot-generative-agents" / "backend" / "penn"
-)
-sys.path.insert(0, str(_SIM_DIR))
-
-from backend.build_world import build_world  # noqa: E402
-from backend.cognition import attach_agents  # noqa: E402
-from backend.planner import LLMPlanner  # noqa: E402
-from text_adventure_games.planning import DailyPlan  # noqa: E402
-from text_adventure_games.reflection import LLMReflector  # noqa: E402
+from backend.build_world import build_world
+from backend.cognition import attach_agents
+from backend.planner import LLMPlanner
+from text_adventure_games.planning import DailyPlan
+from text_adventure_games.reflection import LLMReflector
 
 
 class _CtxClient:
@@ -77,13 +67,20 @@ def test_planner_generate_and_revise_stamp_their_actor():
     assert client.context.get("actor") == "Sofia Ramirez"
 
 
-def test_no_actor_leaves_context_untouched():
-    # Backward compatible: the webapp / tests that build these without an actor
-    # (the default) must not start stamping -- context stays exactly as before.
+def test_no_actor_clears_a_stale_stamp():
+    # Backward compatible at record time: an actorless reflector/planner (the
+    # webapp / test default) stamps None, which usage.py reads as unattributed
+    # (CallRecord.actor None -> "(unattributed)", usage.py totals_by_actor).
+    # Stamping rather than skipping matters when instances share a client: a
+    # previous instance's actor must not be inherited by an actorless one.
     client = _CtxClient()
+    client.context["actor"] = "Stale Agent"  # e.g. left by an earlier planner
     LLMReflector(client).salient_questions([])
+    assert client.context.get("actor") is None
+
+    client.context["actor"] = "Stale Agent"
     LLMPlanner(client).generate(persona="Ada")
-    assert "actor" not in client.context
+    assert client.context.get("actor") is None
 
 
 # --- integration: attach_agents wires char.name through to the role clients --

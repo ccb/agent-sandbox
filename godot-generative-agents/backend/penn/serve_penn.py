@@ -940,10 +940,10 @@ class PennStepper:
         return client
 
     def _role_client(self, role):
-        """A dedicated client for one fixed call site (reflect/plan). Unlike
-        the decide-family sites, these call sites never stamp context
-        themselves, so stamp the role once here: the one key both labels the
-        ledger records (by_role, #368) and routes the call to the tiering
+        """A dedicated client for one fixed call site (reflect/plan). The
+        planner/reflector stamp ``actor`` per call (#847), but ``role`` is
+        construction-time only, so stamp it once here: the one key both labels
+        the ledger records (by_role, #368) and routes the call to the tiering
         map's model for that role."""
         client = create_llm_client(
             self._llm_config, ledger=self._recording_ledger(role)

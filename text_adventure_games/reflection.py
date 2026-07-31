@@ -472,8 +472,11 @@ class LLMReflector:
         ]
         # Attribute this call to its agent (issue #847) so per-actor cost rollups
         # (usage.py by_actor) don't bucket reflection under "(unattributed)".
+        # Stamped unconditionally: an actorless reflector sharing this client
+        # must clear a previous instance's stamp rather than inherit it (a None
+        # actor reads as unattributed at record time).
         ctx = getattr(self.client, "context", None)
-        if self.actor is not None and ctx is not None:
+        if ctx is not None:
             ctx["actor"] = self.actor
         result = self.client.call_tool(messages, tool, max_tokens=self.max_tokens)
         return result or {}
