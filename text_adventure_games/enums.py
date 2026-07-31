@@ -101,7 +101,7 @@ class Property(_StrEnum):
     IS_MARRIED = "is_married"
     IS_BANISHED = "is_banished"
     IS_SLEEPING = "is_sleeping" # a true false to check if a character is in fact sleeping
-
+    IS_TIRED = "is_tired"
     #numerical properties
     ENERGY = "energy"
     ENREGY_VALUE = "energy_value"

@@ -1,16 +1,5 @@
-# A single persona eat sandwich  DEMO world (#932), Its whole purpose is the eat a sandiwch
-# and feel energizedd and not hungry after (#931). 
-# A single person Living at Huston 
-#
-# Baked via `generate_penn_replay.py --scenario boil` (which loads THIS file, a
-# short step budget, and writes maps/penn_replay_boil.json). It reuses the same
-# `the_upenn` matrix and the shared `build_penn_world` factory, so the boil props
-# (`_furnish_boil_water`: the murky pot + sink + stove) and the Penn verb set
-# (get/drink/make/...) are stocked into Houston Hall exactly as in the full world.
-#
-# Sofia's curated day and the bundled replay are untouched -- this is an additive,
-# self-contained fixture (it also doubles as the scenario for the connect-the-dots
-# LLM experiment, #595).
+# A single persona eat sandwich  DEMO world (#931), Its whole purpose is the eat a sandiwch
+# and feel energized and not hungry after (#931). 
 
 personas:
 - name: John Green
@@ -27,36 +16,16 @@ personas:
   - 113
   - 248
   schedule:
-  # The arc is split into four stops, all in Houston Hall (== home, so no travel:
-  # it runs from step 0). Each stop issues its authored command(s), then *performs*
-  # its activity for `steps` more -- and a perform block is quiet on the event log
-  # (one marker for the whole window), unlike an explicit `wait` command (one marker
-  # PER step). So the `steps` gaps space the three events ~29 steps apart on the
-  # timeline WITHOUT flooding the scrubber with wait-markers. Net in the default
-  # 90-step bake: sickness@~11 (12%), boiled@~40 (44%), recovery@~69 (76%) -- an
-  # early, clearly separated arc that fills most of the timeline, and the arc's
-  # three events are the only interesting markers on the strip (12 events total).
-  #
-  # (Splitting a stop by `place` alone would be dropped by the schedule round-trip,
-  # but these differ by `activity` too, so `ScheduleMockClient.replace_schedule`
-  # re-attaches each stop's `commands` positionally -- verified by the bake + test.)
-  # NOTE: each `activity` must be verb-free prose. Between commands the mock issues
-  # `perform <activity>`, which is re-parsed -- and the parser keyword-matches many
-  # verbs as SUBSTRINGS anywhere in the command ("light" in "delighted", "eat "/"get "
-  # mid-word), so such an activity is mis-read as that command and spams failures (cf.
-  # #535, "Diego's 'late' -> EAT"). So the activities below describe a *state* ("at
-  # the union", "feeling ill"), never a verb -- enforced by test_boil_demo.py, which
-  # routes each `perform <activity>` through the real parser and requires `perform`.
-  # A short healthy lead-in so the before-state is visible before the first drink.
+  # eating enegizes the player
   - place: Houston Hall
-    activity: getting ready to have dinner after classes
+    activity: setting in before lunch
     emoji: 🥪
     steps: 10
     
   - place: Houston Hall
-    activity: having dinner after classes
+    activity: having lunch after classes
     emoji: 🥪
-    steps: 28
+    steps: 15
     commands:
     - get sandwich
     - eat sandwich   # -> energy = curr_energy + sandwich energy value
