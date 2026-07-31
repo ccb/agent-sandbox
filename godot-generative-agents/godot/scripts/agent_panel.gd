@@ -251,6 +251,16 @@ var _live_clip_row: HBoxContainer   # the whole live clip row (toggled by set_li
 var _clip_n_spin: SpinBox           # how many recent steps to grab (default 60)
 var _live_clip_gif_btn: Button      # export the last N steps as a GIF
 var _live_clip_frames_btn: Button   # export the last N steps as MP4+GIF (desktop)
+# The capture tools (snapshot + gallery, #253; clip export, #488/#548) are switched OFF
+# for the release: unpolished, and not on the near-term list. Rather than commenting out
+# their construction -- the setters below (set_live, set_clip_span, set_clip_status,
+# set_live_clip_ready) dereference the vars above unconditionally, and viewer.gd calls
+# three of them on every mode switch -- every row is parented into this one container and
+# the container is hidden. Godot visibility is hierarchical, so a setter flipping a child
+# `visible = true` still renders nothing. To restore the feature: delete the
+# `_capture_tools.visible = false` line in _ready() and uncomment the C / [ / ] shortcuts
+# in viewer.gd's _unhandled_input.
+var _capture_tools: VBoxContainer   # hidden parent of every capture row (see above)
 var _list: VBoxContainer            # holds one row per character
 var _rows := {}                     # name -> {row, button, status: Label}
 var _active := ""                   # name of the tracked character, or "" when free
@@ -340,11 +350,19 @@ func _ready() -> void:
 		_calendar_icon(), "Day plans — planned vs. actual, up to now (T)",
 		func() -> void: day_plans_requested.emit()))
 
+	# The capture tools live in one container so hiding it hides all of them (see
+	# _capture_tools above). It sits where the snapshot row used to, so un-hiding it
+	# restores the original sidebar order for the snapshot buttons.
+	_capture_tools = VBoxContainer.new()
+	_capture_tools.add_theme_constant_override("separation", 6)
+	col.add_child(_capture_tools)
+	_capture_tools.visible = false  # DELETE THIS LINE to re-enable the capture tools
+
 	# A second row for the capture tools (snapshot + its gallery, issue #253), kept off
 	# the controls row above so the icons stay finger-sized in the 300px sidebar.
 	var capture_row := HBoxContainer.new()
 	capture_row.add_theme_constant_override("separation", 6)
-	col.add_child(capture_row)
+	_capture_tools.add_child(capture_row)
 
 	# Snapshot: the hand-drawn camera glyph (CAMERA_ROWS). viewer.gd does the capture.
 	capture_row.add_child(_icon_button(
@@ -391,7 +409,7 @@ func _ready() -> void:
 	# the keys), then export the span. Frames+ffmpeg is desktop-only.
 	var clip_row := HBoxContainer.new()
 	clip_row.add_theme_constant_override("separation", 6)
-	col.add_child(clip_row)
+	_capture_tools.add_child(clip_row)
 	_clip_row = clip_row
 
 	_clip_gif_btn = Button.new()
@@ -423,7 +441,7 @@ func _ready() -> void:
 	_live_clip_row = HBoxContainer.new()
 	_live_clip_row.add_theme_constant_override("separation", 6)
 	_live_clip_row.visible = false
-	col.add_child(_live_clip_row)
+	_capture_tools.add_child(_live_clip_row)
 
 	_clip_n_spin = SpinBox.new()
 	_clip_n_spin.min_value = 2
@@ -454,7 +472,7 @@ func _ready() -> void:
 	_clip_status.add_theme_font_size_override("font_size", 12)
 	_clip_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_clip_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	col.add_child(_clip_status)
+	_capture_tools.add_child(_clip_status)
 
 	_speed_row = HBoxContainer.new()
 	_speed_row.add_theme_constant_override("separation", 6)

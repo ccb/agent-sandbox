@@ -49,7 +49,10 @@ func _ready() -> void:
 	# The snapshot gallery (issue #253) is a code-built pop-up, not a scene in SCENES;
 	# check that it builds and accepts snapshots (the capture path it feeds is GPU-only).
 	failures += _check_gallery()
-	var checks := SCENES.size() + 4
+	# The capture tools (snapshot + clip export) are hidden for the release; assert no
+	# mode switch or setter can bring them back (agent_panel.gd's _capture_tools).
+	failures += _check_capture_tools()
+	var checks := SCENES.size() + 5
 	if failures == 0:
 		print("smoke_test: PASS — %d scene(s) OK" % checks)
 	else:
@@ -369,6 +372,52 @@ func _check_gallery() -> int:
 		printerr("  snapshot_gallery: expected 2 snapshots + 2 thumbnails, got %d + %d" % [n, thumbs])
 		return 1
 	print("  snapshot_gallery: OK (%d snapshots)" % n)
+	return 0
+
+
+# Returns 0 if the sidebar's capture tools (snapshot + clip export) stay hidden, 1 if not.
+# They are switched off for the release (see agent_panel.gd's _capture_tools) but their
+# member vars are still written by set_live/set_clip_span/set_clip_status -- so the check
+# that matters is that *no setter can bring them back*, and that none of them crash on
+# nodes that are alive but hidden. _play is the positive control: if it were invisible too
+# the panel simply isn't in the tree and every assertion below would pass vacuously.
+func _check_capture_tools() -> int:
+	var panel: Node = load("res://scripts/agent_panel.gd").new()
+	add_child(panel)  # entering the tree runs _ready(), which builds the sidebar
+	var problems := PackedStringArray()
+
+	if not panel._play.is_visible_in_tree():
+		problems.append("positive control failed: _play is not visible, test is vacuous")
+
+	# Replay mode: set_live(false) explicitly sets _clip_gif_btn/_clip_status visible.
+	panel.set_live(false)
+	if panel._clip_gif_btn.is_visible_in_tree():
+		problems.append("Export GIF visible in replay mode")
+	if panel._clip_status.is_visible_in_tree():
+		problems.append("clip status visible in replay mode")
+	if panel._capture_tools.is_visible_in_tree():
+		problems.append("capture tools visible in replay mode")
+
+	# Live mode: set_live(true) explicitly sets _live_clip_row visible.
+	panel.set_live(true)
+	if panel._live_clip_row.is_visible_in_tree():
+		problems.append("live clip row visible in live mode")
+	if panel._capture_tools.is_visible_in_tree():
+		problems.append("capture tools visible in live mode")
+
+	# The setters viewer.gd calls must not crash on hidden-but-alive nodes.
+	panel.set_clip_span(0, 5)
+	panel.set_clip_status("saved -> /tmp/x.gif", "/tmp")
+	panel.set_live_clip_ready(true)
+	if panel._capture_tools.is_visible_in_tree():
+		problems.append("capture tools visible after the clip setters ran")
+
+	panel.queue_free()
+	if problems.size() > 0:
+		for p in problems:
+			printerr("  capture_tools: %s" % p)
+		return 1
+	print("  capture_tools: OK (hidden in both modes, setters safe)")
 	return 0
 
 
