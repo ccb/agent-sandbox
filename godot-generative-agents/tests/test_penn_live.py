@@ -346,13 +346,14 @@ def test_run_usage_rebaselines_on_reset_and_run_rows_carry_run_cost(tmp_path):
     store = RunStore(tmp_path / "runs")
     stepper = PennStepper(num_steps=3, world=build_penn_world(), run_store=store)
     # #795: no ticks yet, so no chance of a co-settled pair either. counted is
-    # False (mock brain, no llm_client — it never counts co-settling, #825) and
-    # resumed False (a fresh, reset-not-adopted stepper), #819.
+    # True even under the mock brain — co-settling is pure geometry and #825
+    # made every brain count it — and resumed False (a fresh,
+    # reset-not-adopted stepper), #819.
     no_social = {
         "co_settled_pair_steps": 0,
         "by_pair": {},
         "conversations": 0,
-        "counted": False,
+        "counted": True,
         "resumed": False,
     }
     assert stepper.run_usage() == {
