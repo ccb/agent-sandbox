@@ -24,20 +24,20 @@ fi
 
 mkdir -p "$OUT_DIR"
 
-# The web build boots straight into the replay viewer (issue #903), NOT the
-# landing menu the desktop build uses. On the public landing-page figure the menu
-# is a dead click (the reader already asked for the demo) and it surfaces the
-# live-backend and past-runs controls #879 keeps out of public navigation. Forced
-# for the export ONLY -- the committed project.godot and the desktop launch stay
-# menu-first -- and project.godot is restored no matter what happens below. The
-# viewer, launched directly on web, falls through to fetching the bundled replay
-# over HTTP (it isn't packed into the build); the menu stays reachable via the
-# viewer's back button.
+# The web build boots the landing menu, same as desktop — but on web the menu
+# reduces itself to a single "Start replay" button (issue #903, PR #928 review):
+# the reader gets an explicit start affordance instead of landing mid-scene, and
+# none of the live-backend / past-runs controls #879 keeps out of public
+# navigation. That gating lives in godot/scripts/main_menu.gd, keyed on
+# OS.has_feature("web"). We still force the boot scene explicitly for the export
+# so the web entry point stays pinned even if the desktop main scene changes,
+# then restore project.godot no matter what happens. (The bundled replay isn't
+# packed into the build — the viewer fetches it over HTTP, web_replay_url.)
 BACKUP="$(mktemp)"
 cp "$PROJECT_FILE" "$BACKUP"
 restore() { cp "$BACKUP" "$PROJECT_FILE"; rm -f "$BACKUP"; }
 trap restore EXIT
-sed -i.bak 's|^run/main_scene=.*|run/main_scene="res://scenes/viewer.tscn"|' "$PROJECT_FILE"
+sed -i.bak 's|^run/main_scene=.*|run/main_scene="res://scenes/main_menu.tscn"|' "$PROJECT_FILE"
 rm -f "$PROJECT_FILE.bak"
 
 echo "==> Importing assets (first run can take a minute)…"
