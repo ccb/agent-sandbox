@@ -7,6 +7,7 @@ import {
   mergeKnobs,
   planLocked,
 } from "../../config/configBody";
+import { knobAt, nest } from "../../config/knobs";
 import type { ConfigSurface, SetupFormState } from "../../types/config";
 import "./SetupView.css";
 
@@ -71,31 +72,6 @@ const KNOBS: {
   },
 ];
 
-// Read a nested numeric knob out of a knobs dict by path (0 if absent).
-function knobAt(knobs: Record<string, unknown>, path: string[]): number {
-  let cur: unknown = knobs;
-  for (const seg of path) {
-    if (typeof cur !== "object" || cur === null) return 0;
-    cur = (cur as Record<string, unknown>)[seg];
-  }
-  return typeof cur === "number" ? cur : 0;
-}
-
-// Set a nested value by path into a fresh nested-dict edit ({a:{b:{c:v}}}).
-function nest(path: string[], value: number): Record<string, unknown> {
-  const root: Record<string, unknown> = {};
-  let cur = root;
-  path.forEach((seg, i) => {
-    if (i === path.length - 1) cur[seg] = value;
-    else {
-      const next: Record<string, unknown> = {};
-      cur[seg] = next;
-      cur = next;
-    }
-  });
-  return root;
-}
-
 export function SetupView({
   base,
   surface,
@@ -113,7 +89,7 @@ export function SetupView({
   const [model, setModel] = useState(r.model);
   const [steps, setSteps] = useState(r.steps);
   const [tick, setTick] = useState(r.tick_seconds);
-  const [maxCost, setMaxCost] = useState(r.max_cost);
+  const [maxCost, setMaxCost] = useState(r.max_cost ?? 0);
   // knobEdits: nested dict of CHANGED knobs only, keyed by path (see nest()).
   const [knobEdits, setKnobEdits] = useState<Record<string, unknown>>({});
   const [busy, setBusy] = useState(false);
@@ -157,7 +133,7 @@ export function SetupView({
   // Each row's displayed value: the server's defaults, overlaid by its current
   // values, overlaid by any live (unsaved) edit — reusing the same mergeKnobs
   // buildPostBody merges with, so display and submit never disagree about
-  // which value wins. (knobAt/nest are the brief's verbatim helpers above.)
+  // which value wins. (knobAt/nest live in config/knobs.ts.)
   const knobsForDisplay = mergeKnobs(
     mergeKnobs(surface.knobs.defaults, surface.knobs.current),
     knobEdits,
@@ -193,11 +169,8 @@ export function SetupView({
                   onChange={() => toggleCast(p.id)}
                 />
                 <span className="setup-persona-body">
-                  <span className="setup-persona-name">
-                    {p.emoji && <span aria-hidden="true">{p.emoji} </span>}
-                    {p.name}
-                  </span>
-                  {p.description && <span className="setup-persona-desc">{p.description}</span>}
+                  <span className="setup-persona-name">{p.name}</span>
+                  {p.blurb && <span className="setup-persona-desc">{p.blurb}</span>}
                 </span>
               </label>
             ))}
