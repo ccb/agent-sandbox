@@ -169,12 +169,14 @@ and more-recent conversations, and `←`/`→` flips to the authored t=0 **seed
 relationships** (the `relationships:` blocks in `backend/penn/personas/*.yaml`) so you can
 compare who *started out* knowing whom against who actually met during the day.
 
-You can also **snapshot the campus** as it plays (issue #253): the sidebar's camera
-button (or `C`) grabs the current view — UI chrome hidden, so it's the bare
-campus + agents — and stamps it with the world time. The stacked-photos button opens
-a **gallery** of every snapshot taken this session, each captioned with its timestamp;
-click one to enlarge it (`←`/`→` to browse, `Esc` to close). Snapshots live in memory
-for the session — saving them to disk is a separate follow-up.
+**Snapshots and clip export are off in this build.** The campus-snapshot button and
+its gallery (issue #253) and the GIF/MP4 clip export (issues #488/#548) are built but
+hidden — the sidebar rows all live in a hidden container in `scripts/agent_panel.gd`
+(`_capture_tools`), and the `C` / `[` / `]` shortcuts are commented out in
+`scripts/viewer.gd`. The scripts, exporters and their tests are all still in the tree,
+so switching the feature back on is one deleted line plus those shortcuts.
+(`scripts/snapshot.gd` is unrelated and still works — it's the headless dev utility
+for screenshotting a scene, not a viewer feature.)
 
 **Analyzing a saved run offline.** `tools/analyze_run.py` (promoted from a
 batch-2 scratch script, #795) summarises one `runs/<id>/` directory: verbs,
