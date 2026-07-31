@@ -4,7 +4,7 @@ import { fetchConfig, startRun } from "./configApi";
 
 const surface = (status: "configurable" | "locked"): ConfigSurface => ({
   status,
-  personas: [{ id: "maya", name: "Maya" }],
+  personas: [{ id: "maya", name: "Maya", blurb: "A curious grad student.", in_default_cast: true }],
   cast: ["maya"],
   knobs: { defaults: {}, current: {} },
   brains: ["mock", "scripted"],

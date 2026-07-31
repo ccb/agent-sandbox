@@ -11,11 +11,13 @@ export type ConfigStatus =
   | "unavailable" // 404 — this server has no config surface
   | "error"; // transport or non-404 HTTP error
 
+// The catalog comes from the server's library_personas (build_world.py), which
+// emits {id, name, blurb, in_default_cast} — no emoji, no description.
 export interface PersonaEntry {
   id: string;
   name: string;
-  emoji?: string;
-  description?: string;
+  blurb?: string;
+  in_default_cast?: boolean;
 }
 
 // GET /config's `run` block: what is currently set.
@@ -27,7 +29,7 @@ export interface ConfigRun {
   model: string;
   steps: number;
   stop_time?: string | null;
-  max_cost: number;
+  max_cost: number | null;
   tick_seconds: number;
 }
 
