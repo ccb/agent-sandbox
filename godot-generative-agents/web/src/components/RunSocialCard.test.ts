@@ -52,7 +52,7 @@ describe("socialView", () => {
     expect(socialView(social({ conversations: 1 }), 100)?.note).toBe("mismatch");
   });
 
-  it("says uncounted under a brain that never counts co-settling (#825), at any step", () => {
+  it("says uncounted when the backend reports counted:false (pre-#825), at any step", () => {
     expect(socialView(social({ counted: false }), 100)?.note).toBe("uncounted");
     expect(socialView(social({ counted: false }), 0)?.note).toBe("uncounted");
   });

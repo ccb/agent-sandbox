@@ -958,17 +958,25 @@ def step(
             "trace": st.get("trace", []),
         }
 
+    # #795: count the opportunity to talk BEFORE any conversation machinery
+    # runs this tick, so the metric is independent of cooldowns and pins.
+    # #825: outside the conversation gate below, on purpose. Co-settling is
+    # pure geometry -- settled + within earshot -- with no LLM dependency, so
+    # every brain counts it; gated on conversation_enabled it sat at a
+    # permanent 0 under the default mock brain, masking real co-settlement
+    # regressions in exactly the $0 runs meant to catch them. Only the #795
+    # run-end warning stays conversation-gated (serve_penn._finish_run): a
+    # mock run "failing to converse" is not a warning.
+    if social_info is not None:
+        pairs = count_co_settled(game, chars, state, order)
+        social_info.update(co_settled=len(pairs), pairs=pairs)
+
     # Conversation (issue #86): after everyone has moved, let co-located, settled
     # residents talk. Each meeting writes dialogue into both agents' memory
     # streams and updates their cards' chat line. Gated + a no-op for the mock
     # brain, so the default replay is unchanged.
     chats_this_step = 0
     if conversation_enabled:
-        # #795: count the opportunity to talk BEFORE any conversation machinery
-        # runs this tick, so the metric is independent of cooldowns and pins.
-        if social_info is not None:
-            pairs = count_co_settled(game, chars, state, order)
-            social_info.update(co_settled=len(pairs), pairs=pairs)
         # React-or-continue (#370): BEFORE the conversation pass, so a greet's
         # first line is spoken this same tick by maybe_converse's advance
         # phase. Off by default (cog.react_enabled) -> byte-identical.
