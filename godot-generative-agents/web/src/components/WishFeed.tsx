@@ -8,8 +8,10 @@ import "./LlmDashboard.css"; // .event-row/.event-kind(--wish)/.event-turn/.even
  * in its own panel — the demand-side record #846 reads for affordance design.
  * EventFeed (#644) interleaves live wish rows among game events and is
  * live-only; this panel is wishes-only and works from both sources, like
- * MostTakenActions (#701): the live feed's `wish` rows, or the baked replay's
- * `wishes` array scoped to the cursor — so scrubbing back hides later wishes.
+ * MostTakenActions (#701): the live feed's dedicated `wishes` retention
+ * (`live.wishes`, not `live.events` — game_event eviction in the shared feed
+ * must never shrink the demand log), or the baked replay's `wishes` array
+ * scoped to the cursor — so scrubbing back hides later wishes.
  */
 
 // Wishes are rare (a busy live day logs ~10), so a modest cap keeps a
@@ -55,17 +57,12 @@ export function WishFeed({
   /** The current replay step (App's single useReplayStep registrant). */
   replayStep: number;
 }) {
-  // Same source switch as MostTakenActions: the live feed's wish rows when
-  // following a live loop, else the baked wishes through the cursor.
-  const rows = live.live
-    ? selectWishes(
-        live.events.filter((e) => e.kind === "wish"),
-        null,
-      )
-    : selectWishes(replay?.wishes ?? [], replayStep);
-  const total = live.live
-    ? live.events.filter((e) => e.kind === "wish").length
-    : (replay?.wishes ?? []).filter((w) => w.turn <= replayStep).length;
+  // Same source switch as MostTakenActions: the live feed's wish retention
+  // when following a live loop, else the baked wishes through the cursor.
+  const source = live.live ? live.wishes : (replay?.wishes ?? []);
+  const upToTurn = live.live ? null : replayStep;
+  const rows = selectWishes(source, upToTurn);
+  const total = upToTurn === null ? source.length : source.filter((w) => w.turn <= upToTurn).length;
 
   return (
     <div className="agent-field wish-feed">
@@ -96,7 +93,9 @@ export function WishFeed({
         <p className="mem-empty">
           {live.live
             ? "No wishes yet — an agent's unparseable or proposed action lands here (#621)."
-            : "No wishes up to this step — scrub forward, or this replay predates the wish log (#622)."}
+            : replay
+              ? "No wishes up to this step — scrub forward, or this replay predates the wish log (#622)."
+              : "No run yet — open a replay or follow a live backend to see its wishes."}
         </p>
       )}
     </div>
