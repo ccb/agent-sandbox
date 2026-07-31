@@ -33,6 +33,7 @@ from backend.actions import (
     CheckOutBook,
     Deactivate,
     DrinkPenn,
+    EatPenn,
     ReadPenn,
     Study,
     TalkTo,
@@ -62,7 +63,8 @@ WORLD_DATA_BOIL = os.path.join(_SIM_DIR, "world_data_boil.yaml")
 # boil_hard`; never by the default bake.
 WORLD_DATA_BOIL_HARD = os.path.join(_SIM_DIR, "world_data_boil_hard.yaml")
 UPENN_DIR = os.path.join(_SIM_DIR, "the_upenn")
-
+#adding a eat scene to the baked version of the penn sim
+WORLD_DATA_EAT = os.path.join(_SIM_DIR, "world_data_eat.yaml") 
 # The Penn-local verb set (#300): registered on top of Travel/Act via
 # build_world(extra_actions=...). DrinkPenn overrides the engine's "drink"; Craft is
 # the engine crafting action that drives the boil-water Recipe (see _boil_recipe) --
@@ -72,6 +74,7 @@ PENN_EXTRA_ACTIONS = [
     Activate,
     Deactivate,
     DrinkPenn,
+    EatPenn,
     Craft,
     WaitPenn,
     TalkTo,
@@ -484,13 +487,18 @@ def relocate_stove_to_kitchen(game) -> None:
     kitchen.add_item(stove)
 
 
-def make_meal(name: str, description: str, examine: str) -> Item:
+def make_meal(
+    name: str, description: str, examine: str, energy_value: int = 20
+) -> Item:
     """A Houston Hall meal (#615): EDIBLE and gettable (the Item default), so
     the natural loop is get -> eat -- the same possession gate as the drink
     pattern. Discrete items ARE the portions: the engine's Eat consumes the
-    whole item (it has no Drink-style portions), so one meal = one portion."""
+    whole item (it has no Drink-style portions), so one meal = one portion.
+    ``energy_value`` (#931) is what EatPenn restores Property.ENERGY by --
+    mirrors Action Castle's bread/tuna/water energy_value props."""
     meal = Item(name, description, examine)
     meal.set_property(Property.EDIBLE, True)
+    meal.set_property("energy_value", energy_value)
     return meal
 
 
@@ -508,24 +516,27 @@ def _furnish_meals(game) -> None:
     hall = game.locations.get("Houston Hall")
     if hall is None or not hall.get_property("dining"):
         return
-    for name, description, examine in (
+    for name, description, examine, energy_value in (
         (
             "sandwich",
             "a wrapped sandwich",
             "A turkey club off the Houston Hall food-court counter.",
+            20,
         ),
         (
             "bowl of soup",
             "a bowl of lentil soup",
             "Steaming lentil soup from the Houston Hall food court.",
+            30,
         ),
         (
             "apple",
             "a red apple",
             "A crisp apple from the fruit basket by the register.",
+            10,
         ),
     ):
-        hall.add_item(make_meal(name, description, examine))
+        hall.add_item(make_meal(name, description, examine, energy_value))
 
 
 def make_library_shelf() -> Item:

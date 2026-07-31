@@ -8,7 +8,9 @@ from text_adventure_games import clock
 # sleep decay factor
 SLEEP_CONSTANT = 0.9805
 DECAY_FACTOR = 30
-SLEEP_RECOVERY_RATE = 1.12
+SLEEP_RECOVERY_DECAY = 0.9  # multiplier on the remaining energy *deficit* each half
+# hour, not on current energy -- recovery must converge toward 100 regardless of how
+# low energy started, otherwise sleeping while nearly exhausted barely helps at all.
 
 
 class ActionCastle(games.Game):
@@ -75,7 +77,7 @@ class Set_energy(SleepGate, actions.Action):
 
     def apply_effects(self):
         char = self.character
-        char.set_property("energy", 50)
+        char.set_property("energy", 70)
         energy = char.get_property("energy")
         self.parser.ok(f"{energy} is your energy level")
 
@@ -143,12 +145,44 @@ class Eat(SleepGate, consume.Eat):
         self.character = self.acting_character(command=command)
 
     def check_preconditions(self):
+        # can't eat again until the 16-hour "ate_food" cooldown (see the
+        # hunger_resets_after_16_hours trigger in build_game) clears it
+        if self.character.get_property("ate_food"):
+            self.parser.fail(
+                f"{self.character.name.capitalize()} isn't hungry -- they ate recently."
+            )
+            return False
         return super().check_preconditions()
 
     def apply_effects(self):
         energy_level = self.item.get_property("energy_value")
         curr_energy = self.character.get_property("energy")
         self.character.set_property("energy", min(100, curr_energy + energy_level))
+        self.character.set_property("ate_food", True)
+        self.character.set_property("ate_at", self.game.turn)
+        super().apply_effects()
+
+
+# mirrors Eat: gated the same way, on a "drank_water" cooldown instead
+class Drink(SleepGate, consume.Drink):
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, command, actor)
+        self.character = self.acting_character(command=command)
+
+    def check_preconditions(self):
+        if self.character.get_property("drank_water"):
+            self.parser.fail(
+                f"{self.character.name.capitalize()} isn't thirsty -- they drank recently."
+            )
+            return False
+        return super().check_preconditions()
+
+    def apply_effects(self):
+        energy_level = self.item.get_property("energy_value")
+        curr_energy = self.character.get_property("energy")
+        self.character.set_property("energy", min(100, curr_energy + energy_level))
+        self.character.set_property("drank_water", True)
+        self.character.set_property("drank_at", self.game.turn)
         super().apply_effects()
 
 
@@ -939,6 +973,16 @@ def build_game(llm_client=None, embedding_client=None) -> ActionCastle:
     tuna.set_property("edible", True)
     tuna.set_property("energy_value", 40)
 
+    water = things.Item(
+        "water", "a refreshing bottle of water", "Would go well with bread"
+    )
+    water.set_property("drinkable", True)
+    water.set_property("energy_value", 10)
+
+    soda = things.Item("soda", "a refreshing can of soda", "Would go well with tuna")
+    soda.set_property("drinkable", True)
+    soda.set_property("energy_value", 10)
+
     candle = things.Item(
         "candle",
         "a strange candle",
@@ -955,6 +999,8 @@ def build_game(llm_client=None, embedding_client=None) -> ActionCastle:
     feasting_hall.add_item(candle)
     garden.add_item(tuna)
     garden.add_item(bread)
+    garden.add_item(water)
+    garden.add_item(soda)
 
     # Sceneary Items
     pond = things.Item(
@@ -1132,6 +1178,7 @@ def build_game(llm_client=None, embedding_client=None) -> ActionCastle:
         Set_energy,
         Eat,
         Sleep,
+        Drink,
     ]
     game = ActionCastle(cottage, player, characters, custom_actions, gameClock)
 
@@ -1184,11 +1231,10 @@ def build_game(llm_client=None, embedding_client=None) -> ActionCastle:
         return minutes_asleep >= 8 * 60
 
     def recover_and_wake_up(game):
-        curr_energy = game.player.get_property("energy")
         if has_half_an_hour_passed(game):
-            game.player.set_property(
-                "energy", min(100, curr_energy * SLEEP_RECOVERY_RATE)
-            )
+            curr_energy = game.player.get_property("energy")
+            deficit = 100 - curr_energy
+            game.player.set_property("energy", 100 - deficit * SLEEP_RECOVERY_DECAY)
         if has_slept_8_hours(game):
             game.player.set_property("is_sleeping", False)
             game.player.set_property("tired", SLEEP_CONSTANT)
@@ -1203,6 +1249,44 @@ def build_game(llm_client=None, embedding_client=None) -> ActionCastle:
         "recovery_per_turn",
         is_the_player_sleeping,
         recover_and_wake_up,
+        repeatable=True,
+    )
+
+    # 16 game-hours after eating/drinking, the player is hungry/thirsty again
+    # and can eat/drink once more -- same "record a timestamp, check the gap
+    # via game.clock" shape as has_slept_8_hours/recover_and_wake_up above.
+    def should_reset_hunger(game):
+        if not game.player.get_property("ate_food"):
+            return False
+        minutes_since_eating = game.clock.minutes_elapsed(
+            game.turn
+        ) - game.clock.minutes_elapsed(game.player.get_property("ate_at"))
+        return minutes_since_eating >= 16 * 60
+
+    def reset_hunger(game):
+        game.player.set_property("ate_food", False)
+
+    def should_reset_thirst(game):
+        if not game.player.get_property("drank_water"):
+            return False
+        minutes_since_drinking = game.clock.minutes_elapsed(
+            game.turn
+        ) - game.clock.minutes_elapsed(game.player.get_property("drank_at"))
+        return minutes_since_drinking >= 16 * 60
+
+    def reset_thirst(game):
+        game.player.set_property("drank_water", False)
+
+    game.add_trigger(
+        "hunger_resets_after_16_hours",
+        should_reset_hunger,
+        reset_hunger,
+        repeatable=True,
+    )
+    game.add_trigger(
+        "thirst_resets_after_16_hours",
+        should_reset_thirst,
+        reset_thirst,
         repeatable=True,
     )
 

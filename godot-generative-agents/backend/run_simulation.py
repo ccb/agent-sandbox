@@ -42,7 +42,7 @@ from .cognition import (
     remember_outcome,
     score_new_memories,
 )
-from backend.drives import accrue_thirst
+from backend.drives import accrue_energy, accrue_thirst
 from .sim_clock import SimClock
 from .sim_config import CognitionConfig
 from .world_map import WorldMap
@@ -410,6 +410,9 @@ def step(
         # thirsty between decisions. A no-op for any persona without
         # thirst_rate, so the default bake is untouched.
         accrue_thirst(char)
+        # Opt-in energy-decay drive (#931): same per-character, per-step
+        # placement and no-op-by-default shape as accrue_thirst above.
+        accrue_energy(char)
 
         # Decision point: idle and not yet settled into an activity. The
         # pre-pass above already evaluated exactly that predicate into `due`

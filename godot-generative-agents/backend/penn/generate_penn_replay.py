@@ -46,6 +46,7 @@ from penn_world import (
     SIM_START,
     WORLD_DATA,
     WORLD_DATA_BOIL,
+    WORLD_DATA_EAT,
     build_penn_world,
     persona_meta_entry,
     replay_frame_entry,
@@ -90,6 +91,12 @@ SCENARIOS = {
         "steps": DEFAULT_BOIL_STEPS,
         "out": "penn_replay_boil.json",
     },
+    #adding a eat scene to the baked version
+    "eat": {
+        "world_data" : WORLD_DATA_EAT,
+        "steps": 40,
+        "out" :"penn_replay_eat.json",
+    }
 }
 
 

@@ -11,6 +11,8 @@ that, each going through the engine's precondition gate like any built-in action
 """
 
 from text_adventure_games.actions import base, consume, investigate
+from text_adventure_games.enums import Property
+from text_adventure_games.things.characters import MAX_ENERGY
 
 
 class Travel(base.Action):
@@ -283,6 +285,33 @@ class DrinkPenn(consume.Drink):
                         "location": getattr(self.character.location, "name", None),
                     },
                 )
+
+
+class EatPenn(consume.Eat):
+    """The engine's Eat, plus the Penn energy payoff (#931): restores
+    ``Property.ENERGY`` from the eaten item's ``energy_value``, capped at
+    ``MAX_ENERGY``. This is the scaffold slice of the port from Action
+    Castle's ``Eat`` (``text_adventure_games/adventures/action_castle.py``),
+    which also gates re-eating behind a 16-in-game-hour cooldown
+    (``ate_food``/``ate_at``) -- that cooldown is deliberately NOT ported yet
+    (#931's open design question: a boolean-flag pair vs. a single
+    ``NOT_HUNGRY_TIME`` timestamp), so this slice only wires the energy
+    restore, the same way #300's ``DrinkPenn`` started with sickness before
+    the drive/cooldown machinery existed. Registered with the same "eat"
+    action name, so it overrides the built-in for this game only.
+
+    Guarded like ``DrinkPenn``: if the item was poisonous and the engine's
+    Eat just killed the character, don't also restore energy on a corpse."""
+
+    def apply_effects(self):
+        super().apply_effects()
+        if self.character.get_property("is_dead"):
+            return
+        energy_value = self.item.get_property("energy_value") or 0
+        current_energy = self.character.get_property(Property.ENERGY) or 0
+        self.character.set_property(
+            Property.ENERGY, min(MAX_ENERGY, current_energy + energy_value)
+        )
 
 
 class Activate(base.Action):

@@ -13,6 +13,105 @@ on top; copy the template block each working day.
 **Next:**
 - ...
 -->
+## 2026-07-31
+**Focus:** Port Action Castle's eat/energy system onto Penn (issue #931)
+
+**Done today:**
+- Filed #931 for the Penn-side port. Added `EatPenn` (`backend/actions.py`,
+  mirrors `DrinkPenn`): restores `Property.ENERGY` from a meal's
+  `energy_value`, capped at `MAX_ENERGY`; wired into `PENN_EXTRA_ACTIONS` and
+  gave Houston Hall's meals `energy_value`.
+- Added `accrue_energy` to `drives.py` (mirrors `accrue_thirst`: opt-in via
+  `energy_decay_rate`, floors at 0, flips `is_low_energy`), wired into
+  `run_simulation.py`'s per-step loop next to `accrue_thirst`.
+- Wrote `world_data_eat.yaml` (one persona, Houston Hall, get/eat sandwich
+  arc) and wired a `--scenario eat` into `generate_penn_replay.py`. Baked it
+  end-to-end and confirmed the `eat` event fires and energy is restored.
+- Wrote/extended `test_eat_energy.py` (6 tests) and confirmed the existing
+  `test_energy_drive.py` scaffold (4 tests) now passes unmodified.
+- Wrote `penn-eatpenn-plan.md`: the full remaining design (16h eat-again
+  cooldown via `Property.NOT_HUNGRY_TIME` + `game.turn`, surfacing
+  `is_low_energy` to the live LLM brain via `cognition.py`, Sleep as a
+  separate follow-up).
+
+**Blockers / questions:**
+- Noticed `text_adventure_games/actions/consume.py`'s `Eat.apply_effects`
+  TODO comment (the energy-restore assignment placeholder) got deleted with
+  no replacement code -- double check that wasn't accidental before it ships.
+- Yesterday's `Set_energy` blocker (broke `test_action_castle_energy.py` /
+  `test_action_castle_eat.py`, expects 50 vs new 70) is still open.
+
+**Next:**
+- Cooldown + LLM-surfacing halves of #931 (both still unimplemented, see the
+  plan doc).
+- Resolve the `Set_energy` test blocker from 2026-07-30.
+
+## 2026-07-30
+**Focus:** Finish the Eat/Drink cooldown system; sleep recovery tuning
+
+**Done today:**
+- Finished `Drink` (mirrors `Eat`), gated both on `ate_food`/`drank_water`
+  cooldown flags that clear via a new 16-hour reset trigger (same
+  timestamp-and-check shape as `Sleep`'s 8-hour wake-up). Added water/soda
+  items to the Garden. Wrote `tests/test_action_castle_food_cooldown.py` (6
+  tests, all passing).
+- Lowered the sleep recovery rate: `SLEEP_RECOVERY_DECAY` 0.8 -> 0.9 (less of
+  the energy deficit clears per half hour, so overnight recovery is slower).
+- Changed `Set_energy` ("energy mode") to reset to 70 instead of 50.
+
+**Blockers / questions:**
+- The `Set_energy` change broke 2 existing tests that assert energy == 50
+  after "energy mode" (`test_action_castle_energy.py` and
+  `test_action_castle_eat.py`) -- need to decide: update the assertions to 70,
+  or revert the reset value.
+
+**Next:**
+- Fix the 2 broken `Set_energy` tests.
+
+## 2026-07-29
+**Focus:** Action Castle sleep recovery bugfix
+
+**Done today:**
+- Fixed `recover_and_wake_up`: it multiplied *current* energy by a recovery
+  rate each half hour, so the lower your energy, the less sleep helped
+  (energy 1 -> only 5.89 after a full night). Now shrinks the deficit from
+  100 by a constant factor instead, so recovery converges to ~93+ overnight
+  regardless of starting energy. Renamed `SLEEP_RECOVERY_RATE` ->
+  `SLEEP_RECOVERY_DECAY`. All 25 sleep/energy/eat tests still pass.
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Commit this fix + yesterday's uncommitted `enums.py`/Godot scaffold work.
+
+## 2026-07-28
+**Focus:** Action Castle sleep/energy bugfixes + scoping the Penn/Godot port
+
+**Done today:**
+- Fixed several sleep/energy bugs in Action Castle (uninitialized energy
+  crashing `build_game()`, broken `Sleep.__init__`, `is_sleeping` naming
+  mismatch, uncapped recovery). `Sleep` now fast-forwards through the night
+  in one command; added a `SleepGate` mixin blocking actions while asleep.
+- Added `tests/test_action_castle_sleep.py` and fixed/filled in the rest of
+  `test_action_castle_energy.py`/`test_action_castle_eat.py`. Suite green,
+  committed as `f1fffed`.
+- Started scoping the same system for the Penn/Godot sim: added
+  `IS_SLEEPING`/`TIRED`/`SLEPT_AT_TIME` to `enums.Property` and wrote 3 TDD
+  scaffold test files under `godot-generative-agents/tests/` (not committed,
+  expected to fail until `EatPenn`/`Sleep`/`accrue_energy` exist).
+
+**Blockers / questions:**
+- Open question: should Penn's `Sleep` fast-forward turns like Action
+  Castle's, or let a tick-driven drive restore energy instead? Penn's loop
+  is externally ticked, so the Action Castle answer may not transfer.
+- No `sleepable`-tagged location in `world_data_upenn.yaml` yet.
+
+**Next:**
+- Settle the Penn `Sleep` semantics question, implement `EatPenn`/`Sleep`/
+  `accrue_energy` to turn the scaffolds green.
+- Commit the `enums.py` change and the new test files.
+
 ## 2026-07-24
 **Focus:** Git branching workflow, plus time-based energy decay
 
