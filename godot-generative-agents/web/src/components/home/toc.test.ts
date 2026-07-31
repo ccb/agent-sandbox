@@ -13,12 +13,14 @@ import costSource from "./CostSection.tsx?raw";
 import { TOC } from "./HomeView";
 import homeSource from "./HomeView.tsx?raw";
 import implSource from "./ImplementationSection.tsx?raw";
+import reflectionsSource from "./ReflectionsSection.tsx?raw";
 
 // HomeView renders each section component partway down, so splicing the
 // components' source in at their call sites reproduces the rendered id order.
 const MOUNTS: [string, string][] = [
   ["<ImplementationSection />", implSource],
   ["<CostSection />", costSource],
+  ["<ReflectionsSection />", reflectionsSource],
 ];
 const source = MOUNTS.reduce((acc, [mount, src]) => acc.replace(mount, src), homeSource);
 

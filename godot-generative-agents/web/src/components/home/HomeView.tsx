@@ -6,6 +6,7 @@ import { lazy, type MouseEvent, Suspense, useEffect, useRef, useState } from "re
 import { GodotCanvas } from "../GodotCanvas";
 import { CostSection } from "./CostSection";
 import { ImplementationSection } from "./ImplementationSection";
+import { ReflectionsSection } from "./ReflectionsSection";
 import { TeX } from "./TeX";
 import "./home.css";
 
@@ -349,6 +350,7 @@ export const TOC: { id: string; label: string; sub?: true }[] = [
   { id: "verb-to-tool", label: "From verb to tool", sub: true },
   { id: "your-own-verb", label: "Adding your own verb", sub: true },
   { id: "cost", label: "What a day costs" },
+  { id: "reflections", label: "Coding agents as research instruments" },
   { id: "limitations", label: "Limitations" },
   { id: "acknowledgements", label: "Acknowledgements" },
   { id: "references", label: "References" },
@@ -707,6 +709,9 @@ export function HomeView() {
 
       {/* ===== Cost: the #921 cost-scaling measurements ===== */}
       <CostSection />
+
+      {/* ===== Reflections: building this with a coding agent ===== */}
+      <ReflectionsSection />
 
       {/* ===== Limitations ===== */}
       <section className="nrf-section">
