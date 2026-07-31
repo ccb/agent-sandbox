@@ -1735,11 +1735,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			# Toggle the day-plans pop-up (issue #251).
 			_toggle_day_plans()
 			get_viewport().set_input_as_handled()
-		KEY_C:
-			# Capture the current campus view into the snapshot gallery (issue #253).
-			# _take_snapshot no-ops if a modal is open, so this is safe to fire always.
-			_take_snapshot()
-			get_viewport().set_input_as_handled()
+		# Snapshot capture (issue #253) is off for the release along with its sidebar
+		# button -- C would otherwise capture into a gallery with no way to open it.
+		# Re-enable together with agent_panel.gd's _capture_tools.
+#		KEY_C:
+#			# Capture the current campus view into the snapshot gallery (issue #253).
+#			# _take_snapshot no-ops if a modal is open, so this is safe to fire always.
+#			_take_snapshot()
+#			get_viewport().set_input_as_handled()
 		KEY_P:
 			# Toggle the State Details inspector for the tracked agent (issue #408) --
 			# unless the social graph is above it (layer 13 > 12): opening a modal
@@ -1782,12 +1785,16 @@ func _unhandled_input(event: InputEvent) -> void:
 			elif _heatmap.visible:
 				_heatmap.cycle_view(-1 if event.keycode == KEY_LEFT else 1)
 				get_viewport().set_input_as_handled()
-		KEY_BRACKETLEFT:
-			_set_clip_marker(true)
-			get_viewport().set_input_as_handled()
-		KEY_BRACKETRIGHT:
-			_set_clip_marker(false)
-			get_viewport().set_input_as_handled()
+		# Clip in/out markers (issue #488) are off for the release with the Export
+		# buttons: set_clip_span still highlights the span on the timeline strip, so
+		# leaving these live would advertise an export that cannot be run.
+		# Re-enable together with agent_panel.gd's _capture_tools.
+#		KEY_BRACKETLEFT:
+#			_set_clip_marker(true)
+#			get_viewport().set_input_as_handled()
+#		KEY_BRACKETRIGHT:
+#			_set_clip_marker(false)
+#			get_viewport().set_input_as_handled()
 
 
 func _toggle_heatmap() -> void:
