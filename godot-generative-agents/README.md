@@ -484,3 +484,12 @@ Two design docs in the repo sketch the road from here to a fully-wired Godot fro
   `Cute_Fantasy_Free/` with its original `read_me.txt`. Per that license it is **free
   for non-commercial use and may be modified, but not redistributed or resold**. It
   lives here only for this private research repo.
+- **UI chrome** — the **Cute Fantasy UI / Dungeons** pack by Kenmi, kept under
+  `Cute_Fantasy_UI/` with its original `read_me.txt`. `theme/cute_fantasy_ui.tres`
+  9-slices the parchment frames, buttons, sliders and ribbons out of its sheets.
+  Same terms as above: usable and modifiable, **not redistributable or resalable**,
+  here only for this private research repo.
+- **Fonts** — none bundled. All UI text uses Godot's built-in font (Open Sans). The
+  UI pack's 5×9 pixel font was never wired up (it read poorly at the small sizes the
+  panels use, and was ASCII-only) and was deleted; `theme/cute_fantasy_ui.tres`
+  deliberately sets no `default_font`.

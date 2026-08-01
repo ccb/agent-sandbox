@@ -14,8 +14,9 @@ extends PanelContainer
 const PANEL_WIDTH := 210.0
 const MARGIN := 16.0
 # Muted small-print colour, matching the sidebar's status lines (readable on the
-# Cute Fantasy parchment) -- same value live_hud.gd uses.
-const MUTED_COLOR := Color(0.42, 0.32, 0.24)
+# Cute Fantasy parchment) -- same value live_hud.gd uses. See agent_panel.gd's
+# STATUS_COLOR for why this exact brown (6.7:1 on the parchment).
+const MUTED_COLOR := Color(0.32, 0.24, 0.17)
 
 var _rows_box: VBoxContainer
 

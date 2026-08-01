@@ -42,11 +42,17 @@ const DOT_COLORS := {
 	3: Color(0.78, 0.22, 0.18),  # DOWN      - red
 }
 const STATE_NAMES := {0: "Simulated", 1: "Live", 2: "Degraded", 3: "Offline"}
+# The header dot's colour while HALTED. Deliberately NOT darkened like the text
+# colours below: this is a 12px ColorRect, not a glyph, so it answers to the 3:1
+# non-text threshold (it sits at 3.4:1), and dimming it would make the most severe
+# state read quieter than the DOWN dot it shares a value with.
 const HALT_COLOR := Color(0.78, 0.22, 0.18)
 # Muted small-print colour, matching the sidebar's status lines (readable on
-# the Cute Fantasy parchment).
-const MUTED_COLOR := Color(0.42, 0.32, 0.24)
-const TRIPPED_COLOR := Color(0.72, 0.16, 0.12)
+# the Cute Fantasy parchment). See agent_panel.gd's STATUS_COLOR for why this
+# exact brown (6.7:1 on the parchment).
+const MUTED_COLOR := Color(0.32, 0.24, 0.17)
+# "TRIPPED" / the Emergency stop label. Darkened to clear AA (5.0:1), hue unchanged.
+const TRIPPED_COLOR := Color(0.63, 0.14, 0.11)
 # The request log under the meter rows: one compact line per LLM call, newest
 # at the bottom -- the in-viewer twin of backend/llm_monitor.py's terminal
 # rows. The panel is narrow, so each row keeps only timestamp, role, actor and
@@ -54,18 +60,28 @@ const TRIPPED_COLOR := Color(0.72, 0.16, 0.12)
 const LOG_HEIGHT := 108.0
 const LOG_MAX_ROWS := 40
 const LOG_FONT_SIZE := 12
-# The terminal monitor's role colours (cyan/magenta/blue/green), darkened to
-# stay readable on the parchment theme.
+# The terminal monitor's role colours (cyan/magenta/blue/green), darkened to stay
+# readable on the parchment theme. "Darkened" is measured, not eyeballed: at this
+# 12px size every tint has to clear WCAG AA (4.5:1) against the panel's flat
+# #f6ca9f. decide and reflect were still only 4.05:1 and 3.84:1 — both failing —
+# so they came down further; hue is unchanged (189° and 120°), only lightness.
 const LOG_ROLE_TINTS := {
-	"decide": Color(0.10, 0.42, 0.48),
-	"converse": Color(0.55, 0.18, 0.45),
-	"plan": Color(0.17, 0.29, 0.56),
-	"reflect": Color(0.18, 0.45, 0.18),
+	"decide": Color(0.08, 0.30, 0.34),    # 6.3:1
+	"converse": Color(0.55, 0.18, 0.45),  # 5.0:1
+	"plan": Color(0.17, 0.29, 0.56),      # 5.6:1
+	"reflect": Color(0.13, 0.33, 0.13),   # 5.9:1
 }
-# The wish row's tint (#622, surfaced #625): the same rose-pink as
+# The wish row's tint (#622, surfaced #625): the same rose-pink hue as
 # timeline_markers.gd's KIND_COLORS["wish"], so a demand-signal record reads
-# as the same color in both the live request log and the baked-replay strip.
-const WISH_TINT := Color("d9569f")
+# as the same colour in both the live request log and the baked-replay strip.
+# Darker than the strip's swatch, though: the strip fills a shape (3:1 suffices
+# for non-text), while here it is 12px TEXT, and the raw d9569f was 2.4:1.
+# Same hue (327°), 5.2:1.
+const WISH_TINT := Color("8f2a61")
+# The dim timestamp prefix every log row opens with. One constant rather than the
+# same literal in four bbcode format strings — it was 8a7660 (2.86:1, the worst
+# contrast in the panel) in all four, so the drift had nowhere to show up. 5.7:1.
+const LOG_TIME_COLOR := Color("5a4836")
 
 var _dot: ColorRect
 var _status: Label
@@ -195,10 +211,9 @@ func _ready() -> void:
 	_log.fit_content = false
 	_log.custom_minimum_size = Vector2(0, LOG_HEIGHT)
 	_log.add_theme_font_size_override("normal_font_size", LOG_FONT_SIZE)
-	# The Cute Fantasy theme styles Labels but not RichTextLabel, whose default
-	# font colour is white -- unreadable on the parchment panel.
-	_log.add_theme_color_override("default_color", Color(0.24, 0.18, 0.12))
-	_log.text = "[color=#8a7660]no requests yet[/color]"
+	# The body colour comes from the theme's RichTextLabel/colors/default_color
+	# (Godot's own default is white, invisible on the parchment panel).
+	_log.text = "[color=#%s]no requests yet[/color]" % LOG_TIME_COLOR.to_html(false)
 	_body.add_child(_log)
 
 	_stop = Button.new()
@@ -322,8 +337,9 @@ func add_llm_call(rec: Dictionary) -> void:
 	]
 	# Timestamp (muted) leads each row, like the terminal monitor; the call
 	# number is hover detail only.
-	var line := "[hint=%s][color=#8a7660]%s[/color] [color=#%s]%s[/color] %s %s→%s $%.4f[/hint]" % [
+	var line := "[hint=%s][color=#%s]%s[/color] [color=#%s]%s[/color] %s %s→%s $%.4f[/hint]" % [
 		hint,
+		LOG_TIME_COLOR.to_html(false),
 		String(rec.get("time", "-")),
 		tint.to_html(false),
 		role,
@@ -358,8 +374,11 @@ func add_engine_event(event: Dictionary) -> void:
 	var when := "t%s" % str(turn) if turn != null else "-"
 	_push_row(
 		(
-			"[hint=%s · %s][color=#8a7660]%s[/color] [color=#%s]%s[/color] %s[/hint]"
-			% [channel, when, when, MUTED_COLOR.to_html(false), channel, text]
+			"[hint=%s · %s][color=#%s]%s[/color] [color=#%s]%s[/color] %s[/hint]"
+			% [
+				channel, when, LOG_TIME_COLOR.to_html(false), when,
+				MUTED_COLOR.to_html(false), channel, text,
+			]
 		)
 	)
 
@@ -388,8 +407,11 @@ func add_wish(rec: Dictionary) -> void:
 		hint += " — because %s" % reason
 	_push_row(
 		(
-			"[hint=%s][color=#8a7660]%s[/color] [color=#%s]💭 wish[/color] %s: %s[/hint]"
-			% [_bracket_safe(hint), when, WISH_TINT.to_html(false), actor, clipped.replace("[", "[lb]")]
+			"[hint=%s][color=#%s]%s[/color] [color=#%s]💭 wish[/color] %s: %s[/hint]"
+			% [
+				_bracket_safe(hint), LOG_TIME_COLOR.to_html(false), when,
+				WISH_TINT.to_html(false), actor, clipped.replace("[", "[lb]"),
+			]
 		)
 	)
 

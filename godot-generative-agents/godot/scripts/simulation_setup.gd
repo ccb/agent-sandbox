@@ -19,8 +19,11 @@ const VIEWER_SCENE := "res://scenes/viewer.tscn"
 const MENU_SCENE := "res://scenes/main_menu.tscn"
 const ConfigBody := preload("res://scripts/config_body.gd")
 
-const HINT_COLOR := Color(0.42, 0.32, 0.24)
-const ERROR_COLOR := Color(0.82, 0.20, 0.15)
+# Muted brown for the small print, legible on the parchment panel — see
+# agent_panel.gd's STATUS_COLOR for the 6.7:1 contrast rationale.
+const HINT_COLOR := Color(0.32, 0.24, 0.17)
+# Alarm red, darkened to clear AA on the parchment (5.0:1) — see main_menu.gd.
+const ERROR_COLOR := Color(0.62, 0.15, 0.11)
 
 # The curated sim knobs this scene exposes, each mapped to its nested path into
 # GET /config's `knobs` block. Temperature (game.agent.temperature) is the live
@@ -404,7 +407,9 @@ func _render_config(data: Dictionary) -> void:
 		_form_box.add_child(plan_row)
 		_plan_hint = Label.new()
 		_plan_hint.add_theme_color_override("font_color", HINT_COLOR)
-		_plan_hint.add_theme_font_size_override("font_size", 12)
+		_plan_hint.add_theme_font_size_override("font_size", 14)
+		# Wrap rather than widen the form (see past_runs.gd's summary label).
+		_plan_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_form_box.add_child(_plan_hint)
 		# Both pickers re-render the hint; _render_config rebuilds these
 		# controls on every load, so the connects can't double up. unbind(1)
@@ -483,7 +488,9 @@ func _render_config(data: Dictionary) -> void:
 		var hint := Label.new()
 		hint.text = "Ends about %s at the current step budget." % stop
 		hint.add_theme_color_override("font_color", HINT_COLOR)
-		hint.add_theme_font_size_override("font_size", 12)
+		hint.add_theme_font_size_override("font_size", 14)
+		# Wrap rather than widen the form (see past_runs.gd's summary label).
+		hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_form_box.add_child(hint)
 
 	_start_btn.disabled = _persona_checks.is_empty()
