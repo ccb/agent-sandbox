@@ -4,6 +4,49 @@ Daily log, newest entry on top. Format: [`journal/README.md`](README.md).
 
 <!-- Copy the template from README.md to the top each working day. -->
 
+## 2026-07-27 — Tomb: the hint system grows a cipher
+
+(Work lives in the standalone repo now — ccb/tomb-of-nassak-an-rah, extracted
+7/25 — so this journal is the one piece of tomb news still landing here.)
+
+### InvisiClues, enciphered
+Replaced type-HINT-repeatedly with a panel: every open question with its full
+ladder visible in SHAPE — word lengths, case, punctuation — but unrevealed
+rungs enciphered, and one [ DECRYPT ] on the next rung only. A tap submits the
+same journaled free `hint <key>` as typing, so saves, replays, and the
+hints-taken tally stay honest; the panel is a richer *rendering* of the same
+mechanic, and the CLI still gets the classic Infocom list. First cut was CSS
+blur; the better idea was glyph substitution — per-OCCURRENCE random (no
+consistent mapping, so nothing for frequency analysis to attack), seeded by
+the text so the ciphertext reads as a stable document, not static.
+
+### The script safari
+Auditioned Greek/Cyrillic (shipped first), Latin Ext-B, Glagolitic, Armenian,
+Kannada, Mongolian. Picked **Mongolian**: cursive-joining, so the ciphertext
+shapes into flowing script — intercepted Autarchy handwriting. The finding
+worth keeping: fontTools cmap dumps showed the mono fonts (SF Mono, Roboto
+Mono, Droid Sans Mono, Cascadia) carry essentially NONE of the exotic
+candidates — even the "safe" Ext-B pool was 0/30 in SF Mono. Every mock I'd
+admired was rendering through per-glyph font FALLBACK the whole time. So the
+portability question isn't "what does the mono font cover" but "does every
+platform ship any fallback face" — settled empirically, including booting the
+iOS simulator against a test page with a tofu-control line. Mongolian passes
+on iOS, macOS, Android (Noto Sans Mongolian), and Windows (Baiti).
+
+### The invisible cascade
+The [ DECRYPT ] sweep was imperceptible: the resolved prefix kept wearing the
+dim cipher color until completion, the churn head was three characters, and
+the whole run took 0.7s. Now three distinct regions — reading phosphor /
+six-character yellow churn head / cipher-dim tail — sweep left-to-right over
+~2.5s regardless of line length. Verified by screenshotting mid-flight, not
+by vibes; a "Safari doesn't animate" report turned out to be a stale cache.
+
+Also today: split the glowstone toggle card into one-way LIGHT/DOUSE halves
+(the card now does what the command did), opted the terminal out of Chrome
+scroll anchoring (the itch-iframe hop on the Hall of Youth card — Safari has
+no scroll anchoring, which was the tell), and the game went up on itch.io
+(jam submission still pending; deadline 9/30).
+
 ## 2026-07-07 — Student PR review day; Slack round
 
 ### Reviewed and merged all four open student PRs
