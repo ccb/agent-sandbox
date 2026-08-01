@@ -54,3 +54,14 @@ def test_web_menu_reduces_to_a_single_start_button():
     # The full desktop label must survive too — losing it means desktop picked
     # up the reduced web copy.
     assert '"▶  Play the bundled replay"' in text
+
+
+def test_web_menu_start_button_holds_focus():
+    # #944: on web nothing else can hold focus (the backend LineEdit isn't
+    # built there), so the menu must land the keyboard on its one button —
+    # otherwise Enter/Space can't start the public demo at all.
+    text = _MENU_SCRIPT.read_text()
+    assert "bundled_btn.grab_focus()" in text, (
+        "main_menu.gd no longer focuses the web menu's Start-replay button — "
+        "the public web demo becomes mouse-only again (#944)"
+    )
