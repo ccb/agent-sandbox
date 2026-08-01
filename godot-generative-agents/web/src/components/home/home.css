@@ -590,14 +590,24 @@
 
 /* --- footer (Bulma .footer) --- */
 .nrf-footer {
-  padding: 2.5rem 1.5rem 3rem;
+  padding: 1rem 1.5rem 1.25rem;
   background: var(--nrf-footer-bg);
   text-align: center;
 }
+.nrf-footer .nrf-container {
+  /* The prose column is capped at 1180px; the attribution should sit on the
+     page's visual center, not that column's. */
+  max-width: none;
+  padding: 0;
+}
 .nrf-footer-content {
-  max-width: 66%;
+  max-width: min(52rem, calc(100vw - 3rem));
   margin: 0 auto;
-  font-size: 0.92rem;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+.nrf-footer-content p {
+  margin: 0;
 }
 .nrf-footer a {
   color: var(--nrf-link);
@@ -618,6 +628,11 @@
   .nrf-footer {
     margin-left: calc(-1 * var(--nrf-gutter));
     padding-left: calc(1.5rem + var(--nrf-gutter));
+  }
+  /* Half the TOC gutter sits left of the content column — nudge the block back so
+     it reads centered on the full page, not on the prose panel. */
+  .nrf-footer-content {
+    transform: translateX(calc(-1 * var(--nrf-gutter) / 2));
   }
   .nrf-toc {
     display: block;
@@ -656,7 +671,8 @@
     font-size: 1.75rem;
   }
   .nrf-footer-content {
-    max-width: 100%;
+    max-width: calc(100vw - 2rem);
+    transform: none;
   }
   /* Justified text on a phone-width measure is mostly gaps. */
   .nrf-justified {
