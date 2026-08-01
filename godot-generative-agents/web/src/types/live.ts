@@ -117,9 +117,10 @@ export interface RunSocial {
   co_settled_pair_steps: number;
   by_pair: Record<string, number>;
   conversations: number;
-  // #819/#825: whether a zero above is meaningful. `counted` is false under the
-  // mock brain, which never counts co-settling — its permanent 0 is "not
-  // measured", not a drought. `resumed` is true when this process adopted a
+  // #819/#825: whether a zero above is meaningful. `counted` is false only
+  // from a pre-#825 backend, where the mock brain never counted co-settling —
+  // there its permanent 0 is "not measured", not a drought. Current backends
+  // count under every brain and always send true. `resumed` is true when this process adopted a
   // mid-day run, restarting the accumulators at 0 — its 0 is "not fully
   // observed". Both mirror the backend's #795 finish-warning gate, so the card
   // can tell a real drought from those two non-signals. Optional: a backend

@@ -434,6 +434,15 @@ def summarise(run_id: str, runs_dir: pathlib.Path, usage: dict | None) -> dict:
         row = con.execute(
             "SELECT status, cost, steps, model FROM runs WHERE id = ?", (run_id,)
         ).fetchone()
+        # #859: sim.db is a git-tracked binary whose lifetime differs from the
+        # run directories next to it -- a run made in another worktree, or an
+        # artifact PR that deliberately skips the store (batch 8, #893), leaves
+        # a run directory here with no row there. The memory counters below are
+        # the only numbers this tool sources from the database, so when the run
+        # is absent they must say so rather than print a confident 0 that reads
+        # as "#779/#778 never fired". Anything that prints a number should be
+        # able to prove it counted something.
+        out["in_sim_db"] = row is not None
         if row:
             out["persisted"] = {
                 "status": row["status"],
@@ -441,19 +450,20 @@ def summarise(run_id: str, runs_dir: pathlib.Path, usage: dict | None) -> dict:
                 "steps": row["steps"],
                 "model": row["model"],
             }
-        seeded: collections.Counter = collections.Counter()
-        commitments: collections.Counter = collections.Counter()
-        for m in con.execute(
-            "SELECT agent, kind, text, extra FROM memories WHERE run_id = ?", (run_id,)
-        ):
-            if RELATIONSHIP_TAG in (m["extra"] or ""):
-                seeded[m["agent"]] += 1
-            elif m["text"].startswith(COMMITMENT_PREFIX):
-                commitments[m["agent"]] += 1
-        out["relationship_memories"] = dict(sorted(seeded.items()))  # #779
-        out["relationship_memories_total"] = sum(seeded.values())
-        out["commitment_memories"] = dict(sorted(commitments.items()))  # #778
-        out["commitment_memories_total"] = sum(commitments.values())
+            seeded: collections.Counter = collections.Counter()
+            commitments: collections.Counter = collections.Counter()
+            for m in con.execute(
+                "SELECT agent, kind, text, extra FROM memories WHERE run_id = ?",
+                (run_id,),
+            ):
+                if RELATIONSHIP_TAG in (m["extra"] or ""):
+                    seeded[m["agent"]] += 1
+                elif m["text"].startswith(COMMITMENT_PREFIX):
+                    commitments[m["agent"]] += 1
+            out["relationship_memories"] = dict(sorted(seeded.items()))  # #779
+            out["relationship_memories_total"] = sum(seeded.values())
+            out["commitment_memories"] = dict(sorted(commitments.items()))  # #778
+            out["commitment_memories_total"] = sum(commitments.values())
         con.close()
 
     if usage:
@@ -549,6 +559,11 @@ def render(s: dict) -> str:
             f"  #778 commit {s['commitment_memories_total']} commitment memories "
             + (str(s["commitment_memories"]) if s["commitment_memories"] else "(none)")
         )
+    elif s.get("in_sim_db") is False:
+        # #859: the run directory exists but the store has no row for it, so
+        # there is nothing these two counters could have counted.
+        lines.append("  #779 seeds  n/a (run not in sim.db)")
+        lines.append("  #778 commit n/a (run not in sim.db)")
     if s.get("by_role"):
         lines.append(
             "  by_role     "
@@ -829,6 +844,48 @@ def self_check() -> None:
     assert longest["Real"] == 4 and still["Real"] == 4, (longest, still)
     assert longest["Arrives"] == 2 and still["Arrives"] == 1, (longest, still)
     assert longest["Sits"] == 0 and still["Sits"] == 0, (longest, still)
+
+    # #859: the memory counters are the only numbers sourced from sim.db, whose
+    # git-tracked lifetime desynchronizes from the run directories next to it.
+    # A run with no row in the store prints "n/a (run not in sim.db)", never a
+    # confident 0 -- and once the row exists, an honest zero is still a zero.
+    with tempfile.TemporaryDirectory() as tmp:
+        runs_dir = pathlib.Path(tmp)
+        run_dir = runs_dir / "run-desync"
+        run_dir.mkdir()
+        (run_dir / "frames.jsonl").write_text(
+            '{"A": {"act": "reading @ x", "loc": "Hall"}}\n', encoding="utf-8"
+        )
+        con = sqlite3.connect(runs_dir / "sim.db")
+        con.execute(
+            "CREATE TABLE runs (id TEXT PRIMARY KEY, manifest TEXT, status TEXT,"
+            " model TEXT, created TEXT, cost REAL DEFAULT 0.0,"
+            " steps INTEGER DEFAULT 0)"
+        )
+        con.execute(
+            "CREATE TABLE memories (run_id TEXT, agent TEXT, record_id INTEGER,"
+            " kind TEXT, importance REAL, created_turn INTEGER, text TEXT,"
+            " embedding BLOB, extra TEXT)"
+        )
+        con.commit()
+        s = summarise("run-desync", runs_dir, usage=None)
+        assert s["in_sim_db"] is False, s
+        assert "relationship_memories_total" not in s, s
+        out = render(s)
+        assert "#779 seeds  n/a (run not in sim.db)" in out, out
+        assert "#778 commit n/a (run not in sim.db)" in out, out
+        con.execute(
+            "INSERT INTO runs (id, manifest, status, created)"
+            " VALUES ('run-desync', '{}', 'finished', '2026-07-28')"
+        )
+        con.commit()
+        con.close()
+        s = summarise("run-desync", runs_dir, usage=None)
+        assert s["in_sim_db"] is True, s
+        assert s["relationship_memories_total"] == 0, s
+        out = render(s)
+        assert "#779 seeds  0 relationship memories (NONE)" in out, out
+        assert "#778 commit 0 commitment memories (none)" in out, out
 
     print("self-check OK")
 

@@ -10,8 +10,10 @@ extends SceneTree
 ##
 ## The point of exporting rather than redrawing: these call agent_panel.gd's own
 ## static builders, so the legend on the page cannot drift from the buttons in the
-## viewer. Only the five hand-drawn glyphs the legend uses are exported — add the
-## sheet-cut ones (_pack_icon: home, zoom, reset, pause) here if it ever grows.
+## viewer. Only the three hand-drawn glyphs the legend uses are exported — add the
+## sheet-cut ones (_pack_icon: home, zoom, reset, pause) here if it ever grows. The
+## camera + gallery glyphs are omitted while the capture tools are hidden for the
+## release (agent_panel.gd's _capture_tools); their builders are still there.
 
 const AgentPanel := preload("res://scripts/agent_panel.gd")
 
@@ -24,8 +26,6 @@ func _initialize() -> void:
 		"heatmap": AgentPanel._flame_icon(),
 		"social-graph": AgentPanel._graph_icon(),
 		"day-plans": AgentPanel._calendar_icon(),
-		"snapshot": AgentPanel._camera_icon(),
-		"snapshots": AgentPanel._gallery_icon(),
 	}
 
 	var out := ProjectSettings.globalize_path(OUT_DIR)

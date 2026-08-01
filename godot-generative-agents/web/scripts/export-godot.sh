@@ -24,11 +24,15 @@ fi
 
 mkdir -p "$OUT_DIR"
 
-# The web build boots the landing menu (issue #399), same as the desktop default.
-# We still force it explicitly for the export so the web entry point stays pinned
-# even if the desktop main scene changes, then restore project.godot no matter what
-# happens. (On web the menu's "Open a local file…" button is hidden and the bundled
-# replay is fetched over HTTP — the replay isn't packed into the build.)
+# The web build boots the landing menu, same as desktop — but on web the menu
+# reduces itself to a single "Start replay" button (issue #903, PR #928 review):
+# the reader gets an explicit start affordance instead of landing mid-scene, and
+# none of the live-backend / past-runs controls #879 keeps out of public
+# navigation. That gating lives in godot/scripts/main_menu.gd, keyed on
+# OS.has_feature("web"). We still force the boot scene explicitly for the export
+# so the web entry point stays pinned even if the desktop main scene changes,
+# then restore project.godot no matter what happens. (The bundled replay isn't
+# packed into the build — the viewer fetches it over HTTP, web_replay_url.)
 BACKUP="$(mktemp)"
 cp "$PROJECT_FILE" "$BACKUP"
 restore() { cp "$BACKUP" "$PROJECT_FILE"; rm -f "$BACKUP"; }

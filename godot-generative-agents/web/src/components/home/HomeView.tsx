@@ -41,8 +41,6 @@ export const SIDEBAR_LEGEND: {
     label: "Day plans",
     text: "each agent's plan against what actually happened",
   },
-  { icon: "snapshot.png", label: "Snapshot", text: "capture the current campus view" },
-  { icon: "snapshots.png", label: "Snapshots", text: "the captures taken this session" },
   {
     glyph: "ⓘ",
     label: "State Details",

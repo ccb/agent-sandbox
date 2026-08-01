@@ -35,8 +35,9 @@ export interface SocialView {
  * server dict emitted), top 5, plus how many were dropped. `note` classifies
  * the state the counters describe:
  *
- * - `uncounted` — the run's brain never counts co-settling (the mock schedule
- *   brain, #825); its permanent 0 is "not measured".
+ * - `uncounted` — the backend reported it never counted co-settling; only
+ *   pre-#825 backends do this (their mock brain skipped the metric). Its
+ *   permanent 0 is "not measured".
  * - `resumed` — the run was adopted mid-day, so the accumulators restarted at 0.
  * - `mismatch` — a conversation completed yet co-settle read 0: the counter is
  *   demonstrably wrong, which the old both-zero gate hid entirely.
@@ -93,7 +94,7 @@ export function SocialSummary({
 
 const NOTE_TEXT: Record<Exclude<SocialNote, null>, string> = {
   uncounted:
-    "Co-settling isn't counted under this brain — the mock schedule brain never does (#825).",
+    "Co-settling wasn't counted — this backend predates #825, when the mock brain skipped it.",
   resumed: "Resumed run — the social counters restarted at 0, so a low count isn't the whole day.",
   mismatch:
     "A conversation completed but co-settled pair-steps read 0 — the co-settle counter may be off.",

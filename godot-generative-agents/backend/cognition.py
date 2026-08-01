@@ -712,7 +712,9 @@ def attach_agents(
         # replay stays byte-identical. The threshold is the agent's
         # reflection_threshold (LLMAgent's default unless #564's config passed one).
         if reflector_client is not None:
-            agent.reflector = LLMReflector(reflector_client)
+            # actor=char.name (#847): the reflect client is shared across the cast,
+            # so tag each reflection with its agent for per-actor cost attribution.
+            agent.reflector = LLMReflector(reflector_client, actor=char.name)
         # The verbs the structured tool may offer; the mock ignores the enum but a
         # well-formed schema keeps the seam honest for a real brain. Order:
         # the base travel/perform, then any caller-supplied extra_action_names
@@ -845,6 +847,7 @@ def attach_agents(
                 plan_locations,
                 clock=clock,
                 num_steps=num_steps,
+                actor=char.name,  # #847: shared plan client -> attribute per agent
                 travel_minutes=travel_minutes,
             )
             plan = planner.generate(persona=spec, memory=agent.memory)
