@@ -16,11 +16,11 @@ byte-identical to `main@7693ccb6` (diff touches only landing-page files).
 | A1 | tanaka | 4320 | ON | **$0.518** | 66 | done |
 | A3 | tanaka,maya,priya | 4320 | ON | **$3.157** | 434 | done |
 | A5 = baseline | showcase 5 | 4320 | ON | **$5.37 / $5.38 / $6.82** (mean $5.86) | 906/832/1109 | reused: batch 12 runA, batch 10 runA, batch 11 runB |
-| A7 | showcase 5 + diego,sofia | 4320 | ON | — | — | **pending** (`./run_remaining.sh`) |
+| A7 | showcase 5 + diego,sofia | 4320 | ON | **$8.575** | 1375 | done (2026-08-01, post-reset) |
 | D1080 (3h) | showcase 5 | 1080 | ON | **$1.377** | 236 | done |
 | D2160 (6h) | showcase 5 | 2160 | ON | **$2.957** | 509 | done |
 | D4320 (12h) | = A5 baseline | 4320 | ON | = baseline | | reused |
-| C-OFF | showcase 5 | 4320 | **OFF** | — | — | **pending** (`./run_remaining.sh`) |
+| C-OFF | showcase 5 | 4320 | **OFF** | **$7.071** | 1131 | done (2026-08-01, post-reset) |
 
 `C-OFF-aborted-apilimit/`: the first C-OFF attempt died at step 1921/4320
 ($3.03 partial, 5 consecutive 400s) when the **workspace API usage limit**
@@ -31,10 +31,18 @@ consecutive LLM errors, but `drive_run.sh`'s wait loop only terminates on
 `paused && (step>=steps || over_budget)`, so it spins forever on an
 error-pause.
 
-Early findings: duration is linear ($1.38 → $2.96 → $5.86 for 3h/6h/12h);
-agents are **super-linear at the low end** ($0.52 → $3.16 → $5.86 for 1/3/5) —
-a solo agent has no conversations or reactions, so the social Haiku calls
-vanish (66 calls vs ~900 at five agents).
+Findings: duration is linear ($1.38 → $2.96 → $5.86 for 3h/6h/12h,
+~$0.49/sim-hour); agents are **super-linear at the low end then near-linear**
+($0.52 → $3.16 → $5.86 → $8.57 for 1/3/5/7) — a solo agent has no
+conversations or reactions, so the social Haiku calls vanish (66 calls vs
+~900 at five agents), and past three agents the marginal agent costs
+~$1.2–1.4/day. **Cognition OFF cost MORE than ON** ($7.07 vs the $5.86
+baseline mean, above the 5.37–6.82 replicate range; 1131 calls vs ~900) —
+the tools' extra retrieval calls are cheap, and agents deciding without
+recalled context appear to spend more calls overall. One run — a direction,
+not a measurement.
 
-`cost_scaling.csv` has one row per cell/replicate; A7 + C-OFF rows land when
-`run_remaining.sh` has run after the limit reset.
+The C-OFF/A7 runs (2026-08-01) ran on the same recipe post-reset; the first
+C-OFF attempt (2026-07-30) died to the workspace API limit and is preserved
+as `C-OFF-aborted-apilimit/`. `cost_scaling.csv` has one row per
+cell/replicate — 9 rows, complete.

@@ -16,8 +16,10 @@ const CSV = {
   A1: 0.518008,
   A3: 3.157274,
   A5: [5.37355, 5.381057, 6.818001], // batch-12, batch-10, batch-11 replicates
+  A7: 8.574769,
   D1080: 1.377269,
   D2160: 2.957218,
+  COFF: 7.070765,
 };
 
 describe("the cost data", () => {
@@ -33,7 +35,7 @@ describe("the cost data", () => {
       [1, CSV.A1],
       [3, CSV.A3],
       [5, BASELINE.cost],
-      [7, null], // pending: blocked on the 2026-08-01 API-limit reset
+      [7, CSV.A7],
     ]);
   });
 
@@ -45,10 +47,9 @@ describe("the cost data", () => {
     ]);
   });
 
-  it("the cognition comparison uses the baseline as its ON bar", () => {
+  it("the cognition comparison matches the CSV", () => {
     expect(COGNITION_BARS[0].cost).toBe(BASELINE.cost);
-    // The OFF bar is pending; the panel must stay hidden until it lands.
-    expect(COGNITION_BARS[1].cost).toBeNull();
+    expect(COGNITION_BARS[1].cost).toBe(CSV.COFF);
   });
 });
 

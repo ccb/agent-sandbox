@@ -7,8 +7,8 @@
  * Sonnet 5 on decide/plan/reflect/outcome and Haiku 4.5 on converse/score/
  * react, cognition tools on unless stated. CostSection.test.ts pins these
  * constants against the CSV's values so the prose and the data can't drift
- * apart. `null` marks a cell whose run is still pending (blocked on the
- * 2026-08-01 API-limit reset); its point/panel appears once the number lands.
+ * apart. A `cost: null` would mark a not-yet-measured cell (its point/panel
+ * stays hidden); as of 2026-08-01 every cell is measured.
  */
 
 /** The three 5-agent / 12-hour replicates (batches 12, 10, 11 of #760). */
@@ -35,7 +35,7 @@ export const AGENT_POINTS: CostPoint[] = [
   { x: 1, cost: 0.518008 },
   { x: 3, cost: 3.157274 },
   { x: 5, ...BASELINE },
-  { x: 7, cost: null },
+  { x: 7, cost: 8.574769 },
 ];
 
 /** Cost vs simulated hours, at 5 agents. */
@@ -48,7 +48,7 @@ export const DURATION_POINTS: CostPoint[] = [
 /** Cognition tools on vs off, at 5 agents / 12 hours. */
 export const COGNITION_BARS: { label: string; cost: number | null; lo?: number; hi?: number }[] = [
   { label: "tools on", ...BASELINE },
-  { label: "tools off", cost: null },
+  { label: "tools off", cost: 7.070765 },
 ];
 
 /** Smallest "nice" value ≥ v, for a y-axis that ends on a round number. */
@@ -255,8 +255,8 @@ export function CostSection() {
             {cognitionReady && (
               <BarChart
                 bars={COGNITION_BARS}
-                caption="Cognition tools on vs off, at five agents over twelve hours."
-                ariaLabel="Bar chart comparing dollars per run with cognition tools on versus off, at five agents over a twelve-hour day."
+                caption="Cognition tools on vs off, at five agents over twelve hours. The on bar is the baseline mean; the whiskers span its three replicates."
+                ariaLabel="Bar chart comparing dollars per run with cognition tools on versus off, at five agents over a twelve-hour day: about five dollars ninety with the tools on, seven dollars with them off."
               />
             )}
             <p>
@@ -267,7 +267,12 @@ export function CostSection() {
               tiering routes to the cheaper model never happen at all (66 calls in the solo day
               against roughly 900 in a five-agent one). The social machinery, not the individual
               deliberation, is where a multi-agent day's budget goes; past three agents the cost per
-              agent levels off at about a dollar per simulated day.
+              agent levels off at roughly a dollar and a quarter per simulated day. And perhaps
+              counterintuitively, disabling the cognition tools — the retrieval calls an agent may
+              make before acting — made the day <em>more</em> expensive ({usd(7.070765)} against the{" "}
+              {usd(BASELINE.cost)} baseline, above all three replicates): the tools' own calls are
+              cheap, and agents deciding without recalled context spent more calls overall. That is
+              a single run, so read it as a direction rather than a measurement.
             </p>
           </div>
         </div>
