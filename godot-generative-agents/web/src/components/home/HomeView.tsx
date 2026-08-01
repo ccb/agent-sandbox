@@ -892,6 +892,15 @@ export function HomeView() {
               Asset packs
             </h2>
             <div className="nrf-content nrf-justified">
+              <p>
+                Listed below are the asset packs we used in the game. The viewer is a Godot 4.6
+                project — campus maps are authored in Tiled from{" "}
+                <a href="https://www.openstreetmap.org/relation/2594845#map=15/39.94770/-75.19361">
+                  OpenStreetMap data
+                </a>
+                , with tilesets,
+                sprites, and UI art drawn from these packs.
+              </p>
               <ul>
                 <li>
                   <a href="https://kenmi-art.itch.io/cute-fantasy-ui">Cute Fantasy UI</a> by Kenmi
