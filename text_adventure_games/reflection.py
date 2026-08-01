@@ -384,9 +384,15 @@ class LLMReflector:
     edits here.
     """
 
-    def __init__(self, client, *, max_tokens: int = 400):
+    def __init__(self, client, *, max_tokens: int = 400, actor: str | None = None):
         self.client = client
         self.max_tokens = max_tokens
+        # Whose reflection this is (issue #847). A shared reflect client is stamped
+        # with a fixed ``role`` once, but the actor varies per agent -- so stamp it
+        # here, right before each (sequential) call, exactly as the decide/score
+        # sites do. ``None`` (the default, e.g. the webapp) stamps nothing, so
+        # attribution is unchanged for callers that don't supply one.
+        self.actor = actor
 
     def salient_questions(self, records) -> list[str]:
         user = (
@@ -464,5 +470,13 @@ class LLMReflector:
             {"role": "system", "content": prompt_templates.render("reflect_system")},
             {"role": "user", "content": user},
         ]
+        # Attribute this call to its agent (issue #847) so per-actor cost rollups
+        # (usage.py by_actor) don't bucket reflection under "(unattributed)".
+        # Stamped unconditionally: an actorless reflector sharing this client
+        # must clear a previous instance's stamp rather than inherit it (a None
+        # actor reads as unattributed at record time).
+        ctx = getattr(self.client, "context", None)
+        if ctx is not None:
+            ctx["actor"] = self.actor
         result = self.client.call_tool(messages, tool, max_tokens=self.max_tokens)
         return result or {}
