@@ -63,6 +63,10 @@
   max-width: 100%;
   margin: 0 auto;
 }
+/* The abstract reads better on a slightly shorter measure than the body prose. */
+.nrf-abstract {
+  max-width: 44em;
+}
 
 /* --- the sticky contents nav ---
    Fixed in the page's left margin rather than laid out beside the prose: the
@@ -231,6 +235,16 @@
   margin: 0 0 1em;
 }
 .nrf-content p:last-child {
+  margin-bottom: 0;
+}
+.nrf-content ul {
+  margin: 0;
+  padding-left: 1.4em;
+}
+.nrf-content li {
+  margin: 0 0 0.4em;
+}
+.nrf-content li:last-child {
   margin-bottom: 0;
 }
 .nrf-content a {
@@ -409,10 +423,6 @@
 .nrf-chart svg {
   width: 100%;
   height: auto;
-}
-/* The cognition-tools comparison is one small panel, not a full-width figure. */
-.nrf-chart--bars {
-  max-width: 20rem;
 }
 .nrf-chart text {
   font-family: var(--nrf-font);
@@ -675,6 +685,10 @@
 .nrf-panes .nrf-code {
   min-width: 0; /* let a grid child shrink instead of forcing the row wider */
   margin: 0;
+}
+.nrf-panes > p {
+  margin: 0;
+  align-self: center;
 }
 @media screen and (min-width: 900px) {
   .nrf-panes {

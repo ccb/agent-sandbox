@@ -178,7 +178,7 @@ function BarChart({
   const { maxY, py } = scales(shown, 1);
   const slot = (PLOT.right - PLOT.left) / bars.length;
   return (
-    <figure className="nrf-chart nrf-chart--bars">
+    <figure className="nrf-chart">
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={ariaLabel}>
         <Axes maxY={maxY} py={py} />
         {shown.map((b) => {
@@ -203,12 +203,8 @@ function BarChart({
               >
                 {usd(b.cost)}
               </text>
-              <text className="nrf-chart-tick" x={cx} y={PLOT.bottom + 11} textAnchor="middle">
-                {b.label.split(" ").map((word, i) => (
-                  <tspan key={word} x={cx} dy={i === 0 ? 0 : 11}>
-                    {word}
-                  </tspan>
-                ))}
+              <text className="nrf-chart-tick" x={cx} y={PLOT.bottom + 13} textAnchor="middle">
+                {b.label}
               </text>
             </g>
           );
@@ -256,13 +252,6 @@ export function CostSection() {
                 ariaLabel="Line chart of dollars per run against simulated hours: about one dollar forty for three hours, three dollars for six, and five dollars ninety for twelve, close to a straight line through the origin."
               />
             </div>
-            {cognitionReady && (
-              <BarChart
-                bars={COGNITION_BARS}
-                caption="Cognition tools on vs off, at five agents over twelve hours. The on bar is the baseline mean; the whiskers span its three replicates."
-                ariaLabel="Bar chart comparing dollars per run with cognition tools on versus off, at five agents over a twelve-hour day: about five dollars ninety with the tools on, seven dollars with them off."
-              />
-            )}
             <p>
               Duration scales almost exactly linearly: a settled cast spends tokens at a steady
               rate, so half the day is half the bill. Cast size does not. A solo agent's day costs{" "}
@@ -271,13 +260,25 @@ export function CostSection() {
               tiering routes to the cheaper model never happen at all (66 calls in the solo day
               against roughly 900 in a five-agent one). The social machinery, not the individual
               deliberation, is where a multi-agent day's budget goes; past three agents the cost per
-              agent levels off at roughly a dollar and a quarter per simulated day. And perhaps
-              counterintuitively, disabling the cognition tools — the retrieval calls an agent may
-              make before acting — made the day <em>more</em> expensive ({usd(7.070765)} against the{" "}
-              {usd(BASELINE.cost)} baseline, above all three replicates): the tools' own calls are
-              cheap, and agents deciding without recalled context spent more calls overall. That is
-              a single run, so read it as a direction rather than a measurement.
+              agent levels off at roughly a dollar and a quarter per simulated day.
             </p>
+            {cognitionReady && (
+              <div className="nrf-panes">
+                <BarChart
+                  bars={COGNITION_BARS}
+                  caption="Cognition tools on vs off, at five agents over twelve hours. The on bar is the baseline mean; the whiskers span its three replicates."
+                  ariaLabel="Bar chart comparing dollars per run with cognition tools on versus off, at five agents over a twelve-hour day: about five dollars ninety with the tools on, seven dollars with them off."
+                />
+                <p>
+                  And perhaps counterintuitively, disabling the cognition tools — the retrieval
+                  calls an agent may make before acting — made the day <em>more</em> expensive (
+                  {usd(7.070765)} against the {usd(BASELINE.cost)} baseline, above all three
+                  replicates): the tools' own calls are cheap, and agents deciding without recalled
+                  context spent more calls overall. That is a single run, so read it as a direction
+                  rather than a measurement.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>
