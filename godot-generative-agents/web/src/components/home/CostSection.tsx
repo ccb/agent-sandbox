@@ -178,7 +178,7 @@ function BarChart({
   const { maxY, py } = scales(shown, 1);
   const slot = (PLOT.right - PLOT.left) / bars.length;
   return (
-    <figure className="nrf-chart">
+    <figure className="nrf-chart nrf-chart--bars">
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={ariaLabel}>
         <Axes maxY={maxY} py={py} />
         {shown.map((b) => {
@@ -203,8 +203,12 @@ function BarChart({
               >
                 {usd(b.cost)}
               </text>
-              <text className="nrf-chart-tick" x={cx} y={PLOT.bottom + 13} textAnchor="middle">
-                {b.label}
+              <text className="nrf-chart-tick" x={cx} y={PLOT.bottom + 11} textAnchor="middle">
+                {b.label.split(" ").map((word, i) => (
+                  <tspan key={word} x={cx} dy={i === 0 ? 0 : 11}>
+                    {word}
+                  </tspan>
+                ))}
               </text>
             </g>
           );
