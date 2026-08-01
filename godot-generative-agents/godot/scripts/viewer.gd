@@ -163,13 +163,16 @@ const LivePacer := preload("res://scripts/live_pacer.gd")
 const RestartDetect := preload("res://scripts/restart_detect.gd")
 const RunState := preload("res://scripts/run_state.gd")
 const PayloadGuards := preload("res://scripts/payload_guards.gd")
+const ReplayCodec := preload("res://scripts/replay_codec.gd")
 const DecidingState := preload("res://scripts/deciding_indicator.gd")
 const ReplaySave := preload("res://scripts/replay_save.gd")
 
-# The replay/live contract schema this viewer renders (backend.contract
-# SCHEMA_VERSION). A payload declaring a different one still renders, but warns
-# once about likely drift (#638); an absent one is tolerated (older payloads).
-const SUPPORTED_SCHEMA_VERSION := "1.0"
+# The replay/live contract schemas this viewer renders (backend.contract
+# SCHEMA_VERSION). 1.1 (#941) added the carry-forward slim file encoding,
+# rehydrated at load by ReplayCodec, so 1.0 fat files still render bit-for-bit.
+# A payload declaring a different version still renders, but warns once about
+# likely drift (#638); an absent one is tolerated (older payloads).
+const SUPPORTED_SCHEMA_VERSIONS := ["1.0", "1.1"]
 # One-shot dedupe for the "unknown feed kind" warning so a newer backend
 # streaming an unrecognized kind every tick warns once, not per record (#638).
 var _warned_feed_kinds := {}
@@ -622,13 +625,16 @@ func _load_replay_from_text(text: String) -> void:
 		return
 	var replay := data as Dictionary
 	var meta := replay["meta"] as Dictionary
-	if not PayloadGuards.schema_ok(meta, SUPPORTED_SCHEMA_VERSION):
+	if not PayloadGuards.schema_ok(meta, SUPPORTED_SCHEMA_VERSIONS):
 		push_warning(
-			"penn_replay: replay schema_version '%s' != supported '%s'; rendering may be degraded"
-			% [String(meta.get("schema_version", "?")), SUPPORTED_SCHEMA_VERSION])
+			"penn_replay: replay schema_version '%s' not in supported %s; rendering may be degraded"
+			% [String(meta.get("schema_version", "?")), str(SUPPORTED_SCHEMA_VERSIONS)])
 
 	_apply_meta(meta)
-	_frames = replay["frames"]
+	# Rehydrate the 1.1 slim encoding (#941): carry-forward fields omitted by
+	# the writer come back, so every reader below sees full rows. Identity on
+	# 1.0 fat files. Live frames arrive fat and never pass through here.
+	_frames = ReplayCodec.fatten_frames(replay["frames"])
 	# The per-persona full memory history, for the State Details inspector's memory
 	# stream (issue #408). Baked replays carry it; a payload without it (or the live
 	# feed) leaves this empty and the inspector shows only the retrieved-this-step set.

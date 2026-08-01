@@ -38,6 +38,8 @@ fi
 # the success sentinel the test prints — grep -q + pipefail fails either way.
 "$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_replay_markers.gd 2>&1 \
   | tee /dev/stderr | grep -q "all checks passed"
+"$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_replay_codec.gd 2>&1 \
+  | tee /dev/stderr | grep -q "all checks passed"
 "$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_action_tally.gd 2>&1 \
   | tee /dev/stderr | grep -q "all checks passed"
 "$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_simulation_setup.gd 2>&1 \

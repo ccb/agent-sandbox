@@ -259,9 +259,13 @@ def test_baked_meta_carries_sorted_locations(tmp_path):
 
 def test_baked_replay_frames_carry_trace(tmp_path):
     # Reuse the same bake helper as test_baked_replay_validates_against_contract.
+    # The written file is slim (#941) -- trace is omitted on carry-forward
+    # frames -- so the guarantee is on the fattened rows every reader sees.
+    from backend.replay_codec import fatten_frames
+
     out = _bake_small_replay(tmp_path)
     replay = json.loads(out.read_text())
-    for frame in replay["frames"]:
+    for frame in fatten_frames(replay["frames"]):
         for persona in frame.values():
             assert isinstance(persona["trace"], list)
 
