@@ -250,6 +250,100 @@
   font-size: 0.86em;
 }
 
+/* --- code references (see CodeRef.tsx) ---
+   A superscript marker that reveals a file and symbol on hover, on keyboard
+   focus, or on tap — the marker is a <button>, so all three arrive as :hover or
+   :focus-within and no reader is left out. Kept out of the prose so a paragraph
+   of narrative doesn't turn into a paragraph of paths. */
+.nrf-ref {
+  position: relative;
+  white-space: nowrap;
+}
+/* A button is an atomic inline, so the browser offers a line break on either
+   side of it even with no space there — which strands the marker, or the
+   sentence's full stop, alone at the start of a line. Word joiners (U+2060)
+   close both boundaries; they are zero-width, so nothing else changes. */
+.nrf-ref::before,
+.nrf-ref::after {
+  content: "\2060";
+}
+.nrf-ref-mark {
+  border: 0;
+  background: none;
+  padding: 0 0 0 0.1em;
+  cursor: pointer;
+  color: var(--nrf-link);
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.58em;
+  vertical-align: super;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+.nrf-ref-mark:hover {
+  text-decoration: underline;
+}
+.nrf-ref-pop {
+  display: none;
+  position: absolute;
+  top: 1.45em;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  width: max-content;
+  max-width: 18rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 5px;
+  background: var(--nrf-dark);
+  color: #fff;
+  /* the bubble is its own context: unjustified, unhyphenated, left-aligned */
+  text-align: left;
+  white-space: normal;
+  hyphens: none;
+  font-size: 0.8rem;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 18%);
+}
+.nrf-ref:hover .nrf-ref-pop,
+.nrf-ref:focus-within .nrf-ref-pop {
+  display: block;
+}
+/* code inside the bubble sits on the dark fill, not the page */
+.nrf-content .nrf-ref-pop code {
+  color: #fff;
+  font-size: 0.95em;
+}
+/* Too narrow for a popup to open without widening the page — so there is no
+   popup: the marker goes away and the reference reads inline, which is what the
+   prose did before the marker existed. */
+@media (max-width: 640px) {
+  .nrf-ref {
+    white-space: normal;
+  }
+  .nrf-ref-mark {
+    display: none;
+  }
+  .nrf-ref-pop {
+    display: inline;
+    position: static;
+    transform: none;
+    max-width: none;
+    padding: 0;
+    border-radius: 0;
+    background: none;
+    color: inherit;
+    font-size: inherit;
+    box-shadow: none;
+  }
+  .nrf-ref-pop::before {
+    content: " (";
+  }
+  .nrf-ref-pop::after {
+    content: ")";
+  }
+  .nrf-content .nrf-ref-pop code {
+    color: inherit;
+  }
+}
+
 /* --- display math (KaTeX, bundled locally — see TeX.tsx) --- */
 .nrf-math {
   margin: 1.5rem 0;
