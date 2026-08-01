@@ -41,9 +41,13 @@ const BACKDROP_MAP := "res://maps/upenn_core_urban.tmj"
 const DEFAULT_LIVE_URL := "http://127.0.0.1:8080"  # serve_penn.py's default
 
 # Dark-brown that stays legible on the parchment panel (matches agent_panel's
-# STATUS_COLOR); errors go a muted dark red so they read as a problem, not decor.
-const HINT_COLOR := Color(0.42, 0.32, 0.24)
-const ERROR_COLOR := Color(0.82, 0.20, 0.15)
+# STATUS_COLOR — see there for the 6.7:1 contrast rationale); errors go a muted
+# dark red so they read as a problem, not decor.
+const HINT_COLOR := Color(0.32, 0.24, 0.17)
+# Darker than it looks like it should be: the bright 0.82/0.20/0.15 red was only
+# 3.29:1 on the parchment, failing AA for the one kind of text that most has to be
+# readable. Same hue (5°), 5.0:1.
+const ERROR_COLOR := Color(0.62, 0.15, 0.11)
 
 # Give up on the handshake probe after this long so a wrong URL fails fast with a
 # clear message instead of hanging the Connect button.
