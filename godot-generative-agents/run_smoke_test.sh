@@ -72,6 +72,8 @@ fi
   | tee /dev/stderr | grep -q "all checks passed"
 "$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_run_row.gd 2>&1 \
   | tee /dev/stderr | grep -q "all checks passed"
+"$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_ui_contrast.gd 2>&1 \
+  | tee /dev/stderr | grep -q "all checks passed"
 
 # exec so this script's exit code IS the smoke test's quit code (0 pass / 1 fail).
 exec "$GODOT" --headless --path "$PROJECT_DIR" res://scenes/smoke_test.tscn

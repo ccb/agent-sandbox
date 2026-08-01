@@ -69,7 +69,12 @@ const ACTIVE_TINT := Color(1.0, 0.95, 0.6)
 const ROW_DIM_ALPHA := 0.55
 # Muted status line under each character's name — a soft brown that stays legible
 # on the Cute Fantasy theme's light parchment panel (plain grey would wash out).
-const STATUS_COLOR := Color(0.42, 0.32, 0.24)
+# The panel interior is a flat #f6ca9f, so this is measurable: 6.7:1 contrast.
+# It used to be Color(0.42, 0.32, 0.24) = 4.78:1, which only just cleared WCAG AA
+# (4.5:1) — too thin a margin for the 12–14px small print this colour is for.
+# live_hud.gd, actions_hud.gd, main_menu.gd, past_runs.gd and simulation_setup.gd
+# each keep their own copy of this value; keep them in step.
+const STATUS_COLOR := Color(0.32, 0.24, 0.17)
 # Playback speeds offered in the Speed dropdown.
 const SPEEDS := [0.5, 1.0, 2.0, 4.0]
 
@@ -469,7 +474,7 @@ func _ready() -> void:
 	_live_clip_row.add_child(_live_clip_frames_btn)
 
 	_clip_status = Label.new()
-	_clip_status.add_theme_font_size_override("font_size", 12)
+	_clip_status.add_theme_font_size_override("font_size", 14)
 	_clip_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_clip_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_capture_tools.add_child(_clip_status)
