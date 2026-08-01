@@ -695,6 +695,16 @@ def test_stepper_resume_guards(tmp_path):
             run_store=store,
             resume_run_id="run-oldmap",
         )
+    # ...but an older replay-FILE encoding version is NOT a different map:
+    # schema_version tracks the written file format (#941), the store rows a
+    # resume reads are unchanged -- every pre-1.1 run must still resume.
+    store.create_run(dict(done.meta(), schema_version="1.0"), run_id="run-oldschema")
+    PennStepper(
+        num_steps=2,
+        world=build_penn_world(),
+        run_store=store,
+        resume_run_id="run-oldschema",
+    )
     for _ in range(2):
         done.tick()
     assert done.tick() is None

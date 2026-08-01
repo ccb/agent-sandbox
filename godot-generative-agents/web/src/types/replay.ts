@@ -72,7 +72,12 @@ export interface ReplayMeta {
 }
 
 /** One persona's state at a single step. Key order is pinned by
- * backend/contract.py AGENT_FRAME_FIELDS (byte-identity, #297). */
+ * backend/contract.py AGENT_FRAME_FIELDS (byte-identity, #297).
+ *
+ * In a written FILE (schema 1.1, #941) the optional carry-forward fields
+ * (reasoning/chat/memories/trace) may be absent when unchanged from the same
+ * agent's previous frame; useReplay rehydrates them via replayCodec's
+ * fattenFrames, so components always read full rows. */
 export interface AgentFrame {
   /** Tile coordinates. */
   x: number;

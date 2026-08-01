@@ -1362,8 +1362,11 @@ class PennStepper:
         # ...and on this campus map: regenerating the tmj is routine
         # (tools/geo), and tiles seeded from the last frame of a
         # differently-sized map would land agents out of bounds or in walls.
+        # schema_version is deliberately NOT checked: it versions the written
+        # replay FILE encoding (#941), not the store rows this resume reads --
+        # every pre-1.1 run's manifest still says "1.0" and resumes fine.
         current = self.meta()
-        for key in ("schema_version", "width", "height"):
+        for key in ("width", "height"):
             if row["manifest"].get(key) != current[key]:
                 raise ValueError(
                     f"run {run_id} was recorded on a different map "

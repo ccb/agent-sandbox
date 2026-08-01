@@ -67,13 +67,14 @@ static func replay_load_error(data: Variant) -> String:
 	return ""
 
 
-static func schema_ok(meta: Dictionary, supported: String) -> bool:
+static func schema_ok(meta: Dictionary, supported: Array) -> bool:
 	## A version rail: an absent schema_version is tolerated (older payloads
-	## predate it) so this returns true; a present-but-different one returns
+	## predate it) so this returns true; a present-but-unsupported one returns
 	## false so the caller can warn about drift instead of silently
-	## mis-rendering.
+	## mis-rendering. *supported* is a list since #941 — the viewer renders
+	## both the 1.0 fat and 1.1 slim file encodings.
 	var v := String(meta.get("schema_version", ""))
-	return v == "" or v == supported
+	return v == "" or supported.has(v)
 
 
 # --- feed record kind ---
