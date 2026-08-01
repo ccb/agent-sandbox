@@ -1,5 +1,9 @@
 import react from "@vitejs/plugin-react";
-import { defineConfig, type Plugin } from "vite";
+import type { Plugin } from "vite";
+// `defineConfig` comes from vitest rather than vite so the `test` block below
+// type-checks — vite's own overloads know nothing about it. Same function, same
+// vite config; vitest only widens the type.
+import { defineConfig } from "vitest/config";
 
 // Godot's threaded WASM export only runs on a *cross-origin isolated* page, which
 // requires these two response headers. We set them on both the dev server and
