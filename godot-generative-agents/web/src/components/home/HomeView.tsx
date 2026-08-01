@@ -551,9 +551,9 @@ export function HomeView() {
                 of Park et al.'s <em>Generative Agents</em>. The simulation is built on a classical
                 text-adventure engine: every action an agent takes — whether proposed by a language
                 model or by a scripted schedule — must pass the same precondition/effect gate before
-                it can change the world, so the model never mutates state directly. Each run
-                records its LLM traffic and world seed, which makes any run replayable
-                deterministically in a Godot viewer, natively or in the browser via WebAssembly.
+                it can change the world, so the model never mutates state directly. Each run records
+                its LLM traffic and world seed, which makes any run replayable deterministically in
+                a Godot viewer, natively or in the browser via WebAssembly.
               </p>
             </div>
           </div>
@@ -898,16 +898,14 @@ export function HomeView() {
                 <a href="https://www.openstreetmap.org/relation/2594845#map=15/39.94770/-75.19361">
                   OpenStreetMap data
                 </a>
-                , with tilesets,
-                sprites, and UI art drawn from these packs.
+                , with tilesets, sprites, and UI art drawn from these packs.
               </p>
               <ul>
                 <li>
                   <a href="https://kenmi-art.itch.io/cute-fantasy-ui">Cute Fantasy UI</a> by Kenmi
                 </li>
                 <li>
-                  <a href="https://kenmi-art.itch.io/cute-fantasy-rpg">Cute Fantasy RPG</a> by
-                  Kenmi
+                  <a href="https://kenmi-art.itch.io/cute-fantasy-rpg">Cute Fantasy RPG</a> by Kenmi
                 </li>
                 <li>
                   <a href="https://kenney.nl/assets/rpg-urban-pack">RPG Urban Pack</a> by Kenney
