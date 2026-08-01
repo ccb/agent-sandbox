@@ -579,22 +579,21 @@ export function HomeView() {
                 and the showcase's twelve-hour day is 4,320. On each tick, every agent that is not
                 mid-walk, settled into an activity, or mid-conversation makes a decision; decisions
                 are then resolved in a fixed order, so two agents contending for the same resource
-                settle deterministically
+                settle deterministically.
                 <CodeRef>
                   <code>step</code>, in <code>backend/run_simulation.py</code>
-                </CodeRef>
-                . An agent perceives the world through a limited window: it observes a thing at tile{" "}
+                </CodeRef>{" "}
+                An agent perceives the world through a limited window: it observes a thing at tile{" "}
                 <TeX>{TEX.tileOther}</TeX> from its own tile <TeX>{TEX.tileSelf}</TeX> only when the
                 two are within a Chebyshev radius <TeX>{TEX.radius}</TeX>,
               </p>
               <TeX display>{TEX.perception}</TeX>
               <p>
                 and anything newly entering that window — an event, or another agent's arrival —
-                becomes an observation in its memory stream
+                becomes an observation in its memory stream.
                 <CodeRef>
                   <code>TiledGame.can_perceive</code>, in <code>backend/tiled_game.py</code>
                 </CodeRef>
-                .
               </p>
 
               <h3 className="nrf-title nrf-title-4" id="memory">
@@ -605,11 +604,10 @@ export function HomeView() {
                 of dialogue, plans, reflections — is a timestamped record with an importance score.
                 When the agent must decide, it cannot see the whole stream; it retrieves the records
                 that score highest under a weighted sum of recency, importance, and relevance to the
-                current situation <TeX>{TEX.query}</TeX> at tick <TeX>{TEX.tick}</TeX>
+                current situation <TeX>{TEX.query}</TeX> at tick <TeX>{TEX.tick}</TeX>:
                 <CodeRef>
                   <code>AgentMemory.retrieve</code>, in <code>text_adventure_games/memory.py</code>
                 </CodeRef>
-                :
               </p>
               <TeX display>{TEX.retrieval}</TeX>
               <p>
@@ -623,21 +621,20 @@ export function HomeView() {
                 Retrieval refreshes a record's last-accessed time, so memories the agent keeps
                 returning to stay warm while the rest fade. Every constant here — the three weights,
                 the decay, the record count, the budget — is a configuration field rather than a
-                hard-coded number
+                hard-coded number.
                 <CodeRef>
                   <code>RetrievalConfig</code>, in <code>backend/sim_config.py</code>
                 </CodeRef>
-                .
               </p>
               <p>
                 That retrieval happens on every decision, whether or not the agent asks for it. An
                 agent may <em>additionally</em> be handed tools to query its own memory, beliefs and
                 plan directly — <code>recall</code>, <code>query_knowledge</code> and{" "}
-                <code>read_plan</code>
+                <code>read_plan</code>.
                 <CodeRef>
                   <code>cognition_toolset</code>, in <code>text_adventure_games/npc.py</code>
-                </CodeRef>
-                . Those are a second, opt-in channel layered on top of the retrieved records, not a
+                </CodeRef>{" "}
+                Those are a second, opt-in channel layered on top of the retrieved records, not a
                 replacement for them: when they are enabled the same top-six paste still goes into
                 the prompt, and the agent's own lookups are extra calls on top.
               </p>
@@ -647,11 +644,11 @@ export function HomeView() {
               </h3>
               <p>
                 New memories are rated for poignancy by the language model on a 1 (utterly mundane)
-                to 10 (momentous) scale, in one batched, temperature-zero call per agent per tick
+                to 10 (momentous) scale, in one batched, temperature-zero call per agent per tick.
                 <CodeRef>
                   <code>score_new_memories</code>, in <code>backend/cognition.py</code>
-                </CodeRef>
-                . A few signals the model cannot infer from text — like falling ill, or a commitment
+                </CodeRef>{" "}
+                A few signals the model cannot infer from text — like falling ill, or a commitment
                 made in conversation — carry fixed scores instead. Reflection is triggered by
                 accumulated salience rather than by the clock: once the summed importance of the
                 memories <TeX>{TEX.newMemories}</TeX> accrued since the last reflection crosses a
@@ -662,12 +659,11 @@ export function HomeView() {
                 the agent asks itself up to three salient questions about its recent experience,
                 answers each from retrieved evidence, and writes the inferences back into memory as
                 higher-level reflections that cite the records they were drawn from — so later
-                decisions can build on conclusions, not just raw observations
+                decisions can build on conclusions, not just raw observations.
                 <CodeRef>
                   <code>should_reflect</code> and <code>reflect</code>, in{" "}
                   <code>text_adventure_games/reflection.py</code>
                 </CodeRef>
-                .
               </p>
 
               <h3 className="nrf-title nrf-title-4" id="planning">
@@ -676,23 +672,22 @@ export function HomeView() {
               <p>
                 Each agent starts its day by decomposing intentions hierarchically: a day outline,
                 refined into hourly blocks, refined into minute-level stops — each stop a real
-                place, an activity, and a duration — one model call per altitude
+                place, an activity, and a duration — one model call per altitude.
                 <CodeRef>
                   <code>LLMPlanner</code>, in <code>backend/planner.py</code>
-                </CodeRef>
-                . Proposed stops are validated against the actual map, so a hallucinated location is
-                dropped before it can reach the world
+                </CodeRef>{" "}
+                Proposed stops are validated against the actual map, so a hallucinated location is
+                dropped before it can reach the world.
                 <CodeRef>
                   <code>validate_stops</code>, in <code>text_adventure_games/planning.py</code>
-                </CodeRef>
-                . Plans are living documents: an agent revises when it falls behind schedule, when
-                an action is rejected by the world, when a conversation changes its commitments, or
+                </CodeRef>{" "}
+                Plans are living documents: an agent revises when it falls behind schedule, when an
+                action is rejected by the world, when a conversation changes its commitments, or
                 when it reacts to something it perceives — and a revision may only rewrite the tail
-                of the day, never the stops already lived
+                of the day, never the stops already lived.
                 <CodeRef>
                   <code>maybe_revise_plan</code>, in <code>backend/cognition.py</code>
                 </CodeRef>
-                .
               </p>
 
               <h3 className="nrf-title nrf-title-4" id="conversations">
@@ -701,16 +696,16 @@ export function HomeView() {
               <p>
                 When two agents are close, free, and interested, they open a conversation that
                 unfolds one line per tick, up to six exchanges — dialogue takes simulated time
-                rather than resolving instantly, one line at a time
+                rather than resolving instantly, one line at a time.
                 <CodeRef>
                   <code>exchange</code>, in <code>text_adventure_games/conversation.py</code>
-                </CodeRef>
-                . Afterwards each participant distills an outcome: what was agreed, what it means
-                for their relationship, and whether their plans should change
+                </CodeRef>{" "}
+                Afterwards each participant distills an outcome: what was agreed, what it means for
+                their relationship, and whether their plans should change.
                 <CodeRef>
                   <code>apply_conversation_outcome</code>, in <code>backend/cognition.py</code>
-                </CodeRef>
-                ; commitments and relationship notes are written to memory with high importance so
+                </CodeRef>{" "}
+                Commitments and relationship notes are written to memory with high importance so
                 they survive retrieval competition. A pair that has already talked{" "}
                 <TeX>{TEX.talkCount}</TeX> times waits <TeX>{TEX.cooldown}</TeX> ticks before
                 starting again, which keeps two friendly agents from looping the same greeting all
@@ -722,15 +717,15 @@ export function HomeView() {
               </h3>
               <p>
                 Every decision — whether it arrives as a typed tool call from the model or as plain
-                text — is reassembled into a command and pushed through the engine's parser
+                text — is reassembled into a command and pushed through the engine's parser, where
+                the action's preconditions are checked before its effects apply.
                 <CodeRef>
                   <code>Parser.parse_command</code>, in <code>text_adventure_games/parsing.py</code>
-                </CodeRef>
-                , where the action's preconditions are checked before its effects apply. That is the
-                only route into the world; the model never edits world state. A rejected action is
-                not silent either: it becomes a failure memory and can trigger a plan revision, so
-                agents learn from what the world refuses. The five lines that enforce this, and a
-                real verb passing through them, are below in <em>Implementation</em>.
+                </CodeRef>{" "}
+                That is the only route into the world; the model never edits world state. A rejected
+                action is not silent either: it becomes a failure memory and can trigger a plan
+                revision, so agents learn from what the world refuses. The five lines that enforce
+                this, and a real verb passing through them, are below in <em>Implementation</em>.
               </p>
 
               <h3 className="nrf-title nrf-title-4" id="optional">
