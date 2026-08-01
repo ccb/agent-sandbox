@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 // live in their own components (HomeView.tsx was already 745 lines), so all are
 // searched, and page order is checked against their concatenation in render
 // order.
+import caseStudySource from "./CaseStudySection.tsx?raw";
 import costSource from "./CostSection.tsx?raw";
 import { TOC } from "./HomeView";
 import homeSource from "./HomeView.tsx?raw";
@@ -18,6 +19,7 @@ import reflectionsSource from "./ReflectionsSection.tsx?raw";
 // HomeView renders each section component partway down, so splicing the
 // components' source in at their call sites reproduces the rendered id order.
 const MOUNTS: [string, string][] = [
+  ["<CaseStudySection />", caseStudySource],
   ["<ImplementationSection />", implSource],
   ["<CostSection />", costSource],
   ["<ReflectionsSection />", reflectionsSource],
