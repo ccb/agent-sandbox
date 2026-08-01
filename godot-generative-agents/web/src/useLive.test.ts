@@ -60,6 +60,7 @@ const idle = (): LiveState => ({
   frame: null,
   calls: [],
   events: [],
+  wishes: [],
   deciding: {},
   lastFrameAt: null,
 });
@@ -166,6 +167,26 @@ describe("applyFeedRecords", () => {
     for (let i = 1; i <= 205; i++) s = applyFeedRecords(s, [gameEvent(i, `e${i}`)], 0);
     expect(s.events).toHaveLength(200);
     expect(s.events[0]).toMatchObject({ summary: "e6" }); // oldest 5 evicted
+  });
+
+  it("wishes survive event eviction in their own retention (#873)", () => {
+    // A real-LLM day logs thousands of game_events; an early wish must stay in
+    // the demand log (WishFeed's source) even after the shared 200-row event
+    // feed evicts it — the panel's count must never shrink mid-run.
+    let s = applyFeedRecords(idle(), [wish(1, "a bike rack")], 0);
+    for (let i = 2; i <= 260; i++) s = applyFeedRecords(s, [gameEvent(i, `e${i}`)], 0);
+    expect(s.events.some((e) => e.kind === "wish")).toBe(false); // gone from the shared feed
+    expect(s.wishes.map((w) => w.desired)).toEqual(["a bike rack"]); // still on the demand log
+  });
+
+  it("a reset drops the retained wishes with the dead run (#873)", () => {
+    const held = applyFeedRecords(idle(), [wish(1, "old run")], 0);
+    const s = applyFeedRecords(
+      held,
+      [{ cursor: 2, kind: "status", reason: "reset", step: 0 }, wish(3, "fresh")],
+      1,
+    );
+    expect(s.wishes.map((w) => w.desired)).toEqual(["fresh"]);
   });
 });
 
