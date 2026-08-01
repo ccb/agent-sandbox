@@ -195,6 +195,26 @@
      with the white behind it at the bottom. No bounce, nothing to see. */
   overscroll-behavior: none;
   background: var(--color-surface);
+  scrollbar-width: thin;
+  scrollbar-color: #c5c9d0 var(--color-bg-soft);
+}
+
+.view-home::-webkit-scrollbar {
+  width: 10px;
+}
+
+.view-home::-webkit-scrollbar-track {
+  background: var(--color-bg-soft);
+}
+
+.view-home::-webkit-scrollbar-thumb {
+  background: #c5c9d0;
+  border: 2px solid var(--color-bg-soft);
+  border-radius: 5px;
+}
+
+.view-home::-webkit-scrollbar-thumb:hover {
+  background: #a8adb8;
 }
 
 /* Shown while a lazy-loaded prompt chunk downloads. */
