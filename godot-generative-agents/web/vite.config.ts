@@ -38,6 +38,11 @@ function serveDocsInDev(): Plugin {
 
 export default defineConfig({
   plugins: [react(), serveDocsInDev()],
+  // Vitest stubs CSS out by default, which makes `import css from "./x.css?raw"`
+  // resolve to an empty string — and a stylesheet assertion that reads "" passes
+  // or fails for the wrong reason. CodeRef.test.ts checks a rule that no DOM
+  // test would catch, so let the CSS through.
+  test: { css: true },
   server: { headers: crossOriginIsolation },
   preview: { headers: crossOriginIsolation },
 });
