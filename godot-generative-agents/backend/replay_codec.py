@@ -16,8 +16,8 @@ the exact frames the emitter produced::
 
 Semantics of a slim file: **absent = unchanged from the previous frame;
 present (including an explicit null) = a new value.** ``x``/``y``/``act``/
-``e`` are never omitted — the render hot loop and the store validator read
-them positionally every frame. Fattening an already-fat file is the identity,
+``e`` are never omitted — they are the non-Optional ``AgentFrame`` fields, and
+a slim row must stay contract-valid. Fattening an already-fat file is the identity,
 so one reader handles both pre- and post-#941 replays; the run store and the
 live feed stay fat and are untouched by this module.
 
@@ -45,16 +45,23 @@ def slim_frames(frames: list[dict]) -> list[dict]:
     out: list[dict] = []
     prev: dict[str, dict] = {}  # agent name -> that agent's previous fat entry
     for frame in frames:
+        if not isinstance(frame, dict):
+            out.append(frame)  # version-skewed row: pass through, like fatten
+            continue
         row: dict = {}
         for name, entry in frame.items():
             seen = prev.get(name)
             if not isinstance(entry, dict) or seen is None:
                 row[name] = entry
             else:
+                # `k not in seen`, not seen.get(k): an explicit null after an
+                # absent key must stay explicit -- fatten never invents a
+                # value for a key it hasn't seen, so dropping it here would
+                # break the round-trip law on mixed-vintage frames.
                 row[name] = {
                     k: v
                     for k, v in entry.items()
-                    if k not in CARRY_FIELDS or seen.get(k) != v
+                    if k not in CARRY_FIELDS or k not in seen or seen[k] != v
                 }
             if isinstance(entry, dict):
                 prev[name] = entry
@@ -77,6 +84,11 @@ def fatten_frames(frames: list[dict]) -> list[dict]:
     out: list[dict] = []
     carried: dict[str, dict] = {}  # agent name -> {field: last explicit value}
     for frame in frames:
+        if not isinstance(frame, dict):
+            # Version-skewed row: pass through untouched, mirroring the gd/ts
+            # readers -- degrade to "skip + warn elsewhere" (#638), not crash.
+            out.append(frame)
+            continue
         row: dict = {}
         for name, entry in frame.items():
             if not isinstance(entry, dict):

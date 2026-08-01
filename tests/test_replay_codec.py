@@ -136,6 +136,31 @@ def test_never_seen_keys_stay_absent():
     assert "trace" not in fat[2]["Ada"]
 
 
+def test_explicit_null_after_absent_key_round_trips():
+    """A carry key's FIRST appearance as an explicit null must stay explicit.
+
+    slim must not treat "previous frame had no chat key" as equal to
+    ``chat: None`` — fatten never invents a value for a never-seen key, so
+    dropping the null here would break the round-trip law on mixed-vintage
+    frames (a run whose early rows predate a field)."""
+    frames = [
+        {"Ada": {"x": 1, "y": 2, "act": "idle", "e": "🙂"}},
+        {"Ada": {"x": 2, "y": 2, "act": "idle", "e": "🙂", "chat": None}},
+    ]
+    slim = slim_frames(frames)
+    assert "chat" in slim[1]["Ada"]  # explicit null survives slimming
+    assert fatten_frames(slim) == frames
+
+
+def test_non_dict_frame_rows_pass_through():
+    """A version-skewed row degrades to pass-through (#638), never a crash —
+    mirroring the gd/ts readers, which skip such rows."""
+    frames = [None, {"Ada": _entry()}, "junk", {"Ada": _entry(x=2)}]
+    assert slim_frames(frames)[0] is None
+    assert slim_frames(frames)[2] == "junk"
+    assert fatten_frames(slim_frames(frames)) == frames
+
+
 def test_new_agent_mid_run_is_verbatim():
     frames = [
         {"Ada": _entry()},
