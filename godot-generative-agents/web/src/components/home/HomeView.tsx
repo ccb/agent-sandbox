@@ -115,9 +115,8 @@ function ReplayFigure() {
         that runs natively, exported to WebAssembly. Drag to pan and scroll to zoom.
         {/* <details> brings the disclosure arrow, the click/Enter/Space handling and the
             expanded/collapsed state with it — none of which is worth reimplementing in
-            React. Open by default: it's a legend for the thing right above it, and a
-            reader who doesn't want it can fold it away. */}
-        <details className="nrf-legend-toggle" open>
+            React. Closed by default — a reader who wants the legend can open it. */}
+        <details className="nrf-legend-toggle">
           <summary>What the sidebar's buttons do</summary>
           <ul className="nrf-legend">
             {SIDEBAR_LEGEND.map((entry) => (
@@ -353,6 +352,7 @@ export const TOC: { id: string; label: string; sub?: true }[] = [
   { id: "reflections", label: "Coding agents as research instruments" },
   { id: "limitations", label: "Limitations" },
   { id: "acknowledgements", label: "Acknowledgements" },
+  { id: "assets", label: "Asset packs" },
   { id: "references", label: "References" },
   { id: "BibTeX", label: "BibTeX" },
 ];
@@ -536,7 +536,7 @@ export function HomeView() {
       {/* ===== Abstract ===== */}
       <section className="nrf-section">
         <div className="nrf-container">
-          <div className="nrf-narrow nrf-centered">
+          <div className="nrf-narrow nrf-centered nrf-abstract">
             <h2 className="nrf-title nrf-title-3" id="abstract">
               Abstract
             </h2>
@@ -548,15 +548,12 @@ export function HomeView() {
                 Over a simulated twelve-hour day the agents walk between real campus places, pursue
                 individually authored goals, and strike up conversations whose outcomes feed back
                 into their plans and memories, following the memory–reflection–planning architecture
-                of Park et al.'s <em>Generative Agents</em>.
-              </p>
-              <p>
-                The simulation is built on a classical text-adventure engine: every action an agent
-                takes — whether proposed by a language model or by a scripted schedule — must pass
-                the same precondition/effect gate before it can change the world, so the model never
-                mutates state directly. Each run records its LLM traffic and world seed, which makes
-                any run replayable deterministically in a Godot viewer, natively or in the browser
-                via WebAssembly.
+                of Park et al.'s <em>Generative Agents</em>. The simulation is built on a classical
+                text-adventure engine: every action an agent takes — whether proposed by a language
+                model or by a scripted schedule — must pass the same precondition/effect gate before
+                it can change the world, so the model never mutates state directly. Each run
+                records its LLM traffic and world seed, which makes any run replayable
+                deterministically in a Godot viewer, natively or in the browser via WebAssembly.
               </p>
             </div>
           </div>
@@ -882,6 +879,40 @@ export function HomeView() {
                 grading agents on task completion, an interface this prototype has designed but not
                 yet built.
               </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ===== Asset packs ===== */}
+      <section className="nrf-section">
+        <div className="nrf-container">
+          <div className="nrf-narrow">
+            <h2 className="nrf-title nrf-title-3 nrf-centered" id="assets">
+              Asset packs
+            </h2>
+            <div className="nrf-content nrf-justified">
+              <p>
+                Listed below are the asset packs we used in the game. The viewer is a Godot 4.6
+                project — campus maps are authored in Tiled from{" "}
+                <a href="https://www.openstreetmap.org/relation/2594845#map=15/39.94770/-75.19361">
+                  OpenStreetMap data
+                </a>
+                , with tilesets,
+                sprites, and UI art drawn from these packs.
+              </p>
+              <ul>
+                <li>
+                  <a href="https://kenmi-art.itch.io/cute-fantasy-ui">Cute Fantasy UI</a> by Kenmi
+                </li>
+                <li>
+                  <a href="https://kenmi-art.itch.io/cute-fantasy-rpg">Cute Fantasy RPG</a> by
+                  Kenmi
+                </li>
+                <li>
+                  <a href="https://kenney.nl/assets/rpg-urban-pack">RPG Urban Pack</a> by Kenney
+                </li>
+              </ul>
             </div>
           </div>
         </div>
