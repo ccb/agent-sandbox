@@ -20,8 +20,11 @@ const SETUP_SCENE := "res://scenes/simulation_setup.tscn"
 const RunRow := preload("res://scripts/run_row.gd")
 const ReplaySave := preload("res://scripts/replay_save.gd")
 
-const HINT_COLOR := Color(0.42, 0.32, 0.24)
-const ERROR_COLOR := Color(0.82, 0.20, 0.15)
+# Muted brown for the small print, legible on the parchment panel — see
+# agent_panel.gd's STATUS_COLOR for the 6.7:1 contrast rationale.
+const HINT_COLOR := Color(0.32, 0.24, 0.17)
+# Alarm red, darkened to clear AA on the parchment (5.0:1) — see main_menu.gd.
+const ERROR_COLOR := Color(0.62, 0.15, 0.11)
 
 var _url := ""
 var _token := ""
@@ -179,7 +182,11 @@ func _build_row(entry: Dictionary) -> Control:
 	var summary := Label.new()
 	summary.text = RunRow.config_summary(entry)
 	summary.add_theme_color_override("font_color", HINT_COLOR)
-	summary.add_theme_font_size_override("font_size", 12)
+	summary.add_theme_font_size_override("font_size", 14)
+	# Wrap like the config detail below it: a Label with no autowrap reports its
+	# whole text as its minimum width, so a long summary would widen the row past
+	# the 640px panel instead of running onto a second line.
+	summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(summary)
 
 	var actions := HBoxContainer.new()
@@ -212,7 +219,7 @@ func _build_row(entry: Dictionary) -> Control:
 		# Pretty-printed lazily on first reveal (#734 review follow-up): most rows
 		# in a long history are never expanded, so don't stringify JSON up front.
 		detail.add_theme_color_override("font_color", HINT_COLOR)
-		detail.add_theme_font_size_override("font_size", 12)
+		detail.add_theme_font_size_override("font_size", 14)
 		detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		detail.visible = false
 		var toggle := Button.new()
