@@ -105,7 +105,13 @@ class WishState(_ContractModel):
 
 
 class AgentFrame(_ContractModel):
-    """One persona at one step. Field order == AGENT_FRAME_FIELDS (#297)."""
+    """One persona at one step. Field order == AGENT_FRAME_FIELDS (#297).
+
+    In a *written file* (schema 1.1, #941) the optional carry-forward fields
+    (reasoning/chat/memories/trace) may be absent when unchanged from the
+    same agent's previous frame; ``backend.replay_codec.fatten_frames``
+    rehydrates them on read. An absent optional field validates here either
+    way, so both slim files and fat in-memory rows conform."""
 
     x: int
     y: int

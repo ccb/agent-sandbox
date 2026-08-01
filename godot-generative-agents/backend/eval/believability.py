@@ -56,6 +56,8 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from backend.replay_codec import fatten_frames
+
 # ---------------------------------------------------------------------------
 # Loading: one dict, whichever artifact you point at
 # ---------------------------------------------------------------------------
@@ -83,7 +85,13 @@ def load_replay(path: str | Path) -> dict:
 
         return build_replay(RunStore(path.parent), path.name)
     with path.open("r", encoding="utf-8") as fh:
-        return json.load(fh)
+        replay = json.load(fh)
+    # Baked files are slim since #941 (carry-forward fields omitted when
+    # unchanged); the eval's window logic counts repeated payloads, so fatten
+    # back to full rows. Identity on pre-#941 fat files.
+    if isinstance(replay.get("frames"), list):
+        replay["frames"] = fatten_frames(replay["frames"])
+    return replay
 
 
 # ---------------------------------------------------------------------------

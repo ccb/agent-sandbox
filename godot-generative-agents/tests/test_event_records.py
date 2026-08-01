@@ -202,8 +202,11 @@ def test_persisted_bake_round_trips_the_store(tmp_path, monkeypatch):
     assert run["steps"] == len(replay["frames"])
     assert run["cost"] == 0.0
     assert run["manifest"] == replay["meta"]
-    # Frames: byte-equal to the file's (persisted AFTER meeting injection).
-    assert store.read_frames(run["id"]) == replay["frames"]
+    # Frames: the store keeps fat rows, the file is slim (#941) -- fattening
+    # the file's frames must reproduce the store's exactly.
+    from backend.replay_codec import fatten_frames
+
+    assert store.read_frames(run["id"]) == fatten_frames(replay["frames"])
     # Events: the store's copy == the file's GameEvent log (#307).
     assert store.read_events(run["id"]) == replay["events"]
     # Memory streams: the store's lean projection == the file's, per persona.
@@ -223,12 +226,17 @@ def test_persisted_bake_round_trips_the_store(tmp_path, monkeypatch):
     assert got == expected
     # #307: the exported replay IS the baked file -- the whole live->replay
     # bridge is byte-faithful -- and it validates against the pinned contract.
+    # Since #941 the file is slim while build_replay hands in-process callers
+    # fat frames, so the bridge statement is: slimming the export reproduces
+    # the file exactly.
     from backend.contract_models import Replay
     from backend.penn import export_replay
+    from backend.replay_codec import slim_frames
 
     exported = export_replay.build_replay(store, run["id"])
-    assert exported == replay
+    assert dict(exported, frames=slim_frames(exported["frames"])) == replay
     Replay.model_validate(exported)
+    Replay.model_validate(replay)  # the slim file satisfies the contract too
     # The CLI writes the same thing.
     out_path = tmp_path / "exported.json"
     monkeypatch.setattr(
@@ -302,5 +310,7 @@ def test_boil_scenario_bake_validates_against_the_contract(tmp_path, monkeypatch
     store = RunStore(runs)
     (run,) = store.list_runs()
     exported = export_replay.build_replay(store, run["id"])
-    assert exported == replay
+    from backend.replay_codec import slim_frames
+
+    assert dict(exported, frames=slim_frames(exported["frames"])) == replay
     Replay.model_validate(exported)

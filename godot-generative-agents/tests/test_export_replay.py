@@ -7,6 +7,7 @@ import sys
 import pytest
 
 from backend.penn.export_replay import build_replay, main
+from backend.replay_codec import fatten_frames, slim_frames
 from backend.run_store import RunStore
 from text_adventure_games.memory import MemoryKind, MemoryRecord
 
@@ -76,7 +77,9 @@ def test_build_replay_assembles_the_five_keys(tmp_path):
     # key rides along untouched.
     assert replay["meta"]["steps"] == 2
     assert replay["meta"]["llm"] == MANIFEST["llm"]
-    assert replay["frames"] == [FRAME, FRAME]
+    # build_replay hands back FAT frames (#941): carry-forward fields are
+    # rehydrated so in-process consumers see full rows.
+    assert replay["frames"] == fatten_frames([FRAME, FRAME])
     assert replay["events"] == [EVENT]
     assert replay["wishes"] == [WISH]
     assert replay["memory_streams"]["Ada"] == store.memories_for(run_id, "Ada")
@@ -98,6 +101,19 @@ def test_build_replay_unknown_run_raises(tmp_path):
         build_replay(store, "missing")
 
 
+def _as_written(replay: dict) -> dict:
+    """What the CLI writes (#941): slim frames, and meta.schema_version
+    stamped with the encoding version this writer used (not whatever version
+    the run was recorded under)."""
+    from backend.contract import SCHEMA_VERSION
+
+    return dict(
+        replay,
+        meta=dict(replay["meta"], schema_version=SCHEMA_VERSION),
+        frames=slim_frames(replay["frames"]),
+    )
+
+
 def test_cli_exports_the_newest_run_by_default(tmp_path, monkeypatch, capsys):
     store = RunStore(tmp_path / "runs")
     _seed_run(store, "run-a")
@@ -107,7 +123,7 @@ def test_cli_exports_the_newest_run_by_default(tmp_path, monkeypatch, capsys):
     )
     assert main() == 0
     out = tmp_path / "runs" / "run-b" / "penn_replay.json"
-    assert json.loads(out.read_text()) == build_replay(store, "run-b")
+    assert json.loads(out.read_text()) == _as_written(build_replay(store, "run-b"))
     assert str(out.resolve()) in capsys.readouterr().out  # the picker-ready path
 
 
@@ -128,7 +144,7 @@ def test_cli_explicit_run_and_out_path(tmp_path, monkeypatch):
         ],
     )
     assert main() == 0
-    assert json.loads(out.read_text()) == build_replay(store, "run-a")
+    assert json.loads(out.read_text()) == _as_written(build_replay(store, "run-a"))
 
 
 def test_cli_errors_clearly(tmp_path, monkeypatch, capsys):

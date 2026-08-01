@@ -21,6 +21,8 @@ import argparse
 import json
 from pathlib import Path
 
+from backend.contract import SCHEMA_VERSION
+from backend.replay_codec import fatten_frames, slim_frames
 from backend.run_store import DEFAULT_RUNS_DIR, RunStore
 
 
@@ -37,7 +39,12 @@ def build_replay(store: RunStore, run_id: str) -> dict:
     if run is None:
         raise ValueError(f"unknown run id: {run_id}")
     meta = run["manifest"]
-    frames = store.read_frames(run_id)
+    # Stores hold fat frames today, but fatten anyway (#941): it's the
+    # identity on fat rows, and it means in-process consumers (the
+    # believability eval routes run dirs through here) always see full rows
+    # whatever a future store holds. The slim encoding is applied only when
+    # main() writes the file.
+    frames = fatten_frames(store.read_frames(run_id))
     meta.setdefault("steps", len(frames))
     return {
         "meta": meta,
@@ -80,6 +87,16 @@ def main() -> int:
     except ValueError as exc:
         print(exc)
         return 2
+
+    # Written files are slim (#941), same as the bake's writer — the WASM
+    # viewer can't parse a showcase-scale fat file. build_replay stays fat
+    # for in-process callers. The file's schema_version must describe the
+    # encoding *this writer* used, not whatever version the run was recorded
+    # under, so stamp the current one (a dict() copy keeps the manifest's key
+    # order — schema_version is replaced in place).
+    replay = dict(replay)
+    replay["meta"] = dict(replay["meta"], schema_version=SCHEMA_VERSION)
+    replay["frames"] = slim_frames(replay["frames"])
 
     out = Path(args.out) if args.out else store.root / run_id / "penn_replay.json"
     out.parent.mkdir(parents=True, exist_ok=True)
