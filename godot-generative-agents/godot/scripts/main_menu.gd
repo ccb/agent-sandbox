@@ -285,6 +285,13 @@ func _build_panel() -> void:
 	# (web/src/components/home/HomeView.tsx).
 	if not web:
 		_url_edit.grab_focus()
+	else:
+		# On web the menu is exactly one action, so land the keyboard on it:
+		# without this NOTHING holds focus (the LineEdit above doesn't exist
+		# here) and Enter/Space can't start the demo at all — the public build
+		# was mouse-only (#944). A focused Button doesn't wake the browser IME
+		# shim; that hazard was specific to text fields (#911).
+		bundled_btn.grab_focus()
 
 
 func _ribbon(text: String) -> Label:
