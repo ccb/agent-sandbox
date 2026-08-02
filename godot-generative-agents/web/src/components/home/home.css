@@ -624,6 +624,41 @@
   text-align: left;
 }
 
+/* --- highlight-moments table (case-study section) --- */
+.nrf-moments {
+  width: 100%;
+  margin: 2rem 0;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+  text-align: left;
+}
+.nrf-moments caption {
+  caption-side: bottom;
+  margin-top: 0.5rem;
+  color: #6a6a6a;
+  font-size: 0.85rem;
+  font-style: italic;
+  text-align: left;
+}
+.nrf-moments th {
+  color: var(--nrf-heading);
+  border-bottom: 2px solid var(--nrf-heading);
+}
+.nrf-moments th,
+.nrf-moments td {
+  padding: 0.4rem 0.75rem 0.4rem 0;
+  vertical-align: top;
+}
+.nrf-moments tbody tr {
+  border-bottom: 1px solid #e5e5e5;
+}
+/* Clock and step read as data, and shouldn't wrap at narrow widths. */
+.nrf-moments td:nth-child(1),
+.nrf-moments td:nth-child(2) {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 /* --- code snippets (Implementation section) --- */
 :root {
   --nrf-code-keyword: #a626a4; /* def, class, return, if, not, in */
