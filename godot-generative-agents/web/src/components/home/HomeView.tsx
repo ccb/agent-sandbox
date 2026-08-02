@@ -4,6 +4,7 @@
 // import type { ReactNode } from "react";
 import { lazy, type MouseEvent, Suspense, useEffect, useRef, useState } from "react";
 import { GodotCanvas } from "../GodotCanvas";
+import { CaseStudySection } from "./CaseStudySection";
 import { CodeRef } from "./CodeRef";
 import { CostSection } from "./CostSection";
 import { ImplementationSection } from "./ImplementationSection";
@@ -344,6 +345,12 @@ export const TOC: { id: string; label: string; sub?: true }[] = [
   { id: "action-gate", label: "The action gate", sub: true },
   { id: "optional", label: "What's on by default", sub: true },
   { id: "decision", label: "Inside a decision" },
+  { id: "case-study", label: "One day, up close" },
+  { id: "case-cast", label: "The cast", sub: true },
+  { id: "case-dialogs", label: "Three conversations", sub: true },
+  { id: "case-goals", label: "Changing plans", sub: true },
+  { id: "case-memory", label: "Memory at work", sub: true },
+  { id: "case-verdict", label: "What holds up", sub: true },
   { id: "implementation", label: "Implementation" },
   { id: "the-gate", label: "The precondition gate", sub: true },
   { id: "verb-to-tool", label: "From verb to tool", sub: true },
@@ -445,9 +452,9 @@ function TableOfContents() {
  * project-page template (https://github.com/nerfies/nerfies.github.io).
  *
  * The narrative below covers the parts of the project that are settled:
- * credits, abstract, the agent architecture and its formalizations,
- * limitations, acknowledgements, and citations. Still to land here:
- *   TODO(#878): the selected-run case study (narrative + highlight timestamps).
+ * credits, abstract, the agent architecture and its formalizations, the
+ * showcase-run case study, limitations, acknowledgements, and citations.
+ * Still to land here:
  *   TODO(#881): the demo video embed in the teaser slot.
  *   TODO(#880): the "Run locally" guide and its nav entry.
  */
@@ -785,8 +792,8 @@ export function HomeView() {
         </div>
       </section>
 
-      {/* TODO(#878): selected-run case study goes here — narrative, highlight
-          timestamps, and provenance (provider, model, effort, seed, cost). */}
+      {/* ===== Case study: the showcase run, up close (#878) ===== */}
+      <CaseStudySection />
 
       {/* ===== Implementation: the engine underneath ===== */}
       <ImplementationSection />
