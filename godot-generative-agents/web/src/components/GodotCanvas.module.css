@@ -13,9 +13,10 @@
   /* Pixel art: never smooth the campus tiles when the canvas is scaled. */
   image-rendering: pixelated;
   /* canvasResizePolicy: 0 — the page owns both sizes: this box, and the drawing
-     buffer GodotCanvas.tsx keeps at exactly this box's shape × devicePixelRatio
-     (a ResizeObserver follows the wrap). The two must stay the SAME shape: the
-     engine maps pointer input linearly across the element's rect
+     buffer GodotCanvas.tsx keeps at this box's shape × devicePixelRatio, floored
+     at the 1920×1080 design base (#952; a ResizeObserver follows the wrap). The
+     two must stay the SAME shape — a uniform scale is fine, a letterbox is not:
+     the engine maps pointer input linearly across the element's rect
      (GodotInput.computePosition), so any object-fit/letterbox correction here
      desyncs clicks from pixels — the #942 offset. No !important needed either:
      the engine's noResize branch never writes canvas CSS. */
