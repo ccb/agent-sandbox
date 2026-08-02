@@ -40,6 +40,8 @@ fi
   | tee /dev/stderr | grep -q "all checks passed"
 "$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_replay_codec.gd 2>&1 \
   | tee /dev/stderr | grep -q "all checks passed"
+"$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_replay_load_error.gd 2>&1 \
+  | tee /dev/stderr | grep -q "all checks passed"
 "$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_action_tally.gd 2>&1 \
   | tee /dev/stderr | grep -q "all checks passed"
 "$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_simulation_setup.gd 2>&1 \

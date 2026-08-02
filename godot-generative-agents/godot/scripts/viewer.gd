@@ -205,6 +205,7 @@ var _filter_location := ""
 var _agent_location := {}           # name -> building this step
 var _sky: CanvasModulate            # clock-driven day-night tint over the campus
 var _trails: Node2D                 # parent of the per-agent breadcrumb Line2Ds
+var _replay_error: CanvasLayer      # the #937 load-failure surface; first failure wins
 # Web only: push the current step to the page so the React companion panel can
 # follow the replay. `_is_web` gates the JS calls to web exports; `_last_step`
 # (-1 = none pushed yet) lets us call out only when the integer step changes.
@@ -583,10 +584,50 @@ func _on_run_halted(halted: bool) -> void:
 		_panel.set_playing(false)
 
 
+func _show_replay_load_error(message: String) -> void:
+	# The visible half of a replay-load failure (#937): every load path used to
+	# abort with only a console push_error, leaving an empty campus a viewer
+	# can't tell from a hang. One surface for all of them — what failed, and the
+	# way back. The first failure wins (it's the root cause); repeats still
+	# reach the console below but don't stack panels.
+	push_error("penn_replay: %s" % message)
+	if _replay_error != null:
+		return
+	_replay_error = CanvasLayer.new()
+	_replay_error.name = "ReplayLoadError"
+	_replay_error.layer = 100
+	add_child(_replay_error)
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_replay_error.add_child(center)
+	var panel := PanelContainer.new()
+	center.add_child(panel)
+	var margin := MarginContainer.new()
+	for side in ["left", "right", "top", "bottom"]:
+		margin.add_theme_constant_override("margin_" + side, 20)
+	panel.add_child(margin)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 12)
+	margin.add_child(col)
+	var title := Label.new()
+	title.text = "Couldn't load the replay"
+	title.add_theme_font_size_override("font_size", 24)
+	col.add_child(title)
+	var detail := Label.new()
+	detail.text = message
+	detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	detail.custom_minimum_size = Vector2(420, 0)
+	col.add_child(detail)
+	var back := Button.new()
+	back.text = "◀  Back to menu"
+	back.pressed.connect(_on_back_to_menu)
+	col.add_child(back)
+
+
 func _load_replay_desktop() -> void:
 	var f := FileAccess.open(replay_path, FileAccess.READ)
 	if f == null:
-		push_error("penn_replay: cannot open %s" % replay_path)
+		_show_replay_load_error("cannot open %s" % replay_path)
 		return
 	_load_replay_from_text(f.get_as_text())
 
@@ -609,14 +650,14 @@ func _load_replay_web() -> void:
 		url = str(JavaScriptBridge.eval("new URL('%s', window.location.href).href" % web_replay_url, true))
 	var err := http.request(url)
 	if err != OK:
-		push_error("penn_replay: could not start HTTP request for %s (%d)" % [url, err])
+		_show_replay_load_error("could not start the replay request for %s (error %d)" % [url, err])
 
 
 func _on_replay_request_completed(
 	_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray
 ) -> void:
 	if code != 200:
-		push_error("penn_replay: fetching %s returned HTTP %d" % [web_replay_url, code])
+		_show_replay_load_error("fetching %s returned HTTP %d" % [web_replay_url, code])
 		return
 	_load_replay_from_text(body.get_string_from_utf8())
 
@@ -627,7 +668,7 @@ func _load_replay_from_text(text: String) -> void:
 	# hard-indexing meta/frames off a truncated re-bake or a skewed backend (#638).
 	var load_error := PayloadGuards.replay_load_error(data)
 	if load_error != "":
-		push_error("penn_replay: %s" % load_error)
+		_show_replay_load_error(load_error)
 		return
 	var replay := data as Dictionary
 	var meta := replay["meta"] as Dictionary
