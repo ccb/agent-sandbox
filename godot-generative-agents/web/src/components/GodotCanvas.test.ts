@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { tameFocus } from "./GodotCanvas";
+import { bufferSize, tameFocus } from "./GodotCanvas";
 
 // No jsdom here (see the other tests in this package), so stand in a bare object
 // with the one method the helper wraps — what we care about is whether the
@@ -36,5 +36,19 @@ describe("tameFocus", () => {
     elsewhere = false;
     el.focus();
     expect(calls).toEqual([{ preventScroll: true }]);
+  });
+});
+
+describe("bufferSize", () => {
+  it("scales the box's CSS size by the device pixel ratio, floored", () => {
+    expect(bufferSize(1280.6, 719.4, 2)).toEqual([2561, 1438]);
+  });
+
+  it("is the identity at DPR 1 on integer boxes", () => {
+    expect(bufferSize(1280, 720, 1)).toEqual([1280, 720]);
+  });
+
+  it("never emits a zero-sized buffer — a hidden box must not kill the GL context", () => {
+    expect(bufferSize(0, 0, 2)).toEqual([1, 1]);
   });
 });
