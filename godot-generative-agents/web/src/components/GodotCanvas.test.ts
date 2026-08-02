@@ -44,11 +44,31 @@ describe("bufferSize", () => {
     expect(bufferSize(1280.6, 719.4, 2)).toEqual([2561, 1438]);
   });
 
-  it("is the identity at DPR 1 on integer boxes", () => {
-    expect(bufferSize(1280, 720, 1)).toEqual([1280, 720]);
+  it("is the identity at DPR 1 on integer boxes at or above the design base", () => {
+    expect(bufferSize(1920, 1080, 1)).toEqual([1920, 1080]);
   });
 
   it("never emits a zero-sized buffer — a hidden box must not kill the GL context", () => {
     expect(bufferSize(0, 0, 2)).toEqual([1, 1]);
+  });
+
+  // #952: below the 1920×1080 design base, Godot's canvas_items stretch would
+  // downscale nearest-filtered pixel art — floor the buffer at base instead and
+  // let the browser do the (linear, smooth) downscale into the box.
+  it("floors the buffer at the design base when the box is smaller", () => {
+    expect(bufferSize(960, 540, 1)).toEqual([1920, 1080]);
+  });
+
+  it("floors fractional sub-base sizes too, not just integer divisors", () => {
+    expect(bufferSize(1280, 720, 1)).toEqual([1920, 1080]);
+  });
+
+  it("keeps the box's shape when flooring — aspect decides the letterbox, not us", () => {
+    // k = max(1, 1920/800, 1080/800) = 2.4 — one uniform scale, no distortion.
+    expect(bufferSize(800, 800, 1)).toEqual([1920, 1920]);
+  });
+
+  it("does not floor a box the device pixel ratio already carries past base", () => {
+    expect(bufferSize(1280, 720, 2)).toEqual([2560, 1440]);
   });
 });
