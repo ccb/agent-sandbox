@@ -37,6 +37,52 @@ export function wallClock(turn: number): string {
 }
 
 /**
+ * The day's highlights, in step order — where to scrub to in the demo above
+ * (steps are the demo timeline's own unit). Adapted from PR #955 (@0frankie);
+ * each row is re-verified against the replay's event log and transcripts, and
+ * the test pins the ordering, bounds, and clock strings.
+ */
+export const HIGHLIGHTS: { step: number; moment: string }[] = [
+  {
+    step: 0,
+    moment: "Five agents wake into their plans; Maya and Priya agree to meet at Van Pelt.",
+  },
+  {
+    step: 71,
+    moment:
+      "Tanaka preps Irvine Auditorium — AV checks, projector test, handouts (a 💭 wish bubble in the viewer).",
+  },
+  {
+    step: 537,
+    moment:
+      "Mateo finds Tanaka in Irvine, buzzing about the lecture and checking everything's ready.",
+  },
+  {
+    step: 705,
+    moment:
+      "The gravitational-waves lecture begins: Tanaka front and center, Mateo running the AV booth.",
+  },
+  { step: 814, moment: "Tanaka thanks Mateo for the seamless live LIGO-data transition." },
+  {
+    step: 848,
+    moment: "Maya and Priya settle into Chapter 5, problem 3, in the Moelis Reading Room.",
+  },
+  { step: 1151, moment: "Theo, who skipped the lecture, asks Mateo how it went." },
+  {
+    step: 1437,
+    moment: "Priya catches Tanaka with a question; an impromptu whiteboard session follows.",
+  },
+  { step: 1643, moment: "Theo and Mateo debate the lecture's determinism angle over lunch." },
+  { step: 2514, moment: "Priya starts pulling and cleaning a dataset for her course project." },
+  {
+    step: 3573,
+    moment: "Maya and Theo bump into each other in the Book Stacks — “funny running into you.”",
+  },
+  { step: 3725, moment: "Theo studies free will and determinism for his seminar paper." },
+  { step: 4026, moment: "Mateo winds down the day walking with his sister Elena at College Hall." },
+];
+
+/**
  * A displayed dialogue line. `fragments` are each a contiguous verbatim
  * substring of ONE transcript line by `speaker`; the renderer joins them with
  * an ellipsis where the original ran longer.
@@ -476,6 +522,29 @@ export function CaseStudySection() {
               from the replay file the demo plays, and a test pins each one to the record it came
               from, so this prose cannot quietly drift from the data.
             </p>
+
+            <table className="nrf-moments">
+              <caption>
+                Where to scrub to — sim clock and timeline step of each moment, in the demo's
+                timeline.
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Clock</th>
+                  <th scope="col">Step</th>
+                  <th scope="col">What happens</th>
+                </tr>
+              </thead>
+              <tbody>
+                {HIGHLIGHTS.map(({ step, moment }) => (
+                  <tr key={step}>
+                    <td>{wallClock(step)}</td>
+                    <td>{step.toLocaleString()}</td>
+                    <td>{moment}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
 
             <h3 className="nrf-title nrf-title-4" id="case-cast">
               The cast and their mornings

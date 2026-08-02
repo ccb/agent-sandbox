@@ -12,6 +12,7 @@ import type { Replay } from "../../types/replay";
 import {
   COOLDOWN_OBS,
   DIALOGS,
+  HIGHLIGHTS,
   JUDGE,
   MATEO_AMNESIA,
   MAYA_TIMELINE,
@@ -28,6 +29,7 @@ import { BASELINE_REPLICATES } from "./CostSection";
 const replay = JSON.parse(replayRaw) as Replay;
 const frames = fattenFrames(replay.frames);
 const streams = replay.memory_streams ?? {};
+const events = replay.events ?? [];
 
 /** The full conversation transcript an agent's frame carries at `turn`. */
 function transcriptAt(agent: string, turn: number): [string, string][] {
@@ -100,6 +102,42 @@ describe("the dialogue excerpts", () => {
       ([sp, text]) => sp === speaker && text.includes(fragment),
     );
     expect(hit, `"${fragment.slice(0, 60)}…"`).toBeDefined();
+  });
+});
+
+describe("the scrub-to highlights", () => {
+  it("lists moments in step order, within the day", () => {
+    const steps = HIGHLIGHTS.map((h) => h.step);
+    expect(steps).toEqual([...steps].sort((a, b) => a - b));
+    expect(steps[0]).toBe(0);
+    expect(steps[steps.length - 1]).toBeLessThan(RUN.steps);
+  });
+
+  it("anchors every row to the replay", () => {
+    // Two rows point at conversation moments (no event on that exact turn);
+    // pin those to the transcript lines they describe. Every other row must
+    // have a logged event at exactly its step.
+    const eventTurns = new Set(events.map((e) => e.turn));
+    const chatPins: Record<number, [string, string]> = {
+      814: ["Professor Tanaka", "live LIGO data was seamless"],
+      1151: ["Theo Lindqvist", "make it to that gravitational waves lecture"],
+    };
+    for (const { step } of HIGHLIGHTS) {
+      const pin = chatPins[step];
+      if (pin) {
+        const [agent, fragment] = pin;
+        expect(
+          transcriptAt(agent, step).some(([, text]) => text.includes(fragment)),
+          `t${step}: "${fragment}"`,
+        ).toBe(true);
+      } else {
+        expect(eventTurns.has(step), `no event at t${step}`).toBe(true);
+      }
+    }
+    // The one quoted fragment in a moment cell is verbatim from its event.
+    expect(
+      events.some((e) => e.turn === 3573 && e.summary.includes("funny running into you")),
+    ).toBe(true);
   });
 });
 
