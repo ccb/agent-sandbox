@@ -17,5 +17,6 @@
       "source": "/godot/index.pck",
       "headers": [{ "key": "Content-Type", "value": "application/wasm" }]
     }
-  ]
+  ],
+  "rewrites": [{ "source": "/(.*)", "destination": "/" }]
 }

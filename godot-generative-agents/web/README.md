@@ -242,9 +242,9 @@ allows any localhost origin, so the dev server needs no proxy.
 > production promote, not a preview.
 
 **Deploys are built locally and uploaded prebuilt — never built from a clone.**
-`public/godot/` (the ~52 MB WASM export) and `public/docs/` are git-ignored, so a
-Vercel *Git* build would ship a site with a hole where the demo goes: Vite only
-copies `public/`, so a missing export isn't a build error. Hence
+`public/godot/` (the ~52 MB WASM export) is git-ignored, so a Vercel *Git* build
+would ship a site with a hole where the demo goes: Vite only copies `public/`, so
+a missing export isn't a build error. Hence
 [`vercel.json`](vercel.json)'s `git.deploymentEnabled: false` plus
 [`scripts/vercel-build.sh`](scripts/vercel-build.sh), which fails the build when
 the export is absent. Building locally is also what [#882](https://github.com/ccb/agent-sandbox/issues/882)
@@ -275,6 +275,29 @@ Rollback: `vercel rollback` (or `vercel rollback <url>`) re-points production at
 the previous deployment — instant, no rebuild. `vercel ls` lists deployments and
 `vercel inspect <url>` prints the identity to record in #882.
 
+### What the public site exposes
+
+The landing page is the whole public surface (#879 retired the nav; every other view
+is a `#hash` route, which never reaches the server). Two rules keep it that way:
+
+- **No docs.** `pnpm gen:docs` output is a local dev convenience — the dev server
+  serves it at `/docs/`, but `vercel-build.sh` deletes `dist/docs` so it is never
+  deployed. Whether or not you ran `gen:docs` before deploying makes no difference.
+- **Any other path lands on the landing page**, via
+  `"rewrites": [{ "source": "/(.*)", "destination": "/" }]`. It's a *rewrite*, not a
+  redirect, because Vercel gives ["precedence … to the filesystem prior to rewrites
+  being applied"](https://vercel.com/docs/project-configuration/vercel-json#rewrites)
+  — real files (`/godot/*`, `/replay/*`, `/assets/*`) still serve, and only paths that
+  match nothing fall through. A catch-all `redirects` entry would do the opposite:
+  redirects run *before* the filesystem, so it would bounce the engine and the replay
+  to `/` too and the demo would never load. The URL bar keeps `/xyz` rather than
+  snapping to `/`; if you'd rather it snapped, that needs a redirect with every asset
+  prefix negated by hand — brittle, and one forgotten prefix silently breaks an asset.
+
+The trade-off: a *missing* asset now answers 200 with the landing page's HTML instead
+of 404, so a hollow deploy fails in the Godot loader rather than at the network tab.
+That's what `vercel-build.sh`'s asset guard is for — the 404 isn't the safety net.
+
 ### Verify on the deployed origin
 
 | Check | How | Why it matters |
@@ -282,12 +305,13 @@ the previous deployment — instant, no rebuild. `vercel ls` lists deployments a
 | Cross-origin isolation | `curl -sI <url> \| grep -i cross-origin` — expect both COOP + COEP | Godot's *threaded* WASM needs `SharedArrayBuffer`. `vite.config.ts` sets these for `dev`/`preview` only; on Vercel they come from `vercel.json`. Missing ⇒ blank canvas. |
 | `.pck` compression | `curl -sI -H 'accept-encoding: br' <url>/godot/index.pck \| grep -i content-encoding` | `index.pck` is 16 MB raw and **4 %** gzipped, but Vercel compresses an [MIME allowlist](https://vercel.com/docs/how-vercel-cdn-works/compression) that `.pck` isn't on — so `vercel.json` labels that one path `application/wasm`, which is. Godot's loader reads the `.pck` as an ArrayBuffer and ignores the type. No `content-encoding` ⇒ the override didn't take; drop it and eat the 16 MB. |
 | Payload | DevTools → Network, hard reload | ~10 MB compressed per cold visit (the 35 MB engine gzips to ~9 MB) against 57 MB of `dist/`. Hobby includes 100 GB/month of transfer. |
+| Stray URLs | `curl -sI <url>/docs/ <url>/nope` → 200, and the browser shows the landing page | Proves both the `dist/docs` strip and the catch-all rewrite took. A 404 means the rewrite didn't apply; MkDocs HTML at `/docs/` means the strip didn't. |
 
 ### Limits worth knowing
 
 - **CLI upload cap: 100 MB on Hobby, 1 GB on Pro.** `dist/` is ~57 MB today
-  (`du -sh dist`); `pnpm gen:docs` adds the MkDocs site on top. Check before the
-  release build.
+  (`du -sh dist` after `vercel build`, i.e. with `dist/docs` already stripped).
+  Check before the release build.
 - **100 deployments/day** on Hobby.
 - Preview URLs are protected by default — share QA links via the deployment's
   *Protection Bypass*, not by disabling protection.

@@ -35,3 +35,10 @@ if [[ "$ok" != 1 ]]; then
 fi
 
 pnpm build
+
+# The MkDocs site is a local dev convenience (`pnpm gen:docs` → public/docs/, served
+# at /docs/ by the dev middleware in vite.config.ts). It is NOT part of the public
+# showcase — #882 exposes Home only — so drop it from the deployed output rather than
+# depending on whoever deploys not having run gen:docs. With it gone, /docs/ falls
+# through vercel.json's catch-all rewrite to the landing page like any other stray URL.
+rm -rf dist/docs
