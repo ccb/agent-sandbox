@@ -70,6 +70,29 @@ export function tameFocus(el: { focus: (options?: FocusOptions) => void }, block
   };
 }
 
+/**
+ * The drawing-buffer size for a canvas box of the given CSS size (#942).
+ *
+ * The engine maps pointer input linearly across the canvas element's rect
+ * (GodotInput.computePosition: `(clientX - rect.x) * canvas.width / rect.width`),
+ * so the buffer MUST be exactly the box's shape — an object-fit letterbox
+ * between the two lands every click beside the UI it aims at. We therefore own
+ * both sides: the CSS box (GodotCanvas.module.css) and this buffer, kept in
+ * step by a ResizeObserver below. × devicePixelRatio so one buffer pixel is
+ * one device pixel; floored to whole pixels; never 0 (a hidden box must not
+ * kill the GL context).
+ */
+export function bufferSize(
+  cssWidth: number,
+  cssHeight: number,
+  pixelRatio: number,
+): [number, number] {
+  return [
+    Math.max(1, Math.floor(cssWidth * pixelRatio)),
+    Math.max(1, Math.floor(cssHeight * pixelRatio)),
+  ];
+}
+
 export function GodotCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -78,6 +101,7 @@ export function GodotCanvas() {
   useEffect(() => {
     let engine: GodotEngine | undefined;
     let cancelled = false;
+    let resizeObserver: ResizeObserver | undefined;
 
     // Latched, not per-gesture: once the reader presses outside the demo they're
     // reading the page, and the engine has no business pulling focus back until
@@ -95,16 +119,34 @@ export function GodotCanvas() {
         await loadEngineScript();
         if (cancelled) return;
         const canvas = canvasRef.current;
-        if (!canvas || !window.Engine) return;
+        const wrap = wrapRef.current;
+        if (!canvas || !wrap || !window.Engine) return;
         tameFocus(canvas, () => readerIsElsewhere);
+
+        // Keep the buffer at exactly the box's shape (#942) — set before
+        // startGame so the first frame already has the right size, then follow
+        // the box through layout changes. The engine's noResize branch adopts
+        // whatever buffer the page sets and never writes the canvas CSS.
+        const applyBufferSize = () => {
+          const rect = wrap.getBoundingClientRect();
+          const [w, h] = bufferSize(rect.width, rect.height, window.devicePixelRatio || 1);
+          if (canvas.width !== w) canvas.width = w;
+          if (canvas.height !== h) canvas.height = h;
+        };
+        applyBufferSize();
+        resizeObserver = new ResizeObserver(applyBufferSize);
+        resizeObserver.observe(wrap);
 
         engine = new window.Engine({
           // Base path for the engine's sibling files (index.wasm, index.pck, …).
           executable: `${GODOT_BASE}/index`,
           mainPack: `${GODOT_BASE}/index.pck`,
           canvas,
-          // 2 = adapt the framebuffer to the canvas element's CSS size.
-          canvasResizePolicy: 2,
+          // 0 = the page owns the canvas size — both the CSS box and the
+          // drawing buffer (applyBufferSize above). Policy 2 sized the buffer
+          // to the WINDOW while the box was the stage, and the object-fit
+          // letterbox that papered over the mismatch offset every click (#942).
+          canvasResizePolicy: 0,
           focusCanvas: true,
           onProgress: (current: number, total: number) => {
             if (!cancelled && total > 0) {
@@ -131,6 +173,7 @@ export function GodotCanvas() {
     return () => {
       cancelled = true;
       document.removeEventListener("pointerdown", onPointerDown, true);
+      resizeObserver?.disconnect();
       try {
         engine?.requestQuit?.();
       } catch {
