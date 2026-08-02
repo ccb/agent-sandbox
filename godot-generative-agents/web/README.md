@@ -298,6 +298,22 @@ The trade-off: a *missing* asset now answers 200 with the landing page's HTML in
 of 404, so a hollow deploy fails in the Godot loader rather than at the network tab.
 That's what `vercel-build.sh`'s asset guard is for — the 404 isn't the safety net.
 
+Two more launch details:
+
+- **Shared-link metadata** lives in `index.html`: title (matching the `<h1>`), the
+  favicon, and a description/OG card condensed from the page's own Abstract. There is
+  no `og:image` yet — #881's video produces a poster frame, which is the right thing to
+  point at; until then link previews render as a text card rather than a broken image.
+- **`/assets/*` is cached `max-age=31536000, immutable`** — Vite content-hashes every
+  file there, so a new build gets new URLs. Everything else keeps Vercel's
+  `public, max-age=0, must-revalidate` default *on purpose*: `/godot/index.wasm`,
+  `index.pck` and `/replay/penn_replay.json` keep the same names across deploys, so
+  they must revalidate or a promote would leave visitors on a stale engine.
+
+**Open decision — indexing.** Nothing sets `robots` today, so a promoted production URL
+is indexable. If #876 hasn't cleared, add `<meta name="robots" content="noindex" />` to
+`index.html` before promoting rather than after.
+
 ### Verify on the deployed origin
 
 | Check | How | Why it matters |
