@@ -593,6 +593,12 @@ func _load_replay_desktop() -> void:
 
 func _load_replay_web() -> void:
 	var http := HTTPRequest.new()
+	# The browser's fetch layer owns transfer encoding on web exports: it
+	# negotiates Content-Encoding and hands over an already-decompressed body.
+	# With accept_gzip on, Godot sees the response's gzip header and runs its
+	# own StreamPeerGZIP pass over that plaintext — FAILED, garbage to the JSON
+	# parser, silent blank campus behind any compressing host, e.g. Vercel (#938).
+	http.accept_gzip = false
 	add_child(http)
 	http.request_completed.connect(_on_replay_request_completed)
 	# Godot's HTTPRequest needs an absolute URL (with a scheme) — unlike the
