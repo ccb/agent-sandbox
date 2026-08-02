@@ -10,8 +10,9 @@ and so on. Those panels read the *same* `penn_replay.json` the Godot canvas play
 (typed in [`src/types/replay.ts`](src/types/replay.ts)), so they never have to pull
 state out of Godot.
 
-> **Status:** local viewer only — not deployed. See [Licensing](#licensing) before
-> you ever put this on a public URL.
+> **Status:** local viewer only — not deployed yet. The Vercel path is configured
+> ([Deploying to Vercel](#deploying-to-vercel-882)); read [Licensing](#licensing)
+> before you put this on a public URL.
 
 ---
 
@@ -230,6 +231,71 @@ allows any localhost origin, so the dev server needs no proxy.
 | `pnpm export:godot` | Headless Godot Web export → `public/godot/`. |
 | `pnpm gen:replay [-- <args>]` | Run the sim and copy the replay into `public/replay/`. Args pass through, e.g. `pnpm gen:replay --steps 600`. |
 | `pnpm gen:docs` | Build the MkDocs site (`mkdocs build --strict`) into `public/docs/`, served at `/docs/`. |
+
+---
+
+## Deploying to Vercel (#882)
+
+> **Read [Licensing](#licensing) first.** The web export bakes the *Cute Fantasy
+> (Free)* sprite art into `index.pck`, and a public URL **redistributes** it. That
+> audit is [#876](https://github.com/ccb/agent-sandbox/issues/876); it gates the
+> production promote, not a preview.
+
+**Deploys are built locally and uploaded prebuilt — never built from a clone.**
+`public/godot/` (the ~52 MB WASM export) and `public/docs/` are git-ignored, so a
+Vercel *Git* build would ship a site with a hole where the demo goes: Vite only
+copies `public/`, so a missing export isn't a build error. Hence
+[`vercel.json`](vercel.json)'s `git.deploymentEnabled: false` plus
+[`scripts/vercel-build.sh`](scripts/vercel-build.sh), which fails the build when
+the export is absent. Building locally is also what [#882](https://github.com/ccb/agent-sandbox/issues/882)
+asks for: the artifact you QA'd is the one that gets promoted, not a rebuild.
+
+### One-time setup
+
+```bash
+brew install vercel-cli          # or: pnpm add -g vercel
+cd godot-generative-agents/web   # link from HERE — it sets Root Directory for the monorepo
+vercel login
+vercel link                      # writes .vercel/ (git-ignored: ids + pulled env)
+```
+
+### Every deploy
+
+```bash
+pnpm export:godot                # re-export if the Godot side changed
+pnpm gen:replay                  # re-bake if the sim/replay changed
+pnpm lint && pnpm test           # the same gates CI runs
+vercel build                     # runs scripts/vercel-build.sh → dist/ → .vercel/output/
+vercel deploy --prebuilt         # prints the preview URL
+#   … run the #882 QA suite against that URL …
+vercel promote <preview-url>     # same bytes, now production
+```
+
+Rollback: `vercel rollback` (or `vercel rollback <url>`) re-points production at
+the previous deployment — instant, no rebuild. `vercel ls` lists deployments and
+`vercel inspect <url>` prints the identity to record in #882.
+
+### Verify on the deployed origin
+
+| Check | How | Why it matters |
+| --- | --- | --- |
+| Cross-origin isolation | `curl -sI <url> \| grep -i cross-origin` — expect both COOP + COEP | Godot's *threaded* WASM needs `SharedArrayBuffer`. `vite.config.ts` sets these for `dev`/`preview` only; on Vercel they come from `vercel.json`. Missing ⇒ blank canvas. |
+| `.pck` compression | `curl -sI -H 'accept-encoding: br' <url>/godot/index.pck \| grep -i content-encoding` | `index.pck` is 16 MB raw and **4 %** gzipped, but Vercel compresses an [MIME allowlist](https://vercel.com/docs/how-vercel-cdn-works/compression) that `.pck` isn't on — so `vercel.json` labels that one path `application/wasm`, which is. Godot's loader reads the `.pck` as an ArrayBuffer and ignores the type. No `content-encoding` ⇒ the override didn't take; drop it and eat the 16 MB. |
+| Payload | DevTools → Network, hard reload | ~10 MB compressed per cold visit (the 35 MB engine gzips to ~9 MB) against 57 MB of `dist/`. Hobby includes 100 GB/month of transfer. |
+
+### Limits worth knowing
+
+- **CLI upload cap: 100 MB on Hobby, 1 GB on Pro.** `dist/` is ~57 MB today
+  (`du -sh dist`); `pnpm gen:docs` adds the MkDocs site on top. Check before the
+  release build.
+- **100 deployments/day** on Hobby.
+- Preview URLs are protected by default — share QA links via the deployment's
+  *Protection Bypass*, not by disabling protection.
+- `COEP: require-corp` blocks **every** cross-origin `<iframe>`, `<script>` and
+  `<img>`. Today the page loads nothing cross-origin (external URLs are all plain
+  links, which are unaffected), but the [#881](https://github.com/ccb/agent-sandbox/issues/881)
+  video must be self-hosted — a YouTube/Vimeo embed will be blocked — or the
+  headers have to be scoped to the demo first.
 
 ---
 
