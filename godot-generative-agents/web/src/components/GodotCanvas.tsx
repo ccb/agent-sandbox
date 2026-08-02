@@ -70,27 +70,41 @@ export function tameFocus(el: { focus: (options?: FocusOptions) => void }, block
   };
 }
 
+// The Godot project's design resolution (project.godot window/size/viewport_*):
+// everything is laid out on a 1920×1080 canvas_items canvas and stretched from
+// there. Keep in step with the project file.
+const DESIGN_WIDTH = 1920;
+const DESIGN_HEIGHT = 1080;
+
 /**
- * The drawing-buffer size for a canvas box of the given CSS size (#942).
+ * The drawing-buffer size for a canvas box of the given CSS size (#942, #952).
  *
  * The engine maps pointer input linearly across the canvas element's rect
  * (GodotInput.computePosition: `(clientX - rect.x) * canvas.width / rect.width`),
- * so the buffer MUST be exactly the box's shape — an object-fit letterbox
- * between the two lands every click beside the UI it aims at. We therefore own
- * both sides: the CSS box (GodotCanvas.module.css) and this buffer, kept in
- * step by a ResizeObserver below. × devicePixelRatio so one buffer pixel is
- * one device pixel; floored to whole pixels; never 0 (a hidden box must not
- * kill the GL context).
+ * so the buffer MUST be exactly the box's *shape* — an object-fit letterbox
+ * between the two lands every click beside the UI it aims at (#942). We
+ * therefore own both sides: the CSS box (GodotCanvas.module.css) and this
+ * buffer, kept in step by a ResizeObserver below. × devicePixelRatio so one
+ * buffer pixel is one device pixel; floored to whole pixels; never 0 (a hidden
+ * box must not kill the GL context).
+ *
+ * Shape, not size: the buffer never drops below the 1920×1080 design base
+ * (#952). Below it, Godot's own canvas_items stretch would be the downscaler,
+ * and it samples the pixel art nearest-neighbor — unevenly fat and dropped
+ * pixels. Rendering at base and letting the browser downscale the surplus
+ * keeps the art smooth; being one uniform scale of the box's shape, it keeps
+ * the click mapping exact.
  */
 export function bufferSize(
   cssWidth: number,
   cssHeight: number,
   pixelRatio: number,
 ): [number, number] {
-  return [
-    Math.max(1, Math.floor(cssWidth * pixelRatio)),
-    Math.max(1, Math.floor(cssHeight * pixelRatio)),
-  ];
+  const w = cssWidth * pixelRatio;
+  const h = cssHeight * pixelRatio;
+  if (w < 1 || h < 1) return [1, 1];
+  const k = Math.max(1, DESIGN_WIDTH / w, DESIGN_HEIGHT / h);
+  return [Math.max(1, Math.floor(w * k)), Math.max(1, Math.floor(h * k))];
 }
 
 export function GodotCanvas() {
