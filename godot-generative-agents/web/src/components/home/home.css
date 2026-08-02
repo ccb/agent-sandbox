@@ -504,6 +504,107 @@
   aspect-ratio: 16 / 9;
 }
 
+/* --- the run case study (CaseStudySection: transcripts, memories, scores) --- */
+.nrf-dialog {
+  margin: 1.25rem 0;
+  padding: 0.25rem 0 0.25rem 1.1rem;
+  border-left: 3px solid #dbdbdb;
+}
+.nrf-dialog p {
+  margin: 0.5rem 0;
+}
+.nrf-dialog-meta {
+  color: #6a6a6a;
+  font-size: 0.9rem;
+}
+/* A quoted memory record: kind + provenance line above the verbatim text. */
+.nrf-memcard {
+  background: var(--nrf-light);
+  border-radius: 6px;
+  padding: 0.7rem 1rem;
+  margin: 0.9rem 0;
+}
+.nrf-memcard p {
+  margin: 0.3rem 0 0;
+}
+.nrf-memmeta {
+  color: #6a6a6a;
+  font-size: 0.85rem;
+}
+.nrf-memkind {
+  font-variant: small-caps;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--nrf-heading);
+  margin-right: 0.6rem;
+}
+/* Maya's plan trail: a time-badged list. */
+.nrf-timeline {
+  list-style: none;
+  margin: 1rem 0;
+  padding: 0;
+}
+.nrf-timeline li {
+  position: relative;
+  padding-left: 3.6rem;
+  margin: 0.6rem 0;
+}
+.nrf-timeline .nrf-time {
+  position: absolute;
+  left: 0;
+  color: #6a6a6a;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  line-height: inherit;
+}
+/* The believability audit's mean scores. */
+.nrf-scores {
+  border-collapse: collapse;
+  margin: 1rem auto 1.5rem;
+}
+.nrf-scores td {
+  border-bottom: 1px solid #ededed;
+  padding: 0.35rem 1.1rem;
+}
+.nrf-scores td:last-child {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+/* The scrub-to highlights table (from PR #955). */
+.nrf-moments {
+  width: 100%;
+  margin: 2rem 0;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+  text-align: left;
+}
+.nrf-moments caption {
+  caption-side: bottom;
+  margin-top: 0.5rem;
+  color: #6a6a6a;
+  font-size: 0.85rem;
+  font-style: italic;
+  text-align: left;
+}
+.nrf-moments th {
+  color: var(--nrf-heading);
+  border-bottom: 2px solid var(--nrf-heading);
+}
+.nrf-moments th,
+.nrf-moments td {
+  padding: 0.4rem 0.75rem 0.4rem 0;
+  vertical-align: top;
+}
+.nrf-moments tbody tr {
+  border-bottom: 1px solid #e5e5e5;
+}
+/* Clock and step read as data, and shouldn't wrap at narrow widths. */
+.nrf-moments td:nth-child(1),
+.nrf-moments td:nth-child(2) {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 /* --- the enlarged replay figure ---
    The Godot canvas cannot be re-mounted into a <dialog> the way the chain
    diagram is (one engine, one canvas — see ReplayFigure), so the frame itself is
