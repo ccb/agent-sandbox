@@ -121,8 +121,8 @@ function ReplayFigure() {
           </button>
         )}
         <figcaption className="nrf-figcaption">
-          A full twelve-hour run, replayed deterministically in the browser — the same Godot viewer
-          that runs natively, exported to WebAssembly. Drag to pan and scroll to zoom.
+          Five LLM-driven agents plan, remember, and converse their way through a twelve-hour day on
+          a 2D tile map of Penn's campus. Drag to pan and scroll to zoom.
           {/* <details> brings the disclosure arrow, the click/Enter/Space handling and the
               expanded/collapsed state with it — none of which is worth reimplementing in
               React. Closed by default — a reader who wants the legend can open it. */}
@@ -276,12 +276,13 @@ export const TEX = {
   colRow: String.raw`(x, y) = (\text{col}, \text{row})`,
 };
 
-// The Paper / arXiv / Video / Code buttons in the hero are commented out until
-// the video (#881) and the public repository (#884, scheduled 2026-08-14)
-// exist. Their inline SVG line-icons are commented out here along with them,
-// since nothing else uses them. (The original Nerfies template pulls Font
-// Awesome / Academicons from a CDN, which COOP/COEP would block — hence
-// inlining.) Re-enable this block and the buttons together.
+// The Paper / arXiv / Code buttons in the hero are commented out until the
+// public repository (#884, scheduled 2026-08-14) exists. Their inline SVG
+// line-icons are commented out here along with them, since nothing else uses
+// them. (The original Nerfies template pulls Font Awesome / Academicons from a
+// CDN, which COOP/COEP would block — hence inlining.) Re-enable this block and
+// the buttons together. A Video button and its icon lived here too; both were
+// deleted when the demo video was dropped (#881, deferred 2026-08-03).
 /*
 function Icon({ children }: { children: ReactNode }) {
   return (
@@ -315,12 +316,6 @@ const ArxivIcon = (
     <path d="M6 12v5c0 1 2.7 3 6 3s6-2 6-3v-5" />
   </Icon>
 );
-const VideoIcon = (
-  <Icon>
-    <circle cx="12" cy="12" r="9" />
-    <polygon points="10 8 16 12 10 16" fill="currentColor" stroke="currentColor" />
-  </Icon>
-);
 const CodeIcon = (
   <Icon>
     <path d="m9 18-6-6 6-6" />
@@ -332,6 +327,65 @@ const CodeIcon = (
 // The repository this companion lives in. Swap for the standalone public repo
 // when it publishes (#884).
 const REPO_URL = "https://github.com/ccb/agent-sandbox";
+
+// Named so the copy button and the rendered block can't drift apart.
+const BIBTEX = `@misc{king2026penncampusagents,
+  title  = {Penn Campus: Generative Agents in a Simulated World},
+  author = {King, Alistair and L, Frankie and Callison-Burch, Chris},
+  year   = {2026},
+  note   = {PURM, University of Pennsylvania},
+  url    = {${REPO_URL}},
+}`;
+
+/** The citation block, plus a copy button. Its own component so the "copied"
+    flash re-renders the block and not the whole page. The icons are the same
+    inline Feather-style strokes as the (commented-out) hero buttons above —
+    Font Awesome from a CDN is what COOP/COEP blocks. */
+function BibTeXBlock() {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="nrf-pre-wrap">
+      <button
+        type="button"
+        className={copied ? "nrf-pre-copy is-copied" : "nrf-pre-copy"}
+        // The label carries the state for a screen reader; the icon swap carries
+        // it for everyone else.
+        aria-label={copied ? "BibTeX copied to clipboard" : "Copy BibTeX to clipboard"}
+        title={copied ? "Copied" : "Copy"}
+        onClick={() =>
+          navigator.clipboard.writeText(BIBTEX).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+          })
+        }
+      >
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          {copied ? (
+            <polyline points="20 6 9 17 4 12" />
+          ) : (
+            <>
+              <rect x="9" y="9" width="11" height="11" rx="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </>
+          )}
+        </svg>
+      </button>
+      <pre className="nrf-pre">
+        <code>{BIBTEX}</code>
+      </pre>
+    </div>
+  );
+}
 
 // Re-exported for tests that import from this file.
 export { TOC } from "./toc";
@@ -352,6 +406,23 @@ function TableOfContents() {
   // headings through the band on its way, and the last entries can never win the
   // band race at all (see below), so their highlight is the click's to set.
   const pinnedUntil = useRef(0);
+  // Whether the page has scrolled far enough that a "back to top" affordance
+  // earns its keep — shown next to the heading rather than in the list, since
+  // the top of the page isn't a section.
+  const [showTop, setShowTop] = useState(false);
+
+  useEffect(() => {
+    const sentinel = document.getElementById("nrf-top-sentinel");
+    if (!sentinel) return;
+    // rootMargin grows the root outward, so the (zero-height) sentinel at the
+    // very top of the page keeps "intersecting" for the first 80px of scroll
+    // and only then flips — that's the "slightly down" threshold.
+    const observer = new IntersectionObserver(([entry]) => setShowTop(!entry.isIntersecting), {
+      rootMargin: "80px 0px 0px 0px",
+    });
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     // Active = the last target to cross a band across the top fifth of the
@@ -396,9 +467,31 @@ function TableOfContents() {
     pinnedUntil.current = Date.now() + JUMP_PIN_MS;
   };
 
+  const scrollToTop = () => {
+    document.getElementById("nrf-top-sentinel")?.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      block: "start",
+    });
+    setActive("");
+    pinnedUntil.current = Date.now() + JUMP_PIN_MS;
+  };
+
   return (
     <nav className="nrf-toc" aria-label="Table of contents">
-      <p className="nrf-toc-heading">Contents</p>
+      <p className="nrf-toc-heading">
+        Contents
+        {showTop && (
+          <button
+            type="button"
+            className="nrf-toc-top"
+            onClick={scrollToTop}
+            aria-label="Back to top"
+            title="Back to top"
+          >
+            ↑
+          </button>
+        )}
+      </p>
       <ul className="nrf-toc-list">
         {TOC.map((entry) => (
           <li key={entry.id}>
@@ -428,12 +521,14 @@ function TableOfContents() {
  * credits, abstract, the showcase-run case study, the agent architecture and
  * its formalizations, limitations, acknowledgements, and citations.
  * Still to land here:
- *   TODO(#881): the demo video embed in the teaser slot.
  *   TODO(#880): the "Run locally" guide and its nav entry.
  */
 export function HomeView() {
   return (
     <div className="nrf">
+      {/* Zero-height marker for the "back to top" affordance in the TOC
+          heading — not a link target, so no id in TOC/toc.ts. */}
+      <div id="nrf-top-sentinel" className="nrf-top-sentinel" aria-hidden="true" />
       <TableOfContents />
 
       {/* ===== Hero: title, authors, affiliations, links ===== */}
@@ -444,7 +539,7 @@ export function HomeView() {
               Penn Campus: Generative Agents in a Simulated World
             </h1>
             <p className="nrf-venue">
-              PURM 2026 · University of Pennsylvania
+              University of Pennsylvania · PURM 2026
               {/* Decorative: the line right beside it already names the
                   university, so alt is empty rather than repeating it. */}
               <img
@@ -456,24 +551,24 @@ export function HomeView() {
               />
             </p>
 
+            {/* Everyone shares one affiliation, and the venue line above already
+                names it — so no affiliation line and no superscripts. */}
             <div className="nrf-authors">
               <span className="nrf-author-block">
                 <a href="https://github.com/aking526">Alistair King</a>,
               </span>{" "}
               <span className="nrf-author-block">
-                <a href="https://github.com/0frankie">Frankie L</a>
+                <a href="https://github.com/0frankie">Frankie L</a>,
+              </span>{" "}
+              <span className="nrf-author-block">
+                <a href="https://www.cis.upenn.edu/~ccb/">Chris Callison-Burch</a>
               </span>
             </div>
 
-            {/* Everyone shares one affiliation, and the venue line above already
-                names it — so no affiliation line and no superscripts. */}
-            <div className="nrf-advisor">
-              Advised by <a href="https://www.cis.upenn.edu/~ccb/">Chris Callison-Burch</a>
-            </div>
-
-            {/* Paper / arXiv / Video / Code links — re-enable (along with the
-                Icon block at the top of this file) once the video (#881) and
-                public repository (#884) URLs exist.
+            {/* Paper / arXiv / Code links — re-enable (along with the Icon
+                block at the top of this file) once the public repository (#884)
+                URL exists. A Video button sat between arXiv and Code; deleted
+                with #881 (video deferred 2026-08-03).
 
             <div className="nrf-links">
               <a className="nrf-button" href="#">
@@ -483,10 +578,6 @@ export function HomeView() {
               <a className="nrf-button" href="#">
                 {ArxivIcon}
                 <span>arXiv</span>
-              </a>
-              <a className="nrf-button" href="#">
-                {VideoIcon}
-                <span>Video</span>
               </a>
               <a className="nrf-button" href={REPO_URL} target="_blank" rel="noreferrer">
                 {CodeIcon}
@@ -500,14 +591,11 @@ export function HomeView() {
 
       {/* ===== Teaser: summary + the replay itself (it used to be a button linking
           out to a standalone #game page) =====
-          TODO(#881): embed the captioned demo video here once it's published.
+          The replay itself is the teaser — a demo video was going to share this
+          slot, until it was dropped (#881, deferred 2026-08-03).
           TODO(#878): swap in a still from the selected showcase run meanwhile. */}
       <section className="nrf-teaser" id="demo">
         <div className="nrf-container">
-          <p className="nrf-subtitle nrf-centered nrf-teaser-cap">
-            Five LLM-driven agents plan, remember, and converse their way through a twelve-hour day
-            on a 2D tile map of Penn's campus.
-          </p>
           <ReplayFigure />
         </div>
       </section>
@@ -530,9 +618,7 @@ export function HomeView() {
                 of Park et al.'s <em>Generative Agents</em>. The simulation is built on a classical
                 text-adventure engine: every action an agent takes must pass the same
                 precondition/effect gate before it can change the world, so the model never mutates
-                state directly. Each run records its LLM traffic and world seed, which makes any run
-                replayable deterministically in a Godot viewer, natively or in the browser via
-                WebAssembly.
+                state directly.
               </p>
             </div>
           </div>
@@ -557,8 +643,8 @@ export function HomeView() {
               <p>
                 The day above is what the pieces below produce when they run together. Memory,
                 planning, conversation, and the action gate are the machinery behind each moment —
-                the clock that advances the world, the retrieval that surfaces what matters, the
-                plans that bend when a conversation does, and the precondition check that keeps the
+                the clock that advances the world, the plans that bend when a conversation does, the
+                retrieval that surfaces what matters, and the precondition check that keeps the
                 model from rewriting state directly.
               </p>
               <SectionHeading id="world" level={3} className="nrf-title nrf-title-4">
@@ -586,12 +672,40 @@ export function HomeView() {
                 </CodeRef>
               </p>
 
+              <SectionHeading id="planning" level={3} className="nrf-title nrf-title-4">
+                Planning
+              </SectionHeading>
+              <p>
+                Each agent starts its day by decomposing intentions hierarchically: a day outline,
+                refined into hourly blocks, refined into minute-level stops — each stop a real
+                place, an activity, and a duration — one model call per altitude.
+                <CodeRef>
+                  <code>LLMPlanner</code>, in <code>backend/planner.py</code>
+                </CodeRef>{" "}
+                Proposed stops are validated against the actual map, so a hallucinated location is
+                dropped before it can reach the world.
+                <CodeRef>
+                  <code>validate_stops()</code>, in <code>text_adventure_games/planning.py</code>
+                </CodeRef>{" "}
+                Plans are living documents: an agent revises when it falls behind schedule, when an
+                action is rejected by the world, when a conversation changes its commitments, or
+                when it reacts to something it perceives — and a revision may only rewrite the tail
+                of the day, never the stops already lived.
+                <CodeRef>
+                  <code>maybe_revise_plan()</code>, in <code>backend/cognition.py</code>
+                </CodeRef>
+              </p>
+
               <SectionHeading id="memory" level={3} className="nrf-title nrf-title-4">
                 Memory and retrieval
               </SectionHeading>
               <p>
                 Everything an agent experiences — observations, its own actions and failures, lines
                 of dialogue, plans, reflections — is a timestamped record with an importance score.
+                That score is not a hand-tuned constant: the language model rates each new record's
+                poignancy from 1 (utterly mundane) to 10 (momentous), and only a few signals it
+                cannot read off the text — falling ill, a commitment made in conversation — carry
+                fixed scores instead. Importance and reflection below covers how that scoring runs.
                 When the agent must decide, it cannot see the whole stream; it retrieves the records
                 that score highest under a weighted sum of recency, importance, and relevance to the
                 current situation <TeX>{TEX.query}</TeX> at tick <TeX>{TEX.tick}</TeX>:
@@ -657,30 +771,6 @@ export function HomeView() {
                 </CodeRef>
               </p>
 
-              <SectionHeading id="planning" level={3} className="nrf-title nrf-title-4">
-                Planning
-              </SectionHeading>
-              <p>
-                Each agent starts its day by decomposing intentions hierarchically: a day outline,
-                refined into hourly blocks, refined into minute-level stops — each stop a real
-                place, an activity, and a duration — one model call per altitude.
-                <CodeRef>
-                  <code>LLMPlanner</code>, in <code>backend/planner.py</code>
-                </CodeRef>{" "}
-                Proposed stops are validated against the actual map, so a hallucinated location is
-                dropped before it can reach the world.
-                <CodeRef>
-                  <code>validate_stops()</code>, in <code>text_adventure_games/planning.py</code>
-                </CodeRef>{" "}
-                Plans are living documents: an agent revises when it falls behind schedule, when an
-                action is rejected by the world, when a conversation changes its commitments, or
-                when it reacts to something it perceives — and a revision may only rewrite the tail
-                of the day, never the stops already lived.
-                <CodeRef>
-                  <code>maybe_revise_plan()</code>, in <code>backend/cognition.py</code>
-                </CodeRef>
-              </p>
-
               <SectionHeading id="conversations" level={3} className="nrf-title nrf-title-4">
                 Conversations
               </SectionHeading>
@@ -729,8 +819,7 @@ export function HomeView() {
                 agent's observation and retrieved memories are assembled into context, the model is
                 asked for an action, its answer is parsed back into a command, and the world's
                 precondition gate has the last word. The diagram below is generated from the
-                engine's own chain specifications and prompt templates, so it stays in step with the
-                code rather than being drawn by hand.
+                engine's own chain specifications and prompt templates.{" "}
               </p>
               <PromptChainFigure />
               <p className="nrf-figure-note">
@@ -798,12 +887,12 @@ export function HomeView() {
             </SectionHeading>
             <div className="nrf-content nrf-justified">
               <p>
-                This is a small research prototype, and it is honest about it. As described above,
-                the generative machinery runs only when a real language-model provider is attached.
-                Reproducibility comes from recording each run's LLM traffic and world seed and
-                replaying both, not from seeding the model itself. And the scale is deliberately
-                modest — five agents, one campus, one simulated day — so the behaviors you'll see
-                are believable vignettes, not validated claims about human behavior.
+                This is a small research prototype. Reproducibility comes from recording each run's
+                LLM traffic and world seed and replaying both, not from seeding the model itself.
+                And the scale is deliberately modest — five agents, one campus, one simulated day —
+                so the behaviors you'll see are believable vignettes, not validated claims about
+                human behavior. Nor are these agents a ceiling: they reflect the machinery we built
+                and the models we could afford to run, not the frontier of what agents can do.
               </p>
             </div>
           </div>
@@ -871,6 +960,17 @@ export function HomeView() {
                 menu is derived from affordances in scope. That work is also our reference point for
                 grading agents on task completion, an interface this prototype has designed but not
                 yet built.
+              </p>
+              <p>
+                The design of this page is adapted from the{" "}
+                <a href="https://github.com/nerfies/nerfies.github.io">Nerfies</a> project page. We
+                thank the authors for releasing their{" "}
+                <a href="https://github.com/nerfies/nerfies.github.io">source code</a>, which is
+                licensed under a{" "}
+                <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">
+                  Creative Commons Attribution-ShareAlike 4.0 International License
+                </a>
+                .
               </p>
             </div>
 
@@ -941,36 +1041,9 @@ export function HomeView() {
           <h2 className="nrf-title nrf-title-3" id="BibTeX">
             BibTeX
           </h2>
-          <pre className="nrf-pre">
-            <code>{`@misc{king2026penncampusagents,
-  title  = {Penn Campus: Generative Agents in a Simulated World},
-  author = {King, Alistair and L, Frankie and Callison-Burch, Chris},
-  year   = {2026},
-  note   = {PURM, University of Pennsylvania},
-  url    = {${REPO_URL}},
-}`}</code>
-          </pre>
+          <BibTeXBlock />
         </div>
       </section>
-
-      {/* ===== Footer: template attribution (as the Nerfies license asks) ===== */}
-      <footer className="nrf-footer">
-        <div className="nrf-container">
-          <div className="nrf-content nrf-footer-content">
-            <p>
-              The design of this page is adapted from the{" "}
-              <a href="https://github.com/nerfies/nerfies.github.io">Nerfies</a> project page. We
-              thank the authors for releasing their{" "}
-              <a href="https://github.com/nerfies/nerfies.github.io">source code</a>, which is
-              licensed under a{" "}
-              <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">
-                Creative Commons Attribution-ShareAlike 4.0 International License
-              </a>
-              .
-            </p>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }

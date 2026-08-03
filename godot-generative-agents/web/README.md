@@ -302,8 +302,10 @@ Two more launch details:
 
 - **Shared-link metadata** lives in `index.html`: title (matching the `<h1>`), the
   favicon, and a description/OG card condensed from the page's own Abstract. There is
-  no `og:image` yet — #881's video produces a poster frame, which is the right thing to
-  point at; until then link previews render as a text card rather than a broken image.
+  no `og:image` — the poster frame was going to come from #881's video, which is now
+  deferred, so link previews render as a text card rather than a broken image. If a card
+  image starts to matter, a still from the frozen showcase replay (#878) is the cheap
+  substitute; a text card is not a defect.
 - **`/assets/*` is cached `max-age=31536000, immutable`** — Vite content-hashes every
   file there, so a new build gets new URLs. Everything else keeps Vercel's
   `public, max-age=0, must-revalidate` default *on purpose*: `/godot/index.wasm`,
@@ -333,9 +335,12 @@ is indexable. If #876 hasn't cleared, add `<meta name="robots" content="noindex"
   *Protection Bypass*, not by disabling protection.
 - `COEP: require-corp` blocks **every** cross-origin `<iframe>`, `<script>` and
   `<img>`. Today the page loads nothing cross-origin (external URLs are all plain
-  links, which are unaffected), but the [#881](https://github.com/ccb/agent-sandbox/issues/881)
-  video must be self-hosted — a YouTube/Vimeo embed will be blocked — or the
-  headers have to be scoped to the demo first.
+  links, which are unaffected), and anything added later must be same-origin, send
+  `CORP`, or wait for the headers to be scoped to the demo alone. This is why
+  analytics has to be first-party ([#961](https://github.com/ccb/agent-sandbox/issues/961))
+  and one of the reasons the demo video was dropped rather than embedded
+  ([#881](https://github.com/ccb/agent-sandbox/issues/881)) — a YouTube/Vimeo embed
+  would simply be blocked.
 
 ---
 
