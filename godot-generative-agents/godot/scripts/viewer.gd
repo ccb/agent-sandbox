@@ -240,8 +240,8 @@ var _last_actions_step := -1
 # spoken up to the playhead, so dialogue stays readable without slowing the
 # bubbles (whose pacing the sim mirrors -- see DIALOGUE_LINE_STEPS) or the
 # agents. Same push-on-step-change contract as the panels above, but active in
-# BOTH replay and live mode; rows come from dialogue_log.gd. Hidden until
-# toggled (L / the sidebar's speech-bubble button).
+# BOTH replay and live mode; rows come from dialogue_log.gd. Shown by default;
+# toggled off/on with L / the sidebar's speech-bubble button.
 var _dialogue_log: PanelContainer
 var _last_dialogue_step := -1
 
@@ -467,12 +467,12 @@ func _ready() -> void:
 	$UI.add_child(_actions_hud)
 	_actions_hud.visible = _resolve_backend_url() == ""
 
-	# The right-docked dialogue-log panel (#963), same code-built pattern. Hidden
-	# until toggled; unlike the actions HUD it works in live mode too (its data
-	# path is the frames array, which live playback fills identically).
+	# The right-docked dialogue-log panel (#963), same code-built pattern. Shown
+	# by default (L toggles it away); unlike the actions HUD it works in live
+	# mode too (its data path is the frames array, which live playback fills
+	# identically).
 	_dialogue_log = preload("res://scripts/dialogue_log_panel.gd").new()
 	_dialogue_log.theme = _panel.theme
-	_dialogue_log.visible = false
 	$UI.add_child(_dialogue_log)
 
 	# A clock-driven tint over the 2D world (the screen-space UI layer is unaffected),
@@ -1992,9 +1992,14 @@ func _dialogue_rows(step: int) -> Array:
 	# the extractor stay pure.
 	var rows: Array = []
 	for e in DialogueLog.extract(_frames, _names, step, int(DIALOGUE_LINE_STEPS)):
+		# Clock time only (HH:MM) -- the full _format_sim_time date would eat
+		# most of the narrow header line, and the sidebar clock shows the date.
+		var dt: Dictionary = Time.get_datetime_dict_from_unix_time(
+			_start_unix + int(e["step"]) * _sec_per_step)
 		rows.append({
-			"time": _format_sim_time(int(e["step"]) * _sec_per_step),
+			"time": "%02d:%02d" % [dt["hour"], dt["minute"]],
 			"speaker": e["speaker"],
+			"with": e.get("with", ""),
 			"line": e["line"],
 		})
 	return rows

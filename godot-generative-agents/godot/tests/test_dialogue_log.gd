@@ -64,6 +64,8 @@ func _initialize() -> void:
 	_check(rows.size() == 3, "double-stamp + lingering -> 3 lines, not 6 or 63")
 	_check(_speakers(rows) == ["Ana", "Bo", "Ana"], "lines in transcript order")
 	_check(_steps(rows) == [10, 13, 16], "reveals paced one line per L steps")
+	_check(rows.map(func(r: Dictionary) -> String: return String(r["with"]))
+		== ["Bo", "Ana", "Bo"], "each line labeled with who it's spoken to")
 
 	# 3) Reveal truncation = bubble sync: the log holds only the lines whose
 	#    bubble has fired by up_to.
@@ -149,20 +151,23 @@ func _initialize() -> void:
 	get_root().add_child(panel)
 	var log: RichTextLabel = panel.get_child(0).get_child(0).get_child(1)
 	_check(log.get_parsed_text().contains("No dialogue yet."), "panel seeds the empty state")
-	var r1 := {"time": "08:00", "speaker": "Ana", "line": "hi"}
+	var r1 := {"time": "08:00", "speaker": "Ana", "with": "Bo", "line": "hi"}
 	var r2 := {"time": "08:02", "speaker": "Bo", "line": "[b]not bold[/b]"}
 	panel.set_rows([r1])
-	_check(log.get_parsed_text().contains("Ana:")
+	_check(log.get_parsed_text().contains("Ana")
 		and not log.get_parsed_text().contains("No dialogue yet."),
 		"first rows replace the empty state")
+	_check(log.get_parsed_text().contains("→  Bo"),
+		"the header names who the line is spoken to")
 	panel.set_rows([r1, r2])
 	var text := log.get_parsed_text()
-	_check(text.contains("Ana:") and text.contains("Bo:"), "prefix extension appends the tail")
+	_check(text.contains("hi") and text.contains("08:02"),
+		"prefix extension appends the tail")
 	_check(text.contains("[b]not bold[/b]"),
 		"brackets in LLM prose render literally (bbcode neutralized)")
 	panel.set_rows([r2])
 	text = log.get_parsed_text()
-	_check(not text.contains("Ana:") and text.contains("Bo:"),
+	_check(not text.contains("Ana") and text.contains("Bo"),
 		"non-prefix rows rebuild from scratch (backward scrub truncates)")
 	panel.set_rows([])
 	_check(log.get_parsed_text().contains("No dialogue yet."),

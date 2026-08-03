@@ -11,8 +11,10 @@ extends RefCounted
 
 
 ## The chronological dialogue history visible at step `up_to` (inclusive):
-## an Array of { "step": int, "speaker": String, "line": String }, where
-## "step" is the step the line is SPOKEN on screen — a window stamped whole
+## an Array of { "step": int, "speaker": String, "line": String, "with": String },
+## where "with" names who the speaker is talking to (the other agent(s) stamped
+## with the same window on that frame) and "step" is the step the line is
+## SPOKEN on screen — a window stamped whole
 ## at step k plays one line per `line_steps` (the bubbles' pacing), so the
 ## log grows in sync with the bubbles and timestamps match what was watched.
 ##
@@ -54,6 +56,14 @@ static func extract(frames: Array, names: Array, up_to: int, line_steps: int) ->
 			if not (opener is Array and (opener as Array).size() >= 2 \
 					and String(opener[0]) == name):
 				continue  # the partner's stamp (or malformed opener) — skip
+			# Everyone stamped with this same window on this frame is in the
+			# conversation — that's who each line is spoken *to*.
+			var participants: Array = [name]
+			for other_v in names:
+				var other := String(other_v)
+				if other != name and frame.get(other) is Dictionary \
+						and (frame[other] as Dictionary).get("chat") == chat:
+					participants.append(other)
 			var start := int(emitted.get(name, 0)) if _extends(was, lines) else 0
 			var batch := 0  # position within this newly-observed batch
 			for idx in range(start, lines.size()):
@@ -64,10 +74,13 @@ static func extract(frames: Array, names: Array, up_to: int, line_steps: int) ->
 				batch += 1
 				if reveal > up_to:
 					continue  # the bubble hasn't reached this line yet
+				var speaker := String(pair[0])
 				out.append({
 					"step": reveal,
-					"speaker": String(pair[0]),
+					"speaker": speaker,
 					"line": String(pair[1]),
+					"with": " & ".join(participants.filter(
+						func(p: String) -> bool: return p != speaker)),
 				})
 			emitted[name] = lines.size()
 	# Total order (step, then speaker, then line): sort_custom isn't stable, so

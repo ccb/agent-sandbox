@@ -4,8 +4,8 @@ extends PanelContainer
 ## slowing the bubbles (whose pacing the sim mirrors) or the agents. Pure UI,
 ## the same shape as actions_hud.gd -- viewer.gd extracts the rows
 ## (dialogue_log.gd) and pushes them here via set_rows(); this file only
-## renders. Toggled with L or the sidebar's speech-bubble button; hidden by
-## default. Works unchanged in replay, live, and the web export.
+## renders. Shown by default; toggled with L or the sidebar's speech-bubble
+## button. Works unchanged in replay, live, and the web export.
 
 # A reading column against the right edge, between the top-right panel slot
 # (actions_hud in replay / live_hud live) and the bottom-right minimap.
@@ -92,11 +92,19 @@ func set_rows(rows: Array) -> void:
 
 
 func _append_row(row: Dictionary) -> void:
-	# "time  Speaker: line", one paragraph per utterance. speaker/line are LLM
-	# prose -- neutralize "[" so a stray bracket can't corrupt the bbcode (the
-	# live_hud request-log idiom).
+	# One block per utterance, so the name/timestamp header doesn't crowd the
+	# prose off the narrow column:
+	#   Speaker  ->  partner  .  time     (bold name; muted small print)
+	#   the line itself
+	#   (blank line)
+	# speaker/with/line are LLM prose -- neutralize "[" so a stray bracket
+	# can't corrupt the bbcode (the live_hud request-log idiom).
 	var speaker := String(row.get("speaker", "?")).replace("[", "[lb]")
+	var partner := String(row.get("with", "")).replace("[", "[lb]")
 	var line := String(row.get("line", "")).replace("[", "[lb]")
+	var meta := "  ·  %s" % String(row.get("time", ""))
+	if partner != "":
+		meta = "  →  %s%s" % [partner, meta]
 	_log.append_text(
-		"[color=#%s]%s[/color]  [b]%s:[/b] %s\n"
-		% [MUTED_COLOR.to_html(false), String(row.get("time", "")), speaker, line])
+		"[b]%s[/b][color=#%s][font_size=13]%s[/font_size][/color]\n%s\n\n"
+		% [speaker, MUTED_COLOR.to_html(false), meta, line])
