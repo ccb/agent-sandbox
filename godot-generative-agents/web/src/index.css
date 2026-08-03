@@ -12,6 +12,15 @@ html,
 body,
 #root {
   height: 100%;
+  /* One viewport tall — but on a phone `100%` resolves against the LARGE
+     viewport, the one with the browser's toolbars retracted, and the document
+     never scrolls so they never retract. The bottom strip would sit under them
+     permanently, out of reach: the landing page's own scroller ends there, so its
+     last lines could not be scrolled into view. `dvh` is that same height minus
+     whatever chrome is actually on screen. Kept after `100%`, which stays the
+     fallback for engines that don't know the unit. */
+  /* biome-ignore lint/suspicious/noDuplicateProperties: the pair IS the fallback */
+  height: 100dvh;
   margin: 0;
   /* This is a fixed full-height app (header + a stage that fills the rest); the
      page itself must never scroll. Without this, the embedded Godot canvas —

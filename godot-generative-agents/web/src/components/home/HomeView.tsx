@@ -62,6 +62,10 @@ export const SIDEBAR_LEGEND: {
  * and one WASM heap), and the canvas must never unmount or collapse to zero
  * size, since `canvasResizePolicy: 2` would shrink its framebuffer with it. So
  * the same frame grows in place and the engine keeps running through it.
+ *
+ * On a handheld the whole figure steps aside for the note beneath it (#958): see
+ * the `(pointer: coarse)` block in home.css for why the demo isn't offered there,
+ * and why the swap is CSS rather than a `matchMedia` gate in here.
  */
 function ReplayFigure() {
   const [shown, setShown] = useState(false);
@@ -78,74 +82,79 @@ function ReplayFigure() {
   }, [enlarged]);
 
   return (
-    <figure className={`nrf-figure nrf-figure--replay${enlarged ? " is-enlarged" : ""}`}>
-      {shown ? (
-        <>
-          {enlarged && (
-            <button
-              type="button"
-              className="nrf-scrim"
-              onClick={() => setEnlarged(false)}
-              aria-label="Close the enlarged replay"
-            />
-          )}
-          <div className="nrf-figure-frame">
-            <GodotCanvas />
-            <button
-              type="button"
-              className="nrf-figure-expand"
-              onClick={() => setEnlarged((on) => !on)}
-              aria-label={enlarged ? "Shrink the replay" : "Enlarge the replay"}
-              title={enlarged ? "Shrink" : "Enlarge"}
-            >
-              {enlarged ? "✕" : "⤢"}
-            </button>
-          </div>
-        </>
-      ) : (
-        <button
-          type="button"
-          className="nrf-figure-frame nrf-figure-idle nrf-figure-button"
-          onClick={() => setShown(true)}
-        >
-          Open the replay demo →
-        </button>
-      )}
-      <figcaption className="nrf-figcaption">
-        A full twelve-hour run, replayed deterministically in the browser — the same Godot viewer
-        that runs natively, exported to WebAssembly. Drag to pan and scroll to zoom.
-        {/* <details> brings the disclosure arrow, the click/Enter/Space handling and the
-            expanded/collapsed state with it — none of which is worth reimplementing in
-            React. Closed by default — a reader who wants the legend can open it. */}
-        <details className="nrf-legend-toggle">
-          <summary>What the sidebar's buttons do</summary>
-          <ul className="nrf-legend">
-            {SIDEBAR_LEGEND.map((entry) => (
-              <li key={entry.label ?? entry.glyph}>
-                {entry.icon ? (
-                  <img
-                    className="nrf-legend-icon"
-                    src={`${import.meta.env.BASE_URL}sidebar-icons/${entry.icon}`}
-                    alt=""
-                  />
-                ) : (
-                  <span className="nrf-legend-glyph">{entry.glyph}</span>
-                )}
-                <span>
-                  {entry.label ? (
-                    <>
-                      <b>{entry.label}</b> — {entry.text}
-                    </>
+    <>
+      <figure className={`nrf-figure nrf-figure--replay${enlarged ? " is-enlarged" : ""}`}>
+        {shown ? (
+          <>
+            {enlarged && (
+              <button
+                type="button"
+                className="nrf-scrim"
+                onClick={() => setEnlarged(false)}
+                aria-label="Close the enlarged replay"
+              />
+            )}
+            <div className="nrf-figure-frame">
+              <GodotCanvas />
+              <button
+                type="button"
+                className="nrf-figure-expand"
+                onClick={() => setEnlarged((on) => !on)}
+                aria-label={enlarged ? "Shrink the replay" : "Enlarge the replay"}
+                title={enlarged ? "Shrink" : "Enlarge"}
+              >
+                {enlarged ? "✕" : "⤢"}
+              </button>
+            </div>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="nrf-figure-frame nrf-figure-idle nrf-figure-button"
+            onClick={() => setShown(true)}
+          >
+            Open the replay demo →
+          </button>
+        )}
+        <figcaption className="nrf-figcaption">
+          A full twelve-hour run, replayed deterministically in the browser — the same Godot viewer
+          that runs natively, exported to WebAssembly. Drag to pan and scroll to zoom.
+          {/* <details> brings the disclosure arrow, the click/Enter/Space handling and the
+              expanded/collapsed state with it — none of which is worth reimplementing in
+              React. Closed by default — a reader who wants the legend can open it. */}
+          <details className="nrf-legend-toggle">
+            <summary>What the sidebar's buttons do</summary>
+            <ul className="nrf-legend">
+              {SIDEBAR_LEGEND.map((entry) => (
+                <li key={entry.label ?? entry.glyph}>
+                  {entry.icon ? (
+                    <img
+                      className="nrf-legend-icon"
+                      src={`${import.meta.env.BASE_URL}sidebar-icons/${entry.icon}`}
+                      alt=""
+                    />
                   ) : (
-                    entry.text
+                    <span className="nrf-legend-glyph">{entry.glyph}</span>
                   )}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </details>
-      </figcaption>
-    </figure>
+                  <span>
+                    {entry.label ? (
+                      <>
+                        <b>{entry.label}</b> — {entry.text}
+                      </>
+                    ) : (
+                      entry.text
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        </figcaption>
+      </figure>
+      {/* The handheld stand-in for everything above. Rendered always, shown only
+          under the gate — the figure and this note are never both visible. */}
+      <p className="nrf-replay-note">Open this page on a desktop browser to watch the replay.</p>
+    </>
   );
 }
 
