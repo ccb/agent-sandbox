@@ -1,23 +1,18 @@
-"""TDD scaffold (implementation pending) for a Penn Sleep action.
+"""Tests for Sleep (#931): a Penn action that recovers energy over time.
 
-Modeled on Action Castle's Sleep/SleepGate work: falling asleep should be
-gated (too energetic / no sleep-capable spot in scope), set Property.IS_SLEEPING,
-and restore Property.ENERGY over time. Unlike Action Castle, Sleep gates on a
-world-tagged affordance (mirroring Study's REQUIRED_AFFORDANCES = ("studyable",))
-rather than always being available -- so a location needs a "sleepable" tag
-before this is even reachable in the real Penn world (see the TODO list: no
-such location exists yet in world_data_upenn.yaml).
+Modeled on Action Castle's Sleep/SleepGate work: falling asleep is gated (too
+energetic / no sleep-capable spot in scope) and sets Property.IS_SLEEPING.
+Unlike Action Castle, Sleep gates on a world-tagged affordance (mirroring
+Study's REQUIRED_AFFORDANCES = ("studyable",)) rather than always being
+available -- so a location needs a "sleepable" tag before Sleep is reachable
+there. (world_data_upenn.yaml doesn't have one yet -- Sleep is exercised here
+via this file's own tiny world, not the live/bake one.)
 
-Whether Sleep should fast-forward turns internally (Action Castle's answer)
-or something else entirely is an OPEN QUESTION here -- Penn's step loop is
-externally ticked (live server / bake), unlike do_command's single-command
-round, so that answer may not transfer as-is. These tests assume Sleep sets
-is_sleeping and lets the *drive* (see test_energy_drive.py) restore energy on
-subsequent ticks, rather than looping internally -- revisit once that
-question is actually settled.
-
-Expect failures (an ImportError at collection, until backend/actions.py grows
-Sleep, and world_data_upenn.yaml grows a sleepable location).
+Penn's step loop is externally ticked (live server / bake), unlike Action
+Castle's do_command single-command round, so Sleep can't fast-forward turns
+the way Action Castle's does. These tests reflect that: Sleep only sets
+is_sleeping; the *drive* (drives.sleep_accumulation, see test_energy_drive.py)
+restores energy on subsequent ticks instead.
 
 Run with: uv run pytest godot-generative-agents/tests/test_sleep_action.py -v
 """

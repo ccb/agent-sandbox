@@ -186,10 +186,13 @@ class WaitPenn(base.Wait):
 
 
 class DrinkPenn(consume.Drink):
-    """The engine's Drink, plus the Penn boil-water twist (#300): drinking a
-    liquid that ``requires_boiling`` and is not ``is_boiled`` sets ``is_sick``
-    on the drinker and logs a ``sickness`` GameEvent -- the measurable
-    motivation signal the self-coding experiment (#299) needs. The pair is
+    """The engine's Drink, plus two Penn twists: the energy payoff (#931,
+    mirroring ``EatPenn``) that restores ``Property.ENERGY`` from the drunk
+    item's ``energy_value`` capped at ``MAX_ENERGY``, and the boil-water
+    twist (#300): drinking a liquid that ``requires_boiling`` and is not
+    ``is_boiled`` sets ``is_sick`` on the drinker and logs a ``sickness``
+    GameEvent -- the measurable motivation signal the self-coding experiment
+    (#299) needs. The pair is
     deliberate: properties default to False, so gating on ``is_boiled`` alone
     would sicken every future drinkable; ``requires_boiling`` scopes the rule
     to raw water, and a (self-coded, #301) boil action clears it by setting
@@ -210,6 +213,14 @@ class DrinkPenn(consume.Drink):
         # and a feel-better memory for someone who just died.
         if self.character.get_property("is_dead"):
             return
+        # Energy restore (#931), unconditional like EatPenn's: hydration is a
+        # fact about the drink, separate from whether it also sickens you.
+        energy_value = self.item.get_property("energy_value") or 0
+        if energy_value:
+            current_energy = self.character.get_property(Property.ENERGY) or 0
+            self.character.set_property(
+                Property.ENERGY, min(MAX_ENERGY, current_energy + energy_value)
+            )
         if self.item.get_property("requires_boiling") and not self.item.get_property(
             "is_boiled"
         ):
@@ -312,6 +323,55 @@ class EatPenn(consume.Eat):
         self.character.set_property(
             Property.ENERGY, min(MAX_ENERGY, current_energy + energy_value)
         )
+
+
+# Below this Property.ENERGY, a character is tired enough to sleep -- the
+# Sleep.check_preconditions threshold (distinct from drives.py's lower
+# is_low_energy alarm threshold, which flags "should eat/sleep soon" rather
+# than gating the sleep action itself).
+SLEEP_ENERGY_THRESHOLD = 50
+
+
+class Sleep(base.Action):
+    """Sleep in place to recover energy (#931). Gated on a world-tagged
+    "sleepable" affordance -- the Study precedent (REQUIRED_AFFORDANCES) --
+    so a location needs that tag before Sleep is reachable there at all, and
+    on the character actually being tired (Property.ENERGY below
+    SLEEP_ENERGY_THRESHOLD). apply_effects only sets Property.IS_SLEEPING;
+    the actual energy recovery happens on subsequent ticks via
+    drives.sleep_accumulation, the same "act now, drive restores over time"
+    split EatPenn/accrue_energy uses for eating."""
+
+    ACTION_NAME = "sleep"
+    ACTION_DESCRIPTION = "Sleep here to recover energy (only somewhere sleepable)"
+    ACTION_ALIASES = ["nap", "rest"]
+    REQUIRED_AFFORDANCES = ("sleepable",)
+
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
+        self.character = self.acting_character(command, hint="sleeper")
+
+    def check_preconditions(self) -> bool:
+        if not self.was_matched(self.character, "No one is sleeping."):
+            return False
+        if not self.has_affordance_in_scope(
+            self.character, "There is nowhere to sleep here."
+        ):
+            return False
+        if self.character.get_property(Property.IS_SLEEPING):
+            self.parser.fail(f"{self.character.name.capitalize()} is already asleep.")
+            return False
+        energy = self.character.get_property(Property.ENERGY) or 0
+        if energy >= SLEEP_ENERGY_THRESHOLD:
+            self.parser.fail(
+                f"{self.character.name.capitalize()} isn't tired enough to sleep."
+            )
+            return False
+        return True
+
+    def apply_effects(self):
+        self.character.set_property(Property.IS_SLEEPING, True)
+        return self.parser.ok(f"{self.character.name} settles in to sleep.")
 
 
 class Activate(base.Action):

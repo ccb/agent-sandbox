@@ -38,6 +38,7 @@ from backend.actions import (
     Study,
     TalkTo,
     WaitPenn,
+    Sleep,
 )
 from backend.build_world import _normalize_personas, build_world, load_world_yaml
 from backend.world_map import WorldMap
@@ -63,8 +64,8 @@ WORLD_DATA_BOIL = os.path.join(_SIM_DIR, "world_data_boil.yaml")
 # boil_hard`; never by the default bake.
 WORLD_DATA_BOIL_HARD = os.path.join(_SIM_DIR, "world_data_boil_hard.yaml")
 UPENN_DIR = os.path.join(_SIM_DIR, "the_upenn")
-#adding a eat scene to the baked version of the penn sim
-WORLD_DATA_EAT = os.path.join(_SIM_DIR, "world_data_eat.yaml") 
+# adding a eat scene to the baked version of the penn sim
+WORLD_DATA_EAT = os.path.join(_SIM_DIR, "world_data_eat.yaml")
 # The Penn-local verb set (#300): registered on top of Travel/Act via
 # build_world(extra_actions=...). DrinkPenn overrides the engine's "drink"; Craft is
 # the engine crafting action that drives the boil-water Recipe (see _boil_recipe) --
@@ -81,6 +82,7 @@ PENN_EXTRA_ACTIONS = [
     Study,
     CheckOutBook,
     ReadPenn,
+    Sleep,
 ]
 
 # The verb set a Penn brain may choose from (spec §3) -- the engine verbs the
@@ -107,6 +109,7 @@ PENN_ACTION_VERBS = [
     "study",
     "check_out_book",
     "read",
+    "sleep",
 ]
 
 SEC_PER_STEP = 10  # in-game seconds per step, for a wall-clock label
@@ -382,6 +385,10 @@ def make_murky_pot() -> Item:
     pot.set_property("requires_boiling", True)
     pot.set_property("is_boiled", False)
     pot.set_property("portions", 3)
+    # Mirrors Action Castle's water (#931): every drinkable restores energy,
+    # even the raw/sickening pot -- getting sick is a separate DrinkPenn
+    # effect from the plain fact that water is hydrating.
+    pot.set_property("energy_value", 10)
     # Aliases (#635): the full name is long and a model naturally says "water" /
     # "murky water" / "the pot". Safe because Drink matches *carried* items only
     # and the arc never carries both pots at once (make consumes this one), so
@@ -404,6 +411,7 @@ def make_boiled_pot() -> Item:
     pot.set_property(Property.DRINKABLE, True)
     pot.set_property("is_boiled", True)
     pot.set_property("portions", 3)
+    pot.set_property("energy_value", 10)  # mirrors the murky pot (#931)
     # Aliases (#635): see make_murky_pot -- the recovery drink must be nameable
     # as "boiled water" / "water" / "the pot", not only the full string.
     for alias in ("water", "boiled water", "pot", "boiled pot"):
@@ -539,6 +547,38 @@ def _furnish_meals(game) -> None:
         hall.add_item(make_meal(name, description, examine, energy_value))
 
 
+def make_drink(
+    name: str, description: str, examine: str, energy_value: int = 10
+) -> Item:
+    """A Houston Hall drink (#931): DRINKABLE and gettable, mirroring
+    ``make_meal``'s EDIBLE/energy_value pairing so ``DrinkPenn`` has
+    something to restore ``Property.ENERGY`` from, the same way it restores
+    from a meal's ``energy_value``."""
+    drink = Item(name, description, examine)
+    drink.set_property(Property.DRINKABLE, True)
+    drink.set_property("energy_value", energy_value)
+    return drink
+
+
+def _furnish_drinks(game) -> None:
+    """Stock Houston Hall with a DRINKABLE, energy-restoring drink (#931) --
+    the drink-side counterpart to ``_furnish_meals``. Same ``dining`` arena
+    gate: the isolated boil scenario, which authors its own raw/boiled water
+    to keep its decision surface to just the drink/boil arc, gets none of
+    this."""
+    hall = game.locations.get("Houston Hall")
+    if hall is None or not hall.get_property("dining"):
+        return
+    hall.add_item(
+        make_drink(
+            "soda",
+            "a canned soda",
+            "An orange soda from the Houston Hall food-court fountain.",
+            10,
+        )
+    )
+
+
 def make_library_shelf() -> Item:
     """The Van Pelt circulating shelf (#616). ``book_shelf`` is the affordance
     CheckOutBook declares, so the verb is offered exactly where the shelf
@@ -666,6 +706,7 @@ def build_penn_world(
         )
         _furnish_boil_water(game)
         _furnish_meals(game)
+        _furnish_drinks(game)
         _furnish_van_pelt(game)
         if not withhold_boil:
             game.add_recipe(_boil_recipe())  # boiling = Craft over this Recipe (#300)

@@ -57,8 +57,6 @@ class Property(_StrEnum):
     IS_DRUNK = "is_drunk"
     CHARACTER_TYPE = "character_type"
     EMOTIONAL_STATE = "emotional_state"
-    
-
 
     # Affordances -- yes/no capabilities of an item. Read by action
     # preconditions ("is this drinkable?") and surfaced to agents as an
@@ -100,17 +98,18 @@ class Property(_StrEnum):
     IS_ROYAL = "is_royal"
     IS_MARRIED = "is_married"
     IS_BANISHED = "is_banished"
-    IS_SLEEPING = "is_sleeping" # a true false to check if a character is in fact sleeping
-    IS_TIRED = "is_tired"
-    #numerical properties
+    IS_SLEEPING = (
+        "is_sleeping"  # a true false to check if a character is in fact sleeping
+    )
+    IS_SLEEPY = (
+        "is_sleepy"  # if a character is really tired that characeter gets sleepy
+    )
+
+    # numerical properties
     ENERGY = "energy"
     ENREGY_VALUE = "energy_value"
-    TIRED = "tired"
-    SLEPT_AT_TIME = "sleep_at_time" # this might be a poor design choice but we'll see
-    ATE_AMOUNT = "coonsumed_amount" # how much has the player eaten
-    DRANK_AMOUNT = "coonsumed_amount" # how much energy_value has the player drank
-    NOT_HUNGRY_TIME = "not_hungry_time"
-    NOT_THIRSTY_TIME = "not_thirsty_time"
+    ENERGY_LOW_THRESHOLD = "energy_low_threshold"
+
 
 # ----------------------------------------------------------------------
 # Movement directions

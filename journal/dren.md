@@ -13,6 +13,47 @@ on top; copy the template block each working day.
 **Next:**
 - ...
 -->
+## 2026-08-03
+**Focus:** Finish the SleepPenn/EatPenn/DrinkPenn test suite (#931)
+
+**Done today:**
+- `DrinkPenn` never actually restored energy (only `EatPenn` did) -- added
+  the same `energy_value` restore, unconditional like `EatPenn`'s (separate
+  from the sickness/boil twist), and gave the Houston Hall drink + the boil
+  scenario's murky/boiled pots an `energy_value`, mirroring Action Castle's
+  water.
+- Renamed `SleepPenn` -> `Sleep` and rebuilt its gating to match
+  `test_sleep_action.py`'s scaffold: `REQUIRED_AFFORDANCES = ("sleepable",)`
+  (the Study precedent) plus a raw-energy "tired enough" threshold, instead
+  of the unreachable `is_sleepy`-flag gate it had before.
+- Found and fixed a real bug breaking most of the step-loop test suite:
+  `drives.sleep_accumulation` called `get_property` with a stray second
+  arg (TypeError, since the engine's `get_property` takes only one) --
+  every `run_simulation.step()` call was crashing on it. Also fixed its
+  recovery math (was nearly doubling energy each tick instead of shrinking
+  the deficit from 100) and an `"Is_sleepy"`/`"is_sleepy"` casing mismatch
+  that silently made `accrue_energy`'s sleepy-flag never readable.
+- Fixed the test file bugs blocking `test_eat_energy.py`'s drink tests: a
+  duplicate `test_energy_is_capped_at_max_energy` definition silently
+  shadowing the eat version, `"eat soda"` where it meant `"drink soda"`,
+  and two tests asserting/using the wrong action.
+- Resolved the `Set_energy` 50-vs-70 test blocker (open since 2026-07-30):
+  kept the 70 behavior, updated the two stale assertions.
+- Full suite: `uv run pytest tests/ godot-generative-agents/tests/` now
+  green except pre-existing, unrelated failures (confirmed via `git stash`
+  that they fail identically without today's changes): the superseded
+  `tests/test_energy.py`, and a handful of `godot-generative-agents/tests/`
+  files that need `uv sync --extra server` (fastapi) to even collect.
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- `uv sync --extra server` in this env so the fastapi-gated test files
+  actually collect, and re-check they're really unaffected.
+- world_data_upenn.yaml still has no `sleepable`-tagged location, so `Sleep`
+  is reachable in tests but not yet in the live/bake world.
+
 ## 2026-07-31
 **Focus:** Port Action Castle's eat/energy system onto Penn (issue #931)
 
@@ -36,8 +77,6 @@ on top; copy the template block each working day.
 
 **Blockers / questions:**
 - Noticed `text_adventure_games/actions/consume.py`'s `Eat.apply_effects`
-  TODO comment (the energy-restore assignment placeholder) got deleted with
-  no replacement code -- double check that wasn't accidental before it ships.
 - Yesterday's `Set_energy` blocker (broke `test_action_castle_energy.py` /
   `test_action_castle_eat.py`, expects 50 vs new 70) is still open.
 
