@@ -262,7 +262,8 @@ export function GodotCanvas() {
         // Run locally guide lands under the article.
         // TODO(#880): link "Run locally" to that section once it has an anchor —
         // an href to a section that doesn't exist yet jumps nowhere.
-        // TODO(#881): offer the demo video here too once it's published.
+        // Run locally is the only fallback offered here: the demo video that
+        // would also have gone here was dropped (#881, deferred 2026-08-03).
         <div className={styles.blocked}>
           <p>This browser can’t run the replay demo.</p>
           <p>See “Run locally” below to run the viewer on your own machine.</p>

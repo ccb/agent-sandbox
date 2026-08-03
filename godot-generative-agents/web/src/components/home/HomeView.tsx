@@ -276,12 +276,13 @@ export const TEX = {
   colRow: String.raw`(x, y) = (\text{col}, \text{row})`,
 };
 
-// The Paper / arXiv / Video / Code buttons in the hero are commented out until
-// the video (#881) and the public repository (#884, scheduled 2026-08-14)
-// exist. Their inline SVG line-icons are commented out here along with them,
-// since nothing else uses them. (The original Nerfies template pulls Font
-// Awesome / Academicons from a CDN, which COOP/COEP would block — hence
-// inlining.) Re-enable this block and the buttons together.
+// The Paper / arXiv / Code buttons in the hero are commented out until the
+// public repository (#884, scheduled 2026-08-14) exists. Their inline SVG
+// line-icons are commented out here along with them, since nothing else uses
+// them. (The original Nerfies template pulls Font Awesome / Academicons from a
+// CDN, which COOP/COEP would block — hence inlining.) Re-enable this block and
+// the buttons together. A Video button and its icon lived here too; both were
+// deleted when the demo video was dropped (#881, deferred 2026-08-03).
 /*
 function Icon({ children }: { children: ReactNode }) {
   return (
@@ -313,12 +314,6 @@ const ArxivIcon = (
   <Icon>
     <path d="M22 10 12 5 2 10l10 5 10-5z" />
     <path d="M6 12v5c0 1 2.7 3 6 3s6-2 6-3v-5" />
-  </Icon>
-);
-const VideoIcon = (
-  <Icon>
-    <circle cx="12" cy="12" r="9" />
-    <polygon points="10 8 16 12 10 16" fill="currentColor" stroke="currentColor" />
   </Icon>
 );
 const CodeIcon = (
@@ -428,7 +423,6 @@ function TableOfContents() {
  * credits, abstract, the showcase-run case study, the agent architecture and
  * its formalizations, limitations, acknowledgements, and citations.
  * Still to land here:
- *   TODO(#881): the demo video embed in the teaser slot.
  *   TODO(#880): the "Run locally" guide and its nav entry.
  */
 export function HomeView() {
@@ -471,9 +465,10 @@ export function HomeView() {
               Advised by <a href="https://www.cis.upenn.edu/~ccb/">Chris Callison-Burch</a>
             </div>
 
-            {/* Paper / arXiv / Video / Code links — re-enable (along with the
-                Icon block at the top of this file) once the video (#881) and
-                public repository (#884) URLs exist.
+            {/* Paper / arXiv / Code links — re-enable (along with the Icon
+                block at the top of this file) once the public repository (#884)
+                URL exists. A Video button sat between arXiv and Code; deleted
+                with #881 (video deferred 2026-08-03).
 
             <div className="nrf-links">
               <a className="nrf-button" href="#">
@@ -483,10 +478,6 @@ export function HomeView() {
               <a className="nrf-button" href="#">
                 {ArxivIcon}
                 <span>arXiv</span>
-              </a>
-              <a className="nrf-button" href="#">
-                {VideoIcon}
-                <span>Video</span>
               </a>
               <a className="nrf-button" href={REPO_URL} target="_blank" rel="noreferrer">
                 {CodeIcon}
@@ -500,7 +491,8 @@ export function HomeView() {
 
       {/* ===== Teaser: summary + the replay itself (it used to be a button linking
           out to a standalone #game page) =====
-          TODO(#881): embed the captioned demo video here once it's published.
+          The replay itself is the teaser — a demo video was going to share this
+          slot, until it was dropped (#881, deferred 2026-08-03).
           TODO(#878): swap in a still from the selected showcase run meanwhile. */}
       <section className="nrf-teaser" id="demo">
         <div className="nrf-container">
