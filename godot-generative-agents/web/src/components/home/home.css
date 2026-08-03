@@ -262,6 +262,10 @@
 .nrf-content :not(pre) > code {
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   font-size: 0.86em;
+  /* A module path has no spaces to break at, so on a phone one of them is wider
+     than the column and drags the whole page sideways — `anywhere` also lets the
+     column shrink past it, which `break-word` would not. */
+  overflow-wrap: anywhere;
 }
 
 /* --- code references (see CodeRef.tsx) ---
@@ -423,6 +427,13 @@
 .nrf-chart svg {
   width: 100%;
   height: auto;
+  /* The panels are one fixed 320x210 viewBox scaled to fit, so their type scales
+     with them: left to fill a single-column .nrf-panes row (anything under
+     900px) an axis label renders at nearly 30px. Cap the drawing and centre it;
+     the label then never strays far from the 11px it is drawn at. */
+  max-width: 520px;
+  margin-inline: auto;
+  display: block;
 }
 .nrf-chart text {
   font-family: var(--nrf-font);
@@ -502,6 +513,23 @@
 .nrf-figure--replay .nrf-figure-frame {
   height: auto;
   aspect-ratio: 16 / 9;
+}
+
+/* The two stand-ins for the replay figure (#958) — one per reason it's missing,
+   both hidden until the gate at the bottom of this file picks one. They borrow
+   the idle frame's look (the border, radius and fill of the "Open the replay
+   demo" box they replace) but not its rules: .nrf-figure-frame hard-codes a
+   520px height, and a placeholder should be as tall as its one sentence. */
+.nrf-replay-note {
+  display: none;
+  margin: 1.5rem 0 0;
+  padding: 2.5rem 1.25rem;
+  border: 1px solid #dcdcdc;
+  border-radius: 10px;
+  background: var(--nrf-light);
+  color: #6a6a6a;
+  font-size: 0.95rem;
+  text-align: center;
 }
 
 /* --- the run case study (CaseStudySection: transcripts, memories, scores) --- */
@@ -888,14 +916,59 @@
     text-align: left;
   }
   /* A node graph beside a prompt panel has nowhere to go at this width, so the
-     chain figure steps aside for a note rather than rendering unusably. The
-     replay figure is just a canvas and stays. */
+     chain figure steps aside for a note rather than rendering unusably. (The
+     replay figure does the same, for different reasons — see the gate below.) */
   .nrf-figure--chain {
     display: none;
   }
   .nrf-figure-note {
     display: block;
   }
-  /* The replay frame is sized by its 16:9 ratio, not --nrf-frame-h, so it scales
-     down with the viewport on its own — nothing to override here. */
+}
+
+/* --- when the replay demo isn't offered (#958) ---
+   Two reasons, two messages, because only one of them is the reader's to fix.
+
+   Too narrow is temporary: the viewer wants room for a campus and a sidebar, and
+   widening the window brings it back. Say so.
+
+   Touch-primary is not: pressing the demo pulls a ~10 MB threaded-WASM build
+   into a phone's memory ceiling, its touch input has never been checked against
+   the click mapping the canvas buffer depends on (#942), and the enlarge overlay
+   closes with Esc — a key a phone doesn't have. None of that is tested on a real
+   device, so it isn't offered, and nothing downloads. Width alone wouldn't catch
+   it: an iPad in landscape is wider than any phone breakpoint and carries every
+   one of those risks. The cost is a touchscreen desktop reading as handheld —
+   the right way to be wrong here.
+
+   ORDER IS LOAD-BEARING: a phone matches both blocks, so the touch one comes
+   second and takes the width note back down. Two plain media queries rather than
+   one `and (not (pointer: coarse))` — a browser that doesn't parse the boolean
+   would drop that query whole and leave an empty gap where a note should be.
+
+   Kept as CSS rather than a matchMedia gate in ReplayFigure: HomeView is
+   imported by tests that run without a DOM (legend.test.ts, toc.test.ts), so a
+   module-scope matchMedia would take the suite down with it — and the swap is
+   pinned as CSS by replayGate.test.ts either way. CSS can't unmount the engine,
+   so narrowing a desktop window mid-playback leaves it running behind
+   `display: none`; its buffer floors at 1x1 and comes back on widening, GL
+   context intact (checked, both ways). Nothing to tear down. */
+@media (max-width: 768px) {
+  .nrf-figure--replay {
+    display: none;
+  }
+  .nrf-replay-note--narrow {
+    display: block;
+  }
+}
+@media (pointer: coarse) {
+  .nrf-figure--replay {
+    display: none;
+  }
+  .nrf-replay-note--narrow {
+    display: none;
+  }
+  .nrf-replay-note--touch {
+    display: block;
+  }
 }
