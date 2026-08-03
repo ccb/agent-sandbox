@@ -14,7 +14,6 @@
   --nrf-dark: #363636; /* Bulma .button.is-dark */
   --nrf-dark-hover: #2b2b2b;
   --nrf-light: #f5f5f5;
-  --nrf-footer-bg: #fafafa;
   /* Palatino throughout — headings and body — with the usual old-style-serif
      fallbacks for platforms that don't ship it. All local, so the page still
      needs no font download. */
@@ -78,13 +77,35 @@
 .nrf-toc {
   display: none;
 }
+.nrf-top-sentinel {
+  height: 0;
+  overflow: hidden;
+}
 .nrf-toc-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin: 0 0 0.55rem 0.9rem;
   color: #8c8c8c;
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.09em;
   text-transform: uppercase;
+}
+.nrf-toc-top {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #8c8c8c;
+  font-size: 0.95rem;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  line-height: 1;
+  cursor: pointer;
+}
+.nrf-toc-top:hover {
+  color: var(--nrf-heading);
 }
 .nrf-toc-list {
   margin: 0;
@@ -180,18 +201,11 @@
 .nrf-author-block {
   display: inline-block;
 }
-.nrf-advisor {
-  margin-top: 0.2rem;
-  color: #555;
-  font-size: 1rem;
-}
-.nrf-authors a,
-.nrf-advisor a {
+.nrf-authors a {
   color: var(--nrf-link);
   text-decoration: none;
 }
-.nrf-authors a:hover,
-.nrf-advisor a:hover {
+.nrf-authors a:hover {
   text-decoration: underline;
 }
 
@@ -761,6 +775,41 @@
   text-align: left;
 }
 
+/* The copy button sits over the block's top-right corner. The <pre> scrolls
+   under it, so the button is a sibling in a positioned wrapper, not inside. */
+.nrf-pre-wrap {
+  position: relative;
+}
+/* Deliberately quiet: no border or fill until you're on it, and a gray that
+   reads as "affordance" rather than as part of the citation. */
+.nrf-pre-copy {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  display: flex;
+  padding: 0.35rem;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #9aa0a6;
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    background-color 0.15s;
+}
+.nrf-pre-copy:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--nrf-text);
+}
+/* The one moment it speaks up — otherwise the check is too faint to register. */
+.nrf-pre-copy.is-copied {
+  color: var(--nrf-code-string);
+}
+.nrf-pre-copy:focus-visible {
+  outline: 2px solid var(--nrf-link);
+  outline-offset: 1px;
+}
+
 /* --- code snippets (The text-adventure engine section) --- */
 :root {
   --nrf-code-keyword: #a626a4; /* def, class, return, if, not, in */
@@ -833,80 +882,23 @@
   }
 }
 
-/* --- footer (Bulma .footer) --- */
-.nrf-footer {
-  padding: 1rem 1.5rem 1.25rem;
-  background: var(--nrf-footer-bg);
-  text-align: center;
-}
-.nrf-footer .nrf-container {
-  /* The prose column is capped at 1180px; the attribution should sit on the
-     page's visual center, not that column's. */
-  max-width: none;
-  padding: 0;
-}
-.nrf-footer-content {
-  max-width: min(52rem, calc(100vw - 3rem));
-  margin: 0 auto;
-  font-size: 0.88rem;
-  line-height: 1.45;
-}
-.nrf-footer-content p {
-  margin: 0;
-}
-.nrf-footer a {
-  color: var(--nrf-link);
-}
-.nrf-footer a:hover {
-  text-decoration: underline;
-}
-
 /* --- wide screens: room for the contents nav in the left margin --- */
 @media (min-width: 1024px) {
   .nrf {
     padding-left: var(--nrf-gutter);
   }
-  /* The gutter is padding on .nrf, so every section's background — and only the
-     footer has one — would stop at it and leave a white notch down the left of
-     the footer. Span the footer back across the gutter and put the width back as
-     padding, which keeps its content aligned with the sections above. */
-  .nrf-footer {
-    margin-left: calc(-1 * var(--nrf-gutter));
-    padding-left: calc(1.5rem + var(--nrf-gutter));
-  }
-  /* Half the TOC gutter sits left of the content column — nudge the block back so
-     it reads centered on the full page, not on the prose panel. */
-  .nrf-footer-content {
-    transform: translateX(calc(-1 * var(--nrf-gutter) / 2));
-  }
   .nrf-toc {
     display: block;
     position: fixed;
-    top: 4rem;
+    top: 3rem;
     left: 1.75rem;
     z-index: 5; /* under the enlarged-replay scrim (40) */
     width: var(--nrf-toc-w);
     padding-right: 0.85rem;
     border-right: 1px solid #e4e4e4;
-    /* Taller than the window on a short one: scroll it, not the page. */
-    max-height: calc(100vh - 8rem);
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    scrollbar-width: thin;
-    scrollbar-color: #c5c9d0 transparent;
-  }
-  .nrf-toc::-webkit-scrollbar {
-    width: 8px;
-  }
-  .nrf-toc::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  .nrf-toc::-webkit-scrollbar-thumb {
-    background: #c5c9d0;
-    border-radius: 4px;
-  }
-  .nrf-toc::-webkit-scrollbar-thumb:hover {
-    background: #a8adb8;
+    /* No scrollbar: the nav is exactly as tall as its content. On a short
+       window the tail of a long contents list runs past the viewport edge
+       rather than growing a scrollbar of its own. */
   }
 }
 
@@ -914,10 +906,6 @@
 @media (max-width: 768px) {
   .nrf-title-1 {
     font-size: 1.75rem;
-  }
-  .nrf-footer-content {
-    max-width: calc(100vw - 2rem);
-    transform: none;
   }
   /* Justified text on a phone-width measure is mostly gaps. */
   .nrf-justified {

@@ -261,7 +261,8 @@ export function GodotCanvas() {
         // point is the landing page's replay figure (home/HomeView.tsx), where the
         // Run locally guide (#run-locally, home/RunLocallySection.tsx) lands
         // under the article.
-        // TODO(#881): offer the demo video here too once it's published.
+        // Run locally is the only fallback offered here: the demo video that
+        // would also have gone here was dropped (#881, deferred 2026-08-03).
         <div className={styles.blocked}>
           <p>This browser can’t run the replay demo.</p>
           <p>

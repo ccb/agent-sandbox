@@ -43,23 +43,21 @@ describe("landing-page contents nav", () => {
   });
 
   it("numbers top-level sections, subsections, and appendix entries", () => {
-    expect(TOC[0].number).toBeUndefined();
-    expect(TOC[1].number).toBeUndefined();
-    expect(TOC[2]).toMatchObject({ id: "case-study", number: "1" });
-    expect(TOC[3]).toMatchObject({ id: "case-cast", number: "1.1" });
-    expect(TOC[7]).toMatchObject({ id: "case-verdict", number: "1.5" });
-    expect(TOC[8]).toMatchObject({ id: "architecture", number: "2" });
-    expect(TOC[9]).toMatchObject({ id: "world", number: "2.1" });
-    expect(TOC[15]).toMatchObject({ id: "decision", number: "2.7" });
-    expect(TOC[20]).toMatchObject({ id: "reflections", number: "5" });
-    expect(TOC[21]).toMatchObject({ id: "run-locally", number: "6" });
-    expect(TOC[22]).toMatchObject({ id: "prereqs", number: "6.1", sub: true });
-    expect(TOC[27]).toMatchObject({ id: "extending", number: "6.6", sub: true });
-    expect(TOC[28]).toMatchObject({ id: "limitations", number: "7" });
-    expect(TOC[29].id).toBe("appendix");
-    expect(TOC[29].number).toBeUndefined();
-    expect(TOC[30]).toMatchObject({ id: "acknowledgements", number: "A.1", sub: true });
-    expect(TOC[32]).toMatchObject({ id: "references", number: "A.3", sub: true });
+    expect(TOC[0]).toMatchObject({ id: "case-study", number: "1" });
+    expect(TOC[1]).toMatchObject({ id: "case-cast", number: "1.1" });
+    expect(TOC[5]).toMatchObject({ id: "case-verdict", number: "1.5" });
+    expect(TOC[6]).toMatchObject({ id: "architecture", number: "2" });
+    expect(TOC[7]).toMatchObject({ id: "world", number: "2.1" });
+    expect(TOC[13]).toMatchObject({ id: "decision", number: "2.7" });
+    expect(TOC[18]).toMatchObject({ id: "reflections", number: "5" });
+    expect(TOC[19]).toMatchObject({ id: "run-locally", number: "6" });
+    expect(TOC[20]).toMatchObject({ id: "prereqs", number: "6.1", sub: true });
+    expect(TOC[25]).toMatchObject({ id: "extending", number: "6.6", sub: true });
+    expect(TOC[26]).toMatchObject({ id: "limitations", number: "7" });
+    expect(TOC[27].id).toBe("appendix");
+    expect(TOC[27].number).toBeUndefined();
+    expect(TOC[28]).toMatchObject({ id: "acknowledgements", number: "A.1", sub: true });
+    expect(TOC[30]).toMatchObject({ id: "references", number: "A.3", sub: true });
     expect(TOC.find((e) => e.id === "BibTeX")).toBeUndefined();
     expect(source).toContain('id="BibTeX"');
   });
