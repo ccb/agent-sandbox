@@ -38,3 +38,32 @@
   max-width: 80%;
   pointer-events: none;
 }
+
+/* The status slot's other occupant: what a browser that can't run the export gets
+   instead of the engine (#957). Same place and colour as .status — it replaces the
+   "Starting…" that used to sit there forever — but this is the reader's content
+   rather than a progress note, so it takes real type, a measure, and (unlike
+   .status) its pointer events, for #880's link. */
+.blocked {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  max-width: min(34rem, 85%);
+  color: #cfd6e0;
+  font-size: 15px;
+  line-height: 1.6;
+  text-align: center;
+}
+.blocked p {
+  margin: 0 0 0.6em;
+}
+.blocked p:last-child {
+  margin-bottom: 0;
+}
+/* The feature list is diagnostic — for us if the deployed headers ever regress, not
+   something a visitor has to read. Present, quiet. */
+.blockedWhy {
+  color: #8a939f;
+  font-size: 12px;
+}
