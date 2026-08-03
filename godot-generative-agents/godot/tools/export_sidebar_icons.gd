@@ -25,7 +25,6 @@ func _initialize() -> void:
 	var icons := {
 		"heatmap": AgentPanel._flame_icon(),
 		"social-graph": AgentPanel._graph_icon(),
-		"day-plans": AgentPanel._calendar_icon(),
 		"dialogue-log": AgentPanel._speech_icon(),
 	}
 

@@ -39,11 +39,6 @@ export const SIDEBAR_LEGEND: {
   { icon: "heatmap.png", label: "Heatmap", text: "where the agents have spent their time so far" },
   { icon: "social-graph.png", label: "Social graph", text: "who has talked to whom" },
   {
-    icon: "day-plans.png",
-    label: "Day plans",
-    text: "each agent's plan against what actually happened",
-  },
-  {
     icon: "dialogue-log.png",
     label: "Dialogue log",
     text: "every line the agents have said so far, timestamped — bubbles go fast; this doesn't",
