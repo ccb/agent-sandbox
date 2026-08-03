@@ -316,6 +316,32 @@ Two more launch details:
 is indexable. If #876 hasn't cleared, add `<meta name="robots" content="noindex" />` to
 `index.html` before promoting rather than after.
 
+### Analytics (#961)
+
+Page views come from **Vercel Web Analytics** — `@vercel/analytics` rendered in
+[`src/main.tsx`](src/main.tsx), production builds only. Two things about it are
+load-bearing and easy to lose:
+
+- **It has to be first-party.** `COEP: require-corp` blocks every cross-origin
+  subresource, so a Google Analytics / Plausible / Umami tag on someone else's origin
+  is simply blocked here. Vercel's script is served from our own origin
+  (`/_vercel/insights/script.js`, beaconing to `/_vercel/insights/view`), so COEP never
+  applies. It's also cookieless — no consent banner, no PII, which suits a university
+  research page. Don't swap it for a third-party tag without first scoping the headers
+  to the demo alone.
+- **A dashboard toggle turns it on**, and nothing in this repo records that: deploys are
+  local-prebuilt with `git.deploymentEnabled: false`, so enabling *Web Analytics* under
+  the project's **Analytics** tab is a manual, one-time step. Without it the script 404s
+  and no views are recorded, with no build-time complaint.
+
+`@vercel/speed-insights` is a separate package and a separate toggle — not installed.
+Add it only if the WASM payload's real-world load time becomes a question worth paying
+for.
+
+Locally the component is absent in `pnpm dev` (deliberately: the package's dev script is
+cross-origin and COEP would block it) and 404s in `pnpm preview` (a production build with
+no Vercel platform behind it). Neither is a defect.
+
 ### Verify on the deployed origin
 
 | Check | How | Why it matters |
@@ -323,6 +349,7 @@ is indexable. If #876 hasn't cleared, add `<meta name="robots" content="noindex"
 | Cross-origin isolation | `curl -sI <url> \| grep -i cross-origin` — expect both COOP + COEP | Godot's *threaded* WASM needs `SharedArrayBuffer`. `vite.config.ts` sets these for `dev`/`preview` only; on Vercel they come from `vercel.json`. Missing ⇒ the figure says "This browser can't run the replay demo" and names them (#957) — which is also the only visitor-facing sign of a header regression, since nothing in CI boots the engine. |
 | `.pck` compression | `curl -sI -H 'accept-encoding: br' <url>/godot/index.pck \| grep -i content-encoding` | `index.pck` is 16 MB raw and **4 %** gzipped, but Vercel compresses an [MIME allowlist](https://vercel.com/docs/how-vercel-cdn-works/compression) that `.pck` isn't on — so `vercel.json` labels that one path `application/wasm`, which is. Godot's loader reads the `.pck` as an ArrayBuffer and ignores the type. No `content-encoding` ⇒ the override didn't take; drop it and eat the 16 MB. |
 | Payload | DevTools → Network, hard reload | ~10 MB compressed per cold visit (the 35 MB engine gzips to ~9 MB) against 57 MB of `dist/`. Hobby includes 100 GB/month of transfer. |
+| Analytics script | `curl -sI <url>/_vercel/insights/script.js` → `content-type: …javascript`, then load the page with DevTools open: no COEP violation, `200` on `/_vercel/insights/view`, and the visit appears in the dashboard | `/_vercel/*` is a reserved platform path that resolves ahead of the catch-all rewrite — but `text/html` here means the rewrite swallowed it, and the fix is to negate the prefix in the rewrite's `source`. A `404` instead means the dashboard toggle is off, not that the code is wrong. |
 | Stray URLs | `curl -sI <url>/docs/ <url>/nope` → 200, and the browser shows the landing page | Proves both the `dist/docs` strip and the catch-all rewrite took. A 404 means the rewrite didn't apply; MkDocs HTML at `/docs/` means the strip didn't. |
 
 ### Limits worth knowing
@@ -331,14 +358,20 @@ is indexable. If #876 hasn't cleared, add `<meta name="robots" content="noindex"
   (`du -sh dist` after `vercel build`, i.e. with `dist/docs` already stripped).
   Check before the release build.
 - **100 deployments/day** on Hobby.
+- **Web Analytics on Hobby: 50,000 events/month, 1-month reporting window**
+  ([pricing](https://vercel.com/docs/analytics/limits-and-pricing)) — one page view is one
+  event, and the allowance is shared across every project on the account. Ample for a
+  presentation-week spike, but the window means the numbers must be read (or screenshotted)
+  within a month of the run. Past the cap, collection pauses after a 3-day grace period and
+  resumes 7 days later — Hobby can't buy more events. Custom events and UTM parameters are
+  Pro-only; page views are all we get here.
 - Preview URLs are protected by default — share QA links via the deployment's
   *Protection Bypass*, not by disabling protection.
 - `COEP: require-corp` blocks **every** cross-origin `<iframe>`, `<script>` and
   `<img>`. Today the page loads nothing cross-origin (external URLs are all plain
   links, which are unaffected), and anything added later must be same-origin, send
   `CORP`, or wait for the headers to be scoped to the demo alone. This is why
-  analytics has to be first-party ([#961](https://github.com/ccb/agent-sandbox/issues/961))
-  and one of the reasons the demo video was dropped rather than embedded
+  [analytics is first-party](#analytics-961) and one of the reasons the demo video was dropped rather than embedded
   ([#881](https://github.com/ccb/agent-sandbox/issues/881)) — a YouTube/Vimeo embed
   would simply be blocked.
 

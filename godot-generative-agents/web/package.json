@@ -18,6 +18,7 @@
     "gen:promptviz": "bash scripts/gen-promptviz.sh"
   },
   "dependencies": {
+    "@vercel/analytics": "^2.0.1",
     "cytoscape": "3.30.2",
     "cytoscape-dagre": "2.5.0",
     "dagre": "0.8.5",
