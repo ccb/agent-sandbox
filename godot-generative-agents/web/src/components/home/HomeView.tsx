@@ -9,6 +9,7 @@ import { CodeRef } from "./CodeRef";
 import { CostSection } from "./CostSection";
 import { ImplementationSection } from "./ImplementationSection";
 import { ReflectionsSection } from "./ReflectionsSection";
+import { RunLocallySection } from "./RunLocallySection";
 import { SectionHeading } from "./SectionHeading";
 import { TeX } from "./TeX";
 import { TOC } from "./toc";
@@ -429,7 +430,6 @@ function TableOfContents() {
  * its formalizations, limitations, acknowledgements, and citations.
  * Still to land here:
  *   TODO(#881): the demo video embed in the teaser slot.
- *   TODO(#880): the "Run locally" guide and its nav entry.
  */
 export function HomeView() {
   return (
@@ -784,6 +784,9 @@ export function HomeView() {
 
       {/* ===== Reflections: building this with a coding agent ===== */}
       <ReflectionsSection />
+
+      {/* ===== Run locally: the native Godot run flow (#880) ===== */}
+      <RunLocallySection />
 
       {/* ===== Limitations ===== */}
       <section className="nrf-section">

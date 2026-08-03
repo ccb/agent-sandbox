@@ -14,6 +14,7 @@ import costSource from "./CostSection.tsx?raw";
 import homeSource from "./HomeView.tsx?raw";
 import implSource from "./ImplementationSection.tsx?raw";
 import reflectionsSource from "./ReflectionsSection.tsx?raw";
+import runLocallySource from "./RunLocallySection.tsx?raw";
 import { TOC } from "./toc";
 
 // HomeView renders each section component partway down, so splicing the
@@ -23,6 +24,7 @@ const MOUNTS: [string, string][] = [
   ["<ImplementationSection />", implSource],
   ["<CostSection />", costSource],
   ["<ReflectionsSection />", reflectionsSource],
+  ["<RunLocallySection />", runLocallySource],
 ];
 const source = MOUNTS.reduce((acc, [mount, src]) => acc.replace(mount, src), homeSource);
 
@@ -50,11 +52,14 @@ describe("landing-page contents nav", () => {
     expect(TOC[9]).toMatchObject({ id: "world", number: "2.1" });
     expect(TOC[15]).toMatchObject({ id: "decision", number: "2.7" });
     expect(TOC[20]).toMatchObject({ id: "reflections", number: "5" });
-    expect(TOC[21]).toMatchObject({ id: "limitations", number: "6" });
-    expect(TOC[22].id).toBe("appendix");
-    expect(TOC[22].number).toBeUndefined();
-    expect(TOC[23]).toMatchObject({ id: "acknowledgements", number: "A.1", sub: true });
-    expect(TOC[25]).toMatchObject({ id: "references", number: "A.3", sub: true });
+    expect(TOC[21]).toMatchObject({ id: "run-locally", number: "6" });
+    expect(TOC[22]).toMatchObject({ id: "prereqs", number: "6.1", sub: true });
+    expect(TOC[27]).toMatchObject({ id: "extending", number: "6.6", sub: true });
+    expect(TOC[28]).toMatchObject({ id: "limitations", number: "7" });
+    expect(TOC[29].id).toBe("appendix");
+    expect(TOC[29].number).toBeUndefined();
+    expect(TOC[30]).toMatchObject({ id: "acknowledgements", number: "A.1", sub: true });
+    expect(TOC[32]).toMatchObject({ id: "references", number: "A.3", sub: true });
     expect(TOC.find((e) => e.id === "BibTeX")).toBeUndefined();
     expect(source).toContain('id="BibTeX"');
   });

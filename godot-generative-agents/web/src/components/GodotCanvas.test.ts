@@ -141,6 +141,7 @@ describe("the preflight's place in the boot sequence", () => {
 
   it("offers the reader the local route rather than a raw engine error", () => {
     expect(source).toContain("can’t run the replay demo");
-    expect(source).toContain("“Run locally” below");
+    // The fallback must link to the guide, not just name it (#880).
+    expect(source).toContain('href="#run-locally"');
   });
 });
