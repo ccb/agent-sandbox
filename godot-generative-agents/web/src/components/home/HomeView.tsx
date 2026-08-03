@@ -44,6 +44,11 @@ export const SIDEBAR_LEGEND: {
     text: "each agent's plan against what actually happened",
   },
   {
+    icon: "dialogue-log.png",
+    label: "Dialogue log",
+    text: "every line the agents have said so far, timestamped — bubbles go fast; this doesn't",
+  },
+  {
     glyph: "ⓘ",
     label: "State Details",
     text: "one agent's memories, current plan and relationships",

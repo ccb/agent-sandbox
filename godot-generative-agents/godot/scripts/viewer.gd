@@ -417,6 +417,10 @@ func _ready() -> void:
 	_day_plans.close_requested.connect(_close_day_plans)
 	_day_plans.seek_requested.connect(_on_seek)
 
+	# Dialogue-log dock (#963): the sidebar speech-bubble button (or L) toggles
+	# the right-docked history of everything said up to the playhead.
+	_panel.dialogue_log_requested.connect(_toggle_dialogue_log)
+
 	# Snapshot capture + gallery pop-up (issue #253): the camera button (or C) captures
 	# the current campus view into the gallery; the gallery button toggles the pop-up of
 	# captures taken this session. Both live only in memory (no file export yet).

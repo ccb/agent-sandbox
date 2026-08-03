@@ -42,6 +42,10 @@ signal social_graph_requested
 # The "Day plans" button was pressed (open/close the planned-vs-actual pop-up,
 # issue #251). Same contract as heatmap_requested: a toggle request (T does the same).
 signal day_plans_requested
+# The "Dialogue log" button was pressed (open/close the right-docked history of
+# every line spoken, issue #963). Same contract as heatmap_requested: a toggle
+# request (L does the same).
+signal dialogue_log_requested
 # The "Snapshot" (camera) button was pressed: capture the current campus view (issue
 # #253). The viewer does the capture; C does the same.
 signal snapshot_requested
@@ -231,6 +235,33 @@ const CALENDAR_ROWS: PackedStringArray = [
 	"................",
 ]
 
+# No speech-bubble glyph in the pack either (issue #963): a white bubble with a
+# tail and three pack-blue "someone is talking" dots, in the pack's dark outline
+# — the sidebar cousin of the viewer's white, blue-outlined dialogue bubbles.
+const SPEECH_PALETTE := {
+	"#": Color("181425"),  # outline
+	"w": Color("ffffff"),  # bubble fill
+	"b": Color("0099db"),  # pack blue dots
+}
+const SPEECH_ROWS: PackedStringArray = [
+	"................",
+	"..##########....",
+	".#wwwwwwwwww#...",
+	"#wwwwwwwwwwww#..",
+	"#wwwwwwwwwwww#..",
+	"#wwbwwbwwbwww#..",
+	"#wwwwwwwwwwww#..",
+	"#wwwwwwwwwwww#..",
+	".#wwwwwwwwww#...",
+	"..###ww#####....",
+	"....#ww#........",
+	"....#w#.........",
+	"....##..........",
+	"................",
+	"................",
+	"................",
+]
+
 var _clock: Label
 var _play: Button                   # play/pause toggle (icon set by set_playing)
 # Pause/play glyphs, dark-brown row of the sheet (matches the theme's text).
@@ -354,6 +385,10 @@ func _ready() -> void:
 	view_row.add_child(_icon_button(
 		_calendar_icon(), "Day plans — planned vs. actual, up to now (T)",
 		func() -> void: day_plans_requested.emit()))
+	# Dialogue log: the hand-drawn speech-bubble glyph (see SPEECH_ROWS).
+	view_row.add_child(_icon_button(
+		_speech_icon(), "Dialogue log — every line spoken, up to now (L)",
+		func() -> void: dialogue_log_requested.emit()))
 
 	# The capture tools live in one container so hiding it hides all of them (see
 	# _capture_tools above). It sits where the snapshot row used to, so un-hiding it
@@ -567,6 +602,10 @@ static func _gallery_icon() -> Texture2D:
 
 static func _calendar_icon() -> Texture2D:
 	return _bitmap_icon(CALENDAR_ROWS, CALENDAR_PALETTE)
+
+
+static func _speech_icon() -> Texture2D:
+	return _bitmap_icon(SPEECH_ROWS, SPEECH_PALETTE)
 
 
 static func _bitmap_icon(rows: PackedStringArray, palette: Dictionary) -> Texture2D:
