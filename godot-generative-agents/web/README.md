@@ -318,7 +318,7 @@ is indexable. If #876 hasn't cleared, add `<meta name="robots" content="noindex"
 
 | Check | How | Why it matters |
 | --- | --- | --- |
-| Cross-origin isolation | `curl -sI <url> \| grep -i cross-origin` — expect both COOP + COEP | Godot's *threaded* WASM needs `SharedArrayBuffer`. `vite.config.ts` sets these for `dev`/`preview` only; on Vercel they come from `vercel.json`. Missing ⇒ blank canvas. |
+| Cross-origin isolation | `curl -sI <url> \| grep -i cross-origin` — expect both COOP + COEP | Godot's *threaded* WASM needs `SharedArrayBuffer`. `vite.config.ts` sets these for `dev`/`preview` only; on Vercel they come from `vercel.json`. Missing ⇒ the figure says "This browser can't run the replay demo" and names them (#957) — which is also the only visitor-facing sign of a header regression, since nothing in CI boots the engine. |
 | `.pck` compression | `curl -sI -H 'accept-encoding: br' <url>/godot/index.pck \| grep -i content-encoding` | `index.pck` is 16 MB raw and **4 %** gzipped, but Vercel compresses an [MIME allowlist](https://vercel.com/docs/how-vercel-cdn-works/compression) that `.pck` isn't on — so `vercel.json` labels that one path `application/wasm`, which is. Godot's loader reads the `.pck` as an ArrayBuffer and ignores the type. No `content-encoding` ⇒ the override didn't take; drop it and eat the 16 MB. |
 | Payload | DevTools → Network, hard reload | ~10 MB compressed per cold visit (the 35 MB engine gzips to ~9 MB) against 57 MB of `dist/`. Hobby includes 100 GB/month of transfer. |
 | Stray URLs | `curl -sI <url>/docs/ <url>/nope` → 200, and the browser shows the landing page | Proves both the `dist/docs` strip and the catch-all rewrite took. A 404 means the rewrite didn't apply; MkDocs HTML at `/docs/` means the strip didn't. |
@@ -418,7 +418,7 @@ The first panels exist (the **Agent cards** view — `src/components/AgentPanel.
 | `ERR_PNPM_IGNORED_BUILDS: esbuild` on `pnpm install`/`build` | pnpm blocks dependency build scripts by default. We allow esbuild in `pnpm-workspace.yaml` (`allowBuilds: { esbuild: true }`). On pnpm 11 this setting lives in `pnpm-workspace.yaml`, **not** the `package.json` `pnpm` field. Run `pnpm install` after editing it. |
 | Canvas loads but the map is blank/grey | The `.tmj` maps weren't packed. They're plain JSON (not Godot resources), so the `Web` preset must keep `include_filter="*.tmj"`. (Note: `export_presets.cfg` uses `;` for comments, **not `#`** — a `#` silently drops the next setting.) |
 | `Invalid URL scheme` / replay won't load on web | Godot's `HTTPRequest` needs an absolute URL; `viewer.gd` resolves the relative path via `JavaScriptBridge`. Make sure the replay is reachable at `/replay/penn_replay.json` (run `pnpm gen:replay`). |
-| Blank page / `SharedArrayBuffer is not defined` | The page isn't cross-origin isolated. Use `pnpm dev`/`pnpm preview` (they set COOP/COEP). If serving another way, send those headers, or export single-threaded (`variant/thread_support=false`). |
+| The demo says **"This browser can't run the replay demo"** | The engine's preflight found something missing — the names are in the message, the full strings in the console (#957). Almost always cross-origin isolation: use `pnpm dev`/`pnpm preview` (they set COOP/COEP). If serving another way, send those headers, or export single-threaded (`variant/thread_support=false`). |
 | Port 5173 already in use | Another Vite is running. Stop it, or Vite will pick the next free port (check its printed URL). |
 
 ---
