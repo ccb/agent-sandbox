@@ -9,6 +9,7 @@ import { CodeRef } from "./CodeRef";
 import { CostSection } from "./CostSection";
 import { ImplementationSection } from "./ImplementationSection";
 import { ReflectionsSection } from "./ReflectionsSection";
+import { RunLocallySection } from "./RunLocallySection";
 import { SectionHeading } from "./SectionHeading";
 import { TeX } from "./TeX";
 import { TOC } from "./toc";
@@ -520,8 +521,6 @@ function TableOfContents() {
  * The narrative below covers the parts of the project that are settled:
  * credits, abstract, the showcase-run case study, the agent architecture and
  * its formalizations, limitations, acknowledgements, and citations.
- * Still to land here:
- *   TODO(#880): the "Run locally" guide and its nav entry.
  */
 export function HomeView() {
   return (
@@ -873,6 +872,9 @@ export function HomeView() {
 
       {/* ===== Reflections: building this with a coding agent ===== */}
       <ReflectionsSection />
+
+      {/* ===== Run locally: the native Godot run flow (#880) ===== */}
+      <RunLocallySection />
 
       {/* ===== Limitations ===== */}
       <section className="nrf-section">
