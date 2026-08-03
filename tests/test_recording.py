@@ -17,7 +17,7 @@ import json
 
 import pytest
 
-from notebooks.hw1_llm import build_llm_game
+from text_adventure_games.adventures.react_action_castle import build_llm_game
 from text_adventure_games.llm_client import (
     LlmClient,
     MockLlmClient,
