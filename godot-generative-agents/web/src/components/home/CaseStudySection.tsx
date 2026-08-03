@@ -514,16 +514,14 @@ export function CaseStudySection() {
           </SectionHeading>
           <div className="nrf-content nrf-justified">
             <p>
-              The replay above is not a montage: it is one specific run — <code>{RUN.id}</code> — a
-              single simulated Monday from 08:00 to 20:00, 4,320 ticks of ten simulated seconds
-              each, with five agents, seed {RUN.seed}, plans authored by{" "}
+              The replay above is one specific run — a single simulated Monday from 08:00 to 20:00,
+              4,320 ticks of ten simulated seconds each, with five agents, plans authored by{" "}
               <code>{RUN.planModel}</code> and dialogue, scoring, and reactions by{" "}
               <code>{RUN.liveModel}</code>. The day produced {RUN.events} gate-approved actions and{" "}
               {RUN.conversations} conversations, and cost ${RUN.costUsd.toFixed(2)} — the five-agent
               baseline in the cost section below. This section walks that day beat by beat; the next
               section is the machinery behind each moment. Every quotation that follows is copied
-              verbatim from the replay file the demo plays, and a test pins each one to the record
-              it came from, so this prose cannot quietly drift from the data.
+              verbatim from the replay file the demo plays.
             </p>
 
             <table className="nrf-moments">
@@ -593,8 +591,8 @@ export function CaseStudySection() {
             <p>
               Conversations start when two agents are adjacent, free, and mutually interested, and
               unfold one line per tick; when one ends, each participant distills what was agreed
-              into memory. The run's most consequential exchange is also its most ordinary: at
-              13:53, deep in the reading room, Maya and Theo drift from Kant and the Krebs cycle
+              into memory. One of the run's most consequential exchanges is also its most ordinary:
+              at 13:53, deep in the reading room, Maya and Theo drift from Kant and the Krebs cycle
               into making a plan.
             </p>
             <DialogFigure dialog={DIALOGS.sandwich} />
