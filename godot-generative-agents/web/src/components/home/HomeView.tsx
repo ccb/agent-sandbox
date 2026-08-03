@@ -9,12 +9,14 @@ import { CodeRef } from "./CodeRef";
 import { CostSection } from "./CostSection";
 import { ImplementationSection } from "./ImplementationSection";
 import { ReflectionsSection } from "./ReflectionsSection";
+import { SectionHeading } from "./SectionHeading";
 import { TeX } from "./TeX";
+import { TOC } from "./toc";
 import "./home.css";
 
-// Lazy: the visualizer pulls in Cytoscape (~430 kB), and it only mounts when a
-// reader asks for it (see PromptChainFigure), so that weight never lands on a
-// visitor who just reads the page.
+// Lazy: the visualizer pulls in Cytoscape (~430 kB). It mounts with the home
+// page (see PromptChainFigure) but still rides its own chunk so the rest of
+// the page paints before that download finishes.
 const PromptChainView = lazy(() =>
   import("../promptviz/PromptChainView").then((m) => ({ default: m.PromptChainView })),
 );
@@ -58,15 +60,16 @@ export const SIDEBAR_LEGEND: {
 
 /**
  * The Godot replay, embedded where the "Open the replay demo" button used to
- * link out to a standalone `#game` page. Like the prompt-chain figure it stays
- * behind a click — the engine is a multi-megabyte WebAssembly download that a
- * reader hasn't asked for — and it enlarges into an overlay.
+ * link out to a standalone `#game` page. It stays behind a click — the engine
+ * is a multi-megabyte WebAssembly download that a reader hasn't asked for —
+ * and it enlarges into an overlay.
  *
- * Unlike that figure, enlarging here is a CSS class rather than a `<dialog>`
- * with a second mount: there can only ever be ONE engine instance (one `#canvas`
- * and one WASM heap), and the canvas must never unmount or collapse to zero
- * size, since `canvasResizePolicy: 2` would shrink its framebuffer with it. So
- * the same frame grows in place and the engine keeps running through it.
+ * Unlike the prompt-chain figure, enlarging here is a CSS class rather than a
+ * `<dialog>` with a second mount: there can only ever be ONE engine instance
+ * (one `#canvas` and one WASM heap), and the canvas must never unmount or
+ * collapse to zero size, since `canvasResizePolicy: 2` would shrink its
+ * framebuffer with it. So the same frame grows in place and the engine keeps
+ * running through it.
  *
  * The whole figure steps aside for one of the two notes beneath it (#958) when
  * the window is too narrow, or when the pointer is touch-primary — a different
@@ -171,12 +174,11 @@ function ReplayFigure() {
 
 /**
  * The prompt-chain visualizer, framed as a figure. It used to be its own page
- * (`#prompts`); folding it in here costs nothing on load because it stays
- * behind a click — the diagram is an aside to the architecture section above,
- * not something every visitor needs fetched.
+ * (`#prompts`); now it mounts with the architecture section. Enlarge still
+ * opens a second mount in a `<dialog>` — unlike the Godot replay, which has to
+ * grow in place because there can only be one engine instance.
  */
 function PromptChainFigure() {
-  const [shown, setShown] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -191,30 +193,20 @@ function PromptChainFigure() {
   return (
     <>
       <figure className="nrf-figure nrf-figure--chain">
-        {shown ? (
-          <Suspense fallback={<div className="nrf-figure-frame nrf-figure-idle">Loading…</div>}>
-            <div className="nrf-figure-frame">
-              <PromptChainView />
-              <button
-                type="button"
-                className="nrf-figure-expand"
-                onClick={expand}
-                aria-label="Enlarge the diagram"
-                title="Enlarge"
-              >
-                ⤢
-              </button>
-            </div>
-          </Suspense>
-        ) : (
-          <button
-            type="button"
-            className="nrf-figure-frame nrf-figure-idle nrf-figure-button"
-            onClick={() => setShown(true)}
-          >
-            Load the interactive diagram
-          </button>
-        )}
+        <Suspense fallback={<div className="nrf-figure-frame nrf-figure-idle">Loading…</div>}>
+          <div className="nrf-figure-frame">
+            <PromptChainView />
+            <button
+              type="button"
+              className="nrf-figure-expand"
+              onClick={expand}
+              aria-label="Enlarge the diagram"
+              title="Enlarge"
+            >
+              ⤢
+            </button>
+          </div>
+        </Suspense>
         <figcaption className="nrf-figcaption">
           Each node is one step of a decision; color marks whether it calls the model or gates it
           without one. Click a node to read the prompt template behind it.
@@ -346,43 +338,8 @@ const CodeIcon = (
 // when it publishes (#884).
 const REPO_URL = "https://github.com/ccb/agent-sandbox";
 
-/**
- * The contents nav, in page order — `id` matches the element it points at (a
- * section for the demo, otherwise the heading itself) and `sub` marks a
- * subsection of the entry above it. `toc.test.ts` pins every id to a real target
- * in this file. Keep the order in sync with the DOM: the scroll-spy below relies
- * on it.
- */
-export const TOC: { id: string; label: string; sub?: true }[] = [
-  { id: "demo", label: "Demo" },
-  { id: "abstract", label: "Abstract" },
-  { id: "architecture", label: "How an agent works" },
-  { id: "world", label: "The world and its clock", sub: true },
-  { id: "memory", label: "Memory and retrieval", sub: true },
-  { id: "importance", label: "Importance and reflection", sub: true },
-  { id: "planning", label: "Planning", sub: true },
-  { id: "conversations", label: "Conversations", sub: true },
-  { id: "action-gate", label: "The action gate", sub: true },
-  { id: "optional", label: "What's on by default", sub: true },
-  { id: "decision", label: "Inside a decision" },
-  { id: "case-study", label: "One day, up close" },
-  { id: "case-cast", label: "The cast", sub: true },
-  { id: "case-dialogs", label: "Three conversations", sub: true },
-  { id: "case-goals", label: "Changing plans", sub: true },
-  { id: "case-memory", label: "Memory at work", sub: true },
-  { id: "case-verdict", label: "What holds up", sub: true },
-  { id: "implementation", label: "Implementation" },
-  { id: "the-gate", label: "The precondition gate", sub: true },
-  { id: "verb-to-tool", label: "From verb to tool", sub: true },
-  { id: "your-own-verb", label: "Adding your own verb", sub: true },
-  { id: "cost", label: "What a day costs" },
-  { id: "reflections", label: "Coding agents as research instruments" },
-  { id: "limitations", label: "Limitations" },
-  { id: "acknowledgements", label: "Acknowledgements" },
-  { id: "assets", label: "Asset packs" },
-  { id: "references", label: "References" },
-  { id: "BibTeX", label: "BibTeX" },
-];
+// Re-exported for tests that import from this file.
+export { TOC } from "./toc";
 
 // How long a clicked entry outranks the scroll-spy — long enough to cover the
 // smooth scroll it started (browsers pick their own duration; ~500ms is typical).
@@ -408,7 +365,7 @@ function TableOfContents() {
     // viewport exactly, so the default root is the right one even though the
     // document itself never scrolls.
     //
-    // ponytail: a target in the final viewport (References, BibTeX) can never
+    // ponytail: a target in the final viewport (Appendix, References) can never
     // reach that band — the container runs out of scroll room first — so
     // free-scrolling to the very bottom leaves the previous entry lit. Clicking
     // them is covered by the pin; add a scrolled-to-the-end rule if the scroll
@@ -458,6 +415,9 @@ function TableOfContents() {
               }`}
               aria-current={active === entry.id ? "true" : undefined}
             >
+              {entry.number !== undefined && (
+                <span className="nrf-toc-num">{entry.number}</span>
+              )}
               {entry.label}
             </a>
           </li>
@@ -472,8 +432,8 @@ function TableOfContents() {
  * project-page template (https://github.com/nerfies/nerfies.github.io).
  *
  * The narrative below covers the parts of the project that are settled:
- * credits, abstract, the agent architecture and its formalizations, the
- * showcase-run case study, limitations, acknowledgements, and citations.
+ * credits, abstract, the showcase-run case study, the agent architecture and
+ * its formalizations, limitations, acknowledgements, and citations.
  * Still to land here:
  *   TODO(#881): the demo video embed in the teaser slot.
  *   TODO(#880): the "Run locally" guide and its nav entry.
@@ -553,8 +513,7 @@ export function HomeView() {
         <div className="nrf-container">
           <p className="nrf-subtitle nrf-centered nrf-teaser-cap">
             Five LLM-driven agents plan, remember, and converse their way through a twelve-hour day
-            on a faithful tile map of Penn's campus — and every run replays deterministically, right
-            in your browser.
+            on a 2D tile map of Penn's campus.
           </p>
           <ReplayFigure />
         </div>
@@ -564,9 +523,9 @@ export function HomeView() {
       <section className="nrf-section">
         <div className="nrf-container">
           <div className="nrf-narrow nrf-centered nrf-abstract">
-            <h2 className="nrf-title nrf-title-3" id="abstract">
+            <SectionHeading id="abstract" level={2} className="nrf-title nrf-title-3">
               Abstract
-            </h2>
+            </SectionHeading>
             <div className="nrf-content nrf-justified">
               <p>
                 We place five generative agents — characters driven by a large language model, with
@@ -574,10 +533,9 @@ export function HomeView() {
                 map of the University of Pennsylvania's campus derived from real OpenStreetMap data.
                 Over a simulated twelve-hour day the agents walk between real campus places, pursue
                 individually authored goals, and strike up conversations whose outcomes feed back
-                into their plans and memories, following the memory–reflection–planning architecture
+                into their plans and memories, following the memory-reflection-planning architecture
                 of Park et al.'s <em>Generative Agents</em>. The simulation is built on a classical
-                text-adventure engine: every action an agent takes — whether proposed by a language
-                model or by a scripted schedule — must pass the same precondition/effect gate before
+                text-adventure engine: every action an agent takes must pass the same precondition/effect gate before
                 it can change the world, so the model never mutates state directly. Each run records
                 its LLM traffic and world seed, which makes any run replayable deterministically in
                 a Godot viewer, natively or in the browser via WebAssembly.
@@ -587,17 +545,31 @@ export function HomeView() {
         </div>
       </section>
 
+      {/* ===== Case study: the showcase run, up close (#878) ===== */}
+      <CaseStudySection />
+
       {/* ===== Architecture ===== */}
       <section className="nrf-section">
         <div className="nrf-container">
           <div className="nrf-narrow">
-            <h2 className="nrf-title nrf-title-3 nrf-centered" id="architecture">
+            <SectionHeading
+              id="architecture"
+              level={2}
+              className="nrf-title nrf-title-3 nrf-centered"
+            >
               How an agent works
-            </h2>
+            </SectionHeading>
             <div className="nrf-content nrf-justified">
-              <h3 className="nrf-title nrf-title-4" id="world">
+              <p>
+                The day above is what the pieces below produce when they run together. Memory,
+                planning, conversation, and the action gate are the machinery behind each moment —
+                the clock that advances the world, the retrieval that surfaces what matters, the
+                plans that bend when a conversation does, and the precondition check that keeps the
+                model from rewriting state directly.
+              </p>
+              <SectionHeading id="world" level={3} className="nrf-title nrf-title-4">
                 The world and its clock
-              </h3>
+              </SectionHeading>
               <p>
                 The world advances in discrete ticks of ten in-game seconds, so an hour is 360 ticks
                 and the showcase's twelve-hour day is 4,320. On each tick, every agent that is not
@@ -605,7 +577,7 @@ export function HomeView() {
                 are then resolved in a fixed order, so two agents contending for the same resource
                 settle deterministically.
                 <CodeRef>
-                  <code>step</code>, in <code>backend/run_simulation.py</code>
+                  <code>step()</code>, in <code>backend/run_simulation.py</code>
                 </CodeRef>{" "}
                 An agent perceives the world through a limited window: it observes a thing at tile{" "}
                 <TeX>{TEX.tileOther}</TeX> from its own tile <TeX>{TEX.tileSelf}</TeX> only when the
@@ -616,13 +588,13 @@ export function HomeView() {
                 and anything newly entering that window — an event, or another agent's arrival —
                 becomes an observation in its memory stream.
                 <CodeRef>
-                  <code>TiledGame.can_perceive</code>, in <code>backend/tiled_game.py</code>
+                  <code>TiledGame.can_perceive()</code>, in <code>backend/tiled_game.py</code>
                 </CodeRef>
               </p>
 
-              <h3 className="nrf-title nrf-title-4" id="memory">
+              <SectionHeading id="memory" level={3} className="nrf-title nrf-title-4">
                 Memory and retrieval
-              </h3>
+              </SectionHeading>
               <p>
                 Everything an agent experiences — observations, its own actions and failures, lines
                 of dialogue, plans, reflections — is a timestamped record with an importance score.
@@ -630,7 +602,7 @@ export function HomeView() {
                 that score highest under a weighted sum of recency, importance, and relevance to the
                 current situation <TeX>{TEX.query}</TeX> at tick <TeX>{TEX.tick}</TeX>:
                 <CodeRef>
-                  <code>AgentMemory.retrieve</code>, in <code>text_adventure_games/memory.py</code>
+                  <code>AgentMemory.retrieve()</code>, in <code>text_adventure_games/memory.py</code>
                 </CodeRef>
               </p>
               <TeX display>{TEX.retrieval}</TeX>
@@ -656,21 +628,21 @@ export function HomeView() {
                 plan directly — <code>recall</code>, <code>query_knowledge</code> and{" "}
                 <code>read_plan</code>.
                 <CodeRef>
-                  <code>cognition_toolset</code>, in <code>text_adventure_games/npc.py</code>
+                  <code>cognition_toolset()</code>, in <code>text_adventure_games/npc.py</code>
                 </CodeRef>{" "}
                 Those are a second, opt-in channel layered on top of the retrieved records, not a
                 replacement for them: when they are enabled the same top-six paste still goes into
                 the prompt, and the agent's own lookups are extra calls on top.
               </p>
 
-              <h3 className="nrf-title nrf-title-4" id="importance">
+              <SectionHeading id="importance" level={3} className="nrf-title nrf-title-4">
                 Importance and reflection
-              </h3>
+              </SectionHeading>
               <p>
                 New memories are rated for poignancy by the language model on a 1 (utterly mundane)
                 to 10 (momentous) scale, in one batched, temperature-zero call per agent per tick.
                 <CodeRef>
-                  <code>score_new_memories</code>, in <code>backend/cognition.py</code>
+                  <code>score_new_memories()</code>, in <code>backend/cognition.py</code>
                 </CodeRef>{" "}
                 A few signals the model cannot infer from text — like falling ill, or a commitment
                 made in conversation — carry fixed scores instead. Reflection is triggered by
@@ -685,14 +657,14 @@ export function HomeView() {
                 higher-level reflections that cite the records they were drawn from — so later
                 decisions can build on conclusions, not just raw observations.
                 <CodeRef>
-                  <code>should_reflect</code> and <code>reflect</code>, in{" "}
+                  <code>should_reflect()</code> and <code>reflect()</code>, in{" "}
                   <code>text_adventure_games/reflection.py</code>
                 </CodeRef>
               </p>
 
-              <h3 className="nrf-title nrf-title-4" id="planning">
+              <SectionHeading id="planning" level={3} className="nrf-title nrf-title-4">
                 Planning
-              </h3>
+              </SectionHeading>
               <p>
                 Each agent starts its day by decomposing intentions hierarchically: a day outline,
                 refined into hourly blocks, refined into minute-level stops — each stop a real
@@ -703,31 +675,31 @@ export function HomeView() {
                 Proposed stops are validated against the actual map, so a hallucinated location is
                 dropped before it can reach the world.
                 <CodeRef>
-                  <code>validate_stops</code>, in <code>text_adventure_games/planning.py</code>
+                  <code>validate_stops()</code>, in <code>text_adventure_games/planning.py</code>
                 </CodeRef>{" "}
                 Plans are living documents: an agent revises when it falls behind schedule, when an
                 action is rejected by the world, when a conversation changes its commitments, or
                 when it reacts to something it perceives — and a revision may only rewrite the tail
                 of the day, never the stops already lived.
                 <CodeRef>
-                  <code>maybe_revise_plan</code>, in <code>backend/cognition.py</code>
+                  <code>maybe_revise_plan()</code>, in <code>backend/cognition.py</code>
                 </CodeRef>
               </p>
 
-              <h3 className="nrf-title nrf-title-4" id="conversations">
+              <SectionHeading id="conversations" level={3} className="nrf-title nrf-title-4">
                 Conversations
-              </h3>
+              </SectionHeading>
               <p>
                 When two agents are close, free, and interested, they open a conversation that
                 unfolds one line per tick, up to six exchanges — dialogue takes simulated time
                 rather than resolving instantly, one line at a time.
                 <CodeRef>
-                  <code>exchange</code>, in <code>text_adventure_games/conversation.py</code>
+                  <code>exchange()</code>, in <code>text_adventure_games/conversation.py</code>
                 </CodeRef>{" "}
                 Afterwards each participant distills an outcome: what was agreed, what it means for
                 their relationship, and whether their plans should change.
                 <CodeRef>
-                  <code>apply_conversation_outcome</code>, in <code>backend/cognition.py</code>
+                  <code>apply_conversation_outcome()</code>, in <code>backend/cognition.py</code>
                 </CodeRef>{" "}
                 Commitments and relationship notes are written to memory with high importance so
                 they survive retrieval competition. A pair that has already talked{" "}
@@ -736,25 +708,50 @@ export function HomeView() {
                 day.
               </p>
 
-              <h3 className="nrf-title nrf-title-4" id="action-gate">
+              <SectionHeading id="action-gate" level={3} className="nrf-title nrf-title-4">
                 The action gate
-              </h3>
+              </SectionHeading>
               <p>
                 Every decision — whether it arrives as a typed tool call from the model or as plain
                 text — is reassembled into a command and pushed through the engine's parser, where
                 the action's preconditions are checked before its effects apply.
                 <CodeRef>
-                  <code>Parser.parse_command</code>, in <code>text_adventure_games/parsing.py</code>
+                  <code>Parser.parse_command()</code>, in <code>text_adventure_games/parsing.py</code>
                 </CodeRef>{" "}
                 That is the only route into the world; the model never edits world state. A rejected
                 action is not silent either: it becomes a failure memory and can trigger a plan
                 revision, so agents learn from what the world refuses. The five lines that enforce
-                this, and a real verb passing through them, are below in <em>Implementation</em>.
+                this, and a real verb passing through them, are below in{" "}
+                <em>The text-adventure engine</em>.
               </p>
 
-              <h3 className="nrf-title nrf-title-4" id="optional">
+              <SectionHeading id="decision" level={3} className="nrf-title nrf-title-4">
+                Inside a decision
+              </SectionHeading>
+              <p>
+                None of the pieces above is a single monolithic prompt. One decision is a chain: the
+                agent's observation and retrieved memories are assembled into context, the model is
+                asked for an action, its answer is parsed back into a command, and the world's
+                precondition gate has the last word. The diagram below is generated from the
+                engine's own chain specifications and prompt templates, so it stays in step with the
+                code rather than being drawn by hand.
+              </p>
+              <PromptChainFigure />
+              <p className="nrf-figure-note">
+                The interactive diagram needs a wider screen than this one.
+              </p>
+
+              {/* TODO(#880): restore "What's on by default" when the Run locally
+                  guide ships with the public codebase (#884). This subsection
+                  (heading id="optional", unconditional/generative/knob
+                  breakdown, showcase-run config) belongs in that guide as the
+                  how-to for configuring your own runs — not as architecture
+                  exposition on the Aug 7 site. Restore together with its TOC
+                  entry in toc.ts.
+
+              <SectionHeading id="optional" level={3} className="nrf-title nrf-title-4">
                 What's on by default
-              </h3>
+              </SectionHeading>
               <p>
                 Not all of the above is always running, and the difference matters for reading the
                 costs below. <strong>Four things are unconditional:</strong> the tick loop,
@@ -763,15 +760,10 @@ export function HomeView() {
                 test suite run offline, for free, and still exercise real perception and real
                 retrieval. <strong>The generative faculties are gated on a real provider:</strong>{" "}
                 conversation, reflection, importance scoring, and model-written plans exist only
-                when one is attached. Without it the agents walk an authored day through a
-                deterministic mock brain
-                <CodeRef>
-                  <code>ScheduleMockClient</code>, in <code>backend/cognition.py</code>
-                </CodeRef>{" "}
-                and never speak to each other. <strong>The rest are knobs that default off:</strong>{" "}
-                the cognition tools described above, embedding-based relevance (unset means the
-                keyword overlap), and reactive interruption, which lets a perception cut into an
-                activity mid-stop. Each is a field in the same configuration object as the retrieval
+                when one is attached. <strong>The rest are knobs that default off:</strong> the
+                cognition tools described above, embedding-based relevance (unset means the keyword
+                overlap), and reactive interruption, which lets a perception cut into an activity
+                mid-stop. Each is a field in the same configuration object as the retrieval
                 constants, so a run is described by its config rather than by a code change.
               </p>
               <p>
@@ -782,40 +774,13 @@ export function HomeView() {
                 listed above the perception-driven one never fires; plans in this run change from
                 falling behind, from a refused action, or from a conversation.
               </p>
+              */}
             </div>
           </div>
         </div>
       </section>
 
-      {/* ===== Prompt chains (folded in from the retired #prompts page) ===== */}
-      <section className="nrf-section">
-        <div className="nrf-container">
-          <div className="nrf-narrow">
-            <h2 className="nrf-title nrf-title-3 nrf-centered" id="decision">
-              Inside a decision
-            </h2>
-            <div className="nrf-content nrf-justified">
-              <p>
-                None of the steps above is a single monolithic prompt. One decision is a chain: the
-                agent's observation and retrieved memories are assembled into context, the model is
-                asked for an action, its answer is parsed back into a command, and the world's
-                precondition gate has the last word. The diagram below is generated from the
-                engine's own chain specifications and prompt templates, so it stays in step with the
-                code rather than being drawn by hand.
-              </p>
-            </div>
-            <PromptChainFigure />
-            <p className="nrf-figure-note">
-              The interactive diagram needs a wider screen than this one.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* ===== Case study: the showcase run, up close (#878) ===== */}
-      <CaseStudySection />
-
-      {/* ===== Implementation: the engine underneath ===== */}
+      {/* ===== The text-adventure engine (#879) ===== */}
       <ImplementationSection />
 
       {/* ===== Cost: the #921 cost-scaling measurements ===== */}
@@ -828,33 +793,42 @@ export function HomeView() {
       <section className="nrf-section">
         <div className="nrf-container">
           <div className="nrf-narrow">
-            <h2 className="nrf-title nrf-title-3 nrf-centered" id="limitations">
+            <SectionHeading
+              id="limitations"
+              level={2}
+              className="nrf-title nrf-title-3 nrf-centered"
+            >
               Limitations
-            </h2>
+            </SectionHeading>
             <div className="nrf-content nrf-justified">
               <p>
                 This is a small research prototype, and it is honest about it. As described above,
-                the generative machinery runs only when a real language-model provider is attached;
-                the offline default is a deterministic mock brain replaying authored schedules,
-                which we use for testing and byte-identical replay baking — so a free run is a
-                weaker thing than the one shown here. Reproducibility comes from recording each
-                run's LLM traffic and world seed and replaying both, not from seeding the model
-                itself. And the scale is deliberately modest — five agents, one campus, one
-                simulated day — so the behaviors you'll see are believable vignettes, not validated
-                claims about human behavior.
+                the generative machinery runs only when a real language-model provider is attached.
+                Reproducibility comes from recording each run's LLM traffic and world seed and
+                replaying both, not from seeding the model itself. And the scale is deliberately
+                modest — five agents, one campus, one simulated day — so the behaviors you'll see
+                are believable vignettes, not validated claims about human behavior.
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ===== Acknowledgements ===== */}
+      {/* ===== Appendix ===== */}
       <section className="nrf-section">
         <div className="nrf-container">
           <div className="nrf-narrow">
-            <h2 className="nrf-title nrf-title-3 nrf-centered" id="acknowledgements">
-              Acknowledgements
+            <h2 className="nrf-title nrf-title-3 nrf-centered" id="appendix">
+              Appendix
             </h2>
+
+            <SectionHeading
+              id="acknowledgements"
+              level={3}
+              className="nrf-title nrf-title-4"
+            >
+              Acknowledgements
+            </SectionHeading>
             <div className="nrf-content nrf-justified">
               <p>
                 This project was carried out through the Penn Undergraduate Research Mentoring
@@ -907,17 +881,10 @@ export function HomeView() {
                 yet built.
               </p>
             </div>
-          </div>
-        </div>
-      </section>
 
-      {/* ===== Asset packs ===== */}
-      <section className="nrf-section">
-        <div className="nrf-container">
-          <div className="nrf-narrow">
-            <h2 className="nrf-title nrf-title-3 nrf-centered" id="assets">
+            <SectionHeading id="assets" level={3} className="nrf-title nrf-title-4">
               Asset packs
-            </h2>
+            </SectionHeading>
             <div className="nrf-content nrf-justified">
               <p>
                 Listed below are the asset packs we used in the game. The viewer is a Godot 4.6
@@ -939,17 +906,10 @@ export function HomeView() {
                 </li>
               </ul>
             </div>
-          </div>
-        </div>
-      </section>
 
-      {/* ===== References ===== */}
-      <section className="nrf-section">
-        <div className="nrf-container">
-          <div className="nrf-narrow">
-            <h2 className="nrf-title nrf-title-3 nrf-centered" id="references">
+            <SectionHeading id="references" level={3} className="nrf-title nrf-title-4">
               References
-            </h2>
+            </SectionHeading>
             <div className="nrf-content">
               <p>
                 Joon Sung Park, Joseph C. O'Brien, Carrie J. Cai, Meredith Ringel Morris, Percy

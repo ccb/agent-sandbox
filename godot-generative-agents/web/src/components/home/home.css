@@ -118,6 +118,14 @@
   color: var(--nrf-heading);
   border-left-color: var(--nrf-heading);
 }
+.nrf-toc-num,
+.nrf-secnum {
+  font-variant-numeric: tabular-nums;
+  color: #9a9a9a;
+}
+.nrf-toc-num {
+  margin-right: 0.35em;
+}
 /* Anchor targets: a heading jumped to shouldn't land flush against the top of
    the scroll container. */
 .nrf-teaser,
@@ -753,7 +761,7 @@
   text-align: left;
 }
 
-/* --- code snippets (Implementation section) --- */
+/* --- code snippets (The text-adventure engine section) --- */
 :root {
   --nrf-code-keyword: #a626a4; /* def, class, return, if, not, in */
   --nrf-code-string: #50a14f;

@@ -1,3 +1,5 @@
+import { SectionHeading } from "./SectionHeading";
+
 /**
  * "Reflections" — how this prototype was built, and what the coding agent that
  * helped build it was and was not good for.
@@ -15,9 +17,13 @@ export function ReflectionsSection() {
     <section className="nrf-section">
       <div className="nrf-container">
         <div className="nrf-narrow">
-          <h2 className="nrf-title nrf-title-3 nrf-centered" id="reflections">
+          <SectionHeading
+            id="reflections"
+            level={2}
+            className="nrf-title nrf-title-3 nrf-centered"
+          >
             Reflections: coding agents as research instruments
-          </h2>
+          </SectionHeading>
           <div className="nrf-content nrf-justified">
             <p>
               Much of this prototype was built with a coding agent in the loop — Claude Code,
@@ -26,10 +32,9 @@ export function ReflectionsSection() {
               human read before merging. Over time the agent's role grew past writing code into
               running the experiments: a live-simulation batch is a long, tedious, and expensive
               errand, and each of the dozen-odd batches behind this page was driven end to end by
-              the agent under a fixed protocol. A free deterministic mock-brain run first, to prove
-              the configuration boots and the flags resolve; then the paid run under a hard per-run
-              cost cap; then analysis of the artifacts; then every behavior that looked wrong filed
-              as its own sub-issue of the run log, so the evidence and the bug report stay attached.
+              the agent under a fixed protocol: a paid run under a hard per-run cost cap; then
+              analysis of the artifacts; then every behavior that looked wrong filed as its own
+              sub-issue of the run log, so the evidence and the bug report stay attached.
             </p>
             <p>
               The cost figures in the section above are the cleanest example. The measurement was
@@ -50,8 +55,8 @@ export function ReflectionsSection() {
               the run only knew how to stop on two conditions — budget exhausted, or all steps done
               — and an error-pause is neither. It polled a frozen run for forty minutes before a
               human noticed. The agent diagnosed the loop, filed it, fixed it to treat a paused run
-              whose step count has stopped advancing as terminal, and verified both directions
-              against the mock brain. The fix then validated itself in production the next morning:
+              whose step count has stopped advancing as terminal, and verified both directions. The
+              fix then validated itself in production the next morning:
               a transient provider flap killed a relaunched run at step 1, and the driver aborted
               after about seventy seconds having spent <strong>$0.00</strong>, artifacts captured
               and the run marked aborted.
@@ -60,8 +65,8 @@ export function ReflectionsSection() {
               What made that comfortable to run unattended is the same principle this paper argues
               for in the simulation itself. Inside a run, a language model never mutates the world:
               it proposes an action, and a precondition gate disposes. Working with a coding agent
-              had exactly that shape. The agent proposes; hard gates decide. The free mock run gates
-              every paid one. The cost cap is enforced by the driver, not by the agent's intentions.
+              had exactly that shape. The agent proposes; hard gates decide. The cost cap is
+              enforced by the driver, not by the agent's intentions.
               The test suite gates what gets published — the numbers in the charts above are pinned
               to the recorded run data, and the suite fails if the prose and the CSV drift apart.
               Human review gates every merge. None of these are sophisticated, and that is rather

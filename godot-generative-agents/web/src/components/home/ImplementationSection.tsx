@@ -1,4 +1,5 @@
 import { CodeBlock } from "./CodeBlock";
+import { SectionHeading } from "./SectionHeading";
 import checkOutBookCode from "./snippets/check_out_book.py?raw";
 import checkOutBookTool from "./snippets/check_out_book.tool.json?raw";
 import checkOutBookGateCode from "./snippets/check_out_book_gate.py?raw";
@@ -37,6 +38,7 @@ export const SNIPPETS = {
     caption: "the tool as generated for an agent in Van Pelt — Book Stacks",
   },
   myVerb: {
+    // Kept for the commented-out "Adding your own verb" subsection (#880/#884).
     code: myVerbCode,
     lang: "python",
     caption: "a commented template for a custom verb",
@@ -44,20 +46,28 @@ export const SNIPPETS = {
 } satisfies Record<string, { code: string; lang: "python" | "json"; caption: string }>;
 
 /**
- * "Implementation" — the section that makes the Abstract's central claim
- * checkable. The Abstract says the model never mutates state directly; this is
- * where a reader sees the five lines that enforce it, one real action passing
- * through them, how a verb becomes a tool the model can call, and what writing
- * their own verb would take.
+ * "The text-adventure engine" — the section that makes the Abstract's central
+ * claim checkable. The Abstract says the model never mutates state directly;
+ * this is where a reader sees the five lines that enforce it, one real action
+ * passing through them, and how a verb becomes a tool the model can call —
+ * all inside the classical `text_adventure_games` library the sim runs on.
+ *
+ * "Adding your own verb" is commented out below until #880 (Run locally) ships
+ * with the public codebase (#884) — a fill-in-the-blank verb template is not
+ * useful until readers can actually clone and run the engine.
  */
 export function ImplementationSection() {
   return (
     <section className="nrf-section">
       <div className="nrf-container">
         <div className="nrf-narrow">
-          <h2 className="nrf-title nrf-title-3 nrf-centered" id="implementation">
-            Implementation
-          </h2>
+          <SectionHeading
+            id="engine"
+            level={2}
+            className="nrf-title nrf-title-3 nrf-centered"
+          >
+            The text-adventure engine
+          </SectionHeading>
           <div className="nrf-content nrf-justified">
             <p>
               The simulation runs on <code>text_adventure_games</code>, a classical text-adventure
@@ -67,9 +77,9 @@ export function ImplementationSection() {
               it was not built to contain a model, so it has no special case that lets one through.
             </p>
 
-            <h3 className="nrf-title nrf-title-4" id="the-gate">
+            <SectionHeading id="the-gate" level={3} className="nrf-title nrf-title-4">
               The precondition gate
-            </h3>
+            </SectionHeading>
             <p>
               Every action a character takes passes through five lines. An action checks its
               preconditions; only if they hold does it apply its effects.
@@ -94,9 +104,9 @@ export function ImplementationSection() {
               a dead end.
             </p>
 
-            <h3 className="nrf-title nrf-title-4" id="verb-to-tool">
+            <SectionHeading id="verb-to-tool" level={3} className="nrf-title nrf-title-4">
               From verb to tool
-            </h3>
+            </SectionHeading>
             <p>
               The model is not asked "what do you do?" and parsed hopefully. It receives one typed
               tool per verb, derived from the same registry the gate reads. That is the same verb
@@ -129,9 +139,16 @@ export function ImplementationSection() {
               authority over the world.
             </p>
 
-            <h3 className="nrf-title nrf-title-4" id="your-own-verb">
+            {/* TODO(#880): restore "Adding your own verb" when the Run locally
+                section ships with the public codebase (#884). The subsection
+                (heading id="your-own-verb", myVerb snippet, custom_actions
+                prose, docs link) and its TOC entry in toc.ts come back
+                together — a fill-in-the-blank verb is only useful once readers
+                can clone and run the engine.
+
+            <SectionHeading id="your-own-verb" level={3} className="nrf-title nrf-title-4">
               Adding your own verb
-            </h3>
+            </SectionHeading>
             <p>
               The framework exists so that other people can build simulations on it, which means
               adding to the world has to be cheap. A new verb is one class:
@@ -146,6 +163,7 @@ export function ImplementationSection() {
               reference, generated from these same sources, is at{" "}
               <a href={`${import.meta.env.BASE_URL}docs/`}>the documentation site</a>.
             </p>
+            */}
           </div>
         </div>
       </div>
