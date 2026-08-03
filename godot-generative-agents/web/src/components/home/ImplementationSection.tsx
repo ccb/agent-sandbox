@@ -67,10 +67,15 @@ export function ImplementationSection() {
           <div className="nrf-content nrf-justified">
             <p>
               The simulation runs on <code>text_adventure_games</code>, a classical text-adventure
-              engine — rooms, items, characters, and a keyword parser — extended until a language
-              model could drive a character through it. The engine's design predates the agents and
-              knows nothing about them, which is precisely what makes the gate below worth trusting:
-              it was not built to contain a model, so it has no special case that lets one through.
+              engine — rooms, items, characters, and a keyword parser — built from{" "}
+              <a href="https://interactive-fiction-class.org/homeworks/text-adventure-game/text-adventure-game.html">
+                Chris Callison-Burch's CIS 7000 – <em>Interactive Fiction and Text Generation</em>{" "}
+                course materials
+              </a>{" "}
+              and extended until a language model could drive a character through it. The engine's
+              design predates the agents and knows nothing about them, which is precisely what makes
+              the gate below worth trusting: it was not built to contain a model, so it has no
+              special case that lets one through.
             </p>
 
             <SectionHeading id="the-gate" level={3} className="nrf-title nrf-title-4">

@@ -13,12 +13,9 @@ export type TocEntry = {
   number?: string;
 };
 
-const UNNUMBERED = new Set(["demo", "abstract"]);
 const APPENDIX_ID = "appendix";
 
 const RAW_TOC: { id: string; label: string; sub?: true }[] = [
-  { id: "demo", label: "Demo" },
-  { id: "abstract", label: "Abstract" },
   { id: "case-study", label: "One day, up close" },
   { id: "case-cast", label: "The cast", sub: true },
   { id: "case-dialogs", label: "Three conversations", sub: true },
@@ -27,9 +24,9 @@ const RAW_TOC: { id: string; label: string; sub?: true }[] = [
   { id: "case-verdict", label: "What holds up", sub: true },
   { id: "architecture", label: "How an agent works" },
   { id: "world", label: "The world and its clock", sub: true },
+  { id: "planning", label: "Planning", sub: true },
   { id: "memory", label: "Memory and retrieval", sub: true },
   { id: "importance", label: "Importance and reflection", sub: true },
-  { id: "planning", label: "Planning", sub: true },
   { id: "conversations", label: "Conversations", sub: true },
   { id: "action-gate", label: "The action gate", sub: true },
   { id: "decision", label: "Inside a decision", sub: true },
@@ -59,10 +56,6 @@ function annotateToc(entries: typeof RAW_TOC): TocEntry[] {
   let inAppendix = false;
 
   return entries.map((entry) => {
-    if (UNNUMBERED.has(entry.id)) {
-      return { ...entry };
-    }
-
     if (entry.id === APPENDIX_ID) {
       inAppendix = true;
       return { ...entry };
