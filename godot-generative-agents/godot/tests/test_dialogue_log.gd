@@ -6,6 +6,7 @@ extends SceneTree
 ## Exit 0 = all checks pass; run_smoke_test.sh runs this and greps the sentinel.
 
 const DialogueLog := preload("res://scripts/dialogue_log.gd")
+const DialogueLogPanel := preload("res://scripts/dialogue_log_panel.gd")
 
 ## Small pacing constant so the reveal math stays legible: a window stamped at
 ## step 10 with 3 lines reveals them at 10, 13, 16.
@@ -139,6 +140,34 @@ func _initialize() -> void:
 	var junk_rows := DialogueLog.extract(junk_pairs, NAMES, 19, L)
 	_check(junk_rows.size() == 2, "malformed pairs skipped, well-formed kept")
 	_check(_steps(junk_rows) == [5, 8], "reveal pacing skips no slots for junk")
+
+	# 9) The panel itself: set_rows takes the append fast path on a prefix-
+	#    extension and rebuilds (truncates) on anything else, and neutralizes
+	#    bbcode in LLM prose. Instantiated headlessly, like the Label checks in
+	#    test_bubble_anchor.gd.
+	var panel := DialogueLogPanel.new()
+	get_root().add_child(panel)
+	var log: RichTextLabel = panel.get_child(0).get_child(0).get_child(1)
+	_check(log.get_parsed_text().contains("No dialogue yet."), "panel seeds the empty state")
+	var r1 := {"time": "08:00", "speaker": "Ana", "line": "hi"}
+	var r2 := {"time": "08:02", "speaker": "Bo", "line": "[b]not bold[/b]"}
+	panel.set_rows([r1])
+	_check(log.get_parsed_text().contains("Ana:")
+		and not log.get_parsed_text().contains("No dialogue yet."),
+		"first rows replace the empty state")
+	panel.set_rows([r1, r2])
+	var text := log.get_parsed_text()
+	_check(text.contains("Ana:") and text.contains("Bo:"), "prefix extension appends the tail")
+	_check(text.contains("[b]not bold[/b]"),
+		"brackets in LLM prose render literally (bbcode neutralized)")
+	panel.set_rows([r2])
+	text = log.get_parsed_text()
+	_check(not text.contains("Ana:") and text.contains("Bo:"),
+		"non-prefix rows rebuild from scratch (backward scrub truncates)")
+	panel.set_rows([])
+	_check(log.get_parsed_text().contains("No dialogue yet."),
+		"emptying restores the empty state")
+	panel.free()
 
 	if _failures == 0:
 		print("test_dialogue_log: all checks passed")
