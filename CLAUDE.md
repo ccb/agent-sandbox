@@ -168,7 +168,12 @@ or a live URL) and **`/serve-backend`** (serve the sim, mock or real-LLM).
     -F sub_issue_id="$(gh api /repos/ccb/agent-sandbox/issues/<n> --jq .id)"
   ```
   Still link the run write-up comment from the issue body, as before.
-- Feature branches → PR → `main`. All work targets `main` now — the long-lived
+- Feature branches → PR → `main`, **except anything touching
+  `godot-generative-agents/web/` (the browser companion / showcase site), which
+  PRs into `prod` instead.** Base the branch on `prod` and set `--base prod`; a
+  web PR opened against `main` is targeting the wrong branch even if it merges
+  cleanly. Everything else — engine, `backend/`, the Godot project, `tools/geo/`,
+  docs — still goes to `main`. The long-lived
   `godot-ga-main` branch was retired and merged back in July 2026. Changes under
   `godot-generative-agents/` (the Godot viewer, `backend/`, `tools/geo/`) are
   still reviewed by the Godot/geo owners (@aking526 + @0frankie); everything else
