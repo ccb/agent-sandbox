@@ -2,7 +2,7 @@ extends RefCounted
 ## Pure guards for the viewer's two data boundaries (issue #638): a partial or
 ## version-skewed payload must degrade to "skip + warn", never crash the hot
 ## render loop or die on connect. The viewer already guards this way in its cold
-## paths (heatmap_panel, day-plans, markers use .get()/typeof checks) -- these
+## paths (heatmap_panel, markers use .get()/typeof checks) -- these
 ## helpers give the hot render loop and the load/handshake path the same
 ## discipline. All static, no scene nodes, so the whole set is unit-testable
 ## headless (tests/test_payload_guards.gd).
