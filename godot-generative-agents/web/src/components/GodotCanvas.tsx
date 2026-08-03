@@ -259,14 +259,16 @@ export function GodotCanvas() {
       {blocked ? (
         // Copy, not a stack trace. "below" is safe to say because the only mount
         // point is the landing page's replay figure (home/HomeView.tsx), where the
-        // Run locally guide lands under the article.
-        // TODO(#880): link "Run locally" to that section once it has an anchor —
-        // an href to a section that doesn't exist yet jumps nowhere.
+        // Run locally guide (#run-locally, home/RunLocallySection.tsx) lands
+        // under the article.
         // Run locally is the only fallback offered here: the demo video that
         // would also have gone here was dropped (#881, deferred 2026-08-03).
         <div className={styles.blocked}>
           <p>This browser can’t run the replay demo.</p>
-          <p>See “Run locally” below to run the viewer on your own machine.</p>
+          <p>
+            See “<a href="#run-locally">Run locally</a>” below to run the viewer on your own
+            machine.
+          </p>
           <p className={styles.blockedWhy}>Missing: {blocked.join(", ")}.</p>
         </div>
       ) : (
