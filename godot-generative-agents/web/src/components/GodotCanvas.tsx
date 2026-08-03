@@ -11,10 +11,19 @@ type GodotEngine = {
   requestQuit?: () => void;
 };
 type GodotEngineCtor = new (config: Record<string, unknown>) => GodotEngine;
+// Statics hung off the same `Engine` global (see the Features object at the top of
+// public/godot/index.js). `getMissingFeatures` is the engine's own preflight, which
+// the stock export's page calls before it starts (public/godot/index.html) and this
+// embed dropped along with that page (#957); `threads` says whether the build needs
+// SharedArrayBuffer and cross-origin isolation, while the rest of the list (WebGL2,
+// fetch, a secure context) is checked either way.
+type GodotEngineStatics = {
+  getMissingFeatures: (supported?: { threads?: boolean }) => string[];
+};
 
 declare global {
   interface Window {
-    Engine?: GodotEngineCtor;
+    Engine?: GodotEngineCtor & GodotEngineStatics;
   }
 }
 
@@ -40,6 +49,27 @@ function loadEngineScript(): Promise<void> {
       reject(new Error(`Could not load ${script.src} — run "npm run export:godot" first.`));
     document.body.appendChild(script);
   });
+}
+
+/**
+ * The features this browser is missing, named for a reader — or `null` if it has
+ * everything the export needs (#957).
+ *
+ * The whole go/no-go decision lives here rather than at the call site so it can be
+ * tested: this package has no DOM to boot an engine in.
+ *
+ * The engine's own strings carry advice aimed at whoever configured the server
+ * ("SharedArrayBuffer - Check that the web server configuration sends the correct
+ * headers.") — keep the feature name, drop the tail: it's ours to act on, not the
+ * visitor's, and the console warning at the call site keeps the whole string.
+ *
+ * `hasWasm` is passed in because the engine's list assumes WebAssembly rather than
+ * checking for it, and "no WASM at all" is exactly the browser this fallback is for.
+ */
+export function unsupportedFeatures(missing: string[], hasWasm: boolean): string[] | null {
+  const names = missing.map((m) => m.split(" - ")[0].trim());
+  if (!hasWasm) return ["WebAssembly", ...names];
+  return names.length > 0 ? names : null;
 }
 
 /**
@@ -111,6 +141,11 @@ export function GodotCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState("Loading engine…");
+  // Non-null once the preflight below has ruled this browser out (#957): the
+  // features it's missing. Separate from `status`, which still carries the loading
+  // chatter and any genuine load failure (a 404'd export, a dead network) — a
+  // different problem with a different message, and worth keeping distinguishable.
+  const [blocked, setBlocked] = useState<string[] | null>(null);
 
   useEffect(() => {
     let engine: GodotEngine | undefined;
@@ -135,6 +170,26 @@ export function GodotCanvas() {
         const canvas = canvasRef.current;
         const wrap = wrapRef.current;
         if (!canvas || !wrap || !window.Engine) return;
+
+        // Ask the engine whether it can run here BEFORE building it (#957).
+        // `threads: true` tracks godot/export_presets.cfg's variant/thread_support:
+        // a threaded build needs cross-origin isolation, and on a page without it
+        // startGame() neither returns nor rejects — it fetches all ~53 MB of
+        // index.wasm + index.pck, fails to spawn its worker pool, and sits on
+        // "Starting…" forever (measured: 75 s, console repeating "still waiting on
+        // run dependencies: loading-workers"). So there is no error to catch and
+        // nothing below this line is worth starting.
+        const gaps = window.Engine.getMissingFeatures({ threads: true });
+        const missing = unsupportedFeatures(gaps, typeof WebAssembly !== "undefined");
+        if (missing) {
+          // Both lists: the short names the figure shows, and the engine's raw
+          // strings with their server-config advice — which is what tells a deployed
+          // COOP/COEP regression apart from a browser that never stood a chance.
+          console.warn("Godot preflight: this browser is missing", missing, gaps);
+          setBlocked(missing);
+          return;
+        }
+
         tameFocus(canvas, () => readerIsElsewhere);
 
         // Keep the buffer at exactly the box's shape (#942) — set before
@@ -201,7 +256,21 @@ export function GodotCanvas() {
       <canvas ref={canvasRef} id="canvas" className={styles.canvas}>
         Your browser does not support the canvas element.
       </canvas>
-      {status && <div className={styles.status}>{status}</div>}
+      {blocked ? (
+        // Copy, not a stack trace. "below" is safe to say because the only mount
+        // point is the landing page's replay figure (home/HomeView.tsx), where the
+        // Run locally guide lands under the article.
+        // TODO(#880): link "Run locally" to that section once it has an anchor —
+        // an href to a section that doesn't exist yet jumps nowhere.
+        // TODO(#881): offer the demo video here too once it's published.
+        <div className={styles.blocked}>
+          <p>This browser can’t run the replay demo.</p>
+          <p>See “Run locally” below to run the viewer on your own machine.</p>
+          <p className={styles.blockedWhy}>Missing: {blocked.join(", ")}.</p>
+        </div>
+      ) : (
+        status && <div className={styles.status}>{status}</div>
+      )}
     </div>
   );
 }
