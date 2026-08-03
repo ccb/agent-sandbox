@@ -11,10 +11,10 @@ import { describe, expect, it } from "vitest";
 // order.
 import caseStudySource from "./CaseStudySection.tsx?raw";
 import costSource from "./CostSection.tsx?raw";
-import { TOC } from "./toc";
 import homeSource from "./HomeView.tsx?raw";
 import implSource from "./ImplementationSection.tsx?raw";
 import reflectionsSource from "./ReflectionsSection.tsx?raw";
+import { TOC } from "./toc";
 
 // HomeView renders each section component partway down, so splicing the
 // components' source in at their call sites reproduces the rendered id order.

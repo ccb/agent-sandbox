@@ -61,11 +61,7 @@ export function ImplementationSection() {
     <section className="nrf-section">
       <div className="nrf-container">
         <div className="nrf-narrow">
-          <SectionHeading
-            id="engine"
-            level={2}
-            className="nrf-title nrf-title-3 nrf-centered"
-          >
+          <SectionHeading id="engine" level={2} className="nrf-title nrf-title-3 nrf-centered">
             The text-adventure engine
           </SectionHeading>
           <div className="nrf-content nrf-justified">

@@ -17,11 +17,7 @@ export function ReflectionsSection() {
     <section className="nrf-section">
       <div className="nrf-container">
         <div className="nrf-narrow">
-          <SectionHeading
-            id="reflections"
-            level={2}
-            className="nrf-title nrf-title-3 nrf-centered"
-          >
+          <SectionHeading id="reflections" level={2} className="nrf-title nrf-title-3 nrf-centered">
             Reflections: coding agents as research instruments
           </SectionHeading>
           <div className="nrf-content nrf-justified">
@@ -56,22 +52,21 @@ export function ReflectionsSection() {
               — and an error-pause is neither. It polled a frozen run for forty minutes before a
               human noticed. The agent diagnosed the loop, filed it, fixed it to treat a paused run
               whose step count has stopped advancing as terminal, and verified both directions. The
-              fix then validated itself in production the next morning:
-              a transient provider flap killed a relaunched run at step 1, and the driver aborted
-              after about seventy seconds having spent <strong>$0.00</strong>, artifacts captured
-              and the run marked aborted.
+              fix then validated itself in production the next morning: a transient provider flap
+              killed a relaunched run at step 1, and the driver aborted after about seventy seconds
+              having spent <strong>$0.00</strong>, artifacts captured and the run marked aborted.
             </p>
             <p>
               What made that comfortable to run unattended is the same principle this paper argues
               for in the simulation itself. Inside a run, a language model never mutates the world:
               it proposes an action, and a precondition gate disposes. Working with a coding agent
               had exactly that shape. The agent proposes; hard gates decide. The cost cap is
-              enforced by the driver, not by the agent's intentions.
-              The test suite gates what gets published — the numbers in the charts above are pinned
-              to the recorded run data, and the suite fails if the prose and the CSV drift apart.
-              Human review gates every merge. None of these are sophisticated, and that is rather
-              the point: cheap mechanical checks at the boundaries are what turned a capable but
-              unreliable collaborator into an instrument we were willing to leave running.
+              enforced by the driver, not by the agent's intentions. The test suite gates what gets
+              published — the numbers in the charts above are pinned to the recorded run data, and
+              the suite fails if the prose and the CSV drift apart. Human review gates every merge.
+              None of these are sophisticated, and that is rather the point: cheap mechanical checks
+              at the boundaries are what turned a capable but unreliable collaborator into an
+              instrument we were willing to leave running.
             </p>
             <p>
               The unreliability is worth stating plainly, because it was constant. The agent

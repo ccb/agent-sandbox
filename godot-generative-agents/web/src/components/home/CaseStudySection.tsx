@@ -509,18 +509,14 @@ export function CaseStudySection() {
     <section className="nrf-section">
       <div className="nrf-container">
         <div className="nrf-narrow">
-          <SectionHeading
-            id="case-study"
-            level={2}
-            className="nrf-title nrf-title-3 nrf-centered"
-          >
+          <SectionHeading id="case-study" level={2} className="nrf-title nrf-title-3 nrf-centered">
             One simulated day, up close
           </SectionHeading>
           <div className="nrf-content nrf-justified">
             <p>
-              The replay above is not a montage: it is one specific run —{" "}
-              <code>{RUN.id}</code> — a single simulated Monday from 08:00 to 20:00, 4,320 ticks of
-              ten simulated seconds each, with five agents, seed {RUN.seed}, plans authored by{" "}
+              The replay above is not a montage: it is one specific run — <code>{RUN.id}</code> — a
+              single simulated Monday from 08:00 to 20:00, 4,320 ticks of ten simulated seconds
+              each, with five agents, seed {RUN.seed}, plans authored by{" "}
               <code>{RUN.planModel}</code> and dialogue, scoring, and reactions by{" "}
               <code>{RUN.liveModel}</code>. The day produced {RUN.events} gate-approved actions and{" "}
               {RUN.conversations} conversations, and cost ${RUN.costUsd.toFixed(2)} — the five-agent

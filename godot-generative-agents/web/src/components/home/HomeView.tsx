@@ -415,9 +415,7 @@ function TableOfContents() {
               }`}
               aria-current={active === entry.id ? "true" : undefined}
             >
-              {entry.number !== undefined && (
-                <span className="nrf-toc-num">{entry.number}</span>
-              )}
+              {entry.number !== undefined && <span className="nrf-toc-num">{entry.number}</span>}
               {entry.label}
             </a>
           </li>
@@ -535,10 +533,11 @@ export function HomeView() {
                 individually authored goals, and strike up conversations whose outcomes feed back
                 into their plans and memories, following the memory-reflection-planning architecture
                 of Park et al.'s <em>Generative Agents</em>. The simulation is built on a classical
-                text-adventure engine: every action an agent takes must pass the same precondition/effect gate before
-                it can change the world, so the model never mutates state directly. Each run records
-                its LLM traffic and world seed, which makes any run replayable deterministically in
-                a Godot viewer, natively or in the browser via WebAssembly.
+                text-adventure engine: every action an agent takes must pass the same
+                precondition/effect gate before it can change the world, so the model never mutates
+                state directly. Each run records its LLM traffic and world seed, which makes any run
+                replayable deterministically in a Godot viewer, natively or in the browser via
+                WebAssembly.
               </p>
             </div>
           </div>
@@ -602,7 +601,8 @@ export function HomeView() {
                 that score highest under a weighted sum of recency, importance, and relevance to the
                 current situation <TeX>{TEX.query}</TeX> at tick <TeX>{TEX.tick}</TeX>:
                 <CodeRef>
-                  <code>AgentMemory.retrieve()</code>, in <code>text_adventure_games/memory.py</code>
+                  <code>AgentMemory.retrieve()</code>, in{" "}
+                  <code>text_adventure_games/memory.py</code>
                 </CodeRef>
               </p>
               <TeX display>{TEX.retrieval}</TeX>
@@ -716,7 +716,8 @@ export function HomeView() {
                 text — is reassembled into a command and pushed through the engine's parser, where
                 the action's preconditions are checked before its effects apply.
                 <CodeRef>
-                  <code>Parser.parse_command()</code>, in <code>text_adventure_games/parsing.py</code>
+                  <code>Parser.parse_command()</code>, in{" "}
+                  <code>text_adventure_games/parsing.py</code>
                 </CodeRef>{" "}
                 That is the only route into the world; the model never edits world state. A rejected
                 action is not silent either: it becomes a failure memory and can trigger a plan
@@ -822,11 +823,7 @@ export function HomeView() {
               Appendix
             </h2>
 
-            <SectionHeading
-              id="acknowledgements"
-              level={3}
-              className="nrf-title nrf-title-4"
-            >
+            <SectionHeading id="acknowledgements" level={3} className="nrf-title nrf-title-4">
               Acknowledgements
             </SectionHeading>
             <div className="nrf-content nrf-justified">
