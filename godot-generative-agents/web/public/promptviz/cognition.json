@@ -351,7 +351,7 @@
           "id": "e0",
           "source": "day_start",
           "target": "seed_relationships",
-          "label": "seed memory",
+          "label": "relationships",
           "condition": null,
           "fired": false
         }
@@ -359,7 +359,7 @@
       {
         "data": {
           "id": "e1",
-          "source": "seed_relationships",
+          "source": "day_start",
           "target": "seed_knowledge",
           "label": "known places",
           "condition": null,
@@ -369,7 +369,7 @@
       {
         "data": {
           "id": "e2",
-          "source": "seed_knowledge",
+          "source": "day_start",
           "target": "seed_events",
           "label": "announcements",
           "condition": null,
@@ -379,7 +379,7 @@
       {
         "data": {
           "id": "e3",
-          "source": "seed_events",
+          "source": "seed_relationships",
           "target": "plan_day",
           "label": "plan the day",
           "condition": null,
@@ -389,6 +389,26 @@
       {
         "data": {
           "id": "e4",
+          "source": "seed_knowledge",
+          "target": "plan_day",
+          "label": "plan the day",
+          "condition": null,
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "e5",
+          "source": "seed_events",
+          "target": "plan_day",
+          "label": "plan the day",
+          "condition": null,
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "e6",
           "source": "plan_day",
           "target": "plan_hourly",
           "label": "decompose",
@@ -398,7 +418,7 @@
       },
       {
         "data": {
-          "id": "e5",
+          "id": "e7",
           "source": "plan_hourly",
           "target": "plan_minute",
           "label": "decompose",
@@ -408,7 +428,7 @@
       },
       {
         "data": {
-          "id": "e6",
+          "id": "e8",
           "source": "plan_minute",
           "target": "plan_anchor_fix",
           "label": "anchor unreachable",
@@ -418,7 +438,7 @@
       },
       {
         "data": {
-          "id": "e7",
+          "id": "e9",
           "source": "plan_minute",
           "target": "seed_plan",
           "label": "plan accepted",
@@ -428,7 +448,7 @@
       },
       {
         "data": {
-          "id": "e8",
+          "id": "e10",
           "source": "plan_anchor_fix",
           "target": "seed_plan",
           "label": "corrected once",
@@ -438,7 +458,7 @@
       },
       {
         "data": {
-          "id": "e9",
+          "id": "e11",
           "source": "seed_plan",
           "target": "tick_start",
           "label": "start the clock",
@@ -448,7 +468,7 @@
       },
       {
         "data": {
-          "id": "e10",
+          "id": "e12",
           "source": "tick_start",
           "target": "perceive",
           "label": "agent is due",
@@ -458,7 +478,7 @@
       },
       {
         "data": {
-          "id": "e11",
+          "id": "e13",
           "source": "perceive",
           "target": "retrieve",
           "label": "observations",
@@ -468,29 +488,9 @@
       },
       {
         "data": {
-          "id": "e12",
+          "id": "e14",
           "source": "retrieve",
           "target": "ctx_decide_context",
-          "label": "top-k memories",
-          "condition": null,
-          "fired": false
-        }
-      },
-      {
-        "data": {
-          "id": "e13",
-          "source": "ctx_decide_context",
-          "target": "ctx_recent_actions",
-          "label": "assemble",
-          "condition": null,
-          "fired": false
-        }
-      },
-      {
-        "data": {
-          "id": "e14",
-          "source": "ctx_recent_actions",
-          "target": "ctx_nearby",
           "label": "assemble",
           "condition": null,
           "fired": false
@@ -499,8 +499,8 @@
       {
         "data": {
           "id": "e15",
-          "source": "ctx_nearby",
-          "target": "ctx_walk_minutes",
+          "source": "retrieve",
+          "target": "ctx_recent_actions",
           "label": "assemble",
           "condition": null,
           "fired": false
@@ -509,6 +509,56 @@
       {
         "data": {
           "id": "e16",
+          "source": "retrieve",
+          "target": "ctx_nearby",
+          "label": "assemble",
+          "condition": null,
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "e17",
+          "source": "retrieve",
+          "target": "ctx_walk_minutes",
+          "label": "assemble",
+          "condition": null,
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "e18",
+          "source": "ctx_decide_context",
+          "target": "decide_action",
+          "label": "the observation",
+          "condition": null,
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "e19",
+          "source": "ctx_recent_actions",
+          "target": "decide_action",
+          "label": "the observation",
+          "condition": null,
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "e20",
+          "source": "ctx_nearby",
+          "target": "decide_action",
+          "label": "the observation",
+          "condition": null,
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "e21",
           "source": "ctx_walk_minutes",
           "target": "decide_action",
           "label": "the observation",
@@ -518,7 +568,7 @@
       },
       {
         "data": {
-          "id": "e17",
+          "id": "e22",
           "source": "decide_action",
           "target": "decide_cognition",
           "label": "consult memory first",
@@ -528,7 +578,7 @@
       },
       {
         "data": {
-          "id": "e18",
+          "id": "e23",
           "source": "decide_cognition",
           "target": "decide_action",
           "label": "answer in hand",
@@ -538,7 +588,7 @@
       },
       {
         "data": {
-          "id": "e19",
+          "id": "e24",
           "source": "decide_action",
           "target": "decide_freetext",
           "label": "no tool call came back",
@@ -548,7 +598,7 @@
       },
       {
         "data": {
-          "id": "e20",
+          "id": "e25",
           "source": "decide_action",
           "target": "route_command",
           "label": "command string",
@@ -558,7 +608,7 @@
       },
       {
         "data": {
-          "id": "e21",
+          "id": "e26",
           "source": "decide_freetext",
           "target": "route_command",
           "label": "parsed command",
@@ -568,7 +618,7 @@
       },
       {
         "data": {
-          "id": "e22",
+          "id": "e27",
           "source": "route_command",
           "target": "remember",
           "label": "effects applied",
@@ -578,7 +628,7 @@
       },
       {
         "data": {
-          "id": "e23",
+          "id": "e28",
           "source": "route_command",
           "target": "remember",
           "label": "preconditions failed",
@@ -588,7 +638,7 @@
       },
       {
         "data": {
-          "id": "e24",
+          "id": "e29",
           "source": "remember",
           "target": "score_importance",
           "label": "new memories",
@@ -598,7 +648,7 @@
       },
       {
         "data": {
-          "id": "e25",
+          "id": "e30",
           "source": "score_importance",
           "target": "reflect_gate",
           "label": "importance updated",
@@ -608,7 +658,7 @@
       },
       {
         "data": {
-          "id": "e26",
+          "id": "e31",
           "source": "reflect_gate",
           "target": "reflect_questions",
           "label": "sum >= 30",
@@ -618,7 +668,7 @@
       },
       {
         "data": {
-          "id": "e27",
+          "id": "e32",
           "source": "reflect_questions",
           "target": "reflect_infer",
           "label": "up to 3 questions",
@@ -628,7 +678,7 @@
       },
       {
         "data": {
-          "id": "e28",
+          "id": "e33",
           "source": "reflect_infer",
           "target": "tick_start",
           "label": "insight remembered",
@@ -638,7 +688,7 @@
       },
       {
         "data": {
-          "id": "e29",
+          "id": "e34",
           "source": "reflect_gate",
           "target": "react_scan",
           "label": "not yet",
@@ -648,7 +698,7 @@
       },
       {
         "data": {
-          "id": "e30",
+          "id": "e35",
           "source": "tick_start",
           "target": "revise_plan",
           "label": "behind schedule",
@@ -658,7 +708,7 @@
       },
       {
         "data": {
-          "id": "e31",
+          "id": "e36",
           "source": "remember",
           "target": "revise_plan",
           "label": "acted off-plan",
@@ -668,7 +718,7 @@
       },
       {
         "data": {
-          "id": "e32",
+          "id": "e37",
           "source": "revise_plan",
           "target": "tick_start",
           "label": "new stops",
@@ -678,7 +728,7 @@
       },
       {
         "data": {
-          "id": "e33",
+          "id": "e38",
           "source": "react_scan",
           "target": "encounter_memory",
           "label": "newly in view",
@@ -688,7 +738,7 @@
       },
       {
         "data": {
-          "id": "e34",
+          "id": "e39",
           "source": "encounter_memory",
           "target": "react_choice",
           "label": "past the rule tier",
@@ -698,7 +748,7 @@
       },
       {
         "data": {
-          "id": "e35",
+          "id": "e40",
           "source": "react_choice",
           "target": "revise_plan",
           "label": "replan around them",
@@ -708,7 +758,7 @@
       },
       {
         "data": {
-          "id": "e36",
+          "id": "e41",
           "source": "react_choice",
           "target": "pair_scan",
           "label": "greet them",
@@ -718,7 +768,7 @@
       },
       {
         "data": {
-          "id": "e37",
+          "id": "e42",
           "source": "react_scan",
           "target": "pair_scan",
           "label": "nobody new",
@@ -728,7 +778,7 @@
       },
       {
         "data": {
-          "id": "e38",
+          "id": "e43",
           "source": "pair_scan",
           "target": "place_grounding",
           "label": "pair settled",
@@ -738,7 +788,7 @@
       },
       {
         "data": {
-          "id": "e39",
+          "id": "e44",
           "source": "place_grounding",
           "target": "dialogue_line",
           "label": "grounded observation",
@@ -748,7 +798,7 @@
       },
       {
         "data": {
-          "id": "e40",
+          "id": "e45",
           "source": "dialogue_line",
           "target": "dialogue_line",
           "label": "their turn (<= 6)",
@@ -758,7 +808,7 @@
       },
       {
         "data": {
-          "id": "e41",
+          "id": "e46",
           "source": "dialogue_line",
           "target": "convo_outcome",
           "label": "conversation ended",
@@ -768,7 +818,7 @@
       },
       {
         "data": {
-          "id": "e42",
+          "id": "e47",
           "source": "convo_outcome",
           "target": "commitment_memory",
           "label": "something agreed",
@@ -778,7 +828,7 @@
       },
       {
         "data": {
-          "id": "e43",
+          "id": "e48",
           "source": "convo_outcome",
           "target": "revise_plan",
           "label": "plans changed",
@@ -788,7 +838,7 @@
       },
       {
         "data": {
-          "id": "e44",
+          "id": "e49",
           "source": "commitment_memory",
           "target": "tick_start",
           "label": "next tick",
@@ -798,7 +848,7 @@
       },
       {
         "data": {
-          "id": "e45",
+          "id": "e50",
           "source": "pair_scan",
           "target": "tick_start",
           "label": "nobody to talk to",
@@ -1104,6 +1154,22 @@
           "day_end_in": {
             "type": "integer",
             "description": "Whole minutes from now until day_end. Explicit for the same reason as next_in -- the model should not have to do clock arithmetic to learn whether a walk fits in the day."
+          },
+          "walking": {
+            "type": "integer",
+            "description": "Whole minutes of walk remaining when the agent is mid-walk toward the CURRENT scheduled stop (#916). Replaces the elapsed clause: mid-walk, \"this has been your current stop for 130 min\" reads as time already spent at the stop -- batch 11's Tanaka concluded her session \"ran well past its planned time\" and turned around 11 tiles from the classroom door, 70 minutes into a correct 68-minute leg. Omitted when settled or when walking away from the plan (which keeps the neglect semantics the elapsed clause exists for)."
+          },
+          "held": {
+            "type": "integer",
+            "description": "Minutes the agent's current PERFORMED activity text has gone unchanged (#905). Set only past cognition.SAME_ACT_CONTEXT_MIN, so a normal study block is never nagged. Distinct from elapsed, which clocks the schedule stop: a re-chosen off-plan wait (\"reviewing problems while waiting for theo\", 340 min in #760 batch 10) never shows up in elapsed at all. The sentence is deliberately factual with no directive -- the model decides whether the hold is still worth it."
+          },
+          "held_activity": {
+            "type": "string",
+            "description": "The unchanged activity text itself, quoted back verbatim."
+          },
+          "absent": {
+            "type": "string",
+            "description": "First name of a cast member held_activity mentions who is NOT here (#905): a person-contingent wait decays with every minute the person doesn't show, but their absence is otherwise only ever the absence of an observation. Omitted when the activity names no absent person."
           }
         },
         "sample": {
@@ -1115,7 +1181,7 @@
           "finished": false
         }
       },
-      "raw_source": "Right now it is {{ time }}.\nYour plan's current stop: {{ activity }} at {{ place }}{% if minutes %} (planned ~{{ minutes }} min){% endif %}.{% if finished %} You have already finished this stop.{% if next_place %} Your next stop is {{ next_activity }} at {{ next_place }}{% if next_due %}, due now.{% else %}, starting at {{ next_hour }} ({{ next_in }} min from now).{% endif %}{% endif %}{% elif elapsed %} This has been your current stop for {{ elapsed }} min.{% endif %}{% if day_end %} The day ends at {{ day_end }} ({{ day_end_in }} min from now).{% endif %}\n",
+      "raw_source": "Right now it is {{ time }}.\nYour plan's current stop: {{ activity }} at {{ place }}{% if minutes %} (planned ~{{ minutes }} min){% endif %}.{% if finished %} You have already finished this stop.{% if next_place %} Your next stop is {{ next_activity }} at {{ next_place }}{% if next_due %}, due now.{% else %}, starting at {{ next_hour }} ({{ next_in }} min from now).{% endif %}{% endif %}{% elif walking %} You are walking there now, about {{ walking }} min from arrival.{% elif elapsed %} This has been your current stop for {{ elapsed }} min.{% endif %}{% if held %} You have been doing exactly this -- \"{{ held_activity }}\" -- for {{ held }} min{% if absent %}, and {{ absent }} is not here{% endif %}.{% endif %}{% if day_end %} The day ends at {{ day_end }} ({{ day_end_in }} min from now).{% endif %}\n",
       "rendered": "Right now it is Monday 12:05 PM.\nYour plan's current stop: eating lunch at Houston Hall (planned ~40 min). This has been your current stop for 15 min."
     },
     "ctx_recent_actions": {

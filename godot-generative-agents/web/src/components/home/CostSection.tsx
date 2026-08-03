@@ -11,6 +11,8 @@
  * stays hidden); as of 2026-08-01 every cell is measured.
  */
 
+import { SectionHeading } from "./SectionHeading";
+
 /** The three 5-agent / 12-hour replicates (batches 12, 10, 11 of #760). */
 export const BASELINE_REPLICATES = [5.37355, 5.381057, 6.818001];
 
@@ -225,9 +227,9 @@ export function CostSection() {
     <section className="nrf-section">
       <div className="nrf-container">
         <div className="nrf-narrow">
-          <h2 className="nrf-title nrf-title-3 nrf-centered" id="cost">
+          <SectionHeading id="cost" level={2} className="nrf-title nrf-title-3 nrf-centered">
             What a day costs
-          </h2>
+          </SectionHeading>
           <div className="nrf-content nrf-justified">
             <p>
               Every language-model call in a run is metered in-process — tokens, cache traffic, and

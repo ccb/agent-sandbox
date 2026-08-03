@@ -83,7 +83,7 @@ export function PromptChainView() {
           <span className="pcv-logo" aria-hidden="true">
             ⛓
           </span>
-          <span className="pcv-name">Prompt Chain Visualizer</span>
+          <span className="pcv-name">Cognition process</span>
         </div>
         {/* Only worth a picker when there's something to pick between — the
             site ships the Penn cognition chain alone. */}
