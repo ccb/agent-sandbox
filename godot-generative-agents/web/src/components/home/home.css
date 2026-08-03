@@ -515,11 +515,11 @@
   aspect-ratio: 16 / 9;
 }
 
-/* The handheld stand-in for the replay figure (#958) — hidden until the gate at
-   the bottom of this file swaps the two. It borrows the idle frame's look (the
-   border, radius and fill of the "Open the replay demo" box it replaces) but not
-   its rules: .nrf-figure-frame hard-codes a 520px height, and a placeholder
-   should be as tall as its one sentence. */
+/* The two stand-ins for the replay figure (#958) — one per reason it's missing,
+   both hidden until the gate at the bottom of this file picks one. They borrow
+   the idle frame's look (the border, radius and fill of the "Open the replay
+   demo" box they replace) but not its rules: .nrf-figure-frame hard-codes a
+   520px height, and a placeholder should be as tall as its one sentence. */
 .nrf-replay-note {
   display: none;
   margin: 1.5rem 0 0;
@@ -926,16 +926,25 @@
   }
 }
 
-/* --- handheld: the replay demo isn't offered at all (#958) ---
-   Pressing it pulls a ~10 MB threaded-WASM build into a phone's memory ceiling,
-   its touch input has never been checked against the click mapping the canvas
-   buffer depends on (#942), and the enlarge overlay closes with Esc — a key a
-   phone doesn't have. None of that is tested on a real device, so the figure
-   steps aside for .nrf-replay-note instead, and nothing downloads.
+/* --- when the replay demo isn't offered (#958) ---
+   Two reasons, two messages, because only one of them is the reader's to fix.
 
-   Touch-primary is half the test, not just width: an iPad in landscape is wider
-   than any phone breakpoint and carries every one of those risks. The cost is a
-   touchscreen desktop reading as handheld — the right way to be wrong here.
+   Too narrow is temporary: the viewer wants room for a campus and a sidebar, and
+   widening the window brings it back. Say so.
+
+   Touch-primary is not: pressing the demo pulls a ~10 MB threaded-WASM build
+   into a phone's memory ceiling, its touch input has never been checked against
+   the click mapping the canvas buffer depends on (#942), and the enlarge overlay
+   closes with Esc — a key a phone doesn't have. None of that is tested on a real
+   device, so it isn't offered, and nothing downloads. Width alone wouldn't catch
+   it: an iPad in landscape is wider than any phone breakpoint and carries every
+   one of those risks. The cost is a touchscreen desktop reading as handheld —
+   the right way to be wrong here.
+
+   ORDER IS LOAD-BEARING: a phone matches both blocks, so the touch one comes
+   second and takes the width note back down. Two plain media queries rather than
+   one `and (not (pointer: coarse))` — a browser that doesn't parse the boolean
+   would drop that query whole and leave an empty gap where a note should be.
 
    Kept as CSS rather than a matchMedia gate in ReplayFigure: HomeView is
    imported by tests that run without a DOM (legend.test.ts, toc.test.ts), so a
@@ -944,11 +953,22 @@
    so narrowing a desktop window mid-playback leaves it running behind
    `display: none`; its buffer floors at 1x1 and comes back on widening, GL
    context intact (checked, both ways). Nothing to tear down. */
-@media (pointer: coarse), (max-width: 768px) {
+@media (max-width: 768px) {
   .nrf-figure--replay {
     display: none;
   }
-  .nrf-replay-note {
+  .nrf-replay-note--narrow {
+    display: block;
+  }
+}
+@media (pointer: coarse) {
+  .nrf-figure--replay {
+    display: none;
+  }
+  .nrf-replay-note--narrow {
+    display: none;
+  }
+  .nrf-replay-note--touch {
     display: block;
   }
 }

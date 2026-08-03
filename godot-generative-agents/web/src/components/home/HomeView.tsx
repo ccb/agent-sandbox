@@ -63,9 +63,10 @@ export const SIDEBAR_LEGEND: {
  * size, since `canvasResizePolicy: 2` would shrink its framebuffer with it. So
  * the same frame grows in place and the engine keeps running through it.
  *
- * On a handheld the whole figure steps aside for the note beneath it (#958): see
- * the `(pointer: coarse)` block in home.css for why the demo isn't offered there,
- * and why the swap is CSS rather than a `matchMedia` gate in here.
+ * The whole figure steps aside for one of the two notes beneath it (#958) when
+ * the window is too narrow, or when the pointer is touch-primary — a different
+ * reason and a different message each. See the gate at the foot of home.css for
+ * why, and for why the swap is CSS rather than a `matchMedia` gate in here.
  */
 function ReplayFigure() {
   const [shown, setShown] = useState(false);
@@ -151,9 +152,14 @@ function ReplayFigure() {
           </details>
         </figcaption>
       </figure>
-      {/* The handheld stand-in for everything above. Rendered always, shown only
-          under the gate — the figure and this note are never both visible. */}
-      <p className="nrf-replay-note">Open this page on a desktop browser to watch the replay.</p>
+      {/* The two stand-ins for everything above. Both always rendered; the gate in
+          home.css shows exactly one of them, or neither, never with the figure. */}
+      <p className="nrf-replay-note nrf-replay-note--narrow">
+        This window is too narrow to show the replay — widen it and the demo appears here.
+      </p>
+      <p className="nrf-replay-note nrf-replay-note--touch">
+        Open this page on a desktop browser to watch the replay.
+      </p>
     </>
   );
 }
