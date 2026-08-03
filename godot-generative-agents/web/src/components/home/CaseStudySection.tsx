@@ -1,14 +1,16 @@
 import { CodeRef } from "./CodeRef";
+import { SectionHeading } from "./SectionHeading";
 
 /**
  * "One simulated day, up close" — the #878 case study of the showcase run.
  *
- * The architecture sections above describe machinery; this section watches it
- * run. Every quotation below — dialogue lines, plan memories, reflections — is
- * copied verbatim from `public/replay/penn_replay.json`, the same file the
- * demo at the top of the page plays, and `CaseStudySection.test.ts` pins each
- * one to the record it came from, so the prose cannot drift from the data.
- * Judge scores are hand-copied from the run's believability audit
+ * Comes right after the demo and abstract: watch the day, then read it beat by
+ * beat, then (in the architecture section) the machinery behind it. Every
+ * quotation below — dialogue lines, plan memories, reflections — is copied
+ * verbatim from `public/replay/penn_replay.json`, the same file the demo at
+ * the top of the page plays, and `CaseStudySection.test.ts` pins each one to
+ * the record it came from, so the prose cannot drift from the data. Judge
+ * scores are hand-copied from the run's believability audit
  * (`runs/issue-760-batch-12/runA/believability.md`) and pinned in the same
  * test.
  */
@@ -498,29 +500,30 @@ function MemoryCard({ memory }: { memory: MemoryQuote }) {
 }
 
 /**
- * The #878 selected-run case study: the architecture above, observed in the
- * one day of simulation the demo at the top of the page plays back.
+ * The #878 selected-run case study: the one day of simulation the demo at the
+ * top of the page plays back, read beat by beat before the architecture that
+ * produced it.
  */
 export function CaseStudySection() {
   return (
     <section className="nrf-section">
       <div className="nrf-container">
         <div className="nrf-narrow">
-          <h2 className="nrf-title nrf-title-3 nrf-centered" id="case-study">
+          <SectionHeading id="case-study" level={2} className="nrf-title nrf-title-3 nrf-centered">
             One simulated day, up close
-          </h2>
+          </SectionHeading>
           <div className="nrf-content nrf-justified">
             <p>
-              Everything above describes machinery. This section watches it run. The replay embedded
-              at the top of this page is not a montage: it is one specific run —{" "}
-              <code>{RUN.id}</code> — a single simulated Monday from 08:00 to 20:00, 4,320 ticks of
-              ten simulated seconds each, with five agents, seed {RUN.seed}, plans authored by{" "}
+              The replay above is not a montage: it is one specific run — <code>{RUN.id}</code> — a
+              single simulated Monday from 08:00 to 20:00, 4,320 ticks of ten simulated seconds
+              each, with five agents, seed {RUN.seed}, plans authored by{" "}
               <code>{RUN.planModel}</code> and dialogue, scoring, and reactions by{" "}
               <code>{RUN.liveModel}</code>. The day produced {RUN.events} gate-approved actions and{" "}
               {RUN.conversations} conversations, and cost ${RUN.costUsd.toFixed(2)} — the five-agent
-              baseline in the cost section below. Every quotation that follows is copied verbatim
-              from the replay file the demo plays, and a test pins each one to the record it came
-              from, so this prose cannot quietly drift from the data.
+              baseline in the cost section below. This section walks that day beat by beat; the next
+              section is the machinery behind each moment. Every quotation that follows is copied
+              verbatim from the replay file the demo plays, and a test pins each one to the record
+              it came from, so this prose cannot quietly drift from the data.
             </p>
 
             <table className="nrf-moments">
@@ -546,9 +549,9 @@ export function CaseStudySection() {
               </tbody>
             </table>
 
-            <h3 className="nrf-title nrf-title-4" id="case-cast">
+            <SectionHeading id="case-cast" level={3} className="nrf-title nrf-title-4">
               The cast and their mornings
-            </h3>
+            </SectionHeading>
             <p>
               At 08:00 each agent wrote its own day: the planner turned a one-paragraph persona into
               a morning-to-evening outline, then into concrete stops on the real map. The five
@@ -584,9 +587,9 @@ export function CaseStudySection() {
               </li>
             </ul>
 
-            <h3 className="nrf-title nrf-title-4" id="case-dialogs">
+            <SectionHeading id="case-dialogs" level={3} className="nrf-title nrf-title-4">
               Three conversations
-            </h3>
+            </SectionHeading>
             <p>
               Conversations start when two agents are adjacent, free, and mutually interested, and
               unfold one line per tick; when one ends, each participant distills what was agreed
@@ -625,13 +628,13 @@ export function CaseStudySection() {
               scripted NPC cannot have.
             </p>
 
-            <h3 className="nrf-title nrf-title-4" id="case-goals">
+            <SectionHeading id="case-goals" level={3} className="nrf-title nrf-title-4">
               A day of changing plans
-            </h3>
+            </SectionHeading>
             <p>
               Plans are living documents
               <CodeRef>
-                <code>maybe_revise_plan</code>, in <code>backend/cognition.py</code>
+                <code>maybe_revise_plan()</code>, in <code>backend/cognition.py</code>
               </CodeRef>{" "}
               and Maya's memory stream keeps the whole edit history: one initial plan and seven
               commitments, every one of them social. Her 08:00 plan named six stops — circulation
@@ -661,9 +664,9 @@ export function CaseStudySection() {
               oddly human: promises to other people hold; promises to oneself about sleep do not.
             </p>
 
-            <h3 className="nrf-title nrf-title-4" id="case-memory">
+            <SectionHeading id="case-memory" level={3} className="nrf-title nrf-title-4">
               Memory at work
-            </h3>
+            </SectionHeading>
             <p>
               The memory stream is not a log; it condenses. Here is one thread of Tanaka's morning,
               three records deep. After a pre-lecture chat with Mateo at 09:30, the outcome pass
@@ -689,9 +692,9 @@ export function CaseStudySection() {
               in the third person, a seam where the narrator's view leaks into the agent's.
             </p>
 
-            <h3 className="nrf-title nrf-title-4" id="case-verdict">
+            <SectionHeading id="case-verdict" level={3} className="nrf-title nrf-title-4">
               What holds up, and what gives it away
-            </h3>
+            </SectionHeading>
             <p>
               An LLM judge audited the run agent by agent, with step-ranged evidence for every
               score. The mean scores:

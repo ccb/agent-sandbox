@@ -6,7 +6,7 @@ import { SNIPPETS } from "./ImplementationSection";
 // string rather than a build error, so an empty snippet would ship as a blank
 // box on the public page — that is what this catches. tests/test_landing_snippets.py
 // is what pins their *content* to the engine.
-describe("Implementation section snippets", () => {
+describe("text-adventure engine section snippets", () => {
   it.each(Object.entries(SNIPPETS))("%s is non-empty", (_name, snippet) => {
     expect(snippet.code.trim().length).toBeGreaterThan(20);
   });

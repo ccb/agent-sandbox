@@ -36,7 +36,7 @@ templates: backend.prompt_templates
 _engine: &engine text_adventure_games.prompt_templates
 
 nodes:
-  # --- bootstrap: seed memory, then plan the day -------------------------
+  # --- bootstrap: seed memory (independent), then plan the day -----------
   - id: day_start
     label: Day start (t=0)
     kind: start
@@ -116,7 +116,7 @@ nodes:
       a PLAN record, so the agent can recall its own intentions. Memory text,
       no model call.
 
-  # --- each tick: perceive -> retrieve -> assemble context ---------------
+  # --- each tick: perceive -> retrieve -> assemble context (parallel) ----
   - id: tick_start
     label: Tick start (10s)
     kind: start
@@ -370,10 +370,13 @@ nodes:
       when the planner is a no-op. Memory text, no model call.
 
 edges:
-  # bootstrap
-  - { from: day_start, to: seed_relationships, label: seed memory }
-  - { from: seed_relationships, to: seed_knowledge, label: known places }
-  - { from: seed_knowledge, to: seed_events, label: announcements }
+  # bootstrap — the three seeds are independent (attach_agents runs them in
+  # sequence, but none reads another's output); only planning depends on all.
+  - { from: day_start, to: seed_relationships, label: relationships }
+  - { from: day_start, to: seed_knowledge, label: known places }
+  - { from: day_start, to: seed_events, label: announcements }
+  - { from: seed_relationships, to: plan_day, label: plan the day }
+  - { from: seed_knowledge, to: plan_day, label: plan the day }
   - { from: seed_events, to: plan_day, label: plan the day }
   - { from: plan_day, to: plan_hourly, label: decompose }
   - { from: plan_hourly, to: plan_minute, label: decompose }
@@ -382,13 +385,16 @@ edges:
   - { from: plan_anchor_fix, to: seed_plan, label: corrected once }
   - { from: seed_plan, to: tick_start, label: start the clock }
 
-  # perceive -> context -> decide
+  # perceive -> retrieve, then four independent context blocks join into decide
   - { from: tick_start, to: perceive, label: agent is due }
   - { from: perceive, to: retrieve, label: observations }
-  - { from: retrieve, to: ctx_decide_context, label: top-k memories }
-  - { from: ctx_decide_context, to: ctx_recent_actions, label: assemble }
-  - { from: ctx_recent_actions, to: ctx_nearby, label: assemble }
-  - { from: ctx_nearby, to: ctx_walk_minutes, label: assemble }
+  - { from: retrieve, to: ctx_decide_context, label: assemble }
+  - { from: retrieve, to: ctx_recent_actions, label: assemble }
+  - { from: retrieve, to: ctx_nearby, label: assemble }
+  - { from: retrieve, to: ctx_walk_minutes, label: assemble }
+  - { from: ctx_decide_context, to: decide_action, label: the observation }
+  - { from: ctx_recent_actions, to: decide_action, label: the observation }
+  - { from: ctx_nearby, to: decide_action, label: the observation }
   - { from: ctx_walk_minutes, to: decide_action, label: the observation }
   - { from: decide_action, to: decide_cognition, label: consult memory first }
   - { from: decide_cognition, to: decide_action, label: answer in hand }
