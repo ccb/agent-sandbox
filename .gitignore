@@ -238,6 +238,9 @@ godot-generative-agents/web/public/docs/
 godot-generative-agents/web/node_modules/
 godot-generative-agents/web/dist/
 godot-generative-agents/web/*.tsbuildinfo
+# Vercel CLI local state — `vercel link` writes the org/project ids and pulled env
+# here, per dev. The deploy config that IS shared lives in web/vercel.json (#882).
+godot-generative-agents/web/.vercel/
 # (The app's package.json / tsconfig*.json / committed replay are tracked normally
 # now that the blanket *.json ignore is gone; the build dirs above stay excluded.)
 app/dist/

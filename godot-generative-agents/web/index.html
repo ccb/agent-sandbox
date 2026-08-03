@@ -3,7 +3,26 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Penn Campus — Generative Agents Replay</title>
+    <!-- Title matches the page's own <h1>, so the browser tab, the search result
+         and the shared-link card all say the same thing. -->
+    <title>Penn Campus: Generative Agents in a Simulated World</title>
+    <link rel="icon" href="/upenn-shield.svg" />
+    <!-- Public-launch metadata (#882): this is what a shared link looks like. The
+         description is condensed from the page's own Abstract so the two can't
+         drift. No og:image yet — #881's video lands a poster frame, which is the
+         right thing to point at; until then Slack/X render the text `summary`
+         card rather than a broken image. -->
+    <meta
+      name="description"
+      content="Five generative agents — LLM-driven characters with persistent memory, daily plans and conversations — live a simulated twelve-hour day on a tile map of Penn's campus built from real OpenStreetMap data. PURM 2026, University of Pennsylvania."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Penn Campus: Generative Agents in a Simulated World" />
+    <meta
+      property="og:description"
+      content="Five LLM-driven agents with memory, plans and conversations walk a real map of Penn's campus for a simulated twelve-hour day — replayable in the browser."
+    />
+    <meta name="twitter:card" content="summary" />
   </head>
   <body>
     <div id="root"></div>
