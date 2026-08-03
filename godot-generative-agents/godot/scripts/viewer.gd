@@ -159,6 +159,7 @@ const LiveClipSpan := preload("res://scripts/live_clip_span.gd")
 const BubbleAnchor := preload("res://scripts/bubble_anchor.gd")
 const ThinkingIndicator := preload("res://scripts/thinking_indicator.gd")
 const AgentFanout := preload("res://scripts/agent_fanout.gd")
+const DialogueLog := preload("res://scripts/dialogue_log.gd")
 const LivePacer := preload("res://scripts/live_pacer.gd")
 const RestartDetect := preload("res://scripts/restart_detect.gd")
 const RunState := preload("res://scripts/run_state.gd")
@@ -234,6 +235,15 @@ const ACTIONS_TOP_N := 6
 var _action_events: Array = []
 var _actions_hud: PanelContainer
 var _last_actions_step := -1
+
+# Dialogue-log panel (#963): the right-docked, persistent history of every line
+# spoken up to the playhead, so dialogue stays readable without slowing the
+# bubbles (whose pacing the sim mirrors -- see DIALOGUE_LINE_STEPS) or the
+# agents. Same push-on-step-change contract as the panels above, but active in
+# BOTH replay and live mode; rows come from dialogue_log.gd. Shown by default;
+# toggled off/on with L / the sidebar's speech-bubble button.
+var _dialogue_log: PanelContainer
+var _last_dialogue_step := -1
 
 # In-world dialogue: when two agents converse, the shared transcript is played back
 # above their heads one line at a time -- only the current speaker shows a bubble --
@@ -407,6 +417,10 @@ func _ready() -> void:
 	_day_plans.close_requested.connect(_close_day_plans)
 	_day_plans.seek_requested.connect(_on_seek)
 
+	# Dialogue-log dock (#963): the sidebar speech-bubble button (or L) toggles
+	# the right-docked history of everything said up to the playhead.
+	_panel.dialogue_log_requested.connect(_toggle_dialogue_log)
+
 	# Snapshot capture + gallery pop-up (issue #253): the camera button (or C) captures
 	# the current campus view into the gallery; the gallery button toggles the pop-up of
 	# captures taken this session. Both live only in memory (no file export yet).
@@ -452,6 +466,14 @@ func _ready() -> void:
 	_actions_hud.theme = _panel.theme
 	$UI.add_child(_actions_hud)
 	_actions_hud.visible = _resolve_backend_url() == ""
+
+	# The right-docked dialogue-log panel (#963), same code-built pattern. Shown
+	# by default (L toggles it away); unlike the actions HUD it works in live
+	# mode too (its data path is the frames array, which live playback fills
+	# identically).
+	_dialogue_log = preload("res://scripts/dialogue_log_panel.gd").new()
+	_dialogue_log.theme = _panel.theme
+	$UI.add_child(_dialogue_log)
 
 	# A clock-driven tint over the 2D world (the screen-space UI layer is unaffected),
 	# so the campus warms/dims with the in-game time of day.
@@ -708,6 +730,13 @@ func _load_replay_from_text(text: String) -> void:
 	_action_events = data.get("events", [])
 	_last_actions_step = preview_step
 	_actions_hud.set_rows(ActionTally.tally(_action_events, preview_step, ACTIONS_TOP_N))
+	# Re-seed the dialogue log the same way, so a replay loaded over a previous
+	# one (or a preview start) doesn't show the old run's lines until the next
+	# step change.
+	_last_dialogue_step = -1
+	if _dialogue_log.visible:
+		_last_dialogue_step = preview_step
+		_dialogue_log.set_rows(_dialogue_rows(preview_step))
 
 	# Fill the sidebar's Focus dropdown with every building the cast visits over the whole
 	# replay (a one-time scan of all frames), sorted, so the option list is stable as the
@@ -1806,6 +1835,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			elif _tracked_name != "" and not _social_graph.visible:
 				_open_inspector(_tracked_name)
 				get_viewport().set_input_as_handled()
+		KEY_L:
+			# Toggle the right-docked dialogue-log panel (#963). A dock, not a
+			# modal: no backdrop, no Esc arm, playback keeps running behind it.
+			_toggle_dialogue_log()
+			get_viewport().set_input_as_handled()
 		KEY_ESCAPE:
 			# Close the topmost open modal first (their CanvasLayer stacking order:
 			# day plans 15 > gallery 14 > social graph 13 > inspector 12 > heatmap 11).
@@ -1926,6 +1960,49 @@ func _open_day_plans() -> void:
 
 func _close_day_plans() -> void:
 	_day_plans.visible = false
+
+
+func _toggle_dialogue_log() -> void:
+	if _dialogue_log.visible:
+		_close_dialogue_log()
+	else:
+		_open_dialogue_log()
+
+
+func _open_dialogue_log() -> void:
+	# Seed with everything said up to the step on screen right now; playback
+	# keeps appending behind it via _process. Like the day-plans pop-up there's
+	# no camera-keyboard suppression: the dock has no arrow-key views (the wheel
+	# scrolls it because GUI input wins over _unhandled_input).
+	if not _frames.is_empty():
+		var last := maxi(_frames.size() - 1, 0)
+		var i := mini(int(_t / step_seconds), last)
+		_last_dialogue_step = i
+		_dialogue_log.set_rows(_dialogue_rows(i))
+	_dialogue_log.visible = true
+
+
+func _close_dialogue_log() -> void:
+	_dialogue_log.visible = false
+
+
+func _dialogue_rows(step: int) -> Array:
+	# Extract the history and stamp each line with the sim time its bubble
+	# fired. The viewer owns the pacing constant and the clock; the panel and
+	# the extractor stay pure.
+	var rows: Array = []
+	for e in DialogueLog.extract(_frames, _names, step, int(DIALOGUE_LINE_STEPS)):
+		# Clock time only (HH:MM) -- the full _format_sim_time date would eat
+		# most of the narrow header line, and the sidebar clock shows the date.
+		var dt: Dictionary = Time.get_datetime_dict_from_unix_time(
+			_start_unix + int(e["step"]) * _sec_per_step)
+		rows.append({
+			"time": "%02d:%02d" % [dt["hour"], dt["minute"]],
+			"speaker": e["speaker"],
+			"with": e.get("with", ""),
+			"line": e["line"],
+		})
+	return rows
 
 
 func _take_snapshot() -> void:
@@ -2346,6 +2423,14 @@ func _process(delta: float) -> void:
 	if _actions_hud.visible and i != _last_actions_step:
 		_last_actions_step = i
 		_actions_hud.set_rows(ActionTally.tally(_action_events, i, ACTIONS_TOP_N))
+
+	# Same for the dialogue-log panel (#963): re-extract up to the new step so
+	# lines appear as their bubbles fire and DROP when you scrub backward. On
+	# steady playback the panel appends just the tail (extract() output is
+	# prefix-stable), so the per-step UI cost stays tiny.
+	if _dialogue_log.visible and i != _last_dialogue_step:
+		_last_dialogue_step = i
+		_dialogue_log.set_rows(_dialogue_rows(i))
 
 	# Fan out co-located agents so stacked sprites stay visible (#560). Group by
 	# each agent's tile THIS step; the per-agent offset below is VIEW-ONLY -- it

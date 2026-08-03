@@ -158,6 +158,7 @@ func _initialize() -> void:
 	var text_consts := {
 		"res://scripts/agent_panel.gd": ["STATUS_COLOR"],
 		"res://scripts/actions_hud.gd": ["MUTED_COLOR"],
+		"res://scripts/dialogue_log_panel.gd": ["MUTED_COLOR"],
 		"res://scripts/main_menu.gd": ["HINT_COLOR", "ERROR_COLOR"],
 		"res://scripts/past_runs.gd": ["HINT_COLOR", "ERROR_COLOR"],
 		"res://scripts/simulation_setup.gd": ["HINT_COLOR", "ERROR_COLOR"],
@@ -188,12 +189,14 @@ func _initialize() -> void:
 	for role in tints:
 		_check_text("live_hud.LOG_ROLE_TINTS[%s]" % role, tints[role])
 
-	# The muted small print is shared by six files as three different names. They
+	# The muted small print is shared by seven files as three different names. They
 	# drifted apart once already; assert they're still one value.
 	var muted := [
 		(load("res://scripts/agent_panel.gd") as GDScript)
 			.get_script_constant_map()["STATUS_COLOR"],
 		(load("res://scripts/actions_hud.gd") as GDScript)
+			.get_script_constant_map()["MUTED_COLOR"],
+		(load("res://scripts/dialogue_log_panel.gd") as GDScript)
 			.get_script_constant_map()["MUTED_COLOR"],
 		(load("res://scripts/main_menu.gd") as GDScript)
 			.get_script_constant_map()["HINT_COLOR"],
@@ -208,7 +211,7 @@ func _initialize() -> void:
 		if not (c as Color).is_equal_approx(muted[0]):
 			all_same = false
 	_check(all_same,
-		"STATUS_COLOR / MUTED_COLOR / HINT_COLOR are still the same brown across all six files")
+		"STATUS_COLOR / MUTED_COLOR / HINT_COLOR are still the same brown across all seven files")
 
 	# The status dots are graphics, so they answer to the 3:1 non-text threshold
 	# rather than 4.5:1. HALT_COLOR is the one that matters: it marks the most
