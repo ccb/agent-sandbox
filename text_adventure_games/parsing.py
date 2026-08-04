@@ -95,7 +95,7 @@ class Parser:
 
         # How output is shown. The engine builds Messages (by Channel) and hands
         # them to a Renderer; the default picks a colored terminal renderer when
-        # one fits, else a plain fallback. Web mode passes a WebRenderer.
+        # one fits, else a plain fallback. API users may pass JSONRenderer.
         # Verbosity/color come from the game's RenderConfig when available,
         # falling back to the OUTPUT_LEVEL / NO_COLOR env vars otherwise.
         # See text_adventure_games/reporting.py.
@@ -114,7 +114,7 @@ class Parser:
                 self.renderer = default_renderer()
 
     def set_renderer(self, renderer):
-        """Swap the renderer (e.g. a WebRenderer for the Flask app, or a
+        """Swap the renderer (for example JSONRenderer for an API feed or
         CaptureRenderer in tests)."""
         self.renderer = renderer
 

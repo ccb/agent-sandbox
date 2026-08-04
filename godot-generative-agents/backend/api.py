@@ -659,7 +659,7 @@ def create_app(
         lifespan = _live_lifespan
 
     app = FastAPI(
-        title="agent-sandbox backend",
+        title="Penn Generative Agents backend",
         summary="Headless HTTP seam over a text-adventure Game (issue #179).",
         lifespan=lifespan,
     )

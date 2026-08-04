@@ -1,29 +1,23 @@
 ---
-description: Run the full pre-PR gate (format check + test suite)
+description: Run the public package's full pre-PR validation gates
 ---
 
-`/check` runs the same gates CI does (`.github/workflows/ci.yml`), locally, before
-you push. Run every gate a PR should pass, from the repo root, via `uv run` (it
-uses the project's `.venv/` automatically). Run both even if the first one fails,
-then report.
+`/check` runs the same gates as `.github/workflows/ci.yml`. Continue through all
+independent gates so the report shows every failure.
 
 Run these in order:
 
-1. **Format** — `uv run black --check .`
-   (reports unformatted files; does not modify anything)
-2. **Pytest suite** — `uv run pytest tests/ -q`
-   (includes the turn-based NPC behavior suite, `tests/test_npc_behaviors.py`)
+1. `uv run black --check .`
+2. `uv run pytest tests/ -q`
+3. `uv run pytest godot-generative-agents/tests/ -q`
+4. `uv run pytest godot-generative-agents/tools/geo/ -q`
+5. `uv run python godot-generative-agents/tools/geo/validate_tmj.py`
+6. `./godot-generative-agents/run_smoke_test.sh`
+7. In `godot-generative-agents/web`: `pnpm lint`, `pnpm test`, `pnpm build`.
+8. In `mkdocs`: `uv run --extra docs mkdocs build --strict`.
 
 If `uv` isn't installed, fall back to the activated venv (`black --check .` /
 `python -m pytest tests/ -q`).
 
-Then print a compact summary, one line per gate:
-
-```
-format   PASS | FAIL
-pytest   PASS | FAIL
-```
-
-For any gate that FAILs, surface the relevant failing output (unformatted file
-list, failing test names + tracebacks) so it can be fixed. If everything passes,
-say so plainly — the branch is PR-ready. Do not commit or push anything.
+Print a compact PASS/FAIL/SKIP summary and the actionable output for failures.
+Do not commit or push.

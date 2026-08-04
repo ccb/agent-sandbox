@@ -1,4 +1,4 @@
-# MkDocs configuration for the agent-sandbox documentation site.
+# MkDocs configuration for the Penn Generative Agents documentation site.
 #
 # This site is self-contained under mkdocs/, kept separate from the repo's
 # hand-written docs in /docs (the design notes and guides read directly on
@@ -14,8 +14,8 @@
 # `mkdocs build` writes a static site to mkdocs/site, which is git-ignored.
 # Only people with access to this repository can build or view the docs.
 
-site_name: agent-sandbox
-site_description: A research test bed for multi-agent simulated environments.
+site_name: Penn Generative Agents
+site_description: Architecture and API reference for the Penn campus agent simulation.
 # No site_url / repo deploy on purpose — see the note above. The site is served
 # from localhost, not hosted publicly.
 

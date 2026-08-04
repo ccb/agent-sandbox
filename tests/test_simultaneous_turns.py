@@ -16,7 +16,7 @@ import pytest
 from text_adventure_games import games, things
 from text_adventure_games.llm_client import MockLlmClient
 from text_adventure_games.npc import ScriptedAgent, make_react_behavior
-from text_adventure_games.webapp.web_parser import WebParser
+from tests.support import BufferedParser
 
 
 class CountingRule:
@@ -51,7 +51,7 @@ def make_world(turn_mode="simultaneous", with_gem=True, with_coin=False):
     game = games.Game(room, player, characters=[alice, bob], turn_mode=turn_mode)
     room.add_character(alice)
     room.add_character(bob)
-    game.set_parser(WebParser(game))
+    game.set_parser(BufferedParser(game))
 
     gem = None
     if with_gem:
@@ -212,7 +212,11 @@ def test_agent_returning_none_sits_the_round_out():
 
     # The round still advanced, but alice produced no trace and no events.
     assert game.turn == turn_before + 1
-    npc_logs = [m for m in game.parser.get_messages() if m["type"] == "npc_log"]
+    npc_logs = [
+        message
+        for message in game.parser.get_messages()
+        if message["channel"] in {"agent_reasoning", "agent_action"}
+    ]
     assert npc_logs == []
     assert [e for e in game.events if e.actor == "alice"] == []
     assert "gem" in room.items

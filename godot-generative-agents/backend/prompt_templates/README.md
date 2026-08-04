@@ -7,9 +7,8 @@ description, documented inputs, a sample) followed by a
 in the codebase, under version control — means each is one reviewable artifact
 you can diff in a pull request, not an f-string spread across a function. There
 is deliberately **no external prompt database or hosted service**: changing one
-is a normal code change. (Part of
-[#145](https://github.com/ccb/agent-sandbox/issues/145); mirrors the engine's own
-`text_adventure_games/prompt_templates/`.)
+is a normal code change. This follows the shared prompt-template convention in
+`text_adventure_games/prompt_templates/`.
 
 Most of these are **not** live model prompts — by default the port drives every
 persona with a deterministic mock (`cognition.ScheduleMockClient`) that

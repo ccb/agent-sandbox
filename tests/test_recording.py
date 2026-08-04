@@ -4,9 +4,7 @@
       MockLlmClient as the wrapped "inner" client, then replay offline.
   A'. The same, on the tool seam (``call_tool`` / ``call_tools``): the paths that
       #354-#359 added AFTER PR #61 -- ToolCallResult must survive the round-trip.
-  B.  seed_world -- pinning the engine's only RNG (the rose action).
-
-The headline byte-identical contract lives in the same file, added by Task 2.
+  B.  Lifecycle, shared-writer, and token-count behavior.
 
 Run with pytest::
 
@@ -17,11 +15,9 @@ import json
 
 import pytest
 
-from text_adventure_games.adventures.react_action_castle import build_llm_game
 from text_adventure_games.llm_client import (
     LlmClient,
     MockLlmClient,
-    MockReActClient,
     ToolCallResult,
 )
 from text_adventure_games.recording import (
@@ -30,9 +26,7 @@ from text_adventure_games.recording import (
     RecordingClient,
     ReplayClient,
     request_key,
-    seed_world,
 )
-from text_adventure_games.scenario import play, prop
 
 # ----------------------------------------------------------------------
 # A tiny deterministic stub that exercises the whole LlmClient Protocol.
@@ -310,73 +304,6 @@ def test_recording_client_ignores_schedule_for_unsupported_inner(tmp_path):
     rec.close()
 
     assert cassette.read_text() == ""
-
-
-# ----------------------------------------------------------------------
-# Section B: engine determinism (seed_world)
-# ----------------------------------------------------------------------
-
-
-def _smell_the_rose_scent():
-    """Build Action Castle, pick and smell the rose, return its random scent."""
-    game = build_llm_game(MockReActClient())
-    play(game, ["go out", "pick rose", "smell rose"])
-    return prop(game, "rose", "scent")
-
-
-def test_seed_world_makes_rose_scent_reproducible():
-    seed_world(0)
-    first = _smell_the_rose_scent()
-    seed_world(0)
-    second = _smell_the_rose_scent()
-    assert first and isinstance(first, str)
-    assert first == second
-
-
-# ----------------------------------------------------------------------
-# Section C: the headline contract -- record, replay, byte-identical state.
-#
-# build_llm_game(MockReActClient()) wires the NPCs as LLMAgents whose client has
-# call_tools, so react_behavior drives them through the native tool loop
-# (npc.py:_use_tool_loop). This run therefore exercises the call_tools cassette
-# path end-to-end: a chat-only recording would CassetteMiss here.
-# ----------------------------------------------------------------------
-
-FEED_TROLL = [
-    "get pole",
-    "go out",
-    "go south",
-    "catch fish with pole",
-    "go north",
-    "go north",
-    "go east",
-    "give fish to troll",
-]
-
-
-def _canonical(primitive):
-    """A canonical string for a world snapshot, key-order-independent."""
-    return json.dumps(primitive, sort_keys=True)
-
-
-def test_record_then_replay_is_byte_identical(tmp_path):
-    cassette = str(tmp_path / "action_castle.jsonl")
-
-    # Record: a real run through the mock-driven Action Castle, RNG seeded. The
-    # NPCs decide via call_tools, so those calls are what land in the cassette.
-    seed_world(0)
-    client = RecordingClient(MockReActClient(), cassette)
-    recorded = build_llm_game(client)
-    play(recorded, FEED_TROLL)
-    client.close()
-
-    # Replay: same seed, same commands, responses served from the cassette --
-    # no MockReActClient in sight, no network, no key.
-    seed_world(0)
-    replayed = build_llm_game(ReplayClient(cassette, strict=True))
-    play(replayed, FEED_TROLL)
-
-    assert _canonical(recorded.to_primitive()) == _canonical(replayed.to_primitive())
 
 
 # ----------------------------------------------------------------------

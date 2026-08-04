@@ -1,11 +1,8 @@
 """Precompute the prompt-chain visualizer's data as static JSON for the web app.
 
-`promptviz` (text_adventure_games/promptviz) is normally a small Flask app that
-builds a chain's DAG + per-node prompts *offline* (no LLM call). The Godot web
-companion is a static site, so rather than run Flask we dump the same JSON here
-and the React prompt-chain figure on the landing page renders it. This mirrors
-app.py's /chains, /graph.json and /prompt responses; the optional run-overlay
-(the only piece that needs a recorded run) is dropped.
+The Godot web companion is static, so this script turns the Penn cognition
+chain and its prompt templates into JSON during development. The React figure
+then renders the same data without a Python server or an LLM call.
 
 Re-run via `pnpm gen:promptviz` whenever a chain spec or its .prompty templates
 change. The per-chain files and a chains.json index land in public/promptviz/.
@@ -19,7 +16,7 @@ from pathlib import Path
 
 
 def _find_repo_root(start: Path) -> Path:
-    """Walk up to the agent-sandbox checkout (holds both engine + backend pkgs)."""
+    """Walk up to the repository root (which holds engine and backend packages)."""
     for p in (start, *start.parents):
         if (p / "pyproject.toml").exists() and (p / "text_adventure_games").is_dir():
             return p
@@ -31,7 +28,7 @@ REPO_ROOT = _find_repo_root(Path(__file__).resolve())
 # cognition chain) imports even when this script is run by file path.
 sys.path.insert(0, str(REPO_ROOT))
 
-from text_adventure_games.promptviz.app import _graph_elements  # noqa: E402
+from text_adventure_games.promptviz.graph import graph_elements  # noqa: E402
 from text_adventure_games.promptviz.spec import ChainSpec, load_spec  # noqa: E402
 from text_adventure_games.promptviz.templates import node_prompt  # noqa: E402
 
@@ -78,7 +75,7 @@ def dump_chain(spec_path: Path) -> dict:
         "chain": spec.name,
         "label": spec.name.replace("_", " ").title(),
         "description": " ".join((spec.description or "").split()),
-        "elements": _graph_elements(spec, None),
+        "elements": graph_elements(spec),
         "prompts": {n.id: _prompt_detail(spec, n) for n in spec.nodes},
     }
 

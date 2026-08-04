@@ -46,7 +46,6 @@ from penn_world import (
     SEC_PER_STEP,
     SIM_START,
     WORLD_DATA,
-    WORLD_DATA_BOIL,
     build_penn_world,
     persona_meta_entry,
     replay_frame_entry,
@@ -70,26 +69,14 @@ _REPO = os.path.dirname(_GG_DIR)
 # Diego's gallery circuit). The viewer's playback speed is independent of this.
 DEFAULT_STEPS = 1200
 
-# The boil-water demo (#592) is a short, single-persona bake -- long enough for the
-# whole arc plus a recovered-agent tail, no more. The arc's three events land at
-# ~step 11/40/69 (a lead-in, then drink/boil/drink ~29 steps apart), leaving a short
-# recovered tail; see world_data_boil.yaml for the stop-by-stop budget.
-DEFAULT_BOIL_STEPS = 90
-
 # Named scenarios select {world YAML, default step budget, default output file}.
-# `--scenario boil` bakes the de-clumped demo alongside (not over) the bundled
-# replay, so the viewer can offer it as its own menu entry (#592). `--steps`/`--out`
-# still override the per-scenario defaults.
+# The public package ships the Penn campus showcase only. `--steps`/`--out` still
+# override these defaults, and the table keeps the CLI extensible for forks.
 SCENARIOS = {
     "penn": {
         "world_data": WORLD_DATA,
         "steps": DEFAULT_STEPS,
         "out": "penn_replay.json",
-    },
-    "boil": {
-        "world_data": WORLD_DATA_BOIL,
-        "steps": DEFAULT_BOIL_STEPS,
-        "out": "penn_replay_boil.json",
     },
 }
 
@@ -192,9 +179,8 @@ def _build_parser() -> argparse.ArgumentParser:
         "--scenario",
         choices=sorted(SCENARIOS),
         default="penn",
-        help="which world to bake: 'penn' (the full campus cast, the bundled "
-        "replay) or 'boil' (the one-persona boil-water demo, #592). Sets the "
-        "default world YAML, step budget, and output file.",
+        help="which world to bake (currently the Penn campus showcase). Sets "
+        "the default world YAML, step budget, and output file.",
     )
     ap.add_argument(
         "--steps",
@@ -206,8 +192,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--out",
         default=None,
         help="output file path, used verbatim (relative to the current directory, "
-        "not maps/); the scenario default lives under maps/. For the viewer's menu "
-        "button to find the boil demo it must land at maps/penn_replay_boil.json.",
+        "not maps/); the scenario default lives under maps/.",
     )
     ap.add_argument(
         "--persist",
@@ -246,8 +231,6 @@ def main() -> int:
     # The configured Penn: personas + locations + meetings, the routing-patched
     # world_map, and the perception-gated build_world_fn (#297). Shared verbatim
     # with the live server, so this bake and a live run walk the same campus. The
-    # boil scenario swaps only the world YAML (one persona, the arc); the map,
-    # factory, and boil props (_furnish_boil_water) are identical.
     pw = build_penn_world(world_data=scenario["world_data"])
 
     print(

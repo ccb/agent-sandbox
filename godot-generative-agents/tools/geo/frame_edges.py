@@ -474,9 +474,8 @@ def main() -> int:
     grow_matrix(args.matrix, args.pad, old_w, old_h)
     print(f"  grew 5 matrix mazes + meta in {os.path.relpath(args.matrix, repo)}")
 
-    # start_tile spawns live in the world files (inline-personas worlds like
-    # world_data_boil.yaml share the same map) AND in the persona library next
-    # to them (#731) -- patch every file that has them.
+    # start_tile spawns can live in world files and in the adjacent persona
+    # library, so patch every file that has them.
     world_dir = os.path.dirname(args.world_data)
     world_files = [args.world_data] + sorted(
         os.path.join(world_dir, f)

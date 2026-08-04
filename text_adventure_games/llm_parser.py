@@ -1,17 +1,14 @@
 """LLM-enhanced parsers for text adventure games.
 
-Provides ``LlmParser`` (LLM-narrated parsing) and ``WebLlmParser`` (the same,
-wired to the web renderer) that add LLM-powered narration, intent detection,
-and entity matching on top of the base keyword parser. Both gracefully fall
+Provides ``LlmParser``, which adds LLM-powered narration, intent detection,
+and entity matching on top of the base keyword parser. It gracefully falls
 back to keyword parsing when the LLM is unavailable or returns no result.
 
 Output goes through the Message/Renderer seam (``reporting.py``): every parser
-builds Messages by Channel and a Renderer decides how they look. Terminal vs.
-web is just a different renderer, so the ``Web*`` classes are now thin shims:
+builds Messages by Channel and a Renderer decides how they look:
 
     Parser        builds Messages -> default_renderer() (rich terminal / plain)
       └── LlmParser     same, but LLM-narrates the text first
-            WebParser / WebLlmParser  install a WebRenderer + expose get_messages()
 
 Ported from the course's hw2 solution (``gpt_parser.py``) with provider-agnostic
 LLM client abstraction.
@@ -348,42 +345,3 @@ class LlmParser(parsing.Parser):
         }
         directions.update(other_directions)
         return self._pick_option(instructions, directions, command)
-
-
-# ======================================================================
-# Web mode
-# ======================================================================
-
-
-class WebLlmParser(LlmParser):
-    """Compatibility shim: an :class:`LlmParser` that renders to a
-    :class:`~text_adventure_games.webapp.web_parser.WebRenderer`.
-
-    The narration logic lives in ``LlmParser`` and the buffering in the
-    renderer; this subclass only installs the web renderer and exposes
-    ``get_messages()`` so the existing Flask wiring keeps working.
-    """
-
-    def __init__(
-        self,
-        game,
-        llm_client: LlmClient,
-        echo_commands: bool = False,
-        verbose: bool = False,
-        narration_style: str | None = None,
-    ):
-        # Imported here (not at module top) to avoid a webapp <-> parser import
-        # cycle; the webapp package imports llm_parser.
-        from text_adventure_games.webapp.web_parser import WebRenderer
-
-        super().__init__(
-            game,
-            llm_client,
-            echo_commands=echo_commands,
-            verbose=verbose,
-            narration_style=narration_style,
-        )
-        self.set_renderer(WebRenderer())
-
-    def get_messages(self):
-        return self.renderer.drain()

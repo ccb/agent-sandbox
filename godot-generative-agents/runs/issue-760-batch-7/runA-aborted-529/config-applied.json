@@ -1,1 +1,0 @@
-{"running":true,"paused":true,"step":0,"cursor":2,"run_id":"run-20260729-194626-016730","applied":{"cast":["tanaka","maya","priya","theo","mateo"],"brain":"llm","plan":"llm","plan_request":"auto","sim_config":null,"run":{"steps":4320,"tick_seconds":0.05,"max_cost":20.0}}}

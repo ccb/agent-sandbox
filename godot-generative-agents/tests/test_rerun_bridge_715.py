@@ -372,11 +372,9 @@ def test_rerun_uses_the_recorded_step_budget_not_the_frame_count(tmp_path):
 
 
 # --- the scenario field (#747) ----------------------------------------------
-# A run served with --scenario boil/boil_hard used to re-run on the DEFAULT
-# campus (reproduce_run rebuilt via build_penn_world() unconditionally) and
-# report DIVERGED on a run that reproduces perfectly. The manifest now records
-# the scenario name and the re-run rebuilds through the same SCENARIOS dispatch
-# serve_penn boots with.
+# The manifest records the selected world and re-runs through the same scenario
+# dispatch used at boot. The public package ships only the Penn scenario, while
+# retaining this extension point for forks.
 
 
 def _record_a_scenario_run(tmp_path, scenario_name):
@@ -409,22 +407,6 @@ def test_manifest_records_the_scenario(tmp_path):
         (tmp_path / "runs" / stepper._run_id / "manifest.json").read_text()
     )
     assert manifest["scenario"] == "penn"
-
-    store, run_id = _record_a_scenario_run(tmp_path / "boil", "boil_hard")
-    assert store.get_run(run_id)["manifest"]["scenario"] == "boil_hard"
-
-
-def test_rerun_of_a_scenario_run_reproduces(tmp_path):
-    # The #747 acceptance: a persisted --scenario run re-runs byte-identical.
-    # boil_hard is the hardest case -- its world builder relocates the stove
-    # AND pins vision_r=0, both of which shape the recorded observations (and
-    # so the cassette's request keys): a re-run on the wrong world misses the
-    # cassette and reports DIVERGED.
-    store, run_id = _record_a_scenario_run(tmp_path, "boil_hard")
-    result = reproduce_run(store, run_id)
-    assert result.match is True
-    assert result.first_divergence is None
-    assert result.steps == RERUN_STEPS
 
 
 def test_rerun_unknown_scenario_fails_loudly(tmp_path):
