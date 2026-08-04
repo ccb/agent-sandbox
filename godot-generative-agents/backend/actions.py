@@ -325,22 +325,20 @@ class EatPenn(consume.Eat):
         )
 
 
-# Below this Property.ENERGY, a character is tired enough to sleep -- the
-# Sleep.check_preconditions threshold (distinct from drives.py's lower
-# is_low_energy alarm threshold, which flags "should eat/sleep soon" rather
-# than gating the sleep action itself).
-SLEEP_ENERGY_THRESHOLD = 50
-
-
 class Sleep(base.Action):
     """Sleep in place to recover energy (#931). Gated on a world-tagged
     "sleepable" affordance -- the Study precedent (REQUIRED_AFFORDANCES) --
     so a location needs that tag before Sleep is reachable there at all, and
-    on the character actually being tired (Property.ENERGY below
-    SLEEP_ENERGY_THRESHOLD). apply_effects only sets Property.IS_SLEEPING;
-    the actual energy recovery happens on subsequent ticks via
-    drives.sleep_accumulation, the same "act now, drive restores over time"
-    split EatPenn/accrue_energy uses for eating."""
+    on the character actually being tired: Property.IS_SLEEPY, the same flag
+    drives.accrue_energy flips once Property.ENERGY crosses its
+    energy_low_threshold. One signal, not two -- "the system says you're
+    sleepy" and "you're allowed to sleep" used to be separate, independently
+    tuned numbers (this gate's own raw-energy threshold vs. accrue_energy's),
+    which could disagree about when a character was actually tired.
+    apply_effects only sets Property.IS_SLEEPING; the actual energy recovery
+    happens on subsequent ticks via drives.sleep_accumulation, the same "act
+    now, drive restores over time" split EatPenn/accrue_energy uses for
+    eating."""
 
     ACTION_NAME = "sleep"
     ACTION_DESCRIPTION = "Sleep here to recover energy (only somewhere sleepable)"
@@ -361,8 +359,7 @@ class Sleep(base.Action):
         if self.character.get_property(Property.IS_SLEEPING):
             self.parser.fail(f"{self.character.name.capitalize()} is already asleep.")
             return False
-        energy = self.character.get_property(Property.ENERGY) or 0
-        if energy >= SLEEP_ENERGY_THRESHOLD:
+        if not self.character.get_property(Property.IS_SLEEPY):
             self.parser.fail(
                 f"{self.character.name.capitalize()} isn't tired enough to sleep."
             )

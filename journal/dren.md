@@ -14,7 +14,7 @@ on top; copy the template block each working day.
 - ...
 -->
 ## 2026-08-04
-**Focus:** Give Sleep a real place to be reached from (#931)
+**Focus:** Give Sleep a real place to be reached from, then unify its gate (#931)
 
 **Done today:**
 - Tagged Houston Hall's Reading Room `sleepable` in `world_data_upenn.yaml`
@@ -24,6 +24,16 @@ on top; copy the template block each working day.
 - Added `test_live_penn_world_has_a_sleepable_location` to
   `test_sleep_action.py`, mirroring `test_eat_energy.py`'s live-world wiring
   checks. Full suite still green, no new failures.
+- Noticed (via Claude poking at it) that `Sleep` had its own hardcoded
+  `SLEEP_ENERGY_THRESHOLD = 50` raw-energy check, completely disconnected
+  from `accrue_energy`'s `IS_SLEEPY` flag (threshold 20) -- two independent
+  numbers claiming to mean "tired," which disagreed by ~100 sim-ticks in a
+  live run. Removed the separate threshold; `Sleep.check_preconditions` now
+  just reads `Property.IS_SLEEPY` directly, so accrue_energy is the single
+  source of truth for tiredness. Updated `test_sleep_action.py`'s tests to
+  set `IS_SLEEPY` instead of raw `ENERGY`, and added a test driving
+  `accrue_energy` to confirm `Sleep` becomes reachable exactly when it flips
+  `IS_SLEEPY`, not before.
 
 **Blockers / questions:**
 - none
