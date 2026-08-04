@@ -50,8 +50,7 @@ from .tiled_game import TiledGame
 def load_world_yaml(path, cast: list[str] | None = None) -> dict:
     """Read a world YAML into a dict, resolving a cast-by-reference world (#731).
 
-    A world either carries its cast inline (a ``personas:`` list -- e.g. the
-    boil demo, ``world_data_boil.yaml``) or names it by reference: a
+    A world either carries its cast inline as a ``personas:`` list or names it by reference: a
     ``cast: [diego, tanaka, sofia]`` list of persona ids, each resolved to
     ``personas/<id>.yaml`` next to the world file. A persona file holds the
     persona's own fields plus optional ``relationships:`` / ``meetings:``

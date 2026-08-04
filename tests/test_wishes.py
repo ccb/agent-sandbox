@@ -109,13 +109,21 @@ def test_plain_renderer_formats_wish_line():
     assert line == "troll [wish] a ladder"
 
 
-def test_web_renderer_maps_wish_to_npc_wish_type():
-    from text_adventure_games.webapp.web_parser import WebRenderer
-    from text_adventure_games.reporting import Message
+def test_json_renderer_preserves_wish_channel_and_actor():
+    from text_adventure_games.reporting import JSONRenderer, Message
 
-    web = WebRenderer()
-    web.emit(Message(Channel.AGENT_WISH, "a ladder", actor="troll"))
-    assert web.drain() == [{"type": "npc_wish", "text": "troll [wish] a ladder"}]
+    renderer = JSONRenderer()
+    renderer.emit(Message(Channel.AGENT_WISH, "a ladder", actor="troll"))
+    assert renderer.drain() == [
+        {
+            "channel": "agent_wish",
+            "text": "a ladder",
+            "actor": "troll",
+            "turn": None,
+            "phase": None,
+            "meta": {},
+        }
+    ]
 
 
 # ----------------------------------------------------------------------
@@ -463,10 +471,10 @@ def _pick_option_containing(keyword):
 
 def _llm_game(responder):
     from text_adventure_games.llm_client import MockLlmClient
-    from text_adventure_games.llm_parser import WebLlmParser
+    from tests.support import BufferedLlmParser
 
     game = tiny_game()
-    game.set_parser(WebLlmParser(game, MockLlmClient(responder)))
+    game.set_parser(BufferedLlmParser(game, MockLlmClient(responder)))
     return game
 
 

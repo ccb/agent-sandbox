@@ -44,7 +44,7 @@ from text_adventure_games.memory import (
     render_memories,
 )
 from text_adventure_games.npc import LLMAgent, react_behavior
-from text_adventure_games.webapp.web_parser import WebParser
+from tests.support import BufferedParser
 
 # Substrings the mock ReAct brain (llm_client.py) keys on. A rendered memory
 # block becomes part of an NPC's observation, so it must contain none of these
@@ -516,7 +516,7 @@ def test_ingest_advances_index_and_is_idempotent(ingest_world):
 
 @pytest.fixture
 def react_world():
-    """Field (player, troll, guard) --north--> Forest, with a WebParser."""
+    """Field (player, troll, guard) --north--> Forest, with a BufferedParser."""
     field = things.Location("Field", "An open grassy field.")
     forest = things.Location("Forest", "A dark tangled forest.")
     field.add_connection("north", forest)
@@ -528,7 +528,7 @@ def react_world():
     game = games.Game(field, player, characters=[troll, guard])
     field.add_character(troll)
     field.add_character(guard)
-    game.set_parser(WebParser(game))
+    game.set_parser(BufferedParser(game))
     return game, player, troll, guard
 
 

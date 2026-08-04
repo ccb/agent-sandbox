@@ -61,10 +61,6 @@ local_settings.py
 db.sqlite3
 db.sqlite3-journal
 
-# Flask stuff:
-instance/
-.webassets-cache
-
 # Scrapy stuff:
 .scrapy
 
@@ -74,13 +70,6 @@ docs/_build/
 # PyBuilder
 .pybuilder/
 target/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
 
 # pyenv
 #   For a library or package, you might want to ignore these files since the code is
@@ -176,8 +165,6 @@ cython_debug/
 
 # Generated per-checkout / per-run — regenerable, never commit.
 godot-generative-agents/godot/maps/penn_replay.json
-# The boil-water demo replay (#592), baked on demand with --scenario boil.
-godot-generative-agents/godot/maps/penn_replay_boil.json
 godot-generative-agents/tools/geo/out/upenn_core_ville_addresses.json
 godot-generative-agents/tools/geo/out/upenn_furniture_debug.tmj
 
@@ -199,12 +186,6 @@ godot-generative-agents/scripts/building_labels.gd.uid
 # Same for Codex, which keeps its own worktrees under .codex/
 .codex/
 
-notebooks/hw3_solution/fine_tuning_item_specifications.jsonl
-notebooks/hw3_solution/fine_tuning_location_descriptions.jsonl
-notebooks/hw3_solution/games-updated.zip
-
-notebooks/hw4_solution/dalle
-
 # macOS
 .DS_Store
 
@@ -218,17 +199,9 @@ docs/superpowers/
 # `uv sync`, and .python-version pins the interpreter (3.12, within the CI range).
 # Only the resolved virtualenv (.venv, below) stays local.
 
-# External benchmark clones (e.g. ScienceWorld) live under benchmarks/ for local
-# reference and experiments. They are upstream repos with their own history and a
-# bundled multi-MB JAR — never commit them into our tree. See
-# docs/design/scienceworld-interface.md (#47) for how to obtain and use them.
-/benchmarks/
-
-# External upstream repo clones (e.g. generative_agents) — kept local for
-# reference/experiments; never commit them into our tree.
+# External upstream clones are local reference material, never project source.
 /external/
-
-parsely_pdfs/*.pdf
+/generative-agents/
 
 # --- godot-generative-agents web viewer ---
 # Build/install artifacts — all regenerated locally (npm run export:godot /

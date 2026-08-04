@@ -327,7 +327,7 @@ const CodeIcon = (
 
 // The repository this companion lives in. Swap for the standalone public repo
 // when it publishes (#884).
-const REPO_URL = "https://github.com/ccb/agent-sandbox";
+const REPO_URL = "https://github.com/aking526/penn-generative-agents";
 
 // Named so the copy button and the rendered block can't drift apart.
 const BIBTEX = `@misc{king2026penncampusagents,
@@ -917,8 +917,8 @@ export function HomeView() {
                 This project was carried out through the Penn Undergraduate Research Mentoring
                 Program (PURM), advised by{" "}
                 <a href="https://www.cis.upenn.edu/~ccb/">Chris Callison-Burch</a>. It builds on the{" "}
-                <code>agent-sandbox</code> multi-agent simulation framework and the text-adventure
-                engine from{" "}
+                <code>Penn Generative Agents</code> multi-agent simulation framework and the
+                text-adventure engine from{" "}
                 <a href="https://interactive-fiction-class.org/homeworks/text-adventure-game/text-adventure-game.html">
                   Chris Callison-Burch's CIS 7000 – <em>Interactive Fiction and Text Generation</em>{" "}
                   course materials

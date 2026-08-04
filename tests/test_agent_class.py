@@ -165,9 +165,9 @@ def tiny_game():
 
 
 def test_llmagent_drives_character_through_parser(tiny_game):
-    from text_adventure_games.webapp.web_parser import WebParser
+    from tests.support import BufferedParser
 
-    tiny_game.set_parser(WebParser(tiny_game))
+    tiny_game.set_parser(BufferedParser(tiny_game))
     troll = tiny_game.characters["troll"]
     troll.set_behavior(make_react_behavior(MockLlmClient(["go north"])))
 

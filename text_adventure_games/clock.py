@@ -11,8 +11,7 @@ counter which maps turns onto a more familiar notion of time:
   is silent in the dusk light") and for NPC schedules ("the gravedigger only
   digs in the morning").
 
-Design notes (see FEATURE-ROADMAP.md section 4 and
-docs/design/multi-character-play.md section 6):
+Design constraints:
 
 * **Time is opt-in.** A game without a clock behaves exactly as before: the
   turn counter still increments, but nothing is displayed and nothing else

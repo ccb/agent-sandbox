@@ -12,7 +12,7 @@ Run with pytest::
 
 Sections:
   A. MockLlmClient itself.
-  B. LlmParser keyword-first / LLM-fallback behavior (via WebLlmParser).
+  B. LlmParser keyword-first / LLM-fallback behavior (via BufferedLlmParser).
   C. The npc.py ReAct loop (react + hybrid behaviors).
 """
 
@@ -22,13 +22,13 @@ import pytest
 
 from text_adventure_games import games, things
 from text_adventure_games.llm_client import LlmClient, MockLlmClient
-from text_adventure_games.llm_parser import WebLlmParser
+from tests.support import BufferedLlmParser
 from text_adventure_games.npc import (
     build_npc_context,
     make_hybrid_behavior,
     make_react_behavior,
 )
-from text_adventure_games.webapp.web_parser import WebParser
+from tests.support import BufferedParser
 
 
 @pytest.fixture
@@ -117,7 +117,7 @@ def test_mock_count_tokens_and_protocol():
 def test_determine_intent_keyword_no_llm(tiny_game):
     """A command resolvable by keyword must NOT call the LLM (the fast path)."""
     mock = MockLlmClient(default="SHOULD NOT BE CALLED")
-    tiny_game.set_parser(WebLlmParser(tiny_game, mock))
+    tiny_game.set_parser(BufferedLlmParser(tiny_game, mock))
 
     intent = tiny_game.parser.determine_intent("go north")
     assert intent == "go"
@@ -127,7 +127,7 @@ def test_determine_intent_keyword_no_llm(tiny_game):
 def test_determine_intent_llm_fallback(tiny_game):
     """A command with no keyword match falls back to the LLM picker."""
     mock = MockLlmClient(pick_option_containing("Go in a direction"))
-    tiny_game.set_parser(WebLlmParser(tiny_game, mock))
+    tiny_game.set_parser(BufferedLlmParser(tiny_game, mock))
 
     intent = tiny_game.parser.determine_intent("vault the chasm")
     assert intent == "go"
@@ -137,7 +137,7 @@ def test_determine_intent_llm_fallback(tiny_game):
 def test_determine_intent_llm_returns_none(tiny_game):
     """When the LLM can't match, determine_intent returns None (no crash)."""
     mock = MockLlmClient(default=None)
-    tiny_game.set_parser(WebLlmParser(tiny_game, mock))
+    tiny_game.set_parser(BufferedLlmParser(tiny_game, mock))
 
     intent = tiny_game.parser.determine_intent("vault the chasm")
     assert intent is None
@@ -147,7 +147,7 @@ def test_get_character_llm_fallback(tiny_game):
     """When keyword matching defaults to the player but a hint is given, the
     LLM is consulted to find a better character match."""
     mock = MockLlmClient(pick_option_containing("troll"))
-    tiny_game.set_parser(WebLlmParser(tiny_game, mock))
+    tiny_game.set_parser(BufferedLlmParser(tiny_game, mock))
 
     result = tiny_game.parser.get_character("the scary one", hint="monster")
     assert result is tiny_game.characters["troll"]
@@ -157,7 +157,7 @@ def test_get_character_llm_fallback(tiny_game):
 def test_match_item_llm_fallback(tiny_game):
     """When no item name appears in the command, the LLM picks the item."""
     mock = MockLlmClient(pick_option_containing("sword"))
-    tiny_game.set_parser(WebLlmParser(tiny_game, mock))
+    tiny_game.set_parser(BufferedLlmParser(tiny_game, mock))
 
     sword = things.Item("sword", "a short sword", "A SHARP SHORT SWORD.")
     lamp = things.Item("lamp", "a brass lamp", "A LAMP.")
@@ -170,7 +170,7 @@ def test_match_item_llm_fallback(tiny_game):
 def test_get_direction_llm_fallback(tiny_game):
     """When no direction keyword appears, the LLM resolves the direction."""
     mock = MockLlmClient(pick_option_containing("Forest"))
-    tiny_game.set_parser(WebLlmParser(tiny_game, mock))
+    tiny_game.set_parser(BufferedLlmParser(tiny_game, mock))
 
     field = tiny_game.locations["Field"]
     direction = tiny_game.parser.get_direction("head toward the woods", field)
@@ -180,27 +180,29 @@ def test_get_direction_llm_fallback(tiny_game):
 def test_narration_ok_fail_npc(tiny_game):
     """ok/fail/npc_ok narrate through the LLM and buffer typed messages."""
     mock = MockLlmClient(default="NARRATED TEXT")
-    tiny_game.set_parser(WebLlmParser(tiny_game, mock))
+    tiny_game.set_parser(BufferedLlmParser(tiny_game, mock))
     parser = tiny_game.parser
     parser.get_messages()
 
     parser.ok("plain description")
     msgs = parser.get_messages()
-    assert any(m["type"] == "output" and "NARRATED" in m["text"] for m in msgs)
+    assert any(m["channel"] == "narration" and "NARRATED" in m["text"] for m in msgs)
 
     parser.fail("you can't do that")
     msgs = parser.get_messages()
-    assert any(m["type"] == "error" and "NARRATED" in m["text"] for m in msgs)
+    assert any(m["channel"] == "blocked" and "NARRATED" in m["text"] for m in msgs)
 
     parser.npc_ok("the troll growls")
     msgs = parser.get_messages()
-    assert any(m["type"] == "npc_action" and "NARRATED" in m["text"] for m in msgs)
+    assert any(
+        m["channel"] == "npc_narration" and "NARRATED" in m["text"] for m in msgs
+    )
 
 
 def test_narration_falls_back_when_llm_returns_none(tiny_game):
     """If the LLM returns None, narration uses the original description."""
     mock = MockLlmClient(default=None)
-    tiny_game.set_parser(WebLlmParser(tiny_game, mock))
+    tiny_game.set_parser(BufferedLlmParser(tiny_game, mock))
     parser = tiny_game.parser
     parser.get_messages()
 
@@ -215,7 +217,7 @@ def test_narration_falls_back_when_llm_returns_none(tiny_game):
 
 
 def test_react_executes_command(tiny_game):
-    tiny_game.set_parser(WebParser(tiny_game))
+    tiny_game.set_parser(BufferedParser(tiny_game))
     troll = tiny_game.characters["troll"]
     troll.set_behavior(make_react_behavior(MockLlmClient(["go north"])))
 
@@ -225,7 +227,7 @@ def test_react_executes_command(tiny_game):
 
 def test_react_retries_on_failure(tiny_game):
     """First command fails (no south exit); the loop retries and succeeds."""
-    tiny_game.set_parser(WebParser(tiny_game))
+    tiny_game.set_parser(BufferedParser(tiny_game))
     troll = tiny_game.characters["troll"]
     mock = MockLlmClient(["go south", "go north"])
     troll.set_behavior(make_react_behavior(mock))
@@ -236,7 +238,7 @@ def test_react_retries_on_failure(tiny_game):
 
 
 def test_hybrid_falls_back_to_scripted(tiny_game):
-    tiny_game.set_parser(WebParser(tiny_game))
+    tiny_game.set_parser(BufferedParser(tiny_game))
     troll = tiny_game.characters["troll"]
 
     scripted_calls = []
@@ -250,7 +252,7 @@ def test_hybrid_falls_back_to_scripted(tiny_game):
 
 
 def test_hybrid_uses_llm_when_available(tiny_game):
-    tiny_game.set_parser(WebParser(tiny_game))
+    tiny_game.set_parser(BufferedParser(tiny_game))
     troll = tiny_game.characters["troll"]
 
     scripted_calls = []
@@ -271,7 +273,7 @@ def test_hybrid_uses_llm_when_available(tiny_game):
 
 def test_react_reflect_prompt_contains_failure_reason(tiny_game):
     """On retry the prompt must include the parser's actual failure message."""
-    tiny_game.set_parser(WebParser(tiny_game))
+    tiny_game.set_parser(BufferedParser(tiny_game))
     troll = tiny_game.characters["troll"]
     # "go south" fails (no south exit); "go north" succeeds
     mock = MockLlmClient(["go south", "go north"])
@@ -291,7 +293,7 @@ def test_react_reflect_prompt_contains_failure_reason(tiny_game):
 
 def test_react_caps_retries(tiny_game):
     """With max_retries=2 the loop makes at most 3 LLM calls then gives up."""
-    tiny_game.set_parser(WebParser(tiny_game))
+    tiny_game.set_parser(BufferedParser(tiny_game))
     troll = tiny_game.characters["troll"]
     # All commands fail — the troll stays put
     mock = MockLlmClient(default="go south")
@@ -305,7 +307,7 @@ def test_react_caps_retries(tiny_game):
 
 def test_hybrid_reflect_prompt_contains_failure_reason(tiny_game):
     """Hybrid behavior also feeds the failure reason back on retry."""
-    tiny_game.set_parser(WebParser(tiny_game))
+    tiny_game.set_parser(BufferedParser(tiny_game))
     troll = tiny_game.characters["troll"]
 
     scripted_calls = []
@@ -434,7 +436,7 @@ def _act_call(action, arguments=""):
 def test_decide_and_route_reflects_in_conversation(tiny_game):
     """The #355 acceptance: a failed precondition comes back as an is_error
     tool_result IN THE SAME conversation, and the model's retry then succeeds."""
-    tiny_game.set_parser(WebParser(tiny_game))
+    tiny_game.set_parser(BufferedParser(tiny_game))
     troll = tiny_game.characters["troll"]
     # Round 1 'go south' fails (no south exit); round 2 'go north' succeeds.
     mock = MockLlmClient(
@@ -462,7 +464,7 @@ def test_decide_and_route_reflects_in_conversation(tiny_game):
 def test_decide_and_route_no_extra_roundtrip_on_success(tiny_game):
     """A terminal action that succeeds stops the loop immediately -- one
     call_tools, no wasted confirmation round-trip."""
-    tiny_game.set_parser(WebParser(tiny_game))
+    tiny_game.set_parser(BufferedParser(tiny_game))
     troll = tiny_game.characters["troll"]
     mock = MockLlmClient(tool_calls_responses=[_act_call("go", "north")])
     troll.set_behavior(make_react_behavior(mock))
@@ -474,7 +476,7 @@ def test_decide_and_route_no_extra_roundtrip_on_success(tiny_game):
 
 def test_decide_and_route_caps_rounds_in_conversation(tiny_game):
     """max_rounds = 1 + max_retries bounds the in-conversation retries."""
-    tiny_game.set_parser(WebParser(tiny_game))
+    tiny_game.set_parser(BufferedParser(tiny_game))
     troll = tiny_game.characters["troll"]
 
     def always_fail(messages, tools, tool_choice, max_tokens, temperature):
@@ -491,7 +493,7 @@ def test_decide_and_route_caps_rounds_in_conversation(tiny_game):
 def test_decide_and_route_falls_back_to_legacy_when_no_tool_call(tiny_game):
     """A client that makes no tool call (only chat scripted) falls through to the
     legacy string-reflection path unchanged."""
-    tiny_game.set_parser(WebParser(tiny_game))
+    tiny_game.set_parser(BufferedParser(tiny_game))
     troll = tiny_game.characters["troll"]
     # No tool_calls_responses -> call_tools returns None (a decline / probe), so
     # decide_and_route falls back to the chat()-driven legacy loop.
@@ -521,7 +523,7 @@ def _add_servant(game):
 
 
 def test_history_attributes_commands_to_their_actor(tiny_game):
-    tiny_game.set_parser(WebParser(tiny_game))
+    tiny_game.set_parser(BufferedParser(tiny_game))
     servant = _add_servant(tiny_game)
     troll = tiny_game.characters["troll"]
 
@@ -533,7 +535,7 @@ def test_history_attributes_commands_to_their_actor(tiny_game):
 
 
 def test_history_labels_own_commands_as_you(tiny_game):
-    tiny_game.set_parser(WebParser(tiny_game))
+    tiny_game.set_parser(BufferedParser(tiny_game))
     troll = tiny_game.characters["troll"]
 
     # "go west" has no exit, so the troll stays put (and failed commands are
@@ -546,7 +548,7 @@ def test_history_labels_own_commands_as_you(tiny_game):
 
 
 def test_history_is_scoped_to_the_observers_location(tiny_game):
-    tiny_game.set_parser(WebParser(tiny_game))
+    tiny_game.set_parser(BufferedParser(tiny_game))
     servant = _add_servant(tiny_game)
     troll = tiny_game.characters["troll"]
 
@@ -559,7 +561,7 @@ def test_history_is_scoped_to_the_observers_location(tiny_game):
 
 
 def test_history_keeps_the_player_label_for_unattributed_entries(tiny_game):
-    tiny_game.set_parser(WebParser(tiny_game))
+    tiny_game.set_parser(BufferedParser(tiny_game))
     troll = tiny_game.characters["troll"]
 
     # Legacy path (trigger-fired / scripted commands): no actor is passed, so
@@ -574,7 +576,7 @@ def test_llm_narration_receives_only_chat_keys(tiny_game):
     """Attribution keys ride on history entries; the chat-completion payload
     sent to a provider must still be pure role/content messages."""
     mock = MockLlmClient(default="NARRATED TEXT")
-    tiny_game.set_parser(WebLlmParser(tiny_game, mock))
+    tiny_game.set_parser(BufferedLlmParser(tiny_game, mock))
     troll = tiny_game.characters["troll"]
 
     tiny_game.parser.parse_command("go north", actor=troll)

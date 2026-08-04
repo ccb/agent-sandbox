@@ -1,514 +1,109 @@
-# godot-generative-agents
+# Penn simulation, viewer, and web companion
 
-A tiny [Godot 4.6](https://godotengine.org) sandbox that renders the **real
-University of Pennsylvania campus** in Godot and plays back a generative-agents
-simulation walking across it. It's a *viewer*: the simulation runs offline in Python
-(the rest of this repo) and Godot draws the world + the agents moving through it.
+This directory contains the Penn-specific application built on the shared
+`text_adventure_games` engine.
 
-## Project layout
-
-Three parts sit side by side here. You run the game and choose replay-vs-live from
-the **in-game menu** — there's no separate "replay" vs "live" launch script anymore:
-
-- **`godot/`** — the Godot 4.6 game and the `res://` project root. Open *this* folder
-  in the editor (or run `./run.sh`). Holds the scenes, scripts, art, and campus maps.
-- **`backend/`** — the Python simulation engine + headless HTTP API (imported as the
-  top-level `backend` package). The Penn world lives under **`backend/penn/`**: the
-  cast (`world_data_upenn.yaml`), the OSM-derived navigation grid (`the_upenn/`), and
-  the replay/live entry points (`generate_penn_replay.py`, `serve_penn.py`).
-- **`web/`** — a React/Vite shell that wraps a WebAssembly export of the game.
-
-Paths below are relative to the Godot project (`godot/`) unless noted.
-
-## What's in the scene
-
-The game opens on a **landing menu** — the front door where you pick how to enter
-the viewer (a replay, a local replay file, or a live backend). Behind it, two scenes
-render the same campus — the academic core block (34th–36th × Spruce–Walnut), built
-from OpenStreetMap data by the repo's geo tool (`godot-generative-agents/tools/geo/osm_to_tiled.py`) and
-drawn with **Kenney's RPG Urban Pack (CC0)**:
-
-- **`scenes/main_menu.tscn`** — the **front door** (the default scene): choose *Watch
-  a replay* (the bundled one or a local `.json` you point it at) or *Run a live
-  simulation* (connect to a running backend), and it hands off to the viewer. Its
-  backdrop is the campus itself, rendered live behind the menu.
-- **`scenes/campus_urban.tscn`** — the campus on its own: brick buildings, asphalt
-  streets, tan paving for Locust Walk, green lawns. Pan and zoom to explore it.
-- **`scenes/viewer.tscn`** — the same campus with a **generative-agents
-  simulation** playing on top: a few Penn personas walking between real buildings on
-  their daily schedules (see *Watching the Penn agent simulation* below). The
-  sidebar's 🏠 button returns to the menu.
-
-Both share a generic map renderer (`scripts/tiled_map.gd`) and a pan/zoom camera
-(`scripts/camera_controls.gd`).
-
-## How it works
-
-**`tiled_map.gd`** (the `Map` node in both scenes). A *generic* renderer for any Tiled
-map whose tileset is one packed image: it reads the `.tmj`, loads the referenced
-sheet, registers every tile, and paints each layer by GID. We use it to show the
-campus drawn with **real art** — `maps/upenn_core_urban.tmj`, baked with **Kenney's
-RPG Urban Pack (CC0)** by the geo tool (`--theme urban`): brick buildings, asphalt
-streets, tan paving for Locust Walk, green for the lawns. The geo tool rotates the map
-so Penn's streets run **straight along the X/Y axes** (the real grid is ~8.6° off
-north) instead of on a slant, and the renderer uses nearest filtering + tile padding
-so there are **no seams** between tiles. This is the no-plugin equivalent of importing
-that `.tmj` with the [YATI](https://github.com/Kiamo2/YATI) addon, and the same file
-also loads natively in Phaser. (`maps/tilemap_packed.png` is the CC0 sheet it
-references.)
-
-`scripts/viewer.gd` drives the agent replay on top of that map — see *Watching
-the Penn agent simulation* below.
-
-### Regenerating / swapping the campus map
-
-`maps/upenn_core_urban.tmj` is a **copy** of the geo tool's output. To refresh it, or
-to render the full campus instead of the 34th–38th × Spruce–Walnut core subset:
-
-```bash
-uv run python godot-generative-agents/tools/geo/osm_to_tiled.py --area core --theme urban   # Kenney CC0 map + sheet
-cp godot-generative-agents/tools/geo/out/upenn_core_urban.tmj  godot-generative-agents/godot/maps/
-cp godot-generative-agents/tools/geo/out/tilemap_packed.png    godot-generative-agents/godot/maps/
-
-# Post-processes that the committed map bakes in (re-run after a fresh bake, in
-# this order — both edit maps/upenn_core_urban.tmj in place and are re-run safe):
-uv run python godot-generative-agents/tools/geo/wall_all_buildings.py                        # brick wall every building
-uv run python godot-generative-agents/tools/geo/furnish_building.py --sector "Williams Hall" # open the roof + furnish
+```text
+backend/     simulation loop, cognition, Penn world, API, run/replay tooling
+godot/       Godot 4.6 native viewer
+tools/geo/   map generation, furnishing, and TMJ↔matrix validation
+web/         public React/Vite writeup and browser replay
+runs/        minimal aggregate/case-study evidence (not a development RunStore)
 ```
 
-The committed `maps/upenn_core_urban.tmj` already includes those two post-processes
-(brick-walled buildings + the furnished Williams Hall cutaway), so the demo renders
-them out of the box. The wall colour is chosen automatically from each building's roof
-tint; to hand-match a specific building, run `wall_building.py --sector "<name>"` with
-the colour you want before `wall_all_buildings.py` (it leaves already-styled buildings
-alone). Both post-processes need the map grid to match the sim matrix 1:1 (239×273).
+## Free live workflow
 
-`scripts/snapshot.gd` / `scenes/snapshot.tscn` are a small dev utility: run that scene
-(optionally with `-- <scene.tscn> <out.png>`) to save a screenshot of a map, used to
-verify the render.
-
-## Running it
-
-Open the **`godot/`** folder in the Godot 4.6 editor and press **Play** (F5), or from
-a terminal (these commands assume you're in this `godot-generative-agents/` folder):
+From the repository root, install the backend and start it:
 
 ```bash
-# Launch the game — opens the landing menu, where you pick a replay or a live backend:
-./run.sh
-
-# The same thing by hand (godot/ is the res:// project root, not this folder):
-/Applications/Godot.app/Contents/MacOS/Godot --path godot
-
-# Skip the menu and jump straight to a scene (deep links, unaffected by the menu):
-/Applications/Godot.app/Contents/MacOS/Godot --path godot res://scenes/campus_urban.tscn
-/Applications/Godot.app/Contents/MacOS/Godot --path godot res://scenes/viewer.tscn
-
-# Headless smoke test — load every scene and check its map painted (exit 0 = OK):
-./run_smoke_test.sh
+uv sync --extra server
+uv run python godot-generative-agents/backend/penn/serve_penn.py \
+  --brain mock --tick-seconds 0.1
 ```
 
-`run_smoke_test.sh` loads each content scene headless and fails (non-zero exit) if a
-scene can't load or its campus map painted zero cells — so a broken `.tmj` / tileset
-regen is caught in CI or before you push, instead of silently rendering an empty
-world. It needs no GPU (it reads the tilemap's cell data, not pixels). `uv run pytest
-tests/test_godot_smoke.py` runs the same check and skips cleanly when Godot isn't
-installed.
-
-The first run regenerates the `.godot/` import cache (git-ignored); the committed
-`*.import` / `*.uid` sidecars let Godot recognize the assets without re-importing
-everything.
-
-## Watching the Penn agent simulation
-
-`scenes/viewer.tscn` plays a **generative-agents simulation on the real
-campus**: a few Penn personas (a student, a professor, an architecture grad)
-walking between real buildings on their daily schedules. Godot is just the
-*viewer* — the simulation runs offline in Python and writes a replay file the
-scene reads (the same split as the upstream Phaser replay):
+In a second terminal, launch the viewer:
 
 ```bash
-# 1. Run the sim -> maps/penn_replay.json (from the repo root, so uv finds the env).
-#    The bake also saves the run to the shared store by default (#752): every entry
-#    point (viewer / this script / web companion) default-saves into
-#    godot-generative-agents/runs/, so a bake shows up in Past runs and is re-runnable.
-#    Add --no-persist for a throwaway bake (replay file only, no store row):
-uv run python godot-generative-agents/backend/penn/generate_penn_replay.py
-
-# 2. Watch it:
-/Applications/Godot.app/Contents/MacOS/Godot --path godot res://scenes/viewer.tscn
-```
-
-**Boil-water demo (#592).** For a short, self-contained view of the
-drink → sicken → boil → recover arc (#300) — instead of scrubbing to the tail of a
-long full-cast bake — pass `--scenario boil`. It bakes a one-persona replay
-(`maps/penn_replay_boil.json`) where the three events land early and spread across
-the timeline; the landing menu then shows a **"Play the boil-water demo"** button
-(it self-hides until this file exists). The full cast / bundled replay is untouched.
-
-```bash
-LLM_PROVIDER=mock uv run python godot-generative-agents/backend/penn/generate_penn_replay.py --scenario boil
-```
-
-The Penn world lives in [`backend/penn/`](backend/penn/): `world_data_upenn.yaml`
-(the world: locations, the `llm:` block, and a `cast: [diego, tanaka, sofia]` list
-resolved from the `personas/` library — 7 personas total, 3 in the default cast
-while the live-LLM MVP keeps runs cheap; see `backend/penn/personas/README.md`)
-and `the_upenn/` (the OSM-derived navigation
-grid from `godot-generative-agents/tools/geo/osm_to_ville.py`). The agent *engine* (deciding, pathfinding) is
-the surrounding `backend` package, so this is the same simulation that runs there —
-just rendered here instead of in Phaser. `scripts/viewer.gd` eases each persona
-tile-to-tile along the path the sim chose, with a name + activity label above each
-sprite. (`backend/` sits beside the Godot project, not inside it, so Godot never
-touches the Python.)
-
-Two pop-ups let you interrogate the run at any point while it plays: the
-**movement heatmap** (`H`, or the sidebar's flame button) shows *where* everyone
-has spent their time so far, and the **social graph** (`G`, or the three-linked-nodes
-button; issue #252) shows *who has talked to whom* so far — edges thicken with more
-and more-recent conversations, and `←`/`→` flips to the authored t=0 **seed
-relationships** (the `relationships:` blocks in `backend/penn/personas/*.yaml`) so you can
-compare who *started out* knowing whom against who actually met during the day.
-
-**Snapshots and clip export are off in this build.** The campus-snapshot button and
-its gallery (issue #253) and the GIF/MP4 clip export (issues #488/#548) are built but
-hidden — the sidebar rows all live in a hidden container in `scripts/agent_panel.gd`
-(`_capture_tools`), and the `C` / `[` / `]` shortcuts are commented out in
-`scripts/viewer.gd`. The scripts, exporters and their tests are all still in the tree,
-so switching the feature back on is one deleted line plus those shortcuts.
-(`scripts/snapshot.gd` is unrelated and still works — it's the headless dev utility
-for screenshotting a scene, not a viewer feature.)
-
-**Analyzing a saved run offline.** `tools/analyze_run.py` (promoted from a
-batch-2 scratch script, #795) summarises one `runs/<id>/` directory: verbs,
-`talk_to` share, conversations, co-settled pair-steps (two agents settled
-within earshot of each other, with a per-pair breakdown), and how the agents
-moved — longest unbroken walk, who was still walking when the run ended, and
-every arrival that departed again:
-
-```bash
-uv run python godot-generative-agents/tools/analyze_run.py <run-id>
-uv run python godot-generative-agents/tools/analyze_run.py <run-id> --json
-uv run python godot-generative-agents/tools/analyze_run.py --self-check
-```
-
-Co-settled prefers the count `run.yaml`'s `result:` block already carries
-(the backend's own tally) and only falls back to approximating it from
-`frames.jsonl` for runs saved before that counter existed — frames alone
-can't tell settled from merely-idle, so the fallback can over-report. Either
-way the output states which source it used. Like the sibling
-`most_common_actions.py` / `most_wanted_actions.py`, it's stdlib-only and
-reads a run without importing the engine, so it stays runnable against an
-archived run long after the code that wrote it has moved on.
-
-**Turn-arounds are reported as two numbers, not one (#850).** An arrival that
-departs again is either an agent hopping between a building and its own
-sub-places (#849) or one abandoning a real cross-campus leg (#826), and a fix
-to either moves a combined count in either direction — #760 batch 5 measured
-17 of its baseline's 20 as a single agent oscillating inside one building. The
-split compares the *building segment of the destination address*
-(`UPenn:Van Pelt Library:Moelis Family Grand Reading Room`), never the display
-name: `Van Pelt — Moelis Reading Room` shares no prefix with its own
-building's name, `Van Pelt Library`, and reducing names is how the first
-published split was wrong. Each cross-building event carries
-`abandoned_minutes` — how long the agent had been walking the leg it gave up
-on — which is #826's acceptance measure. Minutes come from `manifest.json`'s
-`sec_per_step`/`start`; with no manifest the tool assumes 10 s/step and says
-so on the `walking` line.
-
-### Live mode — follow a running sim (issue #263)
-
-The same scene can **follow a live simulation over real HTTP + WebSocket**
-instead of loading a baked file. `backend/penn/serve_penn.py` steps the *same* configured
-Penn world (`backend/penn/penn_world.py`, shared with the bake so the two can't drift —
-issue #297) inside the backend's self-stepping live loop (#349/#262), and the
-viewer becomes a thin client of `backend/api.py`:
-
-```bash
-# 1. Serve the live Penn sim (mock brain: real requests, zero keys, zero spend).
-#    From the repo root; needs the server extra (uv sync --extra server):
-uv run python godot-generative-agents/backend/penn/serve_penn.py --tick-seconds 0.1
-
-# 2. Point the viewer at it (the same switch the run monitor uses):
 SIM_API_URL=http://127.0.0.1:8080 ./godot-generative-agents/run.sh
 ```
 
-`--scenario` picks which world the live loop steps, using the bake's scenario
-names: `penn` (default, the full campus cast), `boil` (the #592 demo above), or
-`boil_hard` (#728 — the boil demo with the stove relocated to a separate Sweeten
-`Kitchen` and the perception radius pinned to 0, so finding it takes actually
-traveling there; the matching experiment harness is
-`backend/penn/experiments/boil_hard_connect_dots.py`).
+The mock brain is deterministic, uses the real world/action/replay paths, needs
+no key, and spends no money. The server listens on loopback by default. A
+non-loopback bind requires `SIM_API_TOKEN` and bearer authentication.
 
-Or skip the env var entirely: launch the viewer normally so it opens the landing
-menu, type the backend's URL (and its token, if the server sets `SIM_API_TOKEN`)
-into **Run a live simulation**, and press **Connect**. The menu probes `GET /live`
-first, so a wrong URL or a backend with no live loop is reported right there instead
-of the viewer silently retrying. (`SIM_API_URL` / `SIM_API_TOKEN`, when set, prefill
-that form.)
+`run.sh` locates Godot on `PATH` or in the standard macOS application location,
+imports assets on a fresh clone, and opens the landing menu. Pass a scene path to
+launch it directly.
 
-Connecting to a backend that is **paused at tick zero** (the default under
-`--brain llm`, or any brain with `--start-paused`) doesn't drop you straight
-into the viewer: it opens the **setup scene** (#733) first — pick the cast from
-the persona library, the planner/model/effort, the day length, and the
-retrieval/perception/conversation knobs, then press **Start** (`POST /config` →
-`POST /resume`). A backend already running skips the setup scene and the viewer
-follows the sim directly.
+## Baked replay
 
-On boot the viewer does one `GET /live` handshake (world meta → spawn the cast),
-one `GET /events?since=0` backfill (history so far → jump to the live head),
-then opens a WebSocket to `/ws` and applies each pushed frame as it lands —
-bubbles, conversation links, trails, minimap, heatmap, social graph and fog all
-work unchanged, because live frames use the exact replay schema. A red **LIVE**
-badge joins the clock and the timeline locks into a read-only progress bar
-(you can't seek a live stream); the Pause button stays a *local* view-pause,
-while the run monitor's Emergency stop is what actually pauses the backend.
-
-The mock brain never speaks, so `serve_penn.py` also ports the bake's scripted
-`meetings:` injector to run on the fly: a meeting's authored dialogue fires the
-moment every participant is genuinely settled at its venue within perception
-range — watch Diego showing Sofia around the Kamin Gallery partway into the
-default run.
-
-**`--brain scripted`** — a deterministic, key-free brain that drives the *full*
-backend offline: the per-verb tool loop, cognition tools, conversation, and
-reflection all run (unlike `--brain mock`, which stays on the schedule driver and
-never reaches them). No `ANTHROPIC_API_KEY`, no spend. Use it to exercise or test
-the live-brain code paths without a provider. Works for both `serve_penn.py` and
-`generate_penn_replay.py`. (Issue #563.)
-
-If the backend disappears the viewer holds the last pose, shows
-"reconnecting…", and retries with backoff; on reconnect the socket re-attaches
-with `?since=<last cursor>`, so no frame is lost or applied twice. `POST
-/reset` on the server starts a fresh day (reload the viewer to re-handshake).
-
-### Real-LLM live mode — Claude Haiku drives the cast (issue #261)
-
-`--brain llm` swaps the deterministic mock for the model declared in the
-simulation config (`backend/penn/world_data_upenn.yaml`, the `llm:` block): **Anthropic
-Claude Haiku (`claude-haiku-4-5`) on every model call** — each agent's
-travel/perform decisions, every line of dialogue when the routing brings two
-agents within perception range (the scripted `meetings:` dialogue stands down;
-what you see is the model's own words), and the periodic reflection passes.
-The daily itinerary is the model's too: since #787 `--plan` defaults to `auto`,
-which under a paying brain means `LLMPlanner` (#397) authors each agent's day
-at attach — so the plan is something the agent can also *revise* when the day
-turns, which the authored schedule never could. Pass `--plan schedule` to force
-the hand-authored days back; their stop windows are tuned so agents converge for
-the scripted rendezvous, which a free-play generated day does not guarantee.
-The mock and scripted brains are unaffected (no client to plan with), so the
-bundled bake and every offline replay stay byte-identical.
+Generate the Penn replay without retaining a local run:
 
 ```bash
-# One-time: the llm extra alongside server (installs the anthropic SDK):
+uv run python godot-generative-agents/backend/penn/generate_penn_replay.py \
+  --no-persist
+./godot-generative-agents/run.sh
+```
+
+The generated native-viewer file is ignored. The reviewed browser showcase
+artifact lives at `web/public/replay/penn_replay.json`; regenerate it through
+`web/scripts/gen-replay.sh` only when intentionally updating the publication.
+
+## Paid live workflow
+
+Copy the root `.env.example` to `.env`, set `ANTHROPIC_API_KEY`, and run with an
+explicit step budget and cost ceiling:
+
+```bash
 uv sync --extra server --extra llm
-
-# Serve with the real brain (terminal 1)…
-export ANTHROPIC_API_KEY=sk-ant-...   # or: cp .env.example .env and fill it in —
-                                      # every backend CLI loads the repo-root .env
-uv run python godot-generative-agents/backend/penn/serve_penn.py --brain llm
-
-# …and watch it live (terminal 2), exactly as before:
-SIM_API_URL=http://127.0.0.1:8080 ./godot-generative-agents/run.sh
+uv run python godot-generative-agents/backend/penn/serve_penn.py \
+  --brain llm --steps 360 --max-cost 1.00
 ```
 
-Key hygiene: only `ANTHROPIC_API_KEY` is ever read — never `LLM_PROVIDER` /
-`LLM_API_KEY` / `OPENAI_API_KEY` (`LLM_PROVIDER=mock` in the bake examples
-above belongs to `generate_penn_replay.py`, which routes through the engine's
-provider-agnostic client; `serve_penn.py` never reads it) — and the server
-refuses to start without it
-(or with a non-Anthropic `provider:` in the config) rather than serving a day
-of silently failing calls. The key is also **verified at boot** with one free
-models-list request: an *invalid* key (typo, placeholder, revoked) aborts with
-a one-line fix instead of what it used to produce — a sim that ticks normally
-while every agent sits frozen on "waking up" at $0 spend, because a rejected
-call degrades to an idle-and-retry tick by design and never reaches the
-budget ledger. (Network trouble during the check only warns; the run's own
-retry path handles transient failures.)
+The model recipe defaults come from `backend/penn/world_data_upenn.yaml` and may
+be overridden by supported CLI/config options. Watch the terminal monitor. A
+cost ceiling is a safety boundary, not a prediction; historical measurements
+are documented in `runs/cost-scaling/README.md`.
 
-#### Model tiering (#368)
+## Penn world and extension points
 
-Every LLM call is stamped with its call-site role — `decide`, `plan`,
-`reflect`, `converse`, `outcome`, `score`, `react` — and by default one model
-(the `llm:` block's `model`) serves them all. To route a role to a different
-model, add a `models:` map to the world YAML's `llm:` block, or override per
-run:
+- `backend/penn/world_data_upenn.yaml`: cast, schedules, relationships, meetings,
+  and model defaults.
+- `backend/penn/personas/`: reusable persona definitions.
+- `backend/penn/penn_world.py`: the one shared world factory used by live and
+  baked execution.
+- `backend/penn/serve_penn.py`: live controls and the replay-compatible stepper.
+- `backend/promptviz_chains/cognition.yaml`: static cognition-flow source used by
+  the writeup.
+- `godot/maps/upenn_core_urban.tmj`: authored visual map.
+- `backend/penn/the_upenn/`: pathfinding matrix consumed by the simulation.
 
-    uv run python godot-generative-agents/backend/penn/serve_penn.py \
-        --brain llm --plan llm \
-        --model-for plan=claude-sonnet-4-6 --model-for reflect=claude-sonnet-4-6
+Forks can add a world builder to the scenario registry, but each shipped scenario
+must provide its world data, tests, documentation, and replay contract together.
 
-Recommended tiering: a stronger model for the low-volume reasoning sites
-(`plan`, `reflect`, `outcome`) and the cheap default for the high-volume ones
-(`decide`, `converse`, `score`, `react`). Per-role spend is visible in
-`GET /usage` (`by_role`) and in each run log's summary line; the
-`LLM_MAX_COST`-style budget ceiling (`max_cost_usd`) stays global across
-tiers.
+## Map changes
 
-#### Tuning the live sim: `--config` (#564)
+The TMJ picture and backend matrix must remain synchronized. See
+`tools/geo/README.md` for the authoring pipeline, then run:
 
-Every sim knob lives in one declarative `SimulationConfig` file
-(`backend/sim_config.py`; see `docs/design/simulation-config.md`) — pass it to
-the live server instead of growing per-knob flags:
-
-```yaml
-# sim.yaml — every omitted field keeps today's default
-retrieval:            # memory-retrieval scoring at each decide
-  alpha_recency: 3.0  # recency-heavy: recent memories dominate
-  max_records: 2
-cognition:
-  vision_r: 4         # perception radius, in tiles
-game:
-  agent:
-    temperature: 0.0  # deterministic decides under --brain llm
+```bash
+uv run pytest godot-generative-agents/tools/geo/ -q
+uv run python godot-generative-agents/tools/geo/validate_tmj.py
 ```
 
-    uv run python godot-generative-agents/backend/penn/serve_penn.py \
-        --brain llm --config sim.yaml
+Asset credits beside the map are part of the distribution. Preserve them and
+verify the license of every added tile, sprite, font, and dataset.
 
-The `retrieval:` weights change which memories surface at every decide (watch
-`role: decide` requests in the monitor, or the agent card's retrieved
-memories); `game.agent.temperature: 0.0` makes decisions deterministic;
-`reflection_threshold` rides along for when a reflector is wired. The
-batch-runner sections (`simulation:`, `embedding:`) are ignored on the live
-path, existing flags keep working (`--cognition-tools` / `--react` force their
-feature on over the file), and the config is recorded in the run's manifest so
-`--re-run` reproduces it. Without `--config`, behavior is byte-identical to
-before.
+## Validation
 
-**The Start/Stop button.** Under `--brain llm` the loop boots **paused**: the
-server is up and the viewer connects, but not a single model call is made
-until you press **▶ Start simulation** in the left sidebar (it sends
-`POST /resume`; `curl -X POST http://127.0.0.1:8080/resume` works too). Once
-running, the same button reads **⏹ Stop simulation** (`POST /pause` — the same
-control the run monitor's Emergency stop drives) and **▶ Resume** after a
-stop, always reflecting the backend's actual state. The free mock brain keeps
-auto-starting; `--start-paused` / `--no-start-paused` overrides either mode.
+```bash
+uv run pytest godot-generative-agents/tests/ -q
+./godot-generative-agents/run_smoke_test.sh
 
-**Closing the viewer stops the backend.** In live mode the window close sends
-`POST /shutdown` before quitting, so the sim — and its spend — never keeps
-running with nobody watching (`serve_penn` opts into the endpoint; the
-`shutdown_backend_on_exit` export on the scene turns the behavior off if you
-want a backend that outlives the window).
-
-**Going back to the menu does not.** The sidebar's 🏠 button returns to the
-landing page *without* shutting the backend down — it's for re-picking what to
-watch, not for ending the run. The menu prefills the URL you just left, so
-**Connect** reattaches to the same sim (the socket resumes with `?since=` and
-loses no frames). Use the window close, the run monitor's Emergency stop, or
-`POST /shutdown` when you actually want the sim to stop.
-
-**Boil-from-memory experiment (#595).** `uv run python -m backend.penn.experiments.boil_from_memory --trials 5` (from `godot-generative-agents/`, needs `ANTHROPIC_API_KEY`) runs a live Haiku brain on the single-persona boil world with vs without a seeded "the unboiled water made me sick" memory, and prints the boil-before-drink rate for each arm. Add `--offline` for a key-free plumbing check (scripted brain, not a real measurement).
-
-Every request is printed to the server terminal as it happens (the **LLM
-request monitor**, `backend/llm_monitor.py`; `--no-monitor` silences it):
-
-```
- LLM calls -- one line per model request (#, time, role, actor, sim turn, model, tokens in (cache w/r), tokens out, latency, $ this call, Σ $ run):
- #    7 12:05:02  decide    Diego Torres        t  118  claude-haiku-4-5  in   1088 ( 912w/    0r)  out  102    731ms  $0.001238  Σ $0.021410
- #    8 12:09:44  converse  Sofia Ramirez       t  119  claude-haiku-4-5  in   1322 (   0w/ 1002r)  out   64    598ms  $0.000740  Σ $0.041007
+cd godot-generative-agents/web
+pnpm install --frozen-lockfile
+pnpm lint && pnpm test && pnpm build
 ```
 
-The same rows appear inside the viewer: the run monitor's **LLM requests** box
-(under the usage meter) logs each call as it happens —
-`12:09:44 converse Ramirez 1.3k→64 $0.0007`, newest at the bottom, hover a row
-for the full detail (sim turn, model, cache split, latency, cumulative spend).
-The rows ride the live event feed (`serve_penn`'s `drain_events()` publishes
-the monitor's records as `llm_call` events), so the box needs no extra
-polling — and `--no-monitor` silences it together with the terminal.
-Engine `GameEvent`s (e.g. the boil-water `sickness` event) ride the same feed
-as `game_event` records (#467); the HUD's generic rows currently render only
-`text`-bearing records, so surfacing these on-screen is #302/#264 follow-up.
-
-**Cost & safety.** Measured, not estimated (#921 — the sweep lives in
-[`runs/cost-scaling/README.md`](runs/cost-scaling/README.md)): under the
-showcase recipe (Sonnet 5 on `decide`/`plan`/`reflect`/`outcome`, Haiku 4.5 on
-the rest, effort medium, cognition tools on) a 5-agent 12-sim-hour day costs
-**$5.4–6.8 per run**, scaling ≈ linearly with duration (~$0.49/sim-hour:
-$1.38 / $2.96 / $5.86 for 3 h / 6 h / 12 h) and with cast size past three
-agents ($0.52 / $3.16 / $5.86 / $8.57 for 1 / 3 / 5 / 7). The exact tool
-schemas and prompts the model gets are in
-[`../docs/design/agent-llm-interface.md`](../docs/design/agent-llm-interface.md)
-(its per-call-site cost arithmetic is the stale pre-tiering estimate — trust
-the measured sweep). The config's
-`max_cost_usd` (default $5) is a hard kill-switch: the moment cumulative spend
-reaches it the day ends — the live loop pauses and the run monitor's budget
-row shows **TRIPPED**. (Note the numbers above: a full 5-agent showcase day
-overshoots the default — raise it deliberately, or run a shorter day.) Two operational notes on latency (#366): under
-`--brain llm` the agents at a decision point decide **concurrently** (one
-worker per persona by default; `--decide-workers N` caps how many model calls
-run at once — tune it under your provider's rate limit — and `0` restores the
-strictly serial path), so a decision tick costs roughly the *slowest* decision rather
-than the sum — and the loop's sleep subtracts each tick's wall time, so
-walk-only ticks keep the `--tick-seconds` cadence while decision ticks start
-the next tick immediately. A decision that outlives `--decide-timeout`
-(default 30 s) leaves that agent idle for the tick — the skip is printed, the
-in-flight call's usage still lands in the ledger, and its answer is applied at
-the agent's next decision point once it resolves (never billed twice); a
-provider outage degrades to the same idle-and-retry (failed calls record no
-cost, so a stalled tokens/min meter in the run monitor — not the budget row —
-is the outage signal). Every `frame` feed record carries `tick_ms` (+
-`deciders`), so a client can tell "thinking" from "stuck" (the viewer-side
-indicator is #372). To *feel* the
-stalls without spending anything: `--mock-latency 5 --decide-workers 3` under
-the mock brain. `deciding` — a per-agent decision lifecycle record
-(`{agent, state: "begin"|"end", step, elapsed_ms?}`, #551), emitted under a
-real/scripted brain; the viewer shows a per-agent "thinking" bubble from it
-(and the global badge prefers it over stall-inference). The `begin` is
-published the moment the decide starts — mid-tick, out-of-band (#605) — so
-the bubble lights for the decide's whole duration even when it begins and
-ends within one tick; the `end` follows at the tick boundary.
-
-### The run monitor (top-right)
-
-A live real-LLM run spends money every step and can stall on the provider, so the
-viewer carries a small **run monitor** (`scripts/live_hud.gd`): a token/cost meter,
-an **LLM requests** log (one timestamped line per model call — the in-viewer twin
-of the terminal monitor above), backend health, and a one-click **Emergency stop**.
-The `-`/`+` button in its header collapses it to just the title bar (the health dot
-stays visible); the meter keeps counting underneath. Its data feed is pluggable
-(`scripts/hud_source.gd`):
-
-- **Baked replay (the default):** no backend exists, so the monitor shows clearly
-  labeled **simulated** usage (and simulated request-log rows) that accrue while
-  the replay plays (`scripts/hud_source_replay.gd`) — realistic numbers, zero
-  dollars at risk. The stop button freezes playback and trips a mock budget gate;
-  Play lifts it.
-- **Live mode:** point the scene at a running backend (`backend/api.py`) by setting
-  the `live_backend_url` export — or just `SIM_API_URL=http://127.0.0.1:8000` in the
-  environment, no editor needed — and the same monitor polls the real `GET /usage` +
-  `GET /health` and drives `POST /pause` (`scripts/hud_source_live.gd`), sending
-  `SIM_API_TOKEN` as a bearer token when set; the request log fills from the event
-  feed's `llm_call` records instead of the simulation.
-
-Both feeds emit the engine's `UsageLedger.summary()` shape (what `GET /usage`
-serves), which is what makes the mock → real-LLM switch a pure configuration change.
-
-## Where this fits — the full-port proposals
-
-This is a **mock**: a standalone proof that the Godot-native tilemap + sprite path works.
-Two design docs in the repo sketch the road from here to a fully-wired Godot frontend:
-
-- [`../docs/design/custom-world-authoring.md`](../docs/design/custom-world-authoring.md) —
-  authoring our own world + sprites (map layers, semantic maze CSVs, personas, licensing).
-- [`../generative-agents/NEXT-STEPS.md`](../generative-agents/NEXT-STEPS.md) (bottom section,
-  "porting the replay frontend to Godot") — turning the file-based replay export into a Godot
-  4 renderer.
-
-## Assets & license
-
-- **Campus tiles** — Kenney's [RPG Urban Pack](https://kenney.nl) (CC0, public
-  domain), baked into `maps/tilemap_packed.png` by the geo tool. Interior cutaway art
-  is credited separately in `maps/INTERIOR_CREDITS.md`.
-- **Agent sprites** — the **Cute Fantasy (Free)** pack by Kenmi, kept under
-  `Cute_Fantasy_Free/` with its original `read_me.txt`. Per that license it is **free
-  for non-commercial use and may be modified, but not redistributed or resold**. It
-  lives here only for this private research repo.
-- **UI chrome** — the **Cute Fantasy UI / Dungeons** pack by Kenmi, kept under
-  `Cute_Fantasy_UI/` with its original `read_me.txt`. `theme/cute_fantasy_ui.tres`
-  9-slices the parchment frames, buttons, sliders and ribbons out of its sheets.
-  Same terms as above: usable and modifiable, **not redistributable or resalable**,
-  here only for this private research repo.
-- **Fonts** — none bundled. All UI text uses Godot's built-in font (Open Sans). The
-  UI pack's 5×9 pixel font was never wired up (it read poorly at the small sizes the
-  panels use, and was ASCII-only) and was deleted; `theme/cute_fantasy_ui.tres`
-  deliberately sets no `default_font`.
+The smoke test imports the Godot project, runs its GDScript tests, and loads the
+important scenes headlessly. Run it after viewer, map, asset, or replay changes.

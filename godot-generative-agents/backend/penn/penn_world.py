@@ -46,19 +46,6 @@ from text_adventure_games.things.items import Item
 _SIM_DIR = os.path.dirname(os.path.abspath(__file__))
 
 WORLD_DATA = os.path.join(_SIM_DIR, "world_data_upenn.yaml")
-# A one-persona boil-water DEMO world (#592): the same map + factory, a single
-# Houston-homed resident running the full boil arc early so it doesn't cluster at
-# the far-right of a long bundled bake. `generate_penn_replay.py --scenario boil`
-# loads this instead of the full cast.
-WORLD_DATA_BOIL = os.path.join(_SIM_DIR, "world_data_boil.yaml")
-# The harder #728 "connect the dots" variant of the boil world: the same map +
-# factory + one-persona arc, plus a `Kitchen` location (Sweeten Alumni Building's
-# real dorm kitchenette). Callers apply `relocate_stove_to_kitchen` right after
-# build and run with vision_r=0, so the murky pot is visible from step 0 but the
-# boil Recipe's tool is a real Travel away. Loaded by
-# `experiments/boil_hard_connect_dots.py` and `serve_penn.py --scenario
-# boil_hard`; never by the default bake.
-WORLD_DATA_BOIL_HARD = os.path.join(_SIM_DIR, "world_data_boil_hard.yaml")
 UPENN_DIR = os.path.join(_SIM_DIR, "the_upenn")
 
 # The Penn-local verb set (#300): registered on top of Travel/Act via
@@ -456,35 +443,6 @@ def _furnish_boil_water(game) -> None:
     hall.add_item(make_boil_sink())
     hall.add_item(make_boil_stove())
     hall.add_item(make_murky_pot())
-
-
-def relocate_stove_to_kitchen(game) -> None:
-    """Move the boil stove out of Houston Hall and into the Kitchen (#728).
-
-    The build-time patch that makes WORLD_DATA_BOIL_HARD hard: `_furnish_boil_water`
-    stocks Houston Hall exactly as always (it stays the single source of the boil
-    props), then callers of the boil_hard world apply this to the freshly built
-    game -- the murky pot and sink stay visible from step 0, while the stove (the
-    boil Recipe's required tool, present-not-consumed) only exists one Travel away.
-    Raises instead of no-opping: `load_world_data` silently drops unknown YAML keys,
-    so a Kitchen that failed to materialize (or a stove that was never furnished)
-    must fail the build loudly -- a silent fallback would quietly run the EASY
-    variant and corrupt the experiment's numbers."""
-    kitchen = game.locations.get("Kitchen")
-    if kitchen is None:
-        raise ValueError(
-            "relocate_stove_to_kitchen needs a 'Kitchen' location -- build the "
-            "world from WORLD_DATA_BOIL_HARD (world_data_boil_hard.yaml)"
-        )
-    hall = game.locations.get("Houston Hall")
-    stove = hall.items.get("stove") if hall is not None else None
-    if stove is None:
-        raise ValueError(
-            "no stove in Houston Hall to relocate -- expected _furnish_boil_water "
-            "to have stocked it"
-        )
-    hall.remove_item(stove)
-    kitchen.add_item(stove)
 
 
 def make_meal(name: str, description: str, examine: str) -> Item:

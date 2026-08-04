@@ -7,7 +7,8 @@ reflect-and-retry). The spec is hand-authored -- a readable teaching diagram of
 the agent's cognitive flow -- and is read entirely offline. Rendering a node's
 prompt (see :mod:`text_adventure_games.promptviz.templates`) never calls a model.
 
-See ``promptviz/chains/action_castle.yaml`` for a worked example.
+The public Penn chain lives in
+``godot-generative-agents/backend/promptviz_chains/cognition.yaml``.
 """
 
 from __future__ import annotations
@@ -39,9 +40,8 @@ class Node:
     # preview. ``None`` means "fall back to the template's own ``sample``".
     example_vars: dict | None = None
     # Optional per-node override of the chain's ``templates`` package. Lets one
-    # chain mix templates from more than one package -- e.g. the Smallville chain
-    # shows gen-agents memory templates (``backend.prompt_templates``) alongside
-    # the engine cognition it reuses (``text_adventure_games.prompt_templates``).
+    # chain mix templates from more than one package. The Penn cognition chain,
+    # for example, combines backend and engine prompt templates.
     templates: str | None = None
 
 

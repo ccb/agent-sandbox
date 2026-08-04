@@ -26,8 +26,9 @@ SIM_API_URL=http://127.0.0.1:8080 ./godot-generative-agents/run.sh`;
 const LLM_RUN = `uv sync --extra server --extra llm   # one-time: adds the Anthropic SDK
 
 # Terminal 1 — serve with the real brain (boots paused; no calls yet):
-export ANTHROPIC_API_KEY=sk-ant-...
-uv run python godot-generative-agents/backend/penn/serve_penn.py --brain llm
+export ANTHROPIC_API_KEY=your-key-here
+uv run python godot-generative-agents/backend/penn/serve_penn.py \\\\
+  --brain llm --steps 360 --max-cost 1.00
 
 # Terminal 2 — the viewer, exactly as before:
 SIM_API_URL=http://127.0.0.1:8080 ./godot-generative-agents/run.sh`;
