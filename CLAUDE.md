@@ -61,6 +61,10 @@ contract tests to move together.
 
 ## Editing rules for a fork
 
+- Target active engine, backend, Godot, tooling, and documentation development at
+  `main`. Changes to `godot-generative-agents/web/` (the browser companion and
+  showcase site) target `prod`; base those branches on `prod` and open their PRs
+  with `prod` as the base.
 - Start from the tests closest to the changed subsystem; finish with all CI gates.
 - Keep mock tests deterministic and network-free.
 - Preserve the versioned replay API and slim/fatten codec invariants.
