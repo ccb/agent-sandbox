@@ -147,7 +147,7 @@ jobs:
             exit 0
           fi
           GH_TOKEN="$ASSETS_REPO_TOKEN" gh release download \
-            --repo ccb/agent-sandbox-assets --pattern '*.zip' --output assets.zip
+            --repo aking526/agent-sandbox-assets --pattern '*.zip' --output assets.zip
           unzip -o assets.zip -x ASSETS.md BUNDLE_README.txt
           rm assets.zip
           echo "present=true" >> "$GITHUB_OUTPUT"
