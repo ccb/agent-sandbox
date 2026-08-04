@@ -1,7 +1,7 @@
 from __future__ import annotations
 from ..things import Thing, Character, Item, Location
 from ..reactions import GatedEffect
-from ..enums import ActionName
+from ..enums import ActionName, Property
 import re
 
 
@@ -680,3 +680,129 @@ class Describe(Action):
                     fig(self.game) if callable(fig) else fig, force=True
                 )
         self.parser.ok(self.game.describe())
+
+
+class Buy(Action):
+    """Scaffold for #932: ``buy <item>`` -- the buyer-initiated half of a
+    trade. ``Sell`` (below) is the owner-initiated mirror of the same trade.
+
+    Money is a plain numerical ``Property.MONEY`` any character can carry.
+    An item becomes purchasable once it carries ``Property.IS_FOR_SALE``, a
+    ``Property.PRICE``, and a ``Property.OWNER`` naming who's authorized to
+    sell it. ``Property.OWNER`` is NOT the same thing as the engine's
+    ``item.owner`` attribute (set automatically by ``add_to_inventory``/
+    ``discard_item`` to track whoever currently CARRIES the item) -- a shop
+    item sitting on a table has ``item.owner is None`` (nobody's carrying it
+    yet) but ``item.get_property(Property.OWNER) == "<merchant's name>"``
+    (who to actually transact with). Read ``Property.OWNER``, not
+    ``item.owner``, for "is there a seller" checks.
+
+    Matching the item is the one genuinely new wrinkle here versus e.g.
+    ``Give``: the buyer doesn't carry it yet, so ``self.character.
+    carried_items()`` is the wrong scope, and ``parser.get_items_in_scope``
+    only covers the buyer's own location + inventory -- it does NOT reach
+    into another character's inventory, so an item the seller is physically
+    holding (not lying on the ground) needs its own combined-scope match.
+    ``CheckOutBook._match_book`` in
+    ``godot-generative-agents/backend/actions.py`` solves this exact problem
+    the same way: pool "items in scope" with "items carried by anyone else
+    standing here."
+
+    TDD scaffold -- see ``tests/test_commerce_scaffold.py`` for the checks
+    this needs and the test covering each. ``check_preconditions``/
+    ``apply_effects`` below ``raise NotImplementedError`` -- fill them in to
+    turn that file green; nothing else in the engine depends on this yet.
+    """
+
+    ACTION_NAME = ActionName.BUY
+    ACTION_DESCRIPTION = "Buy a for-sale item from its owner"
+
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
+        self.character = self.acting_character(command, hint="buyer")
+        # TODO (#932): match the named item. It won't be in
+        # self.character's own scope (they don't have it yet) -- pool
+        # self.parser.get_items_in_scope(self.character) with whatever
+        # anyone ELSE standing in self.character.location is carrying (the
+        # CheckOutBook._match_book pattern cited above), then
+        # self.parser.match_item(command, that_pool, hint="item for sale").
+        self.item = None
+        # TODO: resolve the seller FROM Property.OWNER on the matched item
+        # (self.game.characters.get(item.get_property(Property.OWNER))),
+        # not from the command text -- "buy teapot" should work without
+        # ever naming the seller, since the item already names its owner.
+        self.seller = None
+
+    def check_preconditions(self) -> bool:
+        # TODO (#932) -- one test per check in test_commerce_scaffold.py:
+        # 1. was_matched(self.character, ...) / was_matched(self.item, ...)
+        # 2. self.item.get_property(Property.IS_FOR_SALE)
+        # 3. was_matched(self.seller, ...) -- Property.OWNER must name a
+        #    real, living character ("there must be a person they're
+        #    buying from").
+        # 4. not self.character.get_property(Property.IS_SLEEPING) --
+        #    "they must not be asleep."
+        # 5. self.at(self.seller, self.character.location) -- "locations
+        #    must match."
+        # 6. self.character.get_property(Property.MONEY) >=
+        #    self.item.get_property(Property.PRICE) -- "money must be
+        #    sufficient."
+        # Optional (contention, the CheckOutBook.checked_out_by precedent):
+        # if Property.BUYER is already set to someone else, fail -- someone
+        # else has dibs on this item this round. Otherwise stamp
+        # Property.BUYER = self.character.name here, and clear it again in
+        # apply_effects (or on any later failure) so it doesn't stick.
+        raise NotImplementedError("#932: implement Buy.check_preconditions")
+
+    def apply_effects(self):
+        # TODO (#932): move the item seller -> buyer (self.seller.
+        # discard_item(self.item) + self.character.accept_item(self.item),
+        # the same pair Give.apply_effects uses in actions/things.py), debit
+        # Property.PRICE from the buyer's Property.MONEY, credit it to the
+        # seller's, clear Property.IS_FOR_SALE and Property.BUYER (a sold
+        # item shouldn't stay listed or stay claimed), and self.parser.ok(
+        # ...) a message naming buyer, seller, item, and price.
+        raise NotImplementedError("#932: implement Buy.apply_effects")
+
+
+class Sell(Action):
+    """Scaffold for #932: ``sell <item> to <buyer>`` -- the owner-initiated
+    mirror of ``Buy`` above; see its docstring for the full design (money,
+    ``Property.OWNER`` vs. ``item.owner``, the ``Property.BUYER`` dibs idea).
+
+    Mirrors ``Give``'s ``__init__``/``check_preconditions`` shape almost
+    exactly (``Give``, in ``actions/things.py``) -- reuse its helper calls
+    (``target_character``, ``at``, ``can_accept_item``) rather than
+    reinventing them; the only genuinely new checks are the money/
+    for-sale ones ``Buy`` also needs.
+    """
+
+    ACTION_NAME = ActionName.SELL
+    ACTION_DESCRIPTION = "Sell a for-sale item you own to another character"
+
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
+        sell_words = ["sell"]
+        self.seller = self.acting_character(
+            command, hint="seller", split_words=sell_words, position="before"
+        )
+        # TODO (#932): resolve the buyer the same way Give resolves its
+        # recipient -- self.target_character(command, hint="buyer",
+        # split_words=sell_words, position="after", exclude=self.seller).
+        self.buyer = None
+        # TODO: match the named item among what self.seller carries (see
+        # Give.__init__'s giver_held dict in actions/things.py).
+        self.item = None
+
+    def check_preconditions(self) -> bool:
+        # TODO (#932) -- the same checks Buy needs, from the seller's side:
+        # matched seller/buyer/item, Property.IS_FOR_SALE, buyer not
+        # asleep, same location, buyer's Property.MONEY >= item's
+        # Property.PRICE. Give.check_preconditions (actions/things.py) has
+        # working location/capacity checks to reuse rather than rewrite.
+        raise NotImplementedError("#932: implement Sell.check_preconditions")
+
+    def apply_effects(self):
+        # TODO (#932): same transfer as Buy.apply_effects, just initiated
+        # from the seller's command instead of the buyer's.
+        raise NotImplementedError("#932: implement Sell.apply_effects")
