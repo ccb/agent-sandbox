@@ -60,7 +60,7 @@ from backend.run_simulation import step
 from backend.run_store import DEFAULT_RUNS_DIR, RunStore
 from backend.sim_clock import SimClock
 from backend.sim_config import CognitionConfig, SimulationConfig
-from backend.cognition import attach_agents
+from backend.cognition import attach_agents, author_llm_plan
 from backend.planner import median_travel_minutes
 from scripted_brain import build_scripted_brains
 from penn_world import (
@@ -632,6 +632,7 @@ class PennStepper:
         world_builder=None,
         vision_r=None,
         scenario="penn",
+        defer_plans=False,
     ):
         # What a rebuild without an explicit world (reset()) constructs from:
         # the launch scenario's builder (#728), defaulting to the full campus --
@@ -727,6 +728,11 @@ class PennStepper:
             raise ValueError("resuming a run needs a run store (--persist)")
         self.run_store = run_store
         self.seed = seed
+        # #934: under --start-paused, boot must not spend LLMPlanner calls on
+        # a world a pre-start POST /config may throw away -- plan authorship
+        # moves to the first tick (see _author_deferred_plans).
+        self._defer_plans = defer_plans
+        self._plans_deferred = False
         self._engine_sha = git_sha()  # provenance snapshot, captured once
         self._replay_cassette = replay_cassette
         self._cassette_writer = None
@@ -1150,6 +1156,24 @@ class PennStepper:
         # real brain they only pace the day and never call a model.
         # Where each agent's day came from, for a one-line boot summary below.
         planner_sources: dict = {}
+        # The planner's inputs, stashed for the #934 deferred-authorship pass
+        # (_author_deferred_plans re-plans with EXACTLY what attach saw).
+        # Only walkable places are plannable (#906): the addressless campus
+        # hub ("Penn campus") is a real Location, so it passed
+        # validate_stops and was advertised in "Known places:" -- but a
+        # travel there grounds to no tile, and the agent stands motionless
+        # narrating the trip ("walking home @ None", 303 min in batch 10).
+        self._plan_location_names = frozenset(
+            loc["name"] for loc in self.world.locations if loc.get("address")
+        )
+        # #795: what a walk actually costs, so the planner can budget for it
+        # instead of guessing. Computed from this world's map, so a different
+        # campus gets a different number; None -> the clause is omitted.
+        self._plan_travel_minutes = median_travel_minutes(
+            self.world.world_map,
+            [loc.get("address") for loc in self.world.locations],
+            self.clock,
+        )
         attach_agents(
             self.chars,
             self.world.personas,
@@ -1185,23 +1209,12 @@ class PennStepper:
             # can't reach a stop it pinned to a clock hour) that can precede (not
             # skip) the budget ceiling; the next tick catches it.
             planner_client=self.planner_client,
-            # Only walkable places are plannable (#906): the addressless campus
-            # hub ("Penn campus") is a real Location, so it passed
-            # validate_stops and was advertised in "Known places:" -- but a
-            # travel there grounds to no tile, and the agent stands motionless
-            # narrating the trip ("walking home @ None", 303 min in batch 10).
-            location_names=frozenset(
-                loc["name"] for loc in self.world.locations if loc.get("address")
-            ),
+            location_names=self._plan_location_names,
             clock=self.clock,
-            # #795: what a walk actually costs, so the planner can budget for it
-            # instead of guessing. Computed from this world's map, so a different
-            # campus gets a different number; None -> the clause is omitted.
-            travel_minutes=median_travel_minutes(
-                self.world.world_map,
-                [loc.get("address") for loc in self.world.locations],
-                self.clock,
-            ),
+            travel_minutes=self._plan_travel_minutes,
+            # #934: a paused boot holds each agent on its safe static day and
+            # spends nothing; _author_deferred_plans authors at the first tick.
+            defer_plans=self._defer_plans,
             # #795: the world's announced happenings, seeded to every agent
             # but the host -- only reaches memory under a real planner (see
             # cognition.attach_agents), so this is inert under the mock brain.
@@ -1216,13 +1229,22 @@ class PennStepper:
         # whether it really got model-authored days, rather than only the
         # plan_mode that was ASKED for.
         self._planner_sources = planner_sources
+        # #934: every build re-arms the deferral (a pre-start /config rebuild
+        # is exactly the case that must stay free); the first tick() authors.
+        self._plans_deferred = self._defer_plans and self.planner_client is not None
         if self.run_store is not None and self._run_id is not None:
             # The row was opened above (create_run) so the cassette writer
             # existed before attach; re-stamp its manifest now that the answer
             # is known. Cheap and unconditional: schedule-planned runs record
             # an all-"static" map, which is exactly as informative.
             self.run_store.update_run(self._run_id, manifest=self._store_manifest())
-        if self.planner_client is not None:
+        if self._plans_deferred:
+            print(
+                f"  - PLAN: deferred for {len(planner_sources)} agents (#934) -- "
+                "authored at the first tick, so a pre-start /config re-cast "
+                "never pays for a discarded world"
+            )
+        elif self.planner_client is not None:
             authored = sum(1 for s in planner_sources.values() if s == "llm")
             print(
                 f"  - PLAN: {authored}/{len(planner_sources)} agents on a "
@@ -2054,6 +2076,38 @@ class PennStepper:
         self._build(world=world)
         return applied
 
+    def _author_deferred_plans(self) -> None:
+        """The #934 deferred-authorship pass: author each agent's day at the
+        first tick instead of at attach time, with exactly the inputs
+        attach_agents saw (the stashed location set and travel budget).
+
+        Fires once per build, under the app lock like the tick that calls it,
+        so it cannot interleave with a /config rebuild. The manifest is
+        re-stamped afterwards -- same contract as the boot re-stamp after
+        attach -- so the stored provenance describes the authored day, not
+        the paused window's placeholder."""
+        sources: dict = {}
+        for spec in self.world.personas:
+            sources[spec["name"]] = author_llm_plan(
+                self.chars[spec["name"]].agent,
+                spec,
+                self.planner_client,
+                self._plan_location_names,
+                clock=self.clock,
+                num_steps=self.num_steps,
+                travel_minutes=self._plan_travel_minutes,
+            )
+        self._planner_sources = sources
+        self._plans_deferred = False
+        if self.run_store is not None and self._run_id is not None:
+            self.run_store.update_run(self._run_id, manifest=self._store_manifest())
+        authored = sum(1 for s in sources.values() if s == "llm")
+        print(
+            f"  - PLAN: {authored}/{len(sources)} agents on a model-authored "
+            "day (#397; deferred to the first tick by #934); the rest fell "
+            "back to the schedule"
+        )
+
     def tick(self) -> dict | None:
         """One sim step -> one replay-schema frame (called under the app lock).
 
@@ -2073,6 +2127,11 @@ class PennStepper:
         if not self.endless and self._step_idx >= self.num_steps:
             self._finish_run()
             return None
+        # #934: a paused boot deferred plan authorship; the first tick pays it,
+        # for the cast that is actually running (behind the budget guard above,
+        # so a tripped ceiling never authors).
+        if self._plans_deferred:
+            self._author_deferred_plans()
         # Mid-run brain outage (#745): the brain is failing every call (auth
         # revoked, quota, network down). Raising here -- BEFORE spending more
         # failing round-trips -- hands the run to backend.live's #637 tick-error
@@ -3193,6 +3252,10 @@ def main() -> int:
             world_builder=scenario["world"],
             vision_r=scenario["vision_r"],
             scenario=args.scenario,
+            # #934: a paused boot defers plan authorship to the first tick, so
+            # the default cast's plans are never paid for a world a pre-start
+            # POST /config re-cast throws away. Inert under the free mock.
+            defer_plans=start_paused,
         )
     except ImportError as e:
         raise SystemExit(f"{e}\n(--brain llm needs the LLM extra: uv sync --extra llm)")

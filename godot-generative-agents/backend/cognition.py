@@ -574,6 +574,7 @@ def attach_agents(
     cognition_tools: bool = False,
     temperature: float | None = None,
     reflection_threshold: float | None = None,
+    defer_plans: bool = False,
 ) -> None:
     """Wire one mock-driven :class:`LLMAgent` onto each persona character.
 
@@ -837,30 +838,36 @@ def attach_agents(
         # The mock path is byte-identical -- generate() returns the same stops and
         # replace_schedule re-commits the same list. An LLM that returns nothing
         # usable (empty plan) falls back to the static schedule so the sim is safe.
-        if planner_client is not None:
+        if planner_client is not None and not defer_plans:
             plan_locations = location_names or frozenset(
                 {p["home"] for p in personas}
                 | {stop["place"] for p in personas for stop in p["schedule"]}
             )
-            planner = LLMPlanner(
+            source = author_llm_plan(
+                agent,
+                spec,
                 planner_client,
                 plan_locations,
                 clock=clock,
                 num_steps=num_steps,
-                actor=char.name,  # #847: shared plan client -> attribute per agent
                 travel_minutes=travel_minutes,
             )
-            plan = planner.generate(persona=spec, memory=agent.memory)
-            if plan.stops:
-                source = "llm"
-            else:
-                # The model produced nothing usable -> safe static fallback.
-                planner = MockPlanner(spec)
-                plan = planner.generate(persona=spec)
-                source = "static"
+        elif planner_client is not None:
+            # Deferred authorship (#934): a paused boot must not spend planner
+            # calls on a world a pre-start /config may discard. Hold the safe
+            # static day (the same fallback an unusable model answer gets);
+            # the caller authors for real at its first tick, via
+            # author_llm_plan. The seeding above still ran its
+            # planner-present branches -- the planner WILL read that memory,
+            # just later.
+            planner = MockPlanner(spec)
+            _commit_plan(agent, planner, planner.generate(persona=spec))
+            source = "deferred"
         else:
             planner = MockPlanner(spec)
-            plan = planner.generate(persona=spec, memory=agent.memory)
+            _commit_plan(
+                agent, planner, planner.generate(persona=spec, memory=agent.memory)
+            )
             source = "mock"
         # Record where each agent's plan came from so the caller can report how many
         # were genuinely model-generated vs. fell back.
@@ -869,15 +876,54 @@ def attach_agents(
         # Hand back the generated plan (as JSON-safe primitives) so the run can
         # persist it -- the exporter writes personas/<Name>/daily_plan.json.
         if out_plans is not None:
-            out_plans[spec["name"]] = plan.to_primitive()
-        # Keep the planner + current plan on the agent so the step loop can revise
-        # the unstarted tail at a trigger (see maybe_revise_plan), and commit the
-        # plan's stops as the schedule the client drives.
-        agent.planner = planner
-        agent.plan = plan
-        agent.schedule.replace_schedule(
-            [stop.to_schedule_entry() for stop in plan.stops]
-        )
+            out_plans[spec["name"]] = agent.plan.to_primitive()
+
+
+def _commit_plan(agent, planner, plan) -> None:
+    """Commit a generated day onto *agent*: keep the planner + current plan so
+    the step loop can revise the unstarted tail at a trigger (see
+    maybe_revise_plan), and commit the plan's stops as the schedule the client
+    drives."""
+    agent.planner = planner
+    agent.plan = plan
+    agent.schedule.replace_schedule([stop.to_schedule_entry() for stop in plan.stops])
+
+
+def author_llm_plan(
+    agent,
+    spec,
+    planner_client,
+    plan_locations,
+    *,
+    clock=None,
+    num_steps=None,
+    travel_minutes=None,
+) -> str:
+    """Author *spec*'s day with the real model planner and commit it onto
+    *agent*; returns the provenance ("llm", or "static" when the model
+    produced nothing usable and the authored schedule stands in).
+
+    Shared by :func:`attach_agents` and the #934 deferred-authorship pass
+    (``--start-paused`` moves this call from attach time to the first tick),
+    so the two paths cannot drift."""
+    planner = LLMPlanner(
+        planner_client,
+        plan_locations,
+        clock=clock,
+        num_steps=num_steps,
+        actor=spec["name"],  # #847: shared plan client -> attribute per agent
+        travel_minutes=travel_minutes,
+    )
+    plan = planner.generate(persona=spec, memory=agent.memory)
+    if plan.stops:
+        source = "llm"
+    else:
+        # The model produced nothing usable -> safe static fallback.
+        planner = MockPlanner(spec)
+        plan = planner.generate(persona=spec)
+        source = "static"
+    _commit_plan(agent, planner, plan)
+    return source
 
 
 def _use_action_tools(agent) -> bool:
