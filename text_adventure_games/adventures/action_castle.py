@@ -1201,19 +1201,13 @@ def build_game(llm_client=None, embedding_client=None) -> ActionCastle:
     def has_half_an_hour_passed(game):
         return game.clock.minutes_elapsed(game.turn) % 30 == 0
 
-    # use a linear decay for sleepiness
+    # exponential decay for sleepiness
     def exponential_decay_energy(game):
         player = game.player
         energy = player.get_property("energy")
         tired = player.get_property("tired") * SLEEP_CONSTANT
         player.set_property("tired", tired)
         player.set_property("energy", energy * tired)
-
-    ## add triger to decrease energy every turn
-    # def deduct_energy_every_turn(game):
-    # player = game.player
-    # curr_energy = player.get_property("energy")
-    # player.set_property("energy", curr_energy - 1)
 
     def is_the_player_sleeping(game):
         return game.player.get_property("is_sleeping")

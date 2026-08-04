@@ -1,6 +1,5 @@
 import pytest
 from text_adventure_games.actions import Action
-from text_adventure_games.adventures import action_castle
 from text_adventure_games import (
     things,
     games,
@@ -16,7 +15,6 @@ from text_adventure_games.adventures.action_castle import (
 )
 from text_adventure_games.reporting import CaptureRenderer
 from tests.test_action_castle_2 import _said
-from text_adventure_games import clock
 
 DEAFULT_EXERCISE_COST = 15
 DEFAULT_PER_TURN_DEDUCTION = 1

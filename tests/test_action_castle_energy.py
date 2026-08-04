@@ -1,9 +1,10 @@
 """Scenario tests for the Action-Castle-scoped energy/food system.
 
-Unlike tests/test_energy.py (which targeted an engine-wide approach that was
-later reverted), these test the real thing: the custom Eat override,
-Check_energy ("show energy"), and Set_energy ("energy mode") actions defined
-in text_adventure_games/adventures/action_castle.py, played against the real
+The energy/food system was originally scoped engine-wide, then deliberately
+reverted to Action Castle only (2026-07-22 journal). These test the real,
+scoped-down thing: the custom Eat override, Check_energy ("show energy"),
+and Set_energy ("energy mode") actions defined in
+text_adventure_games/adventures/action_castle.py, played against the real
 build_game() -- same pattern as test_scenarios.py.
 """
 
