@@ -14,9 +14,45 @@ on top; copy the template block each working day.
 - ...
 -->
 ## 2026-08-04
-**Focus:** Give Sleep a real place to be reached from, then unify its gate (#931)
+**Focus:** Give Sleep a real place to be reached from, then unify its gate (#931); scaffold Buy/Sell (#932); dead-code sweep
 
 **Done today:**
+- Dead-code sweep over my own commits (not the shared engine code that
+  predates me): removed a superseded, commented-out
+  `deduct_energy_every_turn` trigger in `action_castle.py` (replaced by
+  `exponential_decay_energy` right above it, never deleted); fixed a
+  comment on that function that called it "linear decay" when it's
+  literally the exponential one; dropped two genuinely unused imports
+  (`action_castle`, `clock`) from `test_action_castle_eat.py`. Biggest
+  find: deleted `tests/test_energy.py` outright -- the original
+  engine-wide energy TDD scaffold from 2026-07-22, which I reverted that
+  same week in favor of the Action-Castle-scoped version, and then flagged
+  for retirement in the journal three separate times without ever doing
+  it. Every test in it failed for that reason, not from bit-rot.
+- Scaffolded a minimal money/commerce system (#932) for me to build out
+  later: `Property.MONEY`/`IS_FOR_SALE`/`PRICE`/`OWNER`/`BUYER` in
+  `enums.py` (fixed a `Owner` casing typo along the way, and noted
+  `Property.OWNER` -- who's authorized to sell -- is deliberately NOT the
+  same thing as the engine's existing `item.owner` attribute, which tracks
+  whoever currently carries an item). Added `Buy`/`Sell` stub classes to
+  `actions/base.py`, heavily commented, `check_preconditions`/
+  `apply_effects` both `raise NotImplementedError` with a TODO checklist
+  covering the four preconditions (for-sale, money, not asleep, owner
+  present + same location) plus a `Property.BUYER` dibs-marker idea
+  (mirrors `CheckOutBook.checked_out_by` in the Penn codebase). Wrote
+  `tests/test_commerce_scaffold.py`: 8 tests, 1 green (registration), 7
+  failing cleanly with `NotImplementedError` pointing at exactly what's
+  missing -- the spec to implement against, once I get to it.
+- While wiring that in, broke `Describe`'s room-printing for a bit: my
+  edit landed `Buy`/`Sell` in the middle of `Describe.apply_effects`'s
+  tail, displacing its final `self.parser.ok(self.game.describe())` line
+  into dead code after `Sell`'s `raise` -- so EVERY `look`/room-description
+  in the whole engine went silent. Caught it because the full suite
+  suddenly had way more failures than the 7 I expected; `git stash` on
+  each file in turn pinned it to `actions/base.py`, and a fresh look at
+  `git show HEAD:...` (not just scrolling the edited file) showed where
+  the real last line had been. Moved it back. Full suite green again
+  except the same pre-existing failures as yesterday.
 - Tagged Houston Hall's Reading Room `sleepable` in `world_data_upenn.yaml`
   (its armchairs double as the nap spot) -- the campus block has no
   dorm/residence in frame, so `Sleep` (`REQUIRED_AFFORDANCES =
