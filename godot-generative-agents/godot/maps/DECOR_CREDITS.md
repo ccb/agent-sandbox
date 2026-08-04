@@ -9,10 +9,10 @@ are painted with the **Cute Fantasy** asset pack by **Kenmi**. The pack's
 | ------------------ | --------------------------------------------- |
 | `decor_plants.png` | `Outdoor decoration/Outdoor_Decor_Free.png`   |
 
-It is a byte-for-byte copy of the sheet already vendored under
-`godot-generative-agents/Cute_Fantasy_Free/`, placed next to `upenn_core_urban.tmj`
-so `tiled_map.gd` can load it as an extra tileset (the renderer reads each sheet
-relative to the `.tmj`).
+It is a byte-for-byte copy of that sheet from the pack (dropped in locally at
+`godot-generative-agents/godot/Cute_Fantasy_Free/` — see `ASSETS.md` at the repo
+root), placed next to `upenn_core_urban.tmj` so `tiled_map.gd` can load it as an
+extra tileset (the renderer reads each sheet relative to the `.tmj`).
 
 **Artist:** Kenmi — https://kenmi-art.itch.io/
 

@@ -32,6 +32,9 @@ world.
 - Python 3.11–3.13 (the repository pins 3.12) and
   [uv](https://docs.astral.sh/uv/)
 - Godot 4.6 for the native viewer
+- The licensed art packs for the viewer — they are not in the repo (their
+  licenses forbid redistribution); [ASSETS.md](ASSETS.md) lists where to get
+  each one and where the files go
 - Node.js 22 and pnpm 11 only when developing the browser companion
 - An Anthropic API key only for paid LLM runs
 

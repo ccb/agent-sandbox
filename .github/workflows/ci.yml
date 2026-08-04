@@ -129,9 +129,29 @@ jobs:
       GODOT_VERSION: "4.6.3"
     steps:
       - uses: actions/checkout@v4
+      # The licensed art (Kenmi Cute Fantasy packs, Franuka interiors — see
+      # ASSETS.md) is not in the repo, and the smoke test needs it. Team runs
+      # restore it from the latest release of the private assets repo; runs
+      # without the secret (public forks) skip the smoke steps instead of failing.
+      - name: Restore licensed art (private bundle)
+        id: assets
+        env:
+          ASSETS_REPO_TOKEN: ${{ secrets.ASSETS_REPO_TOKEN }}
+        run: |
+          if [ -z "$ASSETS_REPO_TOKEN" ]; then
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "ASSETS_REPO_TOKEN not set — skipping the Godot smoke test (see ASSETS.md)."
+            exit 0
+          fi
+          GH_TOKEN="$ASSETS_REPO_TOKEN" gh release download \
+            --repo ccb/agent-sandbox-assets --pattern '*.zip' --output assets.zip
+          unzip -o assets.zip -x ASSETS.md BUNDLE_README.txt
+          rm assets.zip
+          echo "present=true" >> "$GITHUB_OUTPUT"
       # No cache: the 45 MB download + unzip measures ~1s (vs ~3s to save a cache),
       # so caching would cost more than it saves. The 4.6.3 release URL is pinned.
       - name: Install Godot ${{ env.GODOT_VERSION }} (headless)
+        if: steps.assets.outputs.present == 'true'
         run: |
           url="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
           curl -fsSL -o godot.zip "$url"
@@ -140,10 +160,12 @@ jobs:
           mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" "$HOME/.local/bin/godot"
           chmod +x "$HOME/.local/bin/godot"
       - name: Put Godot on PATH
+        if: steps.assets.outputs.present == 'true'
         run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       # run_smoke_test.sh does --headless --import, runs each .gd unit test (grepping
       # a success sentinel to defeat Godot's exit-0-on-parse-error), then the scene
       # smoke — which now also gates each scene's root script (#639). It finds Godot
       # via `command -v godot`, so the PATH step above is enough.
       - name: Godot smoke test
+        if: steps.assets.outputs.present == 'true'
         run: ./godot-generative-agents/run_smoke_test.sh
