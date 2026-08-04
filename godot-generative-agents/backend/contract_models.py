@@ -65,10 +65,17 @@ class RelationshipEdge(_ContractModel):
 
 
 class LlmInfo(_ContractModel):
-    """What is driving the cast on a live run (None under the mock brain)."""
+    """What is driving the cast on a live run (None under the mock brain).
+
+    ``effort``/``models`` ride along on a live manifest (#960): thinking depth
+    is part of "which brain was this?" -- two runs on the same model at
+    different effort are different experiments -- and ``models`` is the #368
+    per-role tiering map (None when untiered). Both absent in a baked file."""
 
     provider: str
     model: str
+    effort: str | None = None
+    models: dict[str, str] | None = None
 
 
 class EventState(_ContractModel):
@@ -144,6 +151,23 @@ class Meta(_ContractModel):
     steps: int | None = None  # bake-only (a live run doesn't know it up front)
     llm: LlmInfo | None = None  # live-only (None in a baked file / under mock)
     locations: list[str] | None = None  # #780: world place names; absent pre-#780
+
+    # A live run's manifest is a superset of the bake's meta (#960): the #715
+    # re-run provenance below rides along, and export_replay passes the
+    # manifest straight through as ``meta``. All optional -- a baked file
+    # carries none of them -- but pinned, because they are exactly the
+    # provider/seed/commit provenance worth recording with a frozen replay.
+    seed: int | None = None
+    engine_sha: str | None = None  # git SHA the server ran at; None outside a repo
+    scenario: str | None = None  # which SCENARIOS entry built the world (#747)
+    cognition_tools: bool | None = None  # resolved value, not the CLI flag
+    react: bool | None = None
+    plan_mode: str | None = None  # the request; planner_sources is the outcome
+    planner_sources: dict[str, str] | None = None  # {name: llm|static|mock} (#787)
+    daily_plans: dict[str, dict] | None = None  # DailyPlan.to_primitive()s (#824)
+    num_steps: int | None = None  # the launched step BUDGET; ``steps`` is actual
+    sim_config: dict | None = None  # the #564 --config dump, key material stripped
+    config: dict | None = None  # the applied pre-run POST /config block (#732)
 
 
 class Replay(_ContractModel):
