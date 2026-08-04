@@ -158,6 +158,9 @@ export interface UsageSummary {
   repair_successes?: number;
   by_tool?: Record<string, Record<string, number>>;
   tool_choice_split?: Record<string, number>;
+  // Cache-minimum dead zone (#822): names each model whose median prompt is
+  // too small to ever cache, or null on a healthy (or unjudgeable) run.
+  cache_warning?: string | null;
   // The run-scoped slice (#526/#569, served since #601): REAL model calls only
   // — the mock brain's $0 pacing records don't inflate these — so the dashboard
   // headline agrees with its per-run call log. Present only when the stepper

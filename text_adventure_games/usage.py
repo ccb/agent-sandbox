@@ -46,6 +46,7 @@ import datetime
 import hashlib
 import json
 import os
+import statistics
 from dataclasses import dataclass
 from typing import Callable
 
@@ -308,6 +309,43 @@ class UsageLedger:
                 split[r.tool_choice] += 1
         return split
 
+    def cache_warning(self) -> str | None:
+        """A one-line warning when prompt caching silently cannot engage (#822),
+        or None.
+
+        Anthropic caches only prompts at or above a model-dependent minimum
+        (:data:`CACHE_MIN_PROMPT_TOKENS`); a smaller prompt does not error, it
+        just never caches -- so a run in the dead zone is indistinguishable
+        from a correctly-cached one except by reading token totals after the
+        fact. Warns per model when the median real prompt sits under the
+        model's minimum and the run saw no cache traffic on it at all; failed
+        calls and zero-token (mock) rows are not prompts and are ignored.
+        """
+        prompts: dict[str, list[int]] = {}
+        cache_traffic: dict[str, int] = {}
+        for r in self.records:
+            u = r.usage
+            if r.error or u.total_input_tokens <= 0:
+                continue
+            prompts.setdefault(u.model, []).append(u.total_input_tokens)
+            cache_traffic[u.model] = (
+                cache_traffic.get(u.model, 0)
+                + u.cache_creation_input_tokens
+                + u.cache_read_input_tokens
+            )
+        lines = []
+        for model, sizes in prompts.items():
+            minimum = cache_min_prompt_tokens(model)
+            if minimum is None or cache_traffic[model] > 0:
+                continue
+            median = int(statistics.median(sizes))
+            if median < minimum:
+                lines.append(
+                    f"prompt caching never engages for {model}: median prompt "
+                    f"{median} tokens is under its {minimum}-token cache minimum"
+                )
+        return "; ".join(lines) or None
+
     def summary(self) -> dict:
         """The run footer: call count, total + per-actor cost, token totals."""
         return {
@@ -338,6 +376,11 @@ class UsageLedger:
             # Forced-vs-auto split (#359): how often the model was free to pick
             # ("auto"/"any") vs pinned to one tool ("forced").
             "tool_choice_split": self._tool_choice_split(),
+            # Cache-minimum dead zone (#822): a string naming each model whose
+            # median prompt is too small to ever cache, or None -- so a
+            # silently-uncacheable run is visible in GET /usage and the run
+            # footer instead of only in post-hoc token arithmetic.
+            "cache_warning": self.cache_warning(),
             **self.token_totals(),
         }
 
@@ -376,6 +419,30 @@ PRICES: dict[str, tuple[float, float]] = {
 
 # Models we have already warned about, so a thousands-of-calls run warns once.
 _PRICE_WARNED: set[str] = set()
+
+# Anthropic's minimum cacheable prompt size, in tokens, by model (#822). A
+# prompt below the minimum does not error -- it silently never caches
+# (cache_creation_input_tokens stays 0 forever), and the bar is model-dependent:
+# Haiku's is 4x Sonnet's, so the exact same prompts that cache on Sonnet can sit
+# in Haiku's dead zone. Models with no entry (OpenAI, mock, unknown) return None
+# from cache_min_prompt_tokens() and are never warned about.
+CACHE_MIN_PROMPT_TOKENS: dict[str, int] = {
+    "claude-opus-5": 512,
+    "claude-opus-4-8": 1024,
+    "claude-opus-4-7": 1024,
+    "claude-opus-4-6": 1024,
+    "claude-sonnet-5": 1024,
+    "claude-sonnet-4-6": 1024,
+    "claude-sonnet-4-5": 1024,
+    "claude-sonnet-4-20250514": 1024,
+    "claude-haiku-4-5": 4096,
+    "claude-haiku-4-5-20251001": 4096,
+}
+
+
+def cache_min_prompt_tokens(model: str) -> int | None:
+    """*model*'s minimum cacheable prompt size in tokens, or None if unknown."""
+    return CACHE_MIN_PROMPT_TOKENS.get(model)
 
 
 def price(model: str, usage: Usage, ttl: str = "5m") -> float:

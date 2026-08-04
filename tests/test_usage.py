@@ -183,6 +183,83 @@ def test_ledger_summary_counts_schema_outcomes():
     assert s["repair_successes"] == 1
 
 
+# --- cache-minimum warning (issue #822) ----------------------------------
+
+
+def _prompt_rec(model, prompt_tokens, cache_read=0, cache_write=0, error=None):
+    return CallRecord(
+        usage=Usage(
+            "anthropic",
+            model,
+            input_tokens=prompt_tokens,
+            cache_creation_input_tokens=cache_write,
+            cache_read_input_tokens=cache_read,
+        ),
+        cost_usd=0.0,
+        error=error,
+    )
+
+
+def test_cache_min_prompt_tokens_table():
+    # Anthropic's minimum cacheable prefix is model-dependent (#822): a prompt
+    # below it silently never caches. Models without a known minimum (OpenAI,
+    # the mock provider, anything unlisted) return None -- never warn.
+    from text_adventure_games.usage import cache_min_prompt_tokens
+
+    assert cache_min_prompt_tokens("claude-haiku-4-5") == 4096
+    assert cache_min_prompt_tokens("claude-haiku-4-5-20251001") == 4096
+    assert cache_min_prompt_tokens("claude-sonnet-5") == 1024
+    assert cache_min_prompt_tokens("claude-opus-4-8") == 1024
+    assert cache_min_prompt_tokens("claude-opus-5") == 512
+    assert cache_min_prompt_tokens("gpt-4o") is None
+    assert cache_min_prompt_tokens("mock") is None
+    assert cache_min_prompt_tokens("totally-made-up-model") is None
+
+
+def test_ledger_warns_when_median_prompt_below_cache_minimum():
+    # The #822 dead zone: Penn prompts run ~1,000-2,500 tokens, under Haiku's
+    # 4096 minimum, so caching silently never engages. The ledger must say so.
+    led = UsageLedger()
+    for tokens in (1_200, 1_500, 2_400):
+        led.record(_prompt_rec("claude-haiku-4-5", tokens))
+    warning = led.cache_warning()
+    assert warning is not None
+    assert "claude-haiku-4-5" in warning
+    assert "4096" in warning
+    assert "1500" in warning  # the median, so the reader sees the gap
+    # The same text rides the run footer / GET /usage.
+    assert led.summary()["cache_warning"] == warning
+
+
+def test_ledger_stays_silent_when_prompts_clear_the_minimum():
+    # The identical prompts on Sonnet 5 sit above its 1024 minimum; whether
+    # caching then engages is the provider's business, not a ledger warning.
+    led = UsageLedger()
+    for tokens in (1_200, 1_500, 2_400):
+        led.record(_prompt_rec("claude-sonnet-5", tokens))
+    assert led.cache_warning() is None
+    assert led.summary()["cache_warning"] is None
+
+
+def test_ledger_stays_silent_when_caching_engages():
+    # Cache traffic on the model means it cleared the bar at least sometimes --
+    # a warning would be a false alarm.
+    led = UsageLedger()
+    led.record(_prompt_rec("claude-haiku-4-5", 1_000, cache_read=5_000))
+    assert led.cache_warning() is None
+
+
+def test_ledger_cache_warning_ignores_mock_and_failed_calls():
+    # Mock pacing rows and failed calls carry zero tokens; they are not
+    # prompts and must not drag the median toward zero.
+    led = UsageLedger()
+    led.record(_rec("troll", 0.0))  # mock $0 row, zero tokens
+    led.record(_prompt_rec("claude-haiku-4-5", 0, error="APIError: boom"))
+    assert led.cache_warning() is None  # no real prompts -> nothing to judge
+    led.record(_prompt_rec("claude-haiku-4-5", 5_000))
+    assert led.cache_warning() is None  # the one real prompt clears 4096
+
+
 # --- UsageLedger cost ceiling / kill-switch (issue #183) ----------------
 
 
