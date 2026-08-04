@@ -24,6 +24,7 @@ import asyncio
 import sys
 import threading
 import time
+from collections import defaultdict
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -108,6 +109,11 @@ class _GatedBrain:
         self.context: dict = {}
         self.gates = gates if gates is not None else {}
         self.tool_calls: list[str] = []
+        # Set the moment call_tool is entered, per actor -- lets a test wait
+        # for "the decide call has started" instead of asserting an
+        # instantaneous tool_calls count that races the daemon thread's first
+        # slice on a loaded runner (#932).
+        self.called: dict[str, threading.Event] = defaultdict(threading.Event)
 
     def _record(self, messages, response):
         raw = SimpleNamespace(
@@ -133,6 +139,7 @@ class _GatedBrain:
 
     def call_tool(self, messages, tool, max_tokens=256, temperature=0.0):
         self.tool_calls.append(tool["name"])
+        self.called[self.context.get("actor")].set()
         gate = self.gates.get(self.context.get("actor"))
         if gate is not None:
             gate.wait(timeout=5)  # deadline so a failing test can't hang CI
@@ -188,6 +195,11 @@ def test_timeout_degrades_to_idle_never_double_asks_then_applies_the_late_answer
     assert st["reasoning"] == "(waking up)"  # card untouched while parked
     assert f"DECIDE TIMEOUT {hung}" in capsys.readouterr().out
     assert hung in stepper._decide_pending
+    # The parked call may not have had a time slice yet on a loaded runner --
+    # the tick only waits out the 0.2 s budget, while the decide runs on its
+    # own daemon thread. Wait for call-start before counting, then pin the
+    # never-double-asks property on the count itself (#932).
+    assert brains[hung].called[hung].wait(timeout=5)
     assert brains[hung].tool_calls.count("choose_action") == 1
     others_decided = {
         name: brains[name].tool_calls.count("choose_action")
