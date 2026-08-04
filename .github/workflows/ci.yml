@@ -1,12 +1,12 @@
 name: CI
 
 # Runs the same gates as the `/check` skill (format + the pytest suite) on every
-# push to main and every pull request. The repo had no CI before this; treat a
+# push to main/prod and every pull request. Treat a
 # green check here as the automated stand-in for the manual pre-PR check.
 
 on:
   push:
-    branches: [main]
+    branches: [main, prod]
   pull_request:
   workflow_dispatch: # lets you trigger a run by hand from the Actions tab
 
@@ -28,7 +28,6 @@ jobs:
       # `uvx` runs black ephemerally — pinned to the version the team runs locally
       # so CI and your machine agree on formatting. Bump this line when you upgrade
       # black (keep it in sync with the [dev] extra in pyproject.toml). No
-      # [jupyter] extra, so notebooks are skipped — same as `black --check .`.
       - run: uvx black@26.5.1 --check .
 
   test:
@@ -51,8 +50,6 @@ jobs:
       # --extra server pulls FastAPI/uvicorn so tests/test_api.py (the headless
       # backend API, #179) is exercised rather than skipped via importorskip.
       - run: uv sync --extra dev --extra server --locked --python ${{ matrix.python-version }}
-      # The turn-based NPC behavior suite now lives at tests/test_npc_behaviors.py
-      # (moved in #51), so pytest collects it — no separate run step needed.
       - name: pytest suite
         run: uv run --no-sync pytest tests/ -q
       # The godot-generative-agents backend keeps its own offline suite under

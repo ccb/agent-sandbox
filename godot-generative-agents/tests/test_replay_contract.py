@@ -270,7 +270,7 @@ def test_baked_replay_frames_carry_trace(tmp_path):
             assert isinstance(persona["trace"], list)
 
 
-@pytest.mark.parametrize("scenario", ["penn", "boil"])
+@pytest.mark.parametrize("scenario", ["penn"])
 def test_bake_is_byte_identical(tmp_path, scenario):
     """#640: the mock bake of the bundled artifact must be deterministic.
 

@@ -1,14 +1,11 @@
 """Output rendering: a typed ``Message`` + a pluggable ``Renderer`` seam.
 
-This is the ``reporting.py`` the appendix of ``docs/design/multi-character-play.md``
-anticipated, designed in ``docs/design/output-and-trace-rendering.md``.
-
 The idea: the engine emits a :class:`Message` tagged with a :class:`Channel` (what
 *kind* of information it is -- world narration, an error, an agent's private
 reasoning, ...). A :class:`Renderer` decides how those messages *look* on one
-surface (a colored terminal, the web app, a test capture). Swap the renderer, not
-the engine, and the same game prints to a terminal, buffers dicts for Flask, or
-records structured messages for a test.
+surface (a colored terminal, an API feed, or a test capture). Swap the renderer,
+not the engine, and the same game prints to a terminal or records structured
+messages for another process.
 
 Renderers here:
 
@@ -19,10 +16,7 @@ Renderers here:
   ``rich``. Imported lazily so the engine never *hard*-requires ``rich``.
 * :class:`CaptureRenderer` -- records messages for tests to assert on *channels*,
   not formatted bytes.
-
-The web renderer lives next to the Flask app in
-``text_adventure_games/webapp/web_parser.py`` (it speaks the template's
-``{"type", "text"}`` dicts).
+* :class:`JSONRenderer` -- emits JSON-safe records for the backend and viewers.
 """
 
 from __future__ import annotations

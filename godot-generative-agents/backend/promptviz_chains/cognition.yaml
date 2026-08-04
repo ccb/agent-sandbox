@@ -2,13 +2,11 @@
 #
 # This is the chain the Godot sim actually runs (backend/cognition.py,
 # planner.py, run_simulation.py plus the engine pieces they reuse). It is the
-# only chain the web companion ships -- the Action Castle chain describes the
-# text-adventure demo, not this simulation.
+# only chain the public web companion ships.
 #
 # Run the visualizer from the repo root (backend is an installed package):
 #
-#   python -m text_adventure_games.promptviz.app \
-#     --spec godot-generative-agents/backend/promptviz_chains/cognition.yaml
+#   cd godot-generative-agents/web && pnpm gen:promptviz
 #
 # The chain spans BOTH template packages: the sim's own templates
 # (`backend.prompt_templates`, the default below) and the engine cognition a

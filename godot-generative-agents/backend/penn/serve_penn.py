@@ -22,7 +22,7 @@ Run from the repo root (terminal 1), then point the viewer at it (terminal 2)::
     SIM_API_URL=http://127.0.0.1:8080 ./godot-generative-agents/run.sh
 
     # the real thing (uv sync --extra server --extra llm, key required):
-    ANTHROPIC_API_KEY=sk-ant-... \
+    ANTHROPIC_API_KEY=your-key-here \
         uv run python godot-generative-agents/backend/penn/serve_penn.py --brain llm
 
 The pieces:
@@ -69,12 +69,9 @@ from penn_world import (
     PENN_ACTION_VERBS,
     SEC_PER_STEP,
     SIM_START,
-    WORLD_DATA_BOIL,
-    WORLD_DATA_BOIL_HARD,
     PennWorld,
     build_penn_world,
     persona_meta_entry,
-    relocate_stove_to_kitchen,
     replay_frame_entry,
 )
 from text_adventure_games.llm_client import LlmConfig, create_llm_client
@@ -169,41 +166,10 @@ SCRIPTED = "scripted"
 WORLD_BUILDERS = {"penn": build_penn_world}
 
 
-def _build_boil_hard_world(cast: list[str] | None = None) -> PennWorld:
-    """A fresh #728 boil_hard world: the boil world plus its `Kitchen` location,
-    with the stove relocated there at build time (`penn_world.
-    relocate_stove_to_kitchen`) -- the murky pot stays visible from step 0, the
-    boil Recipe's tool is a real 297-tick Travel away. Wraps build_world_fn
-    rather than patching one game post-hoc so every rebuild -- including a POST
-    /reset's -- carries the relocation."""
-    pw = build_penn_world(world_data=WORLD_DATA_BOIL_HARD, cast=cast)
-    inner = pw.build_world_fn
-
-    def _relocated(world_map):
-        game, chars = inner(world_map)
-        relocate_stove_to_kitchen(game)
-        return game, chars
-
-    return replace(pw, build_world_fn=_relocated)
-
-
-# Named scenarios (#592/#728): which world this server steps, using the same
-# names as the bake's `generate_penn_replay.py --scenario`. Each entry is a
-# zero-arg builder returning a FRESH PennWorld (the stepper rebuilds through it,
-# so the scenario survives POST /reset) plus the perception radius the scenario
-# pins (None = the config/default radius). boil_hard pins vision_r=0: its stove
-# lives in a separate Kitchen and must not leak into observations via
-# cross-location perception (#82) -- the only lead the agent gets is "Kitchen"
-# in Travel's destination enum (#635).
+# Named scenarios select the world served by both live and replay paths. The
+# public package ships the Penn campus showcase only; forks can add builders here.
 SCENARIOS = {
     "penn": {"world": build_penn_world, "vision_r": None},
-    "boil": {
-        "world": lambda cast=None: build_penn_world(
-            world_data=WORLD_DATA_BOIL, cast=cast
-        ),
-        "vision_r": None,
-    },
-    "boil_hard": {"world": _build_boil_hard_world, "vision_r": 0},
 }
 
 
@@ -635,8 +601,7 @@ class PennStepper:
     ):
         # What a rebuild without an explicit world (reset()) constructs from:
         # the launch scenario's builder (#728), defaulting to the full campus --
-        # without this a boil_hard server's POST /reset would silently swap the
-        # scenario back to the default world.
+        # This preserves the selected scenario across POST /reset.
         self._world_builder = (
             world_builder if world_builder is not None else build_penn_world
         )
@@ -1036,11 +1001,8 @@ class PennStepper:
             cognition_tools=self.cognition_tools,
             react_enabled=self.react,
         )
-        # The scenario's pinned perception radius (#728): boil_hard serves with
-        # vision_r=0 so its relocated stove can't leak into observations via
-        # cross-location perception (#82). Applied over the config-derived base
-        # so neither a --config file nor a resumed run's adopted sim_config can
-        # quietly re-widen it.
+        # Apply a scenario-specific perception radius over the config-derived
+        # base. The Penn showcase currently leaves this unset.
         if self.vision_r is not None:
             self.cog = replace(self.cog, vision_r=self.vision_r)
         # The live analogue of the bake's meta start/sec_per_step (#580): one
@@ -2736,8 +2698,8 @@ def reproduce_run(store: RunStore, run_id: str) -> ReproResult:
     manifest = row["manifest"]
     seed = int(manifest.get("seed", 0))
     # The recorded scenario (#747): rebuild through the SAME SCENARIOS dispatch
-    # serve_penn uses at boot, or a --scenario boil run would be replayed on a
-    # default-campus world and report DIVERGED despite reproducing perfectly.
+    # serve_penn uses at boot, so future fork-defined scenarios reproduce on the
+    # correct world rather than silently falling back to Penn.
     # Pre-#747 manifests lack the key and mean the default scenario (the only
     # world they could have been recorded on). An unknown name fails loudly --
     # ValueError, the vocabulary the CLI and the HTTP route (409) both map --
@@ -2786,9 +2748,8 @@ def reproduce_run(store: RunStore, run_id: str) -> ReproResult:
             react=manifest.get("react", False),
             plan_mode=manifest.get("plan_mode", "schedule"),
             sim_config=_sim_config_from_manifest(manifest),
-            # The scenario's pinned perception radius (#728) shaped the
-            # recorded observations (and so the cassette's request keys);
-            # None for penn/boil leaves the config/default value, unchanged.
+            # A scenario-specific perception radius shapes observations and
+            # therefore cassette request keys.
             vision_r=scenario["vision_r"],
         )
         for _ in range(n):
@@ -2872,11 +2833,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--scenario",
         choices=sorted(SCENARIOS),
         default="penn",
-        help="which world to serve, mirroring the bake's --scenario names: "
-        "'penn' (default: the full campus cast), 'boil' (the one-persona "
-        "boil-water demo, #592), or 'boil_hard' (#728: the demo with the stove "
-        "relocated to a separate Kitchen and vision_r pinned to 0 -- the "
-        "connect-the-dots experiment world)",
+        help="which world to serve (currently the Penn campus showcase)",
     )
     ap.add_argument(
         "--steps",

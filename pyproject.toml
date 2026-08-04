@@ -7,12 +7,13 @@ requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "text-adventure-games"
-description = "A framework for building text based RPGs"
+name = "penn-generative-agents"
+description = "A forkable generative-agent simulation of the University of Pennsylvania campus"
 readme = "README.md"
 authors = [
+    { name = "Alistair King" },
+    { name = "Frankie L" },
     { name = "Chris Callison-Burch", email = "ccb@upenn.edu" },
-    { name = "Jms Dnns" },
 ]
 # Floor is 3.11 — the versions CI tests. The code uses PEP 604 unions
 # (`X | None`), so it needs 3.10+ at minimum; we only verify 3.11–3.13.
@@ -21,9 +22,6 @@ requires-python = ">=3.11"
 # (see [tool.setuptools.dynamic] below). See `dynamic` for why.
 dynamic = ["version"]
 dependencies = [
-    "jupyter",
-    "graphviz",
-    "flask",
     "rich", # colored, turn-structured terminal output (see reporting.py).
     # Optional at runtime: the engine falls back to a plain renderer
     # if it's missing, so a no-rich install still works.
@@ -52,11 +50,13 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://interactive-fiction-class.org/"
+Homepage = "https://github.com/aking526/penn-generative-agents"
+Repository = "https://github.com/aking526/penn-generative-agents"
+Issues = "https://github.com/aking526/penn-generative-agents/issues"
 
 # Install extras with e.g. `pip install -e ".[llm]"`.
 [project.optional-dependencies]
-dev = ["black", "nbformat", "pytest", "httpx"] # httpx backs FastAPI's TestClient (tests/test_api.py)
+dev = ["black", "pytest", "httpx"] # httpx backs FastAPI's TestClient (tests/test_api.py)
 openai = ["openai>=1.0", "tiktoken"]
 anthropic = ["anthropic>=0.20"]
 # jsonschema validates tool-call arguments precisely (#357). Optional: the base
@@ -70,10 +70,6 @@ llm = ["openai>=1.0", "tiktoken", "anthropic>=0.20", "jsonschema>=4.0"]
 # backend (pulls torch). The hosted OpenAI backend reuses the `openai` extra.
 embeddings = ["model2vec"]
 embeddings-st = ["sentence-transformers"]
-# PDF ingest/view for hand-porting Parsely games (text_adventure_games/codegen).
-# pymupdf parses the Parsely PDF into color-tagged spans; install with
-# `uv sync --extra codegen`. The rest of the engine doesn't need it.
-codegen = ["pymupdf>=1.27"]
 # The headless HTTP API (issue #179) lives in `backend.api`: a FastAPI app any
 # out-of-process frontend (Godot, Phaser, the web companion) polls for the typed
 # world-state snapshot + change feed. Opt-in so the engine core stays lean; install
@@ -99,7 +95,7 @@ docs = [
 version = { attr = "text_adventure_games.__version__" }
 
 # Equivalent of the old find_packages(): ship text_adventure_games (repo root) and
-# the simulation backend (`backend`), but not notebooks/, tests/, or docs/ (they
+# the simulation backend (`backend`), but not tests/ or docs/ (they
 # aren't importable packages). The `backend` package was extracted to the repo root
 # in #167/#179, then moved under godot-generative-agents/ in #399 when it was folded
 # into that project alongside its web + godot front ends. Its import name stays
@@ -115,16 +111,6 @@ include = ["text_adventure_games*", "backend*"]
 # tree, so this only matters for a real wheel build.)
 [tool.setuptools.package-data]
 "text_adventure_games.prompt_templates" = ["*.prompty"]
-# The prompt-chain visualizer (promptviz) ships chain specs + its web assets
-# (templates, CSS/JS, and the vendored Cytoscape/dagre libs) as data files, for
-# the same reason as above: a built wheel would otherwise omit them.
-"text_adventure_games.promptviz" = [
-    "chains/*.yaml",
-    "webapp/templates/*.html",
-    "webapp/static/*.css",
-    "webapp/static/*.js",
-    "webapp/static/vendor/*.js",
-]
 # The backend sim loads its world cast (``world_data*.yaml``, via
 # ``Path(__file__).with_name``) and its memory/belief templates (``*.prompty``,
 # via prompt_templates.render) as data files, so a built wheel must ship them too.
