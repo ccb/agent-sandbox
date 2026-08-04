@@ -996,9 +996,20 @@ export function HomeView() {
                   <a href="https://kenmi-art.itch.io/cute-fantasy-rpg">Cute Fantasy RPG</a> by Kenmi
                 </li>
                 <li>
+                  <a href="https://franuka.itch.io/fantasy-rpg-interior-pack">
+                    Fantasy RPG Interior Pack
+                  </a>{" "}
+                  by <a href="https://franuka.itch.io/">Franuka</a> (building interiors)
+                </li>
+                <li>
                   <a href="https://kenney.nl/assets/rpg-urban-pack">RPG Urban Pack</a> by Kenney
                 </li>
               </ul>
+              <p>
+                The Kenney pack is CC0; the other packs' licenses do not permit redistribution, so
+                they are not included in the repository — <code>ASSETS.md</code> at the repo root
+                explains where to get each pack and where its files go.
+              </p>
             </div>
 
             <SectionHeading id="references" level={3} className="nrf-title nrf-title-4">

@@ -230,6 +230,22 @@ docs/superpowers/
 
 parsely_pdfs/*.pdf
 
+# Licensed art — usable but NOT redistributable ("even if modified"); purged
+# from git history. See ASSETS.md for where to buy each pack and where the
+# files go. The team bundle zip is shared privately, never committed.
+godot-generative-agents/godot/Cute_Fantasy_Free/
+godot-generative-agents/godot/Cute_Fantasy_UI/
+godot-generative-agents/godot/maps/decor_plants.png*
+godot-generative-agents/godot/maps/interior_franuka.png*
+godot-generative-agents/godot/maps/interior_school.png*
+godot-generative-agents/godot/maps/interior_bath.png*
+godot-generative-agents/godot/maps/interior_alchemy.png*
+godot-generative-agents/godot/maps/interior_bedroom.png*
+godot-generative-agents/godot/maps/interior_clockwork.png*
+godot-generative-agents/godot/maps/interior_music.png*
+godot-generative-agents/web/public/sprites/
+agent-sandbox-licensed-assets-*.zip
+
 # --- godot-generative-agents web viewer ---
 # Build/install artifacts — all regenerated locally (npm run export:godot /
 # npm install / npm run build / npm run gen:docs), never committed.
