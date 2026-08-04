@@ -5,8 +5,8 @@ energetic / no sleep-capable spot in scope) and sets Property.IS_SLEEPING.
 Unlike Action Castle, Sleep gates on a world-tagged affordance (mirroring
 Study's REQUIRED_AFFORDANCES = ("studyable",)) rather than always being
 available -- so a location needs a "sleepable" tag before Sleep is reachable
-there. (world_data_upenn.yaml doesn't have one yet -- Sleep is exercised here
-via this file's own tiny world, not the live/bake one.)
+there. Most of these tests use this file's own tiny world; the last one is a
+wiring check that the real Penn world actually furnishes one too.
 
 Penn's step loop is externally ticked (live server / bake), unlike Action
 Castle's do_command single-command round, so Sleep can't fast-forward turns
@@ -84,3 +84,18 @@ def test_sleep_succeeds_at_a_sleepable_location_when_tired():
     char.set_property(Property.ENERGY, 5)
     assert game.parser.parse_command("sleep", actor=char)
     assert char.get_property(Property.IS_SLEEPING) is True
+
+
+def test_live_penn_world_has_a_sleepable_location():
+    # Wiring check: the real Penn world (not this file's tiny synthetic one)
+    # must actually furnish a "sleepable" location, or Sleep has nowhere to
+    # be reached from in the live sim/bake -- same category of check as
+    # test_eat_energy.py's test_live_penn_world_meals_carry_energy_value.
+    from backend.penn.penn_world import build_penn_world
+
+    world = build_penn_world()
+    game, _characters = world.build_world_fn(world.world_map)
+    sleepable = [
+        loc for loc in game.locations.values() if loc.get_property("sleepable")
+    ]
+    assert sleepable, "expected at least one sleepable location in the Penn world"

@@ -13,6 +13,25 @@ on top; copy the template block each working day.
 **Next:**
 - ...
 -->
+## 2026-08-04
+**Focus:** Give Sleep a real place to be reached from (#931)
+
+**Done today:**
+- Tagged Houston Hall's Reading Room `sleepable` in `world_data_upenn.yaml`
+  (its armchairs double as the nap spot) -- the campus block has no
+  dorm/residence in frame, so `Sleep` (`REQUIRED_AFFORDANCES =
+  ("sleepable",)`) had nowhere to be reached from outside of tests until now.
+- Added `test_live_penn_world_has_a_sleepable_location` to
+  `test_sleep_action.py`, mirroring `test_eat_energy.py`'s live-world wiring
+  checks. Full suite still green, no new failures.
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- `uv sync --extra server` in this env so the fastapi-gated test files
+  actually collect, and re-check they're really unaffected.
+
 ## 2026-08-03
 **Focus:** Finish the SleepPenn/EatPenn/DrinkPenn test suite (#931)
 
@@ -44,6 +63,15 @@ on top; copy the template block each working day.
   that they fail identically without today's changes): the superseded
   `tests/test_energy.py`, and a handful of `godot-generative-agents/tests/`
   files that need `uv sync --extra server` (fastapi) to even collect.
+- Cleanup pass: removed `accrue_hunger` (dead -- never opted into, never
+  actually accumulated hunger even when called) and the unused `Property`
+  enum members that went with it (`HUNGER`, `HUNGER_RATE`, `THIRST`,
+  `THIRST_RATE`, `SLEPT_AT_TIME`, `ATE_AMOUNT`, `DRANK_AMOUNT`), plus stale
+  TDD-scaffold docstrings/self-note comments now that the feature is
+  implemented and green.
+- Committed and opened PR #969 (`food-system-branch` -> `main`) for #931 --
+  left the `Set_energy` Action Castle test fix out of it, uncommitted, per
+  request.
 
 **Blockers / questions:**
 - none

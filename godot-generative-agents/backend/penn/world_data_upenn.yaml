@@ -108,6 +108,11 @@ locations:
 - name: Houston Hall — Reading Room
   description: Houston Hall's reading room, armchairs and newspapers.
   address: UPenn:Houston Hall:Reading Room
+  # #931: the campus has no dorm/residence in frame (see the file header), so
+  # this is the nearest thing to a place to rest -- its armchairs double as a
+  # nap spot, letting Sleep (REQUIRED_AFFORDANCES = ("sleepable",)) be reached
+  # in the live/bake world instead of only this file's own tiny test world.
+  properties: [sleepable]
 - name: Williams Hall
   description: A classroom and language-department building just off College Green.
   address: UPenn:Williams Hall:lobby
