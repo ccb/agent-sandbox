@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 Guidance for coding agents working in a fork of Penn Generative Agents.
 
