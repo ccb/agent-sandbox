@@ -179,6 +179,69 @@ export function HomeView() {
                 For implementation details and the API reference, see the{" "}
                 <a href={`${import.meta.env.BASE_URL}docs/`}>project documentation</a>.
               </p>
+              <p>
+                Listed below are the asset packs we used in the game. The viewer is a Godot 4.6
+                project — campus maps are authored in Tiled from{" "}
+                <a href="https://www.openstreetmap.org/relation/2594845#map=15/39.94770/-75.19361">
+                  OpenStreetMap data
+                </a>
+                , with tilesets, sprites, and UI art drawn from these packs.
+              </p>
+              <ul>
+                <li>
+                  <a href="https://kenmi-art.itch.io/cute-fantasy-ui">Cute Fantasy UI</a> by Kenmi
+                </li>
+                <li>
+                  <a href="https://kenmi-art.itch.io/cute-fantasy-rpg">Cute Fantasy RPG</a> by Kenmi
+                </li>
+                <li>
+                  <a href="https://franuka.itch.io/fantasy-rpg-interior-pack">
+                    Fantasy RPG Interior Pack
+                  </a>{" "}
+                  by <a href="https://franuka.itch.io/">Franuka</a> (building interiors)
+                </li>
+                <li>
+                  <a href="https://kenney.nl/assets/rpg-urban-pack">RPG Urban Pack</a> by Kenney
+                </li>
+              </ul>
+              <p>
+                The Kenney pack is CC0; the other packs' licenses do not permit redistribution, so
+                they are not included in the repository — <code>ASSETS.md</code> at the repo root
+                explains where to get each pack and where its files go.
+              </p>
+            </div>
+
+            <SectionHeading id="references" level={3} className="nrf-title nrf-title-4">
+              References
+            </SectionHeading>
+            <div className="nrf-content">
+              <p>
+                Joon Sung Park, Joseph C. O'Brien, Carrie J. Cai, Meredith Ringel Morris, Percy
+                Liang, and Michael S. Bernstein. 2023.{" "}
+                <a href="https://dl.acm.org/doi/10.1145/3586183.3606763">
+                  Generative Agents: Interactive Simulacra of Human Behavior
+                </a>
+                . In <em>Proceedings of UIST '23</em>. Source code:{" "}
+                <a href="https://github.com/joonspk-research/generative_agents">
+                  joonspk-research/generative_agents
+                </a>{" "}
+                (Apache License 2.0).
+              </p>
+              <p>
+                Ruoyao Wang, Peter Jansen, Marc-Alexandre Côté, and Prithviraj Ammanabrolu. 2022.{" "}
+                <a href="https://aclanthology.org/2022.emnlp-main.775/">
+                  ScienceWorld: Is your Agent Smarter than a 5th Grader?
+                </a>{" "}
+                In <em>Proceedings of EMNLP 2022</em>.
+              </p>
+              <p>
+                Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik Narasimhan, and
+                Yuan Cao. 2023.{" "}
+                <a href="https://arxiv.org/abs/2210.03629">
+                  ReAct: Synergizing Reasoning and Acting in Language Models
+                </a>
+                . In <em>Proceedings of ICLR 2023</em>.
+              </p>
             </div>
           </div>
         </div>
