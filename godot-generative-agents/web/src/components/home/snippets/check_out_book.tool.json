@@ -12,7 +12,6 @@
         "type": "string",
         "description": "the exact name of the book to check out",
         "enum": [
-          "book shelf",
           "campus history book",
           "star atlas"
         ]

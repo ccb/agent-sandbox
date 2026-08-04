@@ -117,7 +117,10 @@ class Action(GatedEffect):
     # is a word placed before the value when the slots are reassembled into a
     # command string ("attack" + target "player" + weapon "club" whose slot
     # declares connector "with" -> "attack player with club"), which then routes
-    # through the precondition gate unchanged.
+    # through the precondition gate unchanged. An ITEM slot may also declare
+    # ``property`` -- the property name its gate will demand (or a tuple of
+    # names for an OR gate) -- narrowing the enum to items the gate can accept
+    # (#924), so the menu is never wider than the gate.
     ARGUMENTS_SCHEMA: dict | None = None
 
     # Affordance declaration for this verb (issue #612): the property tags that

@@ -208,6 +208,40 @@ def test_read_tool_advertises_item_enum_and_pacing_slots():
     assert "emoji" in props
 
 
+def test_item_slots_offer_only_gate_passable_things():
+    """#924: the shelf must stay in scope -- it is the ``book_shelf``
+    affordance anchor that makes the verbs offered here at all -- but both
+    verbs' gates refuse it, so the argument menus must not offer it either
+    (the #612 offered <=> place-check invariant, at the argument level).
+    Un-narrowed, ``check_out_book(book="book shelf")`` is expressible and
+    costs a tick, a paid call, and a #636 failure memory."""
+    game, chars = _tiny_world()
+    char = chars["Testa"]
+    _stocked_stacks(game)
+    _move(game, char, "Stacks")
+
+    tools = {t["name"]: t for t in action_tools_for(game, char)}
+    props = tools["check_out_book"]["parameters"]["properties"]
+    assert props["book"]["enum"] == ["field guide"]
+    props = tools["read"]["parameters"]["properties"]
+    assert props["item"]["enum"] == ["field guide"]
+
+
+def test_real_campus_book_slots_exclude_the_shelf():
+    """The #924 measured repro: at the Van Pelt stacks both item slots were
+    enum'd ['book shelf', 'campus history book', 'star atlas']."""
+    pw = build_penn_world()
+    game, chars = pw.build_world_fn(pw.world_map)
+    attach_agents(chars, pw.personas, extra_action_names=PENN_ACTION_VERBS)
+    char = next(iter(chars.values()))
+    _move(game, char, "Van Pelt — Book Stacks")
+
+    tools = {t["name"]: t for t in action_tools_for(game, char)}
+    books = ["campus history book", "star atlas"]
+    assert tools["check_out_book"]["parameters"]["properties"]["book"]["enum"] == books
+    assert tools["read"]["parameters"]["properties"]["item"]["enum"] == books
+
+
 def test_book_verbs_are_curated_by_scope():
     game, chars = _tiny_world()
     char = chars["Testa"]

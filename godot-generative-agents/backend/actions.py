@@ -11,6 +11,7 @@ that, each going through the engine's precondition gate like any built-in action
 """
 
 from text_adventure_games.actions import base, consume, investigate
+from text_adventure_games.enums import Property
 
 
 def _tile_address_parent(location):
@@ -636,6 +637,9 @@ class CheckOutBook(base.Action):
         "book": {
             "type": "item",
             "description": "the exact name of the book to check out",
+            # #924: only offer what the gate below can accept -- without this
+            # the slot is enum'd with everything in scope, shelf included.
+            "property": "library_book",
             "required": True,
         },
     }
@@ -727,6 +731,10 @@ class ReadPenn(investigate.Read):
         "item": {
             "type": "item",
             "description": "the exact name of the thing to read",
+            # #924: the inherited gate is an OR (READ_TEXT *or* READABLE), so
+            # the narrowing tuple is too -- anything carrying either stays
+            # offered; the shelf, carrying neither, stops being one.
+            "property": (Property.READ_TEXT, Property.READABLE),
             "required": True,
         },
         # Brain-authoritative pacing (#581), same contract as Act: popped off
