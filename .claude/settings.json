@@ -3,7 +3,6 @@
     "allow": [
       "Bash(uv run black *)",
       "Bash(uv run pytest *)",
-      "Bash(uv run jupyter nbconvert *)",
       "Bash(uv sync *)",
       "Bash(git diff --stat *)"
     ]
@@ -20,10 +19,6 @@
           {
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/format.sh\""
-          },
-          {
-            "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/run_renderer_coverage.sh\""
           }
         ]
       }

@@ -19,8 +19,6 @@ from text_adventure_games.things import Character, Location
 from backend import cognition
 from backend.penn.penn_world import (
     WORLD_DATA,
-    WORLD_DATA_BOIL,
-    WORLD_DATA_BOIL_HARD,
     build_penn_world,
 )
 
@@ -99,9 +97,7 @@ def test_visited_accumulates_across_steps_without_duplicates():
     assert state["alice"]["visited"] == ["Plaza", "Field"]  # first-visit order
 
 
-@pytest.mark.parametrize(
-    "world_data", [WORLD_DATA, WORLD_DATA_BOIL, WORLD_DATA_BOIL_HARD]
-)
+@pytest.mark.parametrize("world_data", [WORLD_DATA])
 def test_shipped_worlds_fit_under_the_grounding_cap(world_data):
     """Every world we ship must stay small enough to ground its dialogue.
 

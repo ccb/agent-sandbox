@@ -6,8 +6,8 @@ followed by a [Jinja2](https://jinja.palletsprojects.com/) template body. Keepin
 prompts here — in the codebase, under version control — means a prompt is one
 reviewable artifact you can diff in a pull request, not an f-string scattered
 across a function. There is deliberately **no external prompt database or hosted
-service**: changing a prompt is a normal code change. (Introduced in
-[#145](https://github.com/ccb/agent-sandbox/issues/145).)
+service**: changing a prompt is a normal code change. Prompt templates are
+versioned source rather than inline prompt strings.
 
 ## How prompts are rendered
 

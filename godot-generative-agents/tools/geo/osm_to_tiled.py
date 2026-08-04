@@ -91,7 +91,7 @@ AREAS = {
 METRES_PER_TILE = 4.0
 
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
-USER_AGENT = "agent-sandbox-geo/0.1 (https://github.com/ccb/agent-sandbox issue#164)"
+USER_AGENT = "penn-generative-agents-geo/0.1 (https://github.com/aking526/penn-generative-agents)"
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.join(HERE, "out")

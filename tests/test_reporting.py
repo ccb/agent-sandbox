@@ -1,8 +1,8 @@
-"""Tests for the output rendering seam (docs/design/output-and-trace-rendering.md).
+"""Tests for the output rendering seam.
 
 These assert on *channels* (via :class:`CaptureRenderer`), not on formatted
 bytes -- the pattern the design doc proposes for the rest of the suite. They
-cover the Message/Channel taxonomy, verbosity gating, the plain + web
+cover the Message/Channel taxonomy, verbosity gating, the plain + JSON
 renderers, that the parser routes its output through the renderer, and that the
 ReAct loop emits the Observe/Think/Act/Reflect channels (and keeps them out of
 command_history).
@@ -25,12 +25,12 @@ from text_adventure_games.reporting import (
     VERBOSE,
     CaptureRenderer,
     Channel,
+    JSONRenderer,
     Message,
     PlainRenderer,
     channel_visible,
     default_renderer,
 )
-from text_adventure_games.webapp.web_parser import WebRenderer
 
 
 @pytest.fixture
@@ -169,29 +169,41 @@ def test_rich_renderer_labels_every_line():
 
 
 # ----------------------------------------------------------------------
-# WebRenderer: the compatibility surface (Channel -> legacy web "type")
+# JSONRenderer: the backend/viewer event surface
 # ----------------------------------------------------------------------
 
 
-def test_web_renderer_maps_channels_to_legacy_types():
-    r = WebRenderer()
+def test_json_renderer_preserves_channels_and_attribution():
+    r = JSONRenderer()
     r.emit(Message(Channel.NARRATION, "a room"))
     r.emit(Message(Channel.BLOCKED, "no can do"))
     r.emit(Message(Channel.NPC_NARRATION, "the troll growls"))
     r.emit(Message(Channel.AGENT_REASONING, "escalate", actor="troll"))
     r.emit(Message(Channel.AGENT_ACTION, "growl player", actor="troll"))
     msgs = r.drain()
-    assert {"type": "output", "text": "a room"} in msgs
-    assert {"type": "error", "text": "no can do"} in msgs
-    assert {"type": "npc_action", "text": "the troll growls"} in msgs
-    # The agent trace keeps the exact labeled one-liner the web UI/tests expect.
-    assert {"type": "npc_log", "text": "troll [reasoning] escalate"} in msgs
-    assert {"type": "npc_log", "text": "troll [action] growl player"} in msgs
+    assert any(m["channel"] == "narration" and m["text"] == "a room" for m in msgs)
+    assert any(m["channel"] == "blocked" and m["text"] == "no can do" for m in msgs)
+    assert any(
+        m["channel"] == "npc_narration" and m["text"] == "the troll growls"
+        for m in msgs
+    )
+    assert any(
+        m["channel"] == "agent_reasoning"
+        and m["actor"] == "troll"
+        and m["text"] == "escalate"
+        for m in msgs
+    )
+    assert any(
+        m["channel"] == "agent_action"
+        and m["actor"] == "troll"
+        and m["text"] == "growl player"
+        for m in msgs
+    )
     assert r.drain() == []  # draining clears the buffer
 
 
-def test_web_renderer_drops_observation_at_normal():
-    r = WebRenderer()  # NORMAL
+def test_json_renderer_drops_observation_at_normal():
+    r = JSONRenderer(level=NORMAL)
     r.emit(Message(Channel.AGENT_OBSERVATION, "the whole scene", actor="troll"))
     assert r.drain() == []
 
@@ -283,10 +295,19 @@ def test_plain_renderer_formats_conflict():
     assert "bob got the gem first this turn." in buf.getvalue()
 
 
-def test_web_renderer_maps_conflict_channel():
-    r = WebRenderer()
+def test_json_renderer_maps_conflict_channel():
+    r = JSONRenderer()
     r.emit(Message(Channel.CONFLICT, "bob got the gem first", actor="alice"))
-    assert {"type": "conflict", "text": "bob got the gem first"} in r.drain()
+    assert r.drain() == [
+        {
+            "channel": "conflict",
+            "text": "bob got the gem first",
+            "actor": "alice",
+            "turn": None,
+            "phase": None,
+            "meta": {},
+        }
+    ]
 
 
 def test_parser_conflict_emits_on_conflict_channel(tiny_game):

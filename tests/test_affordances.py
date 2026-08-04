@@ -174,34 +174,6 @@ def test_give_fails_on_worn_item():
 
 
 # ----------------------------------------------------------------------
-# Wear_Crown composition (bundled Action Castle game)
-# ----------------------------------------------------------------------
-
-
-def test_wear_crown_requires_royalty_and_crowns_on_success():
-    from text_adventure_games.adventures.action_castle import Wear_Crown
-
-    game = _one_char_game()
-    crown = things.Item("crown", "a golden crown")
-    crown.set_property(Property.WEARABLE, True)
-    game.player.add_to_inventory(crown)
-    game.parser.add_action(Wear_Crown)
-
-    # Not royal -> generic Wear's slot move is gated; crown stays in inventory.
-    assert not game.parser.parse_command("wear crown")
-    assert game.player.get_property("is_crowned") is False
-    assert "crown" in game.player.inventory
-
-    # Make royal -> Wear_Crown succeeds; crown moves into `worn` and the
-    # character is crowned.
-    game.player.set_property("is_royal", True)
-    assert game.parser.parse_command("wear crown")
-    assert game.player.get_property("is_crowned") is True
-    assert "crown" in game.player.worn
-    assert "crown" not in game.player.inventory
-
-
-# ----------------------------------------------------------------------
 # Observation surface
 # ----------------------------------------------------------------------
 

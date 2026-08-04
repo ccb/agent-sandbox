@@ -20,7 +20,7 @@ from text_adventure_games import games, things
 from text_adventure_games.blocks import Block
 from text_adventure_games.memory import AgentMemory
 from text_adventure_games.npc import ScriptedAgent
-from text_adventure_games.webapp.web_parser import WebParser
+from tests.support import BufferedParser
 
 # ----------------------------------------------------------------------
 # A. Game.perceivable_locations
@@ -127,7 +127,7 @@ def _simultaneous_world():
     game = games.Game(field, player, characters=[alice, owl], turn_mode="simultaneous")
     field.add_character(alice)
     forest.add_character(owl)
-    game.set_parser(WebParser(game))
+    game.set_parser(BufferedParser(game))
     return game, player, alice, owl
 
 

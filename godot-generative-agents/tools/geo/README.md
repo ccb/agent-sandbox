@@ -1,6 +1,6 @@
 # `godot-generative-agents/tools/geo` — real-world map → Tiled tilemap
 
-Proof-of-concept for [#164](https://github.com/ccb/agent-sandbox/issues/164):
+Map-generation and validation tooling for the Penn campus showcase:
 import real-world map data (OpenStreetMap / GeoJSON) and turn it into a **Tiled**
 tilemap (`.tmj`). Tiled is the one format both renderers we care about consume:
 
