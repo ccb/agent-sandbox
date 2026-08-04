@@ -52,11 +52,11 @@ def test_show_energy_command_succeeds():
     assert results[0] is True
 
 
-def test_set_energy_resets_to_50():
+def test_set_energy_resets_to_70():
     game = build_game()
     game.player.set_property("energy", 0)
     play(game, ["energy mode"])
-    assert prop(game, "The player", "energy") == 50
+    assert prop(game, "The player", "energy") == 70
 
 
 def test_eating_non_edible_item_fails_and_does_not_change_energy():
