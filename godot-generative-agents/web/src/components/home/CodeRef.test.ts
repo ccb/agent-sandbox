@@ -6,6 +6,7 @@
 // toc.test.ts reads the page. (Vitest stubs CSS out unless `test.css` is on —
 // see vite.config.ts.)
 import { describe, expect, it } from "vitest";
+import caseStudy from "./CaseStudySection.tsx?raw";
 import source from "./HomeView.tsx?raw";
 import css from "./home.css?raw";
 
@@ -26,11 +27,29 @@ describe("code references", () => {
     expect(smallScreen).toContain(".nrf-ref-pop {\n    display: inline;");
   });
 
-  it("names a source file in every reference on the page", () => {
-    const refs = source.match(/<CodeRef>[\s\S]*?<\/CodeRef>/g) ?? [];
+  it("keeps the link visibly a link in both presentations", () => {
+    // The bubble is an <a>: on the dark fill the underline is the only affordance
+    // (the browser's blue is unreadable there and is overridden), and inline on a
+    // phone there is no bubble and no marker either, so the underline is all that
+    // is left. Lose it in either place and the reference silently stops looking
+    // clickable.
+    expect(css).toContain(
+      ".nrf-ref-pop:hover,\n.nrf-ref-pop:focus-visible {\n  text-decoration: underline;",
+    );
+    expect(smallScreen).toContain("text-decoration: underline;");
+  });
+
+  it("names a source file in every reference on the page, and links it", () => {
+    const refs = [...source.matchAll(/<CodeRef[\s\S]*?<\/CodeRef>/g)].map((m) => m[0]);
+    const caseRefs = [...caseStudy.matchAll(/<CodeRef[\s\S]*?<\/CodeRef>/g)].map((m) => m[0]);
     expect(refs.length).toBeGreaterThan(0);
-    for (const ref of refs) {
+    expect(caseRefs.length).toBeGreaterThan(0);
+    for (const ref of [...refs, ...caseRefs]) {
       expect(ref).toMatch(/\.py<\/code>/);
+      // `at` is what carries the file and line (codeRefs.ts). A reference without
+      // one wouldn't compile, but the regex above is also how a new reference gets
+      // counted, so assert it here rather than trusting the type alone.
+      expect(ref).toMatch(/<CodeRef at="\w+">/);
     }
   });
 });
