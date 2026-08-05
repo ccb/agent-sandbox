@@ -631,7 +631,7 @@ export function CaseStudySection() {
             </SectionHeading>
             <p>
               Plans are living documents
-              <CodeRef>
+              <CodeRef at="revisePlan">
                 <code>maybe_revise_plan()</code>, in <code>backend/cognition.py</code>
               </CodeRef>{" "}
               and Maya's memory stream keeps the whole edit history: one initial plan and seven

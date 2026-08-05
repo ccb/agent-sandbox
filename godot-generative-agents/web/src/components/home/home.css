@@ -341,6 +341,16 @@
   hyphens: none;
   font-size: 0.8rem;
   box-shadow: 0 2px 8px rgb(0 0 0 / 18%);
+  /* The bubble is a link to the definition (CodeRef.tsx). It keeps the bubble's
+     own white on the dark fill rather than the browser's link blue, which is
+     unreadable there; the underline on hover is what says it's clickable. These
+     are the same class selectors as the rules above, so the small-screen
+     overrides below still win without needing their own specificity fight. */
+  text-decoration: none;
+}
+.nrf-ref-pop:hover,
+.nrf-ref-pop:focus-visible {
+  text-decoration: underline;
 }
 .nrf-ref:hover .nrf-ref-pop,
 .nrf-ref:focus-within .nrf-ref-pop {
@@ -372,6 +382,9 @@
     color: inherit;
     font-size: inherit;
     box-shadow: none;
+    /* Inline, there is no bubble and no marker to hint at — the underline is the
+       only thing left saying the parenthetical opens the file. */
+    text-decoration: underline;
   }
   .nrf-ref-pop::before {
     content: " (";
