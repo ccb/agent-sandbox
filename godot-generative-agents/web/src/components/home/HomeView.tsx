@@ -582,8 +582,8 @@ export function HomeView() {
       {/* ===== Teaser: summary + the replay itself (it used to be a button linking
           out to a standalone #game page) =====
           The replay itself is the teaser — a demo video was going to share this
-          slot, until it was dropped (#881, deferred 2026-08-03).
-          TODO(#878): swap in a still from the selected showcase run meanwhile. */}
+          slot, until it was dropped (#881, deferred 2026-08-03), and what the
+          embed plays IS the frozen #878 showcase run, so no still stands in. */}
       <section className="nrf-teaser" id="demo">
         <div className="nrf-container">
           <ReplayFigure />
