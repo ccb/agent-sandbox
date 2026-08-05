@@ -4,7 +4,6 @@ import checkOutBookCode from "./snippets/check_out_book.py?raw";
 import checkOutBookTool from "./snippets/check_out_book.tool.json?raw";
 import checkOutBookGateCode from "./snippets/check_out_book_gate.py?raw";
 import gateCode from "./snippets/gate.py?raw";
-import myVerbCode from "./snippets/my_verb.py?raw";
 
 /**
  * Every snippet on the page, loaded from the real files under snippets/.
@@ -37,12 +36,6 @@ export const SNIPPETS = {
     lang: "json",
     caption: "the tool as generated for an agent in Van Pelt — Book Stacks",
   },
-  myVerb: {
-    // Kept for the commented-out "Adding your own verb" subsection (#880/#884).
-    code: myVerbCode,
-    lang: "python",
-    caption: "a commented template for a custom verb",
-  },
 } satisfies Record<string, { code: string; lang: "python" | "json"; caption: string }>;
 
 /**
@@ -52,9 +45,11 @@ export const SNIPPETS = {
  * passing through them, and how a verb becomes a tool the model can call —
  * all inside the classical `text_adventure_games` library the sim runs on.
  *
- * "Adding your own verb" is commented out below until #880 (Run locally) ships
- * with the public codebase (#884) — a fill-in-the-blank verb template is not
- * useful until readers can actually clone and run the engine.
+ * "Adding your own verb" lives in godot-generative-agents/README.md (#880) —
+ * a fill-in-the-blank verb template belongs next to the code a reader clones,
+ * not restated here. The template itself stays in snippets/my_verb.py, where
+ * test_landing_snippets.py proves it compiles against the real base class and
+ * pins the README's copy to it.
  */
 export function ImplementationSection() {
   return (
@@ -139,32 +134,6 @@ export function ImplementationSection() {
               after it. Narrowing the menu is a convenience for the model; the gate remains the only
               authority over the world.
             </p>
-
-            {/* TODO(#880): restore "Adding your own verb" when the Run locally
-                section ships with the public codebase (#884). The subsection
-                (heading id="your-own-verb", myVerb snippet, custom_actions
-                prose, docs link) and its TOC entry in toc.ts come back
-                together — a fill-in-the-blank verb is only useful once readers
-                can clone and run the engine.
-
-            <SectionHeading id="your-own-verb" level={3} className="nrf-title nrf-title-4">
-              Adding your own verb
-            </SectionHeading>
-            <p>
-              The framework exists so that other people can build simulations on it, which means
-              adding to the world has to be cheap. A new verb is one class:
-            </p>
-            <CodeBlock {...SNIPPETS.myVerb} />
-            <p>
-              Pass it to the game as <code>custom_actions=[MyVerb]</code> and it becomes three
-              things at once: a command a human player can type, an option a scripted NPC can take,
-              and a typed tool in every agent's menu — offered only where the declared affordance is
-              in scope. That last one is the engine's default wiring; a simulation that curates its
-              own verb list, as this one does, names the verb there instead. The full engine
-              reference, generated from these same sources, is at{" "}
-              <a href={`${import.meta.env.BASE_URL}docs/`}>the documentation site</a>.
-            </p>
-            */}
           </div>
         </div>
       </div>

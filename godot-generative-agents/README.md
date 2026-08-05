@@ -60,10 +60,42 @@ uv run python godot-generative-agents/backend/penn/serve_penn.py \
   --brain llm --steps 360 --max-cost 1.00
 ```
 
+Under `--brain llm` the loop boots **paused**, so nothing is spent until you
+start the day. Launch the viewer in a second terminal exactly as in the free
+workflow; the menu detects the paused backend and opens the **setup screen**,
+where you pick the cast, adjust the run knobs (tick pacing, brain, planner,
+thinking depth, model), and press **Start** — that posts the configuration and
+resumes the loop. To rehearse the same screen without a key or a bill, add
+`--start-paused` to the free mock command above; `--no-start-paused` skips it
+and starts an llm run immediately.
+
 The model recipe defaults come from `backend/penn/world_data_upenn.yaml` and may
 be overridden by supported CLI/config options. Watch the terminal monitor. A
 cost ceiling is a safety boundary, not a prediction; historical measurements
 are documented in `runs/cost-scaling/README.md`.
+
+## What's on by default
+
+Not every faculty is always running, and the difference matters for reading run
+costs. **Four things are unconditional:** the tick loop, perception, the memory
+stream with its retrieval, and the precondition gate. They need no language
+model at all — which is what lets the bundled replay bake and the test suite run
+offline, for free, and still exercise real perception and real retrieval. **The
+generative faculties are gated on a real provider:** conversation, reflection,
+importance scoring, and model-written plans exist only when one is attached.
+**The rest are knobs that default off:** the cognition tools (an opt-in pull
+channel of recall/knowledge/plan tools), embedding-based relevance (unset means
+keyword overlap), and reactive interruption, which lets a perception cut into an
+activity mid-stop. Each is a field in the same configuration object as the
+retrieval constants, so a run is described by its config rather than by a code
+change.
+
+The public showcase run enables most of them: a real provider with model
+tiering — a larger model for the deliberative roles, a cheaper one for the
+conversational ones — model-written plans, medium reasoning effort, cognition
+tools on, keyword relevance, and a fixed seed. Reactive interruption is off, so
+plans in that run change from falling behind, from a refused action, or from a
+conversation — never from a perception interrupt.
 
 ## If something goes wrong
 
@@ -85,6 +117,10 @@ are documented in `runs/cost-scaling/README.md`.
   (default `http://127.0.0.1:8080`).
 - **The server dies with an address-in-use error** — something else owns 8080.
   Pass `--port` to the server and match it in `SIM_API_URL`.
+- **The setup screen refuses to Start** — the server rejected the configuration,
+  and the message under the Start button names the offending field (for
+  example, a planner, thinking depth, or model choice on a free brain). Adjust
+  the knob and press Start again; nothing was applied.
 
 ## Penn world and extension points
 
@@ -101,6 +137,53 @@ are documented in `runs/cost-scaling/README.md`.
 
 Forks can add a world builder to the scenario registry, but each shipped scenario
 must provide its world data, tests, documentation, and replay contract together.
+
+## Adding your own verb
+
+The framework exists so that other people can build simulations on it, which
+means adding to the world has to be cheap. A new verb is one class:
+
+```python
+from text_adventure_games.actions.base import Action
+
+
+class MyVerb(Action):
+    # What the parser matches on, and what the agent's tool is called.
+    ACTION_NAME = "my_verb"
+    # The one line the model sees when this verb appears in its menu.
+    ACTION_DESCRIPTION = "what this verb does, in a short phrase"
+    # Optional. Offer the verb only where the world affords it: some thing in
+    # scope -- an item, or the room itself -- must carry this property.
+    REQUIRED_AFFORDANCES = ("my_affordance",)
+
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
+        # Who is acting. Action's helpers match names against what this
+        # character can actually see, so nothing off-screen can be referenced.
+        self.character = self.acting_character(command, hint="who is acting")
+
+    def check_preconditions(self) -> bool:
+        # The gate. Return False and the world does not change. Whatever you
+        # pass to parser.fail becomes a memory the agent can retry against,
+        # so say why, specifically.
+        if not self.has_affordance_in_scope(self.character, "Not possible here."):
+            return False
+        return True
+
+    def apply_effects(self):
+        # Runs only if the gate opened. Change state, then narrate it -- the
+        # narration is what other characters can perceive.
+        self.character.set_property("my_state", True)
+        self.parser.ok(f"{self.character.name} does the thing.")
+```
+
+Pass it to the game as `custom_actions=[MyVerb]` and it becomes three things at
+once: a command a human player can type, an option a scripted NPC can take, and
+a typed tool in every agent's menu — offered only where the declared affordance
+is in scope. That last one is the engine's default wiring; a simulation that
+curates its own verb list, as the Penn cast does, names the verb there instead.
+The full engine reference, generated from these same sources, lives in
+`mkdocs/`.
 
 ## Map changes
 

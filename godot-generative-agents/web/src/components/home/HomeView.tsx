@@ -816,40 +816,9 @@ export function HomeView() {
                 The interactive diagram needs a wider screen than this one.
               </p>
 
-              {/* TODO(#880): restore "What's on by default" when the Run locally
-                  guide ships with the public codebase (#884). This subsection
-                  (heading id="optional", unconditional/generative/knob
-                  breakdown, showcase-run config) belongs in that guide as the
-                  how-to for configuring your own runs — not as architecture
-                  exposition on the Aug 7 site. Restore together with its TOC
-                  entry in toc.ts.
-
-              <SectionHeading id="optional" level={3} className="nrf-title nrf-title-4">
-                What's on by default
-              </SectionHeading>
-              <p>
-                Not all of the above is always running, and the difference matters for reading the
-                costs below. <strong>Four things are unconditional:</strong> the tick loop,
-                perception, the memory stream with its retrieval, and the precondition gate. They
-                need no language model at all — which is what lets the bundled replay bake and the
-                test suite run offline, for free, and still exercise real perception and real
-                retrieval. <strong>The generative faculties are gated on a real provider:</strong>{" "}
-                conversation, reflection, importance scoring, and model-written plans exist only
-                when one is attached. <strong>The rest are knobs that default off:</strong> the
-                cognition tools described above, embedding-based relevance (unset means the keyword
-                overlap), and reactive interruption, which lets a perception cut into an activity
-                mid-stop. Each is a field in the same configuration object as the retrieval
-                constants, so a run is described by its config rather than by a code change.
-              </p>
-              <p>
-                The showcase run enables most of them: a real provider with model tiering — a larger
-                model for the deliberative roles, a cheaper one for the conversational ones —
-                model-written plans, medium reasoning effort, cognition tools on, keyword relevance,
-                and a fixed seed. Reactive interruption is off, so of the four revision triggers
-                listed above the perception-driven one never fires; plans in this run change from
-                falling behind, from a refused action, or from a conversation.
-              </p>
-              */}
+              {/* "What's on by default" moved to godot-generative-agents/README.md
+                  (#880): it is how-to for configuring your own runs, and the
+                  README is the one canonical run-locally copy. */}
             </div>
           </div>
         </div>
