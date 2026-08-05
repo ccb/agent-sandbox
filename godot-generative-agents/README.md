@@ -13,6 +13,11 @@ runs/        minimal aggregate/case-study evidence (not a development RunStore)
 
 ## Free live workflow
 
+One-time setup first: the viewer's licensed art packs are **not in the
+repository** (their licenses forbid redistribution). `ASSETS.md` at the
+repository root lists the three packs, where to get them, and the exact
+drop-in paths — without them the viewer runs but the map renders gray.
+
 From the repository root, install the backend and start it:
 
 ```bash
@@ -117,6 +122,10 @@ conversation — never from a perception interrupt.
   (default `http://127.0.0.1:8080`).
 - **The server dies with an address-in-use error** — something else owns 8080.
   Pass `--port` to the server and match it in `SIM_API_URL`.
+- **The map renders gray, with errors naming `interior_franuka.png` or other
+  sheets** — the licensed art packs are missing. `ASSETS.md` at the repository
+  root has the packs and drop-in paths; `run.sh` re-imports on the next launch,
+  and `run_smoke_test.sh` fails loudly if a sheet is still misplaced.
 - **The setup screen refuses to Start** — the server rejected the configuration,
   and the message under the Start button names the offending field (for
   example, a planner, thinking depth, or model choice on a free brain). Adjust
