@@ -30,16 +30,11 @@ const RAW_TOC: { id: string; label: string; sub?: true }[] = [
   { id: "conversations", label: "Conversations", sub: true },
   { id: "action-gate", label: "The action gate", sub: true },
   { id: "decision", label: "Inside a decision", sub: true },
-  // TODO(#880): restore with HomeView's "What's on by default" when Run
-  // locally ships with the public codebase (#884) — part of the guide for
-  // configuring your own runs.
-  // { id: "optional", label: "What's on by default", sub: true },
+  // "What's on by default" and "Adding your own verb" live in
+  // godot-generative-agents/README.md (#880), the canonical run-locally copy.
   { id: "engine", label: "The text-adventure engine" },
   { id: "the-gate", label: "The precondition gate", sub: true },
   { id: "verb-to-tool", label: "From verb to tool", sub: true },
-  // TODO(#880): restore with ImplementationSection's "Adding your own verb"
-  // when Run locally ships with the public codebase (#884).
-  // { id: "your-own-verb", label: "Adding your own verb", sub: true },
   { id: "cost", label: "What a day costs" },
   { id: "reflections", label: "Coding agents as research instruments" },
   // No subsections: the guide is now a pointer to the repository's README

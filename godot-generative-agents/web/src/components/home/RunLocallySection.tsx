@@ -42,8 +42,8 @@ export function RunLocallySection() {
               </a>
               , where they stay in step with the code instead of being restated here. New verbs, new
               worlds, and new agent faculties are all ordinary extensions of the general
-              text-adventure engine underneath, and instructions for modifying it ship alongside the
-              code package.
+              text-adventure engine underneath, and the same README shows what a run enables by
+              default and the one-class template for a verb of your own.
             </p>
           </div>
         </div>

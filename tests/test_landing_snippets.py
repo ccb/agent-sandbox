@@ -1,9 +1,9 @@
 """Pin the landing page's code snippets to the engine they quote.
 
-The public landing page (godot-generative-agents/web) shows four code snippets.
-Three quote real engine source; the fourth is an example verb a reader could
-copy. Nothing else checks them -- a renamed method would leave the public page
-confidently wrong -- so this module is that check.
+The public landing page (godot-generative-agents/web) quotes real engine source
+in its code snippets, and godot-generative-agents/README.md quotes the example
+verb template (#880). Nothing else checks them -- a renamed method would leave
+the public page confidently wrong -- so this module is that check.
 
 The snippets are real files under web/src/components/home/snippets/, imported
 into React with Vite's `?raw`. This test reads the same bytes, so there is no
@@ -225,3 +225,14 @@ def test_example_verb_compiles_against_the_real_base_class():
     assert my_verb.REQUIRED_AFFORDANCES == ("my_affordance",)
     for helper in ("acting_character", "has_affordance_in_scope"):
         assert hasattr(my_verb, helper), f"Action lost {helper}()"
+
+
+def test_readme_verb_guide_matches_the_template():
+    """The "Adding your own verb" guide (#880) quotes my_verb.py in
+    godot-generative-agents/README.md. The snippet file is the copy the test
+    above proves compiles against the real base class, so the README block must
+    be byte-identical to it -- otherwise readers copy code nothing validates."""
+    readme = (REPO_ROOT / "godot-generative-agents/README.md").read_text()
+    fenced = re.findall(r"```python\n(.*?)```", readme, re.S)
+    template = (SNIPPET_DIR / "my_verb.py").read_text()
+    assert template in fenced, "README's MyVerb block drifted from my_verb.py"
