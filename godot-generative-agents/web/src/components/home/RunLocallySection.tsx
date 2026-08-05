@@ -1,4 +1,4 @@
-import { REPO_URL } from "./links";
+import { repoFile, repoTree } from "./links";
 import { SectionHeading } from "./SectionHeading";
 
 /**
@@ -13,7 +13,7 @@ import { SectionHeading } from "./SectionHeading";
  * page because it is about *this* page.
  */
 
-const README_URL = `${REPO_URL}/blob/prod/godot-generative-agents/README.md`;
+const README_URL = repoFile("godot-generative-agents/README.md");
 
 export function RunLocallySection() {
   return (
@@ -36,7 +36,7 @@ export function RunLocallySection() {
                 <code>godot-generative-agents/README.md</code>
               </a>{" "}
               in the{" "}
-              <a href={REPO_URL} target="_blank" rel="noreferrer">
+              <a href={repoTree} target="_blank" rel="noreferrer">
                 repository
               </a>
               , where they stay in step with the code instead of being restated here. The public
