@@ -65,6 +65,27 @@ be overridden by supported CLI/config options. Watch the terminal monitor. A
 cost ceiling is a safety boundary, not a prediction; historical measurements
 are documented in `runs/cost-scaling/README.md`.
 
+## If something goes wrong
+
+- **`Godot 4 not found.`** — `run.sh` probes `godot`, then `godot4`, then
+  `/Applications/Godot.app/Contents/MacOS/Godot`. Install Godot 4.6 or put it on
+  `PATH` under one of those names.
+- **An import error naming the LLM extra** — `--brain llm` needs
+  `uv sync --extra server --extra llm`. The server exits with that instruction
+  rather than starting without a brain.
+- **`--brain llm needs ANTHROPIC_API_KEY`** — export it in the serving terminal
+  or put it in a repo-root `.env` (template: `.env.example`). An already-exported
+  variable wins over `.env`, and no other key variable is consulted.
+- **`ANTHROPIC_API_KEY was rejected by the API`** — the key is present but not
+  valid. One free models-list request verifies it at boot, so a typo'd or revoked
+  key stops the server here instead of leaving the cast frozen at $0 spend for a
+  whole simulated day.
+- **`Can't reach … — is the backend running?`** in the viewer's menu — start the
+  server terminal first, and check `SIM_API_URL` matches its `--host`/`--port`
+  (default `http://127.0.0.1:8080`).
+- **The server dies with an address-in-use error** — something else owns 8080.
+  Pass `--port` to the server and match it in `SIM_API_URL`.
+
 ## Penn world and extension points
 
 - `backend/penn/world_data_upenn.yaml`: cast, schedules, relationships, meetings,

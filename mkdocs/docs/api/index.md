@@ -2,7 +2,7 @@
 
 These pages are generated from the engine's own docstrings, so they always match
 the installed code. For the conceptual picture, start with the
-[design notes](https://github.com/aking526/penn-generative-agents/tree/prod/docs/design) on
+[design notes](https://github.com/ccb/agent-sandbox/tree/prod/docs/design) on
 GitHub; these pages are the precise reference.
 
 The reference is split by subsystem:

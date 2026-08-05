@@ -6,8 +6,8 @@ that keep the Penn showcase understandable, reproducible, and easy to fork.
 ## Start locally
 
 ```bash
-git clone https://github.com/aking526/penn-generative-agents.git
-cd penn-generative-agents
+git clone https://github.com/ccb/agent-sandbox.git
+cd agent-sandbox
 uv sync --extra dev --extra server
 uv run pytest tests/ -q
 uv run pytest godot-generative-agents/tests/ -q

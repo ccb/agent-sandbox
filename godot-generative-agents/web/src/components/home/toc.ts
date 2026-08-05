@@ -42,13 +42,9 @@ const RAW_TOC: { id: string; label: string; sub?: true }[] = [
   // { id: "your-own-verb", label: "Adding your own verb", sub: true },
   { id: "cost", label: "What a day costs" },
   { id: "reflections", label: "Coding agents as research instruments" },
+  // No subsections: the guide is now a pointer to the repository's README
+  // (#880, scope narrowed 2026-08-04).
   { id: "run-locally", label: "Run locally" },
-  { id: "prereqs", label: "Prerequisites", sub: true },
-  { id: "mock-run", label: "Try it free first", sub: true },
-  { id: "key-and-cost", label: "Your key, and what a run costs", sub: true },
-  { id: "two-terminal-flow", label: "Run it", sub: true },
-  { id: "run-troubleshooting", label: "If something goes wrong", sub: true },
-  { id: "extending", label: "Make it your own", sub: true },
   { id: "limitations", label: "Limitations" },
   { id: "appendix", label: "Appendix" },
   { id: "acknowledgements", label: "Acknowledgements", sub: true },

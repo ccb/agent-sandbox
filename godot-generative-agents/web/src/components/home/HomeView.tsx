@@ -1,13 +1,18 @@
-// ReactNode is only used by the Icon component below, which is commented out
-// together with the link buttons that use it. Re-enable this import when you
-// re-enable that block.
-// import type { ReactNode } from "react";
-import { lazy, type MouseEvent, Suspense, useEffect, useRef, useState } from "react";
+import {
+  lazy,
+  type MouseEvent,
+  type ReactNode,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { GodotCanvas } from "../GodotCanvas";
 import { CaseStudySection } from "./CaseStudySection";
 import { CodeRef } from "./CodeRef";
 import { CostSection } from "./CostSection";
 import { ImplementationSection } from "./ImplementationSection";
+import { REPO_URL } from "./links";
 import { ReflectionsSection } from "./ReflectionsSection";
 import { RunLocallySection } from "./RunLocallySection";
 import { SectionHeading } from "./SectionHeading";
@@ -277,14 +282,29 @@ export const TEX = {
   colRow: String.raw`(x, y) = (\text{col}, \text{row})`,
 };
 
-// The Paper / arXiv / Code buttons in the hero are commented out until the
-// public repository (#884, scheduled 2026-08-14) exists. Their inline SVG
-// line-icons are commented out here along with them, since nothing else uses
-// them. (The original Nerfies template pulls Font Awesome / Academicons from a
-// CDN, which COOP/COEP would block — hence inlining.) Re-enable this block and
-// the buttons together. A Video button and its icon lived here too; both were
+// The hero's Paper / arXiv buttons stay commented out until there is a paper to
+// link; the Code button is live (the repository URL is known, even though it is
+// private until 2026-08-14 — #884). Icons are inline SVG line-icons: the
+// original Nerfies template pulls Font Awesome / Academicons from a CDN, which
+// COOP/COEP would block. A Video button and its icon lived here too; both were
 // deleted when the demo video was dropped (#881, deferred 2026-08-03).
 /*
+const PaperIcon = (
+  <Icon>
+    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+    <path d="M14 3v5h5" />
+    <line x1="9" y1="13" x2="15" y2="13" />
+    <line x1="9" y1="17" x2="15" y2="17" />
+  </Icon>
+);
+const ArxivIcon = (
+  <Icon>
+    <path d="M22 10 12 5 2 10l10 5 10-5z" />
+    <path d="M6 12v5c0 1 2.7 3 6 3s6-2 6-3v-5" />
+  </Icon>
+);
+*/
+
 function Icon({ children }: { children: ReactNode }) {
   return (
     <svg
@@ -303,32 +323,12 @@ function Icon({ children }: { children: ReactNode }) {
   );
 }
 
-const PaperIcon = (
-  <Icon>
-    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
-    <path d="M14 3v5h5" />
-    <line x1="9" y1="13" x2="15" y2="13" />
-    <line x1="9" y1="17" x2="15" y2="17" />
-  </Icon>
-);
-const ArxivIcon = (
-  <Icon>
-    <path d="M22 10 12 5 2 10l10 5 10-5z" />
-    <path d="M6 12v5c0 1 2.7 3 6 3s6-2 6-3v-5" />
-  </Icon>
-);
 const CodeIcon = (
   <Icon>
     <path d="m9 18-6-6 6-6" />
     <path d="m15 6 6 6-6 6" />
   </Icon>
 );
-*/
-
-// The repository this companion lives in. The plan of record (#875, updated
-// 2026-08-04) flips THIS repository public on Aug 14 rather than exporting a
-// standalone one, so the citation points here; the URL goes live with #884.
-const REPO_URL = "https://github.com/ccb/agent-sandbox";
 
 // Named so the copy button and the rendered block can't drift apart.
 const BIBTEX = `@misc{king2026penncampusagents,
@@ -565,26 +565,16 @@ export function HomeView() {
               </span>
             </div>
 
-            {/* Paper / arXiv / Code links — re-enable (along with the Icon
-                block at the top of this file) once the public repository (#884)
-                URL exists. A Video button sat between arXiv and Code; deleted
-                with #881 (video deferred 2026-08-03).
-
+            {/* Paper / arXiv buttons sat beside Code and are commented out with
+                their icons at the top of this file — nothing to link yet. A Video
+                button was here too; deleted with #881 (video deferred
+                2026-08-03). */}
             <div className="nrf-links">
-              <a className="nrf-button" href="#">
-                {PaperIcon}
-                <span>Paper</span>
-              </a>
-              <a className="nrf-button" href="#">
-                {ArxivIcon}
-                <span>arXiv</span>
-              </a>
               <a className="nrf-button" href={REPO_URL} target="_blank" rel="noreferrer">
                 {CodeIcon}
                 <span>Code</span>
               </a>
             </div>
-            */}
           </div>
         </div>
       </section>
