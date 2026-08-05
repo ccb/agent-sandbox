@@ -12,7 +12,7 @@ import { CaseStudySection } from "./CaseStudySection";
 import { CodeRef } from "./CodeRef";
 import { CostSection } from "./CostSection";
 import { ImplementationSection } from "./ImplementationSection";
-import { REPO_URL } from "./links";
+import { REPO_URL, repoTree } from "./links";
 import { ReflectionsSection } from "./ReflectionsSection";
 import { RunLocallySection } from "./RunLocallySection";
 import { SectionHeading } from "./SectionHeading";
@@ -570,7 +570,7 @@ export function HomeView() {
                 button was here too; deleted with #881 (video deferred
                 2026-08-03). */}
             <div className="nrf-links">
-              <a className="nrf-button" href={REPO_URL} target="_blank" rel="noreferrer">
+              <a className="nrf-button" href={repoTree} target="_blank" rel="noreferrer">
                 {CodeIcon}
                 <span>Code</span>
               </a>
