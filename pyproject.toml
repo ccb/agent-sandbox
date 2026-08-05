@@ -50,9 +50,9 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/aking526/penn-generative-agents"
-Repository = "https://github.com/aking526/penn-generative-agents"
-Issues = "https://github.com/aking526/penn-generative-agents/issues"
+Homepage = "https://github.com/ccb/agent-sandbox"
+Repository = "https://github.com/ccb/agent-sandbox"
+Issues = "https://github.com/ccb/agent-sandbox/issues"
 
 # Install extras with e.g. `pip install -e ".[llm]"`.
 [project.optional-dependencies]
