@@ -136,6 +136,25 @@ EFFORT_CHOICES = ("default", *EFFORT_LEVELS)
 # failure -- already retried by the client's own #260 budget -- rides through.
 BRAIN_OUTAGE_PAUSE_STREAK = 3
 
+# One-verb-ate-the-run thresholds (#811), read off the #760 run log rather
+# than picked out of the air. Top-verb share of decisions across the real-LLM
+# runs on record:
+#
+#   healthy full days   R1 48.9% (47 decisions), R4 40.2% (87, 9 verbs)
+#   degenerate          R9 58.6% (29) -- the run that opened #811 -- then
+#                       R3 76.2% (105), R6 83.3% (192), R2 84.8% (105)
+#
+# Every healthy full day stays under half; every run the log calls degenerate
+# on this axis is majority-one-verb. So the line is a simple majority: warn
+# past 0.5, which also reads as what it measures ("more than every other verb
+# combined"). The decision floor exists for the quiet #795-side days (R5/R7/R8:
+# 15-18 decisions, perform/travel on top at up to 62.5%) -- that is a few
+# agents following a schedule, not a verb eating a run, and their real failure
+# (a silent day) already has #795's own warning. Every degenerate run above
+# had >= 29 decisions; 20 splits the two populations with room on both sides.
+VERB_MIX_WARN_SHARE = 0.5
+VERB_MIX_MIN_DECISIONS = 20
+
 
 class BrainOutage(RuntimeError):
     """The live brain is erroring on every call (#745): raised by
@@ -1293,6 +1312,11 @@ class PennStepper:
         self._co_settled_total = 0
         self._co_settled_by_pair: dict[tuple[str, str], int] = {}
         self._conversations_total = 0
+        # #811: this run's verb histogram -- how many decisions picked each
+        # verb. Fed by step()'s decide_info, served by run_usage() beside the
+        # social block, persisted into run.yaml at finish. Same reset-per-day
+        # and resume caveats as the #795 accumulators above.
+        self._verb_counts: dict[str, int] = {}
         self._resumed = False
         self.emoji = {p["name"]: p["emoji"] for p in self.world.personas}
         self.order = [p["name"] for p in self.world.personas]
@@ -1503,6 +1527,15 @@ class PennStepper:
             )
         }
 
+    def _verbs_json(self) -> dict:
+        # THE verb-histogram shape, defined once (#811, mirrors _by_pair_json
+        # above): busiest verb first. run_usage() and _write_run_record()
+        # both serve this -- one order, not two.
+        return {
+            verb: n
+            for verb, n in sorted(self._verb_counts.items(), key=lambda kv: -kv[1])
+        }
+
     def run_usage(self) -> dict:
         """This run's slice of the lifetime ledger (#526).
 
@@ -1572,6 +1605,18 @@ class PennStepper:
                 # converse failing to converse is not a warning), so the
                 # dashboard can tell a real #795 drought from a non-signal.
                 "counted": True,
+                "resumed": self._resumed,
+            },
+            # #811: what the run's decisions were actually spent on. The
+            # social block above says whether talking was possible/happening;
+            # this says whether one verb ate the run while it did (#795's
+            # numbers both go UP in that failure mode, so they can't flag it).
+            # Counted under every brain, like co-settling -- it's bookkeeping.
+            # `resumed` carries the same caveat as social's: a resumed run's
+            # histogram covers this process's slice only.
+            "verbs": {
+                "decisions": sum(self._verb_counts.values()),
+                "by_verb": self._verbs_json(),
                 "resumed": self._resumed,
             },
         }
@@ -2140,6 +2185,9 @@ class PennStepper:
         for pair in social_info.get("pairs", ()):
             self._co_settled_by_pair[pair] = self._co_settled_by_pair.get(pair, 0) + 1
         self._co_settled_total += social_info.get("co_settled", 0)
+        # #811: fold this tick's chosen verbs into the run histogram.
+        for verb in decide_info.get("verbs", ()):
+            self._verb_counts[verb] = self._verb_counts.get(verb, 0) + 1
         self.last_deciders = decide_info.get("deciders", 0)
         for name in decide_info.get("timeouts", ()):
             # Mirror the injector's FIRE print: the skipped decision must be
@@ -2263,6 +2311,26 @@ class PennStepper:
                 f"run (#795). Check the day plans: try --plan schedule to "
                 f"compare."
             )
+        # #811: the opposite failure mode -- one verb took a majority of a
+        # full day's decisions (thresholds + evidence at VERB_MIX_WARN_SHARE).
+        # Same gates as the #795 warning above: real brain only (a mock bake's
+        # day is legitimately mostly perform) and never on a resume (the
+        # histogram covers this process's slice, not the day).
+        decisions = sum(self._verb_counts.values())
+        if (
+            self.llm_client is not None
+            and not self._resumed
+            and decisions >= VERB_MIX_MIN_DECISIONS
+        ):
+            verb, top = max(self._verb_counts.items(), key=lambda kv: kv[1])
+            if top / decisions > VERB_MIX_WARN_SHARE:
+                print(
+                    f"  - WARNING {verb} took {top} of {decisions} decisions "
+                    f"({top / decisions:.0%}) -- one verb ate the run (#811). "
+                    f"The full mix is `verbs` in GET /usage and run.yaml; if "
+                    f"the missing verbs were never offered, that's a "
+                    f"place-gating coverage gap, not model preference."
+                )
         if self.run_store is not None and self._run_id is not None:
             # Re-stamp the manifest as well as the status: `daily_plans` (#824)
             # is only final once the day is over, since maybe_revise_plan can
@@ -2297,6 +2365,9 @@ class PennStepper:
                 "co_settled_pair_steps": self._co_settled_total,
                 "by_pair": self._by_pair_json(),
                 "conversations": self._conversations_total,
+                # #811: the run's verb histogram, busiest first -- the offline
+                # counterpart of run_usage()'s `verbs` block.
+                "verbs": self._verbs_json(),
             },
         )
         record.save(str(self.run_store.root / self._run_id / "run.yaml"))

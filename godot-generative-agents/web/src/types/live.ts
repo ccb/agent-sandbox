@@ -129,6 +129,18 @@ export interface RunSocial {
   resumed?: boolean;
 }
 
+// This run's verb histogram (#811): how many decisions picked each verb,
+// busiest first. The social block says whether talking was possible/happening;
+// this says whether one verb ate the run while it did — both #795 numbers go
+// UP in that failure mode, so they can't flag it. `resumed` carries the same
+// caveat as RunSocial's: a resumed run's histogram covers the current
+// process's slice of the day only.
+export interface RunVerbs {
+  decisions: number;
+  by_verb: Record<string, number>;
+  resumed: boolean;
+}
+
 // GET /usage — the run ledger's summary (tokens and dollars, #264).
 // `available: false` means no ledger is wired (a zeroed summary with only the
 // core fields); the budget fields appear only when the server was started with
@@ -170,6 +182,9 @@ export interface UsageSummary {
   run_by_actor?: Record<string, number>;
   // Present only alongside the other run-scoped fields above.
   social?: RunSocial;
+  // The #811 verb histogram; present only alongside the run-scoped fields,
+  // like `social`.
+  verbs?: RunVerbs;
 }
 
 // GET /agents/{name}/memory — the live counterpart of the baked

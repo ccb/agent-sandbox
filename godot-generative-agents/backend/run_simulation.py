@@ -613,6 +613,13 @@ def step(
     if decide_info is not None:
         decide_info.update(deciders=len(due), timeouts=timeouts)
 
+    # Verbs chosen at this tick's decision points (#811), reported through
+    # decide_info below so the stepper can keep a per-run histogram. One entry
+    # per decision that produced a command -- gate-failed commands included
+    # (the model chose the verb; that the world refused it is the gate's
+    # story), parked #366 timeouts excluded until the tick their answer lands.
+    chosen_verbs = []
+
     frame = {}
     for name in order:
         char = chars[name]
@@ -672,6 +679,10 @@ def step(
             # the precondition gate.
             is_talk = False
             if command:
+                # #811: count the decision's verb (the command's first token,
+                # the same digest _decision_trace records) before the gate
+                # runs, so success and failure branches both count.
+                chosen_verbs.append(command.split(" ", 1)[0])
                 peeked = game.parser.peek_action(command, actor=char)
                 is_talk = peeked is not None and peeked.ACTION_NAME == ActionName.TALK
             # #581 pacing args are minutes -> steps; with no clock they can't
@@ -957,6 +968,11 @@ def step(
             # tolerance already given "credit_stop" elsewhere in this file.
             "trace": st.get("trace", []),
         }
+
+    # #811: hand the tick's chosen verbs back beside deciders/timeouts. The
+    # stepper accumulates them into the run histogram run_usage() serves.
+    if decide_info is not None:
+        decide_info["verbs"] = chosen_verbs
 
     # #795: count the opportunity to talk BEFORE any conversation machinery
     # runs this tick, so the metric is independent of cooldowns and pins.
