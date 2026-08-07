@@ -332,7 +332,7 @@ const CodeIcon = (
 
 // Named so the copy button and the rendered block can't drift apart.
 const BIBTEX = `@misc{king2026penncampusagents,
-  title  = {Penn Campus: Generative Agents in a Simulated World},
+  title  = {PennAgents: Generative Agents on a Campus Map},
   author = {King, Alistair and L, Frankie and Callison-Burch, Chris},
   year   = {2026},
   note   = {PURM, University of Pennsylvania},
@@ -536,7 +536,7 @@ export function HomeView() {
         <div className="nrf-hero-body">
           <div className="nrf-container nrf-centered">
             <h1 className="nrf-title nrf-title-1">
-              Penn Campus: Generative Agents in a Simulated World
+              PennAgents: Generative Agents on a Campus Map
             </h1>
             <p className="nrf-venue">
               University of Pennsylvania · PURM 2026
