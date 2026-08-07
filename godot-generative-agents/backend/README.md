@@ -1295,7 +1295,7 @@ Deferred (don't expect these yet):
 ---
 
 *Tests that double as executable examples live in
-[`tests/test_api.py`](../tests/test_api.py) — they exercise every status code and
+[`tests/test_api.py`](../../tests/test_api.py) — they exercise every status code and
 the security posture above. The architecture rationale is in the repo's
 `CLAUDE.md` ("Backend HTTP API").*
 

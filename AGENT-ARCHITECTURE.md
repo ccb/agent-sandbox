@@ -1,8 +1,9 @@
 # Agent architecture — state of the system
 
 What the generative-agents simulation in `godot-generative-agents/` **actually
-does today**, as opposed to what the roadmaps propose. Written against
-`1da413f7` (2026-07-24).
+does today**, as opposed to what the roadmaps propose. Written against the tree
+as of **2026-07-24** (originally pinned to `1da413f7`; that SHA no longer
+resolves — #876's history rewrite renumbered every commit).
 
 `README.md` says what the project is for. `ROADMAP.md` and `FEATURE-ROADMAP.md`
 say where it's going. `godot-generative-agents/README.md` says how to *run* it.
@@ -331,7 +332,7 @@ offline bake reproducible and free — but it does mean *most of the interesting
 machinery is dark until you pass `--brain llm`.*
 
 Feature flags resolve by **OR** across CLI, sim config, and engine config
-(`_resolve_cognition_tools`, `serve_penn.py:198`): any surface can switch a
+(`_resolve_cognition_tools`, `serve_penn.py:250`): any surface can switch a
 feature on, none can veto another.
 
 ---
@@ -392,7 +393,7 @@ Cost: `UsageLedger` accumulates per-agent and per-role spend; `--max-cost` /
 
 ## 11. Known gaps and rough edges
 
-Honest list, as of `1da413f7`:
+Honest list, as of 2026-07-24:
 
 - **Most cognition is dark by default** (§8). Reading the code overstates what a
   default run does.

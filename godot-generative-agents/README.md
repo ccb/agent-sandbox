@@ -151,8 +151,8 @@ LLM_PROVIDER=mock uv run python godot-generative-agents/backend/penn/generate_pe
 
 The Penn world lives in [`backend/penn/`](backend/penn/): `world_data_upenn.yaml`
 (the world: locations, the `llm:` block, and a `cast: [diego, tanaka, sofia]` list
-resolved from the `personas/` library — 7 personas total, 3 in the default cast
-while the live-LLM MVP keeps runs cheap; see `backend/penn/personas/README.md`)
+resolved from the `personas/` library — 35 personas total, 3 in the default cast
+while live-LLM runs stay cheap; see `backend/penn/personas/README.md`)
 and `the_upenn/` (the OSM-derived navigation
 grid from `godot-generative-agents/tools/geo/osm_to_ville.py`). The agent *engine* (deciding, pathfinding) is
 the surrounding `backend` package, so this is the same simulation that runs there —
@@ -168,6 +168,9 @@ button; issue #252) shows *who has talked to whom* so far — edges thicken with
 and more-recent conversations, and `←`/`→` flips to the authored t=0 **seed
 relationships** (the `relationships:` blocks in `backend/penn/personas/*.yaml`) so you can
 compare who *started out* knowing whom against who actually met during the day.
+There's also a persistent **dialogue-log dock** (#963/#964,
+`scripts/dialogue_log_panel.gd`) that collects every conversation line as it
+plays, so dialogue stays readable even at full playback speed.
 
 **Snapshots and clip export are off in this build.** The campus-snapshot button and
 its gallery (issue #253) and the GIF/MP4 clip export (issues #488/#548) are built but
@@ -474,7 +477,7 @@ stays visible); the meter keeps counting underneath. Its data feed is pluggable
   dollars at risk. The stop button freezes playback and trips a mock budget gate;
   Play lifts it.
 - **Live mode:** point the scene at a running backend (`backend/api.py`) by setting
-  the `live_backend_url` export — or just `SIM_API_URL=http://127.0.0.1:8000` in the
+  the `live_backend_url` export — or just `SIM_API_URL=http://127.0.0.1:8080` in the
   environment, no editor needed — and the same monitor polls the real `GET /usage` +
   `GET /health` and drives `POST /pause` (`scripts/hud_source_live.gd`), sending
   `SIM_API_TOKEN` as a bearer token when set; the request log fills from the event
@@ -499,16 +502,15 @@ Two design docs in the repo sketch the road from here to a fully-wired Godot fro
 - **Campus tiles** — Kenney's [RPG Urban Pack](https://kenney.nl) (CC0, public
   domain), baked into `maps/tilemap_packed.png` by the geo tool. Interior cutaway art
   is credited separately in `maps/INTERIOR_CREDITS.md`.
-- **Agent sprites** — the **Cute Fantasy (Free)** pack by Kenmi, kept under
-  `Cute_Fantasy_Free/` with its original `read_me.txt`. Per that license it is **free
-  for non-commercial use and may be modified, but not redistributed or resold**. It
-  lives here only for this private research repo.
-- **UI chrome** — the **Cute Fantasy UI / Dungeons** pack by Kenmi, kept under
-  `Cute_Fantasy_UI/` with its original `read_me.txt`. `theme/cute_fantasy_ui.tres`
-  9-slices the parchment frames, buttons, sliders and ribbons out of its sheets.
-  Same terms as above: usable and modifiable, **not redistributable or resalable**,
-  here only for this private research repo.
-- **Fonts** — none bundled. All UI text uses Godot's built-in font (Open Sans). The
-  UI pack's 5×9 pixel font was never wired up (it read poorly at the small sizes the
-  panels use, and was ASCII-only) and was deleted; `theme/cute_fantasy_ui.tres`
-  deliberately sets no `default_font`.
+- **Agent sprites & UI chrome** — the **Cute Fantasy (Free)** and **Cute Fantasy
+  UI / Dungeons** packs by Kenmi are licensed (free for non-commercial use, but
+  **not redistributable**), so #876 removed them from the repo and its history.
+  The root [`ASSETS.md`](../ASSETS.md) documents where to get each pack and
+  exactly where the files go; CI restores the team's bundle from a private
+  release. `theme/cute_fantasy_ui.tres` 9-slices the parchment frames, buttons,
+  sliders and ribbons out of the UI sheets once they're in place.
+- **Fonts** — one bundled: `theme/fonts/NotoEmoji-VariableFont_wght.ttf`
+  (OFL), wired by `scripts/emoji_font.gd` as the default font's fallback so
+  emoji render in web exports (#951). All other UI text uses Godot's built-in
+  font (Open Sans); `theme/cute_fantasy_ui.tres` deliberately sets no
+  `default_font`.
