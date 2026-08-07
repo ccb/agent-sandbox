@@ -33,8 +33,10 @@ from text_adventure_games.reporting import Channel, Message, default_renderer
 from text_adventure_games.usage import UsageLedger
 
 from .cognition import (
+    ABANDONED_LEG_WINDOW_MIN,
     at_scheduled_stop,
     attach_agents,
+    building_of,
     maybe_converse,
     maybe_react,
     maybe_revise_plan,
@@ -107,6 +109,7 @@ def _decide_for(
     waiting=False,
     act_since=None,
     walking=None,
+    abandons=None,
     *,
     deciding_sink=None,
 ):
@@ -146,6 +149,7 @@ def _decide_for(
             waiting=waiting,
             act_since=act_since,
             walking=walking,
+            abandons=abandons,
         )
     finally:
         if deciding_sink is not None:
@@ -565,6 +569,7 @@ def step(
                 waiting=state[name].get("waiting_for_anchor", False),
                 act_since=state[name].get("act_since"),
                 walking=_walking_minutes_left(state[name], chars[name], clock),
+                abandons=state[name].get("abandoned_legs"),
                 deciding_sink=deciding_sink,
             )
         if futs:
@@ -645,6 +650,7 @@ def step(
                     waiting=st.get("waiting_for_anchor", False),
                     act_since=st.get("act_since"),
                     walking=_walking_minutes_left(st, char, clock),
+                    abandons=st.get("abandoned_legs"),
                     deciding_sink=deciding_sink,
                 )
             )
@@ -743,6 +749,33 @@ def step(
                     # instead of reading the walk as time spent on the stop.
                     st["act_text"] = None
                     st["walk_target"] = dest.name
+                    # #933: departing for a DIFFERENT building while the last
+                    # leg's building is still standing (nothing settled there
+                    # -- the settle branches below clear it) means that leg
+                    # was abandoned: analyze_run's cross-building "retarget",
+                    # since a decision always sits on an arrival boundary.
+                    # Record it so the decide prompt can discourage bouncing
+                    # straight back (cognition.abandoned_walks_block). A hop
+                    # within one building is #849's same-place oscillation,
+                    # not an abandon, and the addressless hub ("") is nowhere
+                    # in particular -- both skip, matching the #850 split.
+                    new_building = building_of(address)
+                    old_building = st.get("walk_building", "")
+                    if old_building and new_building and new_building != old_building:
+                        abandoned = st.setdefault("abandoned_legs", {})
+                        abandoned[old_building] = step_idx
+                        # Bound the map: entries past the damper window can
+                        # never render again, so drop them at the same moment
+                        # a new abandon proves the agent is in a dither.
+                        if clock is not None:
+                            horizon = _minutes_to_steps(ABANDONED_LEG_WINDOW_MIN, clock)
+                            for stale in [
+                                building
+                                for building, when in abandoned.items()
+                                if step_idx - when > horizon
+                            ]:
+                                del abandoned[stale]
+                    st["walk_building"] = new_building
                 elif (
                     command.startswith("perform")
                     or (clock is not None and _settles_in_place(game, command))
@@ -761,6 +794,11 @@ def step(
                     # advertise no duration slot and never settle. Byte-identical:
                     # the mock only ever emits perform, whose settle is unchanged.
                     st["performing"] = True
+                    # #933: settling completes the walk leg that got here --
+                    # a later departure abandons nothing. Cleared exactly
+                    # where analyze_run's frame reading would see a non-walk
+                    # act break the walk->walk chain (#850).
+                    st["walk_building"] = ""
                     schedule = char.agent.schedule
                     # #831: a completed activity credits its stop wherever it
                     # ran. This flag used to be the place match, so an agent that
@@ -861,6 +899,11 @@ def step(
                     activity = char.get_property("activity") or "spending time"
                     where = char.location.tile_address if char.location else "?"
                     st["desc"] = f"{activity} @ {where}"
+                    # #933: doing anything here -- even an instantaneous verb
+                    # or a (possibly dead) talk -- completes the walk leg, the
+                    # same non-walk act that breaks analyze_run's walk->walk
+                    # retarget chain (#850).
+                    st["walk_building"] = ""
                     if is_talk:
                         settle_after_dead_talk(st, step_idx, cog.dead_talk_settle_steps)
                     elif (
