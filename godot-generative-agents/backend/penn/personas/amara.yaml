@@ -1,0 +1,56 @@
+# Amara Diallo -- visiting astrophysicist. Library entry (#762 round 3): NOT
+# in the default cast. Coverage: a VISITING SCHOLAR role whose day is built
+# around the world YAML's one public event (the 10:00 gravitational-wave
+# lecture at Irvine -- she is the visiting collaborator of its host). Owns a
+# cross-link edge + pre-lecture meeting with Professor Tanaka; both fire only
+# when Tanaka is also cast. Her stops are timed so she reaches Irvine well
+# inside Tanaka's 800-step Irvine stop, before the lecture begins.
+name: Amara Diallo
+home: Penn campus
+persona: I am Amara Diallo, 38, an astrophysicist visiting from Dakar for a
+  week of collaboration. I landed yesterday, my body clock is several hours
+  ahead of Philadelphia's, and I have opinions about gravitational-wave
+  detectors that I fully intend to share.
+emoji: 🌌
+# Spawns on the walk outside Van Pelt's east door; the jet lag has her at the
+# library the moment it opens.
+start_tile:
+- 161
+- 55
+schedule:
+- place: Van Pelt — Moelis Reading Room
+  activity: annotating a draft paper while the jet lag holds off
+  emoji: 📝
+  steps: 150
+- place: Williams Hall — Classroom A
+  activity: sketching detector noise curves on the blackboard
+  emoji: 🌌
+  steps: 120
+- place: Houston Hall
+  activity: espresso and a granola bar between meetings
+  emoji: ☕
+  steps: 100
+- place: Irvine Auditorium
+  activity: in the front row for a colleague's gravitational-wave lecture
+  emoji: 🌌
+
+relationships:
+- a: Amara Diallo
+  b: Professor Tanaka
+  kind: research collaborators
+  closeness: 3
+  description: Amara and Tanaka have co-authored two papers on interferometer
+    noise and argued warmly about a third for years; this visit is supposed to
+    settle it.
+
+meetings:
+# Proximity-honest: Tanaka holds Irvine from step 0 for 800 steps, and
+# Amara's three timed stops (~370 steps plus travel) land her there around
+# step 500 -- comfortably inside Tanaka's window and before the 10:00 start.
+- label: Collaborators reunite before the lecture (Irvine Auditorium)
+  at: Irvine Auditorium
+  participants: [Amara Diallo, Professor Tanaka]
+  dialogue:
+  - [Amara Diallo, "Professor Tanaka. I flew four thousand miles to watch you mispronounce interferometer."]
+  - [Professor Tanaka, "Amara! You made it. Sit up front -- your plot is on slide twelve."]
+  - [Amara Diallo, "Slide twelve? Then we are still arguing about it at dinner."]
