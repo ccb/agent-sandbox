@@ -10,7 +10,7 @@ It is read-only and offline: point it at a baked replay JSON (what
 ``generate_penn_replay.py`` writes) or at a #304 RunStore run directory
 (``runs/<run_id>/``). No live coupling, no new export fields.
 
-Five rubric dimensions, each scored 1-10 with cited step examples:
+Six rubric dimensions, each scored 1-10 with cited step examples:
 
 * **plan coherence** -- did the agent's actions match its plan (or deviate
   visibly), in the plan's order?
@@ -22,6 +22,9 @@ Five rubric dimensions, each scored 1-10 with cited step examples:
   of (or inviting someone to) a place that doesn't exist in this world?
 * **memory use** -- were the memories retrieved for a decision relevant to
   the action taken?
+* **memory carry** -- does a later conversation reuse a specific detail
+  (a name, a number, a rare word) that first entered this agent's stream in
+  an *earlier* conversation, ideally with a different partner (#814)?
 
 Two judges score the same evidence:
 
@@ -53,6 +56,7 @@ import json
 import random
 import re
 import sys
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -370,7 +374,7 @@ def build_evidence(replay: dict) -> dict[str, AgentEvidence]:
 
 
 # ---------------------------------------------------------------------------
-# Scores and the rubric's five dimensions
+# Scores and the rubric's six dimensions
 # ---------------------------------------------------------------------------
 
 # The rubric, in report order. Every judge scores exactly these.
@@ -380,6 +384,7 @@ DIMENSIONS = (
     "social_grounding",
     "world_grounding",
     "memory_use",
+    "memory_carry",
 )
 
 # A silent agent this co-located had someone to talk to and did not. Below it,
@@ -392,6 +397,27 @@ SILENT_COLOCATION_FLOOR = 0.10
 # (0.72, 0.84). A false positive costs a line of report text, not a score.
 REPEAT_LOOP_MIN_CONVERSATIONS = 3
 REPEAT_LOOP_MAX_NOVELTY = 0.60
+
+# What counts for memory carry (#814), validated against the #760 batch-1
+# runs. Retelling your own source is real but weak evidence, so a carry whose
+# source conversation shares a partner with the reusing one earns half credit;
+# the cross-partner form (R1's Diego -> Sofia -> Tanaka) earns full.
+CARRY_SAME_PARTNER_CREDIT = 0.5
+
+# The "specific detail" gates. A word said in more transcript lines than this,
+# run-wide, is the pair's conversational currency rather than a detail -- the
+# guard that zeroes the #778 loop pairs, whose whole vocabulary repeats every
+# window. A lowercase word must *also* be rare across the run's whole corpus
+# (memories, acts, schedules, personas): a small transcript corpus makes bare
+# filler ("nice", "anyway", "hoping" -- all measured slipping through on
+# batch-1) look rare, but filler saturates the memory streams while a real
+# detail like R1's "warm wood paneling" appears only in its few echoes.
+# Proper nouns and numbers are structurally specific, so only the line cap
+# applies; a person's name not even that, because meeting someone in one
+# conversation and naming them in another is the #814 R1 evidence no matter
+# how often the pair swapped direct address in between.
+CARRY_MAX_TRANSCRIPT_LINES = 4
+CARRY_MAX_CORPUS_DOCS = 5
 
 
 @dataclass
@@ -535,6 +561,101 @@ def _content_words(text: str) -> set[str]:
     return {w for w in words if len(w) >= 4 and w not in _STOPWORDS}
 
 
+# Like _content_words' pattern, plus digit-led tokens ("6:15", "1970s"):
+# a number is exactly the kind of concrete detail carry should notice.
+_DETAIL_RE = re.compile(r"\d[\w:]*|[a-z]+")
+
+
+def _detail_words(text: str) -> set[str]:
+    """The candidate detail tokens of *text*: content words (4+ letters,
+    minus stopwords, like :func:`_content_words`) plus number tokens."""
+    words = set()
+    for tok in _DETAIL_RE.findall((text or "").lower()):
+        if tok[0].isdigit():
+            words.add(tok)
+        elif len(tok) >= 4 and tok not in _STOPWORDS:
+            words.add(tok)
+    return words
+
+
+def _proper_case_words(text: str) -> set[str]:
+    """Lowercased words that appear Title-Cased mid-sentence in *text*.
+
+    English capitalizes mid-sentence only what is structurally specific --
+    "the basement of Meyerson Hall", "maybe Wednesday afternoon" -- so these
+    skip the corpus-rarity gate a lowercase word must pass. Each sentence's
+    opening word is dropped: its capital is grammar, not specificity (a
+    sentence-initial proper noun is a known recall miss, and people's names
+    reach :meth:`HeuristicJudge._memory_carry` via the participant list
+    anyway). Single capitals from all-caps shouting ("AND") come out as
+    one-letter fragments that no detail token ever matches.
+    """
+    found = set()
+    for sentence in re.split(r"[.!?]+", text or ""):
+        tokens = re.findall(r"[A-Za-z][a-z':]*", sentence)
+        for tok in tokens[1:]:
+            if tok[:1].isupper():
+                found.add(tok.lower())
+    return found
+
+
+def _carry_frequencies(evidence_by_name: dict) -> tuple:
+    """Run-wide detail-word document frequencies, for the carry rarity gates.
+
+    Two counts per word, because #814's validation showed each alone fails.
+    ``line_df`` counts transcript lines (each unique window's lines once,
+    run-wide): a #778 loop pair repeats its vocabulary in every window, so
+    loop currency scores high here -- but a *small* run's transcript makes
+    plain filler look rare. ``corpus_df`` adds every memory text, distinct
+    act, schedule stop and persona as documents: filler saturates those, while
+    a genuinely specific detail appears only in its few echoes. (The corpus
+    count cannot stand alone either -- a fact that *was* carried gets
+    re-memorized and re-discussed, inflating exactly the true positives, which
+    is why proper nouns and names skip it.)
+    """
+    line_df: Counter = Counter()
+    corpus_df: Counter = Counter()
+    seen = set()
+    for ev in evidence_by_name.values():
+        for conv in ev.conversations:
+            key = (conv.start, conv.end, frozenset(conv.participants))
+            if key in seen:
+                continue  # every participant carries the same window
+            seen.add(key)
+            for line in conv.transcript:
+                if len(line) == 2:
+                    words = _detail_words(line[1])
+                    line_df.update(words)
+                    corpus_df.update(words)
+        for text in ev.memory_texts:
+            corpus_df.update(_detail_words(text))
+        for act in {seg.act for seg in ev.segments}:
+            corpus_df.update(_detail_words(act))
+        for stop in ev.schedule:
+            corpus_df.update(
+                _detail_words(f"{stop.get('place', '')} {stop.get('activity', '')}")
+            )
+        corpus_df.update(_detail_words(ev.persona))
+    return line_df, corpus_df
+
+
+def _is_specific_detail(
+    word: str, channel: str, line_df: Counter, corpus_df: Counter
+) -> bool:
+    """Is this heard word specific enough to count as a carried detail?
+
+    ``channel`` is how the word entered the agent's stream: ``"name"`` (a
+    conversation partner's own name), ``"proper"`` (Title-Cased mid-sentence,
+    or a number) or ``"common"`` (any other content word). See the
+    ``CARRY_MAX_*`` constants for why each channel faces the gates it does.
+    """
+    if channel == "name":
+        return True
+    if line_df[word] > CARRY_MAX_TRANSCRIPT_LINES:
+        return False
+    return channel == "proper" or corpus_df[word] <= CARRY_MAX_CORPUS_DOCS
+
+
 def _longest_nondecreasing(values: list[int]) -> int:
     """Length of the longest non-decreasing subsequence (repeat visits to the
     same stop are in order). O(n^2), fine for a day's worth of segments."""
@@ -660,6 +781,7 @@ class HeuristicJudge:
             "social_grounding": self._social_grounding(ev, evidence_by_name),
             "world_grounding": self._world_grounding(ev),
             "memory_use": self._memory_use(ev),
+            "memory_carry": self._memory_carry(ev, evidence_by_name),
         }
 
     # -- shared: which schedule stop does a segment's act text belong to? ----
@@ -1113,6 +1235,125 @@ class HeuristicJudge:
             f"{relevant}/{len(decisions)} decisions used a relevant memory",
         )
 
+    # -- dimension 6: memory carry ---------------------------------------------
+
+    def _memory_carry(
+        self, ev: AgentEvidence, evidence_by_name: dict[str, AgentEvidence]
+    ) -> DimScore:
+        """Does a later conversation reuse a detail from an earlier one (#814)?
+
+        The behavior worth demonstrating: in #760's R1, Sofia carried what a
+        conversation with Diego gave her into a conversation with Professor
+        Tanaka ~500 steps later. Per conversation after the agent's first, this
+        looks for a *specific detail* in the agent's own lines that first
+        entered the agent's stream in an earlier conversation -- heard from a
+        partner (or being the partner: meeting someone is how their name enters
+        your stream), not already in the agent's persona, schedule or plans,
+        and not the name of whoever the agent is currently talking to, since
+        direct address is not recall. The score is the mean credit over those
+        later conversations: full for a cross-partner carry, half when the
+        source conversation shares a partner with the reusing one.
+
+        "Specific detail" is the hard part -- #781 showed a single shared
+        content word cannot tell carry from vocabulary collapse, and both naive
+        rarity corpora fail alone (see :func:`_carry_frequencies`). So a detail
+        must be structurally specific (a met agent's name, a mid-sentence
+        proper noun, a number) or a lowercase word rare by *both* counts
+        (:func:`_is_specific_detail`).
+        """
+        conversations = sorted(ev.conversations, key=lambda c: (c.start, c.end))
+        if len(conversations) < 2:
+            return DimScore(
+                None, note="fewer than two conversations, so nothing to carry across"
+            )
+        line_df, corpus_df = _carry_frequencies(evidence_by_name)
+        # Words the agent owned before any conversation: its own name, persona,
+        # schedule and plan memories. Hearing your innate vocabulary said back
+        # is not a fact that entered your stream via a conversation.
+        innate = _detail_words(
+            " ".join(
+                [ev.name, ev.persona]
+                + [f"{s.get('place', '')} {s.get('activity', '')}" for s in ev.schedule]
+                + ev.plan_texts
+            )
+        )
+        # word -> (window index, source partners, source window, channel):
+        # the first time each detail entered this agent's stream.
+        heard: dict[str, tuple[int, frozenset, Conversation, str]] = {}
+        spoken: set[str] = set()
+        credits: list[float] = []
+        carried = cross_partner = 0
+        evidence: list[str] = []
+        for i, conv in enumerate(conversations):
+            partners = frozenset(p for p in conv.participants if p != ev.name)
+            partner_names: set[str] = set()
+            for partner in partners:
+                partner_names |= _detail_words(partner)
+            # Meeting someone is how their name enters your stream -- seeded
+            # before the lines so the agent greeting a new partner by name
+            # ("Hey Grace!") doesn't mask the meeting as the name's source.
+            for word in partner_names:
+                if word not in spoken and word not in innate and word not in heard:
+                    heard[word] = (i, partners, conv, "name")
+            best, best_hit = 0.0, None
+            for line in conv.transcript:
+                if len(line) != 2:
+                    continue
+                speaker, text = line
+                words = _detail_words(text)
+                if speaker == ev.name:
+                    if i > 0:
+                        for word in sorted(words):  # deterministic pick
+                            hit = heard.get(word)
+                            if hit is None or hit[0] >= i or word in partner_names:
+                                continue
+                            if not _is_specific_detail(
+                                word, hit[3], line_df, corpus_df
+                            ):
+                                continue
+                            is_cross = hit[1].isdisjoint(partners)
+                            credit = 1.0 if is_cross else CARRY_SAME_PARTNER_CREDIT
+                            if credit > best:
+                                best, best_hit = credit, (word, hit, is_cross)
+                    spoken |= words
+                else:
+                    proper = _proper_case_words(text)
+                    for word in words:
+                        if word in spoken or word in innate or word in heard:
+                            continue  # not new, or already attributed
+                        channel = (
+                            "proper"
+                            if word[0].isdigit() or word in proper
+                            else "common"
+                        )
+                        heard[word] = (i, partners, conv, channel)
+            if i == 0:
+                continue  # the first conversation has no earlier one to carry
+            credits.append(best)
+            if best_hit is not None:
+                word, hit, is_cross = best_hit
+                carried += 1
+                cross_partner += is_cross
+                if len(evidence) < 3:
+                    evidence.append(
+                        f"steps {conv.start}-{conv.end} ({ev.time_at(conv.start)}): "
+                        f"'{word}' -- first heard from {', '.join(sorted(hit[1]))} "
+                        f"at steps {hit[2].start}-{hit[2].end} -- resurfaces with "
+                        f"{', '.join(sorted(partners))}"
+                        + (" (a different partner)" if is_cross else "")
+                    )
+            elif len(evidence) < 3:
+                evidence.append(
+                    f"steps {conv.start}-{conv.end} ({ev.time_at(conv.start)}): "
+                    f"no specific detail from an earlier conversation resurfaces"
+                )
+        return DimScore(
+            _scale(sum(credits) / len(credits)),
+            evidence,
+            f"{carried}/{len(credits)} later conversation(s) reuse a detail "
+            f"from an earlier one ({cross_partner} across partners)",
+        )
+
 
 # ---------------------------------------------------------------------------
 # The audit: judge every agent, roll up a run summary
@@ -1216,7 +1457,7 @@ _DIM_SCHEMA = {
 BELIEVABILITY_TOOL = {
     "name": "grade_believability",
     "description": (
-        "Grade one agent's recorded day on the five believability dimensions, "
+        "Grade one agent's recorded day on the six believability dimensions, "
         "1-10 each, with step-cited evidence."
     ),
     "parameters": {
@@ -1338,7 +1579,7 @@ class LlmJudge:
     kind = "llm"
 
     def __init__(self, client, max_tokens: int = 4096):
-        # 4096: the forced grade_believability call returns five dimensions of
+        # 4096: the forced grade_believability call returns six dimensions of
         # step-cited evidence — at 1024 the tool JSON truncates mid-generation,
         # fails schema validation, and every agent silently falls back (#908).
         self.client = client

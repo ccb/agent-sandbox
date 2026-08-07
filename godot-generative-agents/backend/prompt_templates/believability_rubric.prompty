@@ -37,5 +37,8 @@ step ranges from the timeline as evidence:
   meet there.
 - memory_use: the memories retrieved for each decision were relevant
   to the decision made.
+- memory_carry: a later conversation reuses a specific detail (a name,
+  a number, a rare word) that first entered the agent's stream in an
+  earlier conversation -- the strongest carry reaches a new partner.
 
-Call grade_believability once, with all five dimensions.
+Call grade_believability once, with all six dimensions.
