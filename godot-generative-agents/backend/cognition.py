@@ -2184,6 +2184,13 @@ def remember_outcome(
             minutes=int(minutes) if minutes else 0,
         )
         importance = 2.0
+    elif verb == "take_notes":
+        # #846: the note IS the effect -- the agent chose to write this down,
+        # so it outranks the routine 2.0 activity records (the
+        # check_out_book/read tier) and importance-weighted retrieval keeps
+        # surfacing it. NOT locked: #583's score_new_memories may re-score.
+        text = render("reflection", verb=verb, topic=rest.strip())
+        importance = 3.0
     elif verb == "eat":
         # Satiety is the memory (#615); hunger as an accumulating drive is #594.
         text = render("reflection", verb=verb, item=rest.strip())

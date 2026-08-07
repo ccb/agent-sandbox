@@ -615,6 +615,86 @@ class Study(base.Action):
         return self.parser.ok(f"{self.character.name} is {activity}.")
 
 
+class TakeNotes(base.Action):
+    """Take notes on something observed or thought about (#846) -- in the
+    #617/#619 affordance-curated lineage, but deliberately UNIVERSAL.
+
+    Nine of the ten #621 parse_gap wishes from the 2026-07-28 Sonnet-5 live
+    runs cluster on note-taking/observation the engine had no verb for
+    ("taking excited notes on curvature and geodesics", "off-center seats to
+    watch the rubber sheet demo", "mentally replaying the lecture"). They all
+    collapse into one shape: *record what I am observing so I keep it* -- so
+    this is one verb with a free-text ``topic``, not a take_notes/observe
+    pair.
+
+    No ``REQUIRED_AFFORDANCES``: the empty declaration is the engine's
+    "universal" case (#612), so the verb is offered everywhere and its gate's
+    place-check passes everywhere -- the #446 offered <=> gate invariant
+    holds by construction. Deliberate, not an oversight: #811 found the
+    narrowly place-gated verbs (study/check_out_book, three Van Pelt rooms)
+    were never offered across whole runs because casts never entered those
+    rooms, and you can jot notes on a lawn as well as in a reading room.
+
+    The effect IS the memory: ``cognition.remember_outcome`` records the note
+    as a first-person observation above default importance (3.0, the
+    check_out_book/read tier), so what the agent chose to write down stays
+    retrievable. No notebook Item, no inventory -- the note has no physical
+    life the sim would have to track. The ARGUMENTS_SCHEMA opts into the #581
+    pacing slots, so a live brain settles into the session like ``perform``."""
+
+    ACTION_NAME = "take_notes"
+    ACTION_DESCRIPTION = (
+        "Take notes on something you are watching, hearing, or thinking about"
+    )
+    ARGUMENTS_SCHEMA = {
+        "topic": {
+            "type": "string",
+            "description": "what you are taking notes on, as a short phrase, "
+            "e.g. 'the rubber sheet demo'",
+            "required": True,
+        },
+        # Brain-authoritative pacing (#581), same contract as `perform`:
+        # popped off the tool call before reassembly, never reach the parser.
+        "duration_minutes": {
+            "type": "number",
+            "description": "how many in-game minutes to spend on these notes "
+            "before deciding again (optional; omit to use the planned duration)",
+            "required": False,
+        },
+        "emoji": {
+            "type": "string",
+            "description": "a single emoji shown on the map while taking notes "
+            "(optional; omit to use the planned/persona default)",
+            "required": False,
+        },
+    }
+
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
+        self.command = command
+        self.character = self.acting_character(command, hint="note-taker")
+        parts = command.split(" ", 1)
+        self.topic = parts[1].strip() if len(parts) > 1 else ""
+
+    def check_preconditions(self) -> bool:
+        if not self.was_matched(self.character, "No one is taking notes."):
+            return False
+        if self.character.location is None:
+            self.parser.fail("There is nowhere to take notes.")
+            return False
+        if not self.topic:
+            # Actionable for the #636 failure memory: the fix is to name a
+            # topic, so say that instead of a bare refusal.
+            self.parser.fail("Say what to take notes on -- the notes need a topic.")
+            return False
+        return True
+
+    def apply_effects(self):
+        activity = f"taking notes on {self.topic}"
+        self.character.set_property("activity", activity)
+        return self.parser.ok(f"{self.character.name} is {activity}.")
+
+
 class CheckOutBook(base.Action):
     """Check a library book out from the shelf (#616) -- Penn's first
     object-tier verb: the book moves shelf -> inventory and records who has

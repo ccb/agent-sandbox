@@ -184,24 +184,29 @@ def test_tool_schema_pane_matches_a_live_tools_for_call(offered_tools):
 
 
 def test_the_library_menu_is_narrowed_by_affordance(offered_tools):
-    """The section's prose claims 7 of the cast's 11 Penn verbs survive the
+    """The section's prose claims 8 of the cast's 12 Penn verbs survive the
     affordance check at the book stacks. Pin both numbers so it can't go stale.
+
+    (``take_notes`` -- #846 -- is deliberately universal, so it survives here
+    like ``wait`` does; the narrowed-away verbs are still study / eat /
+    activate / deactivate.)
 
     SCOPE: this pins the affordance-curation demonstration -- ``tools_for``
     restricted to ``PENN_ACTION_VERBS`` -- and NOT the live sim's wiring. A
     running sim goes through ``cognition.attach_agents`` ->
-    ``action_tools_for``, which prepends ``travel`` and ``perform`` (13
+    ``action_tools_for``, which prepends ``travel`` and ``perform`` (14
     ``action_names``) and drops ``talk_to`` when nobody is co-located, offering
-    8 tools here rather than 7. The prose is worded to claim only what this call
+    9 tools here rather than 8. The prose is worded to claim only what this call
     measures; do not read these numbers as the agent's complete live menu.
     """
-    assert len(PENN_ACTION_VERBS) == 11
+    assert len(PENN_ACTION_VERBS) == 12
     assert sorted(t["name"] for t in offered_tools) == [
         "check_out_book",
         "drink",
         "get",
         "make",
         "read",
+        "take_notes",
         "talk_to",
         "wait",
     ]

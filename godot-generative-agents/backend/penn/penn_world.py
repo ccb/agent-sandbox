@@ -33,6 +33,7 @@ from backend.actions import (
     DrinkPenn,
     ReadPenn,
     Study,
+    TakeNotes,
     TalkTo,
     WaitPenn,
 )
@@ -75,6 +76,7 @@ PENN_EXTRA_ACTIONS = [
     WaitPenn,
     TalkTo,
     Study,
+    TakeNotes,
     CheckOutBook,
     ReadPenn,
 ]
@@ -89,8 +91,13 @@ PENN_EXTRA_ACTIONS = [
 # (Penn-local, #615) are affordance-curated -- offered only where an EDIBLE
 # meal / a `studyable` arena is in scope (#612). `check_out_book`
 # (Penn-local) and `read` (engine) are the #616 Van Pelt book loop,
-# curated to the shelf's arena / the borrower's pocket. Handed to
-# attach_agents(extra_action_names=...) by every Penn entry point.
+# curated to the shelf's arena / the borrower's pocket. `take_notes`
+# (Penn-local, #846) is universal like `wait`: nine of the ten #621
+# parse_gap wishes from the 2026-07-28 runs cluster on note-taking the
+# engine had no verb for, and #811 showed a narrowly place-gated verb is a
+# verb nobody is ever offered -- so it is deliberately not tied to an arena
+# tag. Handed to attach_agents(extra_action_names=...) by every Penn entry
+# point.
 PENN_ACTION_VERBS = [
     "get",
     "drink",
@@ -101,6 +108,7 @@ PENN_ACTION_VERBS = [
     "talk_to",
     "eat",
     "study",
+    "take_notes",
     "check_out_book",
     "read",
 ]
