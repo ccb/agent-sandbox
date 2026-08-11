@@ -535,9 +535,7 @@ export function HomeView() {
       <section className="nrf-hero">
         <div className="nrf-hero-body">
           <div className="nrf-container nrf-centered">
-            <h1 className="nrf-title nrf-title-1">
-              PennAgents: Generative Agents on a Campus Map
-            </h1>
+            <h1 className="nrf-title nrf-title-1">PennAgents: Generative Agents on a Campus Map</h1>
             <p className="nrf-venue">
               University of Pennsylvania · PURM 2026
               {/* Decorative: the line right beside it already names the
