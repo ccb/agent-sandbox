@@ -13,6 +13,129 @@ on top; copy the template block each working day.
 **Next:**
 - ...
 -->
+## 2026-08-11
+**Focus:** Making sleep actually happen (#931 follow-up), then splitting tiredness off hunger entirely, then a wage system for job personas
+
+**Done today:**
+- Root-caused "agents never sleep": the mock brain only ever follows scripted `commands:` stops, never reads `IS_SLEEPY`; and hunger/tiredness shared one `ENERGY` resource, so eating silently cured tiredness. Decoupled the clearing (`clear_low_energy_if_recovered` stopped touching `IS_SLEEPY`), stamped `activity="sleeping"` in `Sleep.apply_effects`, and taught `run_simulation.py`'s settle branch to treat `sleep` like `perform` (unbounded, since it's drive-governed, not schedule-bound). Added authored bedtime stops to diego/tanaka/sofia. Confirmed via bake; found but left alone (per advisor) a pre-existing bug this exposes: routing everyone to the one shared sleepable room can hijack the meeting-injector's longest-co-location heuristic.
+- Added reactive sleep: `attach_agents(game=...)` (opt-in, default off) lets `ScheduleMockClient` override the schedule the moment "You are sleepy." appears in the observation and walk to the nearest sleepable spot. Hardest part: a reactive nap needed a new pre-pass wake-unlatch or the character froze "performing" forever after waking. Gated behind `CognitionConfig.reactive_sleep` + a `--reactive-sleep` flag on `generate_penn_replay.py`.
+- Split tiredness off `ENERGY` into its own `"restedness"` resource (`accrue_tiredness`/retargeted `sleep_accumulation`), mirroring thirst's independent-counter pattern — makes the eat-cures-sleep bug structurally impossible instead of just correctly-ordered. `accrue_energy` dropped its `IS_SLEEPING` gate (hunger now accrues while asleep, like thirst). New `test_tiredness_drive.py`.
+- Added a wage system for the 10 job-flavored personas (Rosa, Walt, Debra, Gus, Leon, Marcus, Ellis, Tanaka, Ravi, Nadia): `accrue_wage`, opt-in `wage_rate` + per-stop `is_work` tag, paid only while actually on-site and settled on a tagged stop. Hit a real bug: added `wage_rate` to the YAMLs but forgot to wire `attach_agents` to copy it onto the character (mirrors `thirst_rate`) — wages silently never accrued until I traced it with a direct simulation check. New `test_wage_drive.py`.
+- Full suite stayed at the same 2 pre-existing unrelated failures (stale `test_config_api_732.py` pins) all day; nothing committed.
+
+**Blockers / questions:**
+- The meeting-injector bug (picks the longest co-location window with no check against a meeting's authored location) is real and will resurface if more sleepable locations land near where personas already meet.
+- Root `tests/test_api.py` still fails to collect — a stale root-level `./backend` bytecode-only dir shadowing the real package, predates this session.
+
+**Next:**
+- Brainstormed, not built: a second real sleepable location (Sweeten Alumni Building's dorm rooms are already geo-baked on the map, just never exposed as a `location:` entry) plus per-persona "nearest spot" selection.
+- Wage amounts are flavor-only, never balanced.
+
+## 2026-08-10
+**Focus:** Closing gaps in the sleep/hunger drive loop so a live LLM brain actually notices and acts on needs (#931 follow-ups)
+
+**Done today:**
+- Retuned sleepy/hungry onset from 5 hours to 1 hour (`_ENERGY_DECAY_CONSTANT`).
+- Found hunger/sleepiness were never surfaced to the LLM at all (only thirst was) — added `"You are hungry."`/`"You are sleepy."` lines to both the decide and converse prompts.
+- Added `marketplace`/`sleepable` to the nearby-affordances tag list (Houston Hall's marketplace tag and the Reading Room's sleepable tag were being silently dropped), plus a new campus-wide (not vision-limited) hint so an agent knows where to eat/sleep from anywhere on the map, not just once it's already nearby.
+- Fixed two real bugs found while verifying the above: (1) eating/drinking restored energy but never cleared the hungry/sleepy flags — a one-way flag; (2) energy decay ran even while a character was asleep, so recovery asymptotically converged just *below* the wake threshold and characters never actually woke up.
+- Added a need-driven interrupt so a long scheduled activity (e.g. an 800-step block) can break early the moment a need appears, instead of blocking any reaction until that activity finishes on its own. Gated to real LLM brains only after it broke two mock-brain tests.
+- Environment: installed Godot 4.6.3 (Homebrew's 4.7.1 needs macOS 13+, we're on 12.3); fixed `uv sync` dropping dev tools when extras aren't all listed together.
+
+**Blockers / questions:**
+- Live `--brain llm` run showed 548 decide calls at $0 cost / 0 tokens each — never root-caused (network to the API checked fine from this machine).
+
+**Next:**
+- Sleep bug: agents don't actually go to sleep even when sleepy — needs investigation.
+- Consider making more locations sleepable (or all of them?) — right now only Houston Hall's Reading Room qualifies.
+
+## 2026-08-07
+**Focus:** Finish Buy/Sell (#931/#932), a Houston Hall sandwich shop on top of it, sleep-gating sweep, and the energy-decay timing fix
+
+**Done today:**
+- Reviewed my own uncommitted Buy/Sell WIP in the Penn backend
+  (`godot-generative-agents/backend/actions.py`) before building on it:
+  `sell` crashed on construction (called a nonexistent `self.item()`
+  matcher), `buy` was a copy-pasted `Sleep` that did nothing, and
+  `REQUIRED_AFFORDANCES = ("marketplace")` was a bare string, not a tuple,
+  so the affordance check silently iterated its characters. Also caught a
+  design regression: the WIP had swapped the already-committed
+  `Property.OWNER` (who's authorized to sell an item) for a boolean
+  `Property.IS_OWNER` on the character, which can't express per-item
+  ownership and broke `tests/test_commerce_scaffold.py`. Restored `OWNER`,
+  rewrote `sell`/`buy` properly (kept the two-step dibs design: `sell`
+  stamps a named buyer, `buy` completes the transfer), and wrote
+  `tests/commerce_system_test.py` (14 tests: dibs, wrong-buyer, asleep,
+  broke, marketplace-affordance gating, the full happy path).
+- Reviewed the whole `food-system-branch` eat/sleep/energy commit chain
+  (7 commits, #931) end to end rather than each commit in isolation, since
+  later ones fix bugs the earlier ones introduced. Found a real one still
+  live: `run_simulation.py`'s per-tick loop runs `accrue_energy` (decay)
+  unconditionally even while `IS_SLEEPING`, with no exclusion like Action
+  Castle's own sleep-decay gate has -- reproduced it directly: with any
+  `energy_decay_rate` above ~0.11, the tick-by-tick decay-then-recover
+  sequence converges to a fixed point below the wake threshold, so that
+  character never wakes up. No shipped persona hits it today, but the
+  knob is real and already exercised by a test. Also flagged (not fixed,
+  just noted): `drives.py` hardcodes `100` instead of importing
+  `MAX_ENERGY`, and `Set_energy`/`Check_energy` are an intentional,
+  tested cheat console shipped in Action Castle's live action list.
+- Swept `godot-generative-agents/backend/actions.py` for sleep-gating:
+  11 of its action classes (`Travel`, `Act`, `WaitPenn`, `DrinkPenn`,
+  `EatPenn`, `Activate`, `Deactivate`, `TalkTo`, `Study`, `CheckOutBook`,
+  `ReadPenn`) had no `IS_SLEEPING` check at all, unlike Action Castle's
+  `SleepGate` mixin, which already covers every one of its own actions.
+  Added the check to each (three of them -- `WaitPenn`/`DrinkPenn`/
+  `EatPenn`/`ReadPenn` -- needed a new `check_preconditions` override,
+  since they'd been relying on the parent's).
+- Wrote `docs/design/belief-graph-implementation-roadmap.md`: a concrete,
+  chunked build plan against the existing (unbuilt) belief-graph proposal
+  doc, scoped to just the "mechanism + database" phases the user wants
+  first (data model, mock extraction, `AgentMemory` wiring, the
+  fall-asleep trigger, real LLM extraction) -- deferring clustering/GraphRAG.
+- Built the Houston Hall sandwich shop end to end: registered `Sell`/`Buy`
+  into `PENN_EXTRA_ACTIONS`/`PENN_ACTION_VERBS`, tagged Houston Hall
+  `marketplace`, removed the old free unowned "sandwich" (replaced by
+  for-sale varieties carried by a worker, to avoid a same-name matching
+  ambiguity). Reused `Rosa Delgado` from the persona library instead of
+  inventing a redundant character (she was already "Houston Hall dining
+  staff, never leaves") and added a second worker, `Walt Higgins`, for
+  "a couple." Gave every persona a default starting `Property.MONEY`,
+  added an opt-in restock drive, and typed `ARGUMENTS_SCHEMA` slots onto
+  `Sell`/`Buy` so a tool-calling brain gets structured fields instead of
+  free text. New `test_sandwich_shop.py` (6 tests); fixed two pre-existing
+  tests that hardcoded "3 free meals at Houston Hall" (now 2) and a
+  `get`/`eat sandwich` demo test (switched to `apple`).
+- Fixed the sleep-onset timing (a person should get sleepy after 5
+  in-game hours). Found the actual blocker first: Penn personas never had
+  a starting `Property.ENERGY` set anywhere, so `accrue_energy`'s
+  exponential decay was starting from 0/unset -- every persona was
+  already `IS_SLEEPY` on tick one, regardless of the decay constant's
+  value. Added `_furnish_starting_energy` (seeds `MAX_ENERGY`). Retuned
+  `_ENERGY_DECAY_CONSTANT`; when the target turn duration I was given
+  (15 sec/turn) turned out not to match what's actually configured
+  everywhere (`SEC_PER_STEP = 10`), changed the real defaults
+  (`penn_world.SEC_PER_STEP`, `exporter.SEC_PER_STEP`,
+  `sim_config.sec_per_step`, `SimClock.sec_per_step`) to 15 rather than
+  just quietly recomputing against 10 -- the goal was for the stated
+  premise to actually be true in the system, not reinterpreted around it.
+  That surfaced a few tests relying on `SimClock`'s implicit default
+  instead of passing `sec_per_step` explicitly like their siblings; fixed
+  those too.
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- `uv sync --extra server` in this env so the fastapi-gated test files
+  actually collect -- still haven't done this, several files stay
+  uncollectible/excluded from every full-suite run this week.
+- Start on the belief-graph roadmap's Chunk 1 (the `BeliefGraph` data
+  model) if that's still the next priority.
+- Consider whether `Sleep`'s own gate should read the new
+  `_furnish_starting_energy`/retuned decay constant in a live bake to
+  confirm the 5-hour onset holds up outside the unit-test math.
+
 ## 2026-08-04
 **Focus:** Give Sleep a real place to be reached from, then unify its gate (#931); scaffold Buy/Sell (#932); dead-code sweep
 
