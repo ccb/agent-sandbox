@@ -1,0 +1,22 @@
+---
+name: known_food_location
+description: >
+  Campus-wide (not proximity-gated) counterpart to nearby_affordances_line's
+  dining hint (#931 follow-up): nearby_affordances_line only names a dining
+  arena already within the character's vision_r, so a hungry agent far from
+  Houston Hall had no way to know where to travel until it happened to wander
+  into view. Rendered by cognition.known_food_location_line() and appended
+  only when the character is actually is_low_energy ("hungry") -- an
+  actionable answer to "where do I go", not a standing campus directory in
+  every observation.
+inputs:
+  places:
+    type: string
+    description: >
+      Pre-joined "<name> (<tags>)" fragments for every dining/marketplace
+      location in the game, regardless of distance, e.g.
+      "Houston Hall (dining, marketplace)".
+sample:
+  places: "Houston Hall (dining, marketplace)"
+---
+Even if it isn't nearby, you know food can be found at: {{ places }}.

@@ -112,7 +112,7 @@ def test_block_requires_a_clock_and_a_schedule():
 def test_block_reads_the_clock_and_current_stop():
     _game, ada = _world()  # schedule steps=None -> no planned clause
     # Step 12 at 10 s/step = 08:02; stop_since=6 -> 6 steps = 1 min elapsed.
-    assert decide_context_block(ada.agent, 12, SimClock(START), 6) == (
+    assert decide_context_block(ada.agent, 12, SimClock(START, sec_per_step=10), 6) == (
         "Right now it is Monday 08:02 AM.\n"
         "Your plan's current stop: reading a novel at Cafe. "
         "You have been on this stop for 1 min."
@@ -126,7 +126,9 @@ def test_decide_prompt_carries_the_block_after_the_environment_text():
     brain = MockLlmClient(tool_calls_responses=[TRAVEL])
     game, ada = _world(llm_client=brain)
 
-    command = observe_and_decide(game, ada, 12, clock=SimClock(START), stop_since=6)
+    command = observe_and_decide(
+        game, ada, 12, clock=SimClock(START, sec_per_step=10), stop_since=6
+    )
 
     assert command == "travel to Cafe"
     user = brain.tool_calls_log[0]["messages"][-1]["content"]

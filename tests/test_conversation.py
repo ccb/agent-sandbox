@@ -18,6 +18,7 @@ Run with::
 import pytest
 
 from text_adventure_games import conversation as convo
+from text_adventure_games.enums import Property
 from text_adventure_games.games import Game
 from text_adventure_games.memory import MemoryKind
 from text_adventure_games.npc import LLMAgent, ScriptedAgent, build_speak_tool
@@ -274,6 +275,58 @@ def test_exchange_records_one_line_and_signals_continue():
     assert len(alice_chat) == 1 and len(bob_chat) == 1
     assert any("Hi Bob." in line for line in bob.heard)
     assert alice_chat[0].created_turn == 3
+
+
+def test_exchange_observation_surfaces_hunger_thirst_and_sleepiness():
+    # #931 follow-up: the decide observation already surfaces
+    # is_thirsty/is_low_energy/IS_SLEEPY (backend/cognition.py); the dialogue
+    # observation had no equivalent, so a hungry/thirsty/sleepy speaker had
+    # no way to know -- or mention -- its own state mid-conversation.
+    captured = {}
+
+    def rule(observation, partner_name):
+        captured["observation"] = observation
+        return None  # decline; we only care about the observation built
+
+    a = ScriptedAgent(lambda obs: None)
+    a.converse_rule = rule
+    b = _talker([])
+    game, alice, bob = _two_in_a_room(a, b)
+    alice.set_property("is_thirsty", True)
+    alice.set_property("is_low_energy", True)
+    alice.set_property(Property.IS_SLEEPY, True)
+    convo_obj = convo.Conversation(participants=("alice", "bob"))
+
+    convo.exchange(game, convo_obj, alice, bob, turn=0)
+
+    obs = captured["observation"]
+    assert "You are thirsty." in obs
+    assert "You are hungry." in obs
+    assert "You are sleepy." in obs
+
+
+def test_exchange_observation_omits_needs_lines_by_default():
+    # The common case (no drives opted in, or none crossed their threshold):
+    # none of the three lines should appear -- confirms the addition doesn't
+    # leak into every conversation, in every game, unconditionally.
+    captured = {}
+
+    def rule(observation, partner_name):
+        captured["observation"] = observation
+        return None
+
+    a = ScriptedAgent(lambda obs: None)
+    a.converse_rule = rule
+    b = _talker([])
+    game, alice, bob = _two_in_a_room(a, b)
+    convo_obj = convo.Conversation(participants=("alice", "bob"))
+
+    convo.exchange(game, convo_obj, alice, bob, turn=0)
+
+    obs = captured["observation"]
+    assert "You are thirsty." not in obs
+    assert "You are hungry." not in obs
+    assert "You are sleepy." not in obs
 
 
 def test_exchange_decline_says_nothing_and_signals_stop():

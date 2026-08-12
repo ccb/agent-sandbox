@@ -36,6 +36,14 @@ schedule:
   # `perform` precedence.
   activity: refining the model into the evening
   emoji: ✏️
+  steps: 60
+# Turns in for the night (#931 follow-up): see sofia.yaml's matching stop --
+# Houston Hall -- Reading Room is the only `sleepable` spot in the world.
+- place: Houston Hall — Reading Room
+  activity: turning in for the night
+  emoji: 😴
+  commands:
+  - sleep
 
 relationships:
 - a: Diego Torres

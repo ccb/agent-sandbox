@@ -98,6 +98,16 @@ REACTED = "reacted"
 # suite loudly instead of silently breaking the guard.
 _CONVERSING_MARKER = "you are in a conversation"
 
+# The exact "You are sleepy." line appended below (unconditionally, every
+# brain) whenever Property.IS_SLEEPY is set. ScheduleMockClient._choose reads
+# this off the observation text rather than the character object -- the mock
+# stands in for an LLM, which only ever sees the prompt, so it should react
+# to the same information a real brain would (and nothing a real brain
+# couldn't see). A shared constant means a reworded line can't silently kill
+# the mock's reactive-sleep override (the #931 follow-up, "walk toward a
+# sleepable spot when tired").
+_SLEEPY_MARKER = "You are sleepy."
+
 # The relationship note a notable meeting leaves behind is momentous on the 1-10
 # poignancy scale (same weight as the #300 "I got sick" signal), so it survives
 # retrieval ranking and pushes the agent toward reflection.
@@ -293,12 +303,20 @@ class ScheduleMockClient(MockReActClient):
     # #372 "thinking" stall demo. 0.0 = today's instant mock, byte-identical.
     latency_s = 0.0
 
-    def __init__(self, schedule: list[dict], config=None, ledger=None):
+    def __init__(self, schedule: list[dict], config=None, ledger=None, sleep_spot=None):
         super().__init__(config, ledger=ledger)
         self.schedule = schedule
         self.stop_index = 0
         # How many of the current stop's authored commands have been issued.
         self._commands_used = 0
+        # Reactive sleep (#931 follow-up): the name of a `sleepable`-tagged
+        # location, or None (the default -- every existing caller that omits
+        # it stays byte-identical). When set, _choose overrides the schedule
+        # the moment the observation carries _SLEEPY_MARKER: head there, then
+        # sleep, regardless of what the current stop says -- same information
+        # a real brain would act on (known_sleep_location_line tells it the
+        # same place), just deterministic instead of decided.
+        self.sleep_spot = sleep_spot
 
     @property
     def _stop(self) -> dict:
@@ -370,9 +388,10 @@ class ScheduleMockClient(MockReActClient):
         patched = []
         for i, entry in enumerate(schedule):
             # Carry backend-only per-stop fields the engine's Stop round-trip
-            # drops (#300 `commands`, #559 `furniture`) back onto a positionally
-            # matching entry -- same `place` and `activity`, i.e. the same
-            # authored stop, just stripped by the round-trip -- that lost them.
+            # drops (#300 `commands`, #559 `furniture`, #931 follow-up
+            # `is_work`) back onto a positionally matching entry -- same
+            # `place` and `activity`, i.e. the same authored stop, just
+            # stripped by the round-trip -- that lost them.
             # An entry that still carries the field keeps its own; a genuinely
             # revised/new stop (different place/activity) inherits nothing.
             if i < len(current):
@@ -384,6 +403,8 @@ class ScheduleMockClient(MockReActClient):
                     entry = {**entry, "commands": list(prior["commands"])}
                 if matches and not entry.get("furniture") and prior.get("furniture"):
                     entry = {**entry, "furniture": prior["furniture"]}
+                if matches and not entry.get("is_work") and prior.get("is_work"):
+                    entry = {**entry, "is_work": True}
             patched.append(entry)
         self.schedule = patched
 
@@ -393,6 +414,19 @@ class ScheduleMockClient(MockReActClient):
     def _choose(self, observation: str) -> str:
         if self.latency_s:
             time.sleep(self.latency_s)  # the single funnel both routes share
+        # Reactive sleep (#931 follow-up): overrides the schedule entirely,
+        # at every decide point, for as long as the character is tired --
+        # the same "You are sleepy." signal a real brain reads, string-matched
+        # off the observation rather than the character object so the mock
+        # only ever acts on what an LLM would actually see in the prompt.
+        # Checked BEFORE the destination check below, so it wins over
+        # whatever the authored stop currently says. Only ever True when the
+        # caller opted in (attach_agents(game=...)); every other caller's
+        # sleep_spot stays None and this block never fires -- byte-identical.
+        if self.sleep_spot and _SLEEPY_MARKER in observation:
+            if self._current_location(observation) != self.sleep_spot.lower():
+                return f"travel to {self.sleep_spot}"
+            return "sleep"
         if self._current_location(observation) != self.destination.lower():
             return f"travel to {self.destination}"
         queued = self._stop.get("commands") or []
@@ -466,6 +500,7 @@ def attach_agents(
     ledger: UsageLedger | None = None,
     embedding_client=None,
     *,
+    game=None,
     relationships_csv: str | None = None,
     base_personas_dir: str | None = None,
     vision_r: int = DEFAULT_VISION_R,
@@ -559,11 +594,32 @@ def attach_agents(
     agent's sampling temperature and reflection trigger from a config (the
     live server's ``--config`` reads them off ``SimulationConfig.game.agent``).
     ``None`` -- the default, and what every existing caller passes -- keeps
-    :class:`LLMAgent`'s own defaults, so behavior is unchanged."""
+    :class:`LLMAgent`'s own defaults, so behavior is unchanged.
+
+    Pass ``game`` (#931 follow-up) so each ``ScheduleMockClient`` can react to
+    tiredness instead of only sleeping at an authored schedule stop: with a
+    ``game``, every mock-driven agent's ``sleep_spot`` is set to the first
+    ``sleepable``-tagged location (:data:`KNOWN_SLEEP_TAG`, sorted by name --
+    the same scan :func:`known_sleep_location_line` runs for a real brain),
+    and ``ScheduleMockClient._choose`` overrides the schedule the moment
+    ``Property.IS_SLEEPY`` shows up in the observation: travel there, then
+    sleep, regardless of the current stop. ``None`` -- the default, and what
+    every existing caller passes -- leaves ``sleep_spot`` unset and every
+    mock keeps sleeping only at its authored bedtime stop, byte-identical."""
     # Load the relationship table once (returns {} if the path is unset/missing).
     relationships = (
         seed.load_relationships(relationships_csv) if relationships_csv else {}
     )
+    sleep_spot = None
+    if game is not None:
+        sleep_spot = next(
+            (
+                loc.name
+                for loc in sorted(game.locations.values(), key=lambda loc: loc.name)
+                if loc.get_property(KNOWN_SLEEP_TAG)
+            ),
+            None,
+        )
     for spec in personas:
         char = characters[spec["name"]]
         # The schedule driver: a deterministic ScheduleMockClient that owns the
@@ -571,7 +627,9 @@ def attach_agents(
         # brain is a real LLM client when one is supplied, else the schedule client
         # itself -- so by default agent.llm_client IS agent.schedule (one object),
         # keeping decisions deterministic and the replay byte-identical.
-        schedule = ScheduleMockClient(spec["schedule"], ledger=ledger)
+        schedule = ScheduleMockClient(
+            spec["schedule"], ledger=ledger, sleep_spot=sleep_spot
+        )
         brain = llm_client if llm_client is not None else schedule
         # Build the agent first so its memory exists and can be seeded before a
         # planner reasons over it. The planner (below) commits the schedule it wants.
@@ -646,6 +704,11 @@ def attach_agents(
             char.set_property("thirst_rate", spec["thirst_rate"])
         if spec.get("thirst_threshold"):
             char.set_property("thirst_threshold", spec["thirst_threshold"])
+        # Opt-in wage drive (#931 follow-up): same copy-over as thirst above,
+        # so the step loop's accrue_wage reads it. Absent for every persona
+        # without a job -> byte-identical bake.
+        if spec.get("wage_rate"):
+            char.set_property("wage_rate", spec["wage_rate"])
         # Bind the private memory to this character and seed the day's plan: the
         # whole itinerary, so retrieval has the agent's intentions to surface from
         # turn 0 (and the first stop still mentions destination + activity, which
@@ -997,11 +1060,16 @@ def decide_with_action_tools(game, char, observation: str) -> str | None:
 
 # Arena affordance tags surfaced in the nearby-affordances line (#613): the
 # tags a visible-but-distant arena carries that a verb will key on -- `studyable`
-# (the study verb, #615) and `dining` (Houston Hall meals, #615). An explicit
-# tuple, NOT "every property on the location", so the line stays a curated hint
-# rather than dumping the arena's whole bool bag. Later slices add their tag
-# names here as they land.
-ARENA_AFFORDANCE_TAGS = ("studyable", "dining")
+# (the study verb, #615), `dining` (Houston Hall meals, #615), `marketplace`
+# (Sell/Buy sandwiches, #931 -- co-located with `dining` at Houston Hall today,
+# but a distinct affordance a hungry brain should be told about explicitly
+# rather than inferring "marketplace" from "dining"), and `sleepable` (Sleep,
+# #931 -- otherwise a sleepy brain has no locational hint at all, unlike
+# thirst/hunger/dining, which all point somewhere). An explicit tuple, NOT
+# "every property on the location", so the line stays a curated hint rather
+# than dumping the arena's whole bool bag. Later slices add their tag names
+# here as they land.
+ARENA_AFFORDANCE_TAGS = ("studyable", "dining", "marketplace", "sleepable")
 
 
 def nearby_affordances_line(game, char) -> str:
@@ -1030,6 +1098,50 @@ def nearby_affordances_line(game, char) -> str:
     if not fragments:
         return ""
     return render("nearby_affordances", arenas="; ".join(fragments))
+
+
+KNOWN_FOOD_TAGS = ("dining", "marketplace")
+KNOWN_SLEEP_TAG = "sleepable"
+
+
+def known_food_location_line(game, char) -> str:
+    """Campus-wide dining/marketplace hint (#931 follow-up), independent of
+    ``nearby_affordances_line``'s vision-radius limit.
+
+    Scans **every** location in ``game.locations`` -- not just perceivable
+    ones -- for a fragment carrying any tag in :data:`KNOWN_FOOD_TAGS`, sorted
+    by name for a stable line. Conditional on the character actually being
+    ``is_low_energy`` ("hungry" -- see ``drives.accrue_energy``): an
+    actionable answer to "where do I go", not a standing campus directory
+    appended to every observation regardless of need. Returns ``""`` when the
+    character isn't hungry, or nothing in the game is tagged.
+    """
+    if not char.get_property("is_low_energy"):
+        return ""
+    fragments = []
+    for loc in sorted(game.locations.values(), key=lambda location: location.name):
+        tags = [tag for tag in KNOWN_FOOD_TAGS if loc.get_property(tag)]
+        if tags:
+            fragments.append(f"{loc.name} ({', '.join(tags)})")
+    if not fragments:
+        return ""
+    return render("known_food_location", places="; ".join(fragments))
+
+
+def known_sleep_location_line(game, char) -> str:
+    """Sleep's counterpart to :func:`known_food_location_line` -- see its
+    docstring. Conditional on ``Property.IS_SLEEPY``, tagged on
+    :data:`KNOWN_SLEEP_TAG` (``"sleepable"``)."""
+    if not char.get_property(Property.IS_SLEEPY):
+        return ""
+    fragments = [
+        loc.name
+        for loc in sorted(game.locations.values(), key=lambda location: location.name)
+        if loc.get_property(KNOWN_SLEEP_TAG)
+    ]
+    if not fragments:
+        return ""
+    return render("known_sleep_location", places="; ".join(fragments))
 
 
 def decide_context_block(agent, step: int, clock, stop_since: int = 0) -> str:
@@ -1151,6 +1263,10 @@ def observe_and_decide(
     # self-line, worded via sick_self_description set in actions.py.)
     if char.get_property("is_thirsty"):
         base = base + "\n\nYou are thirsty."
+    if char.get_property("is_low_energy"):
+        base = base + "\n\nYou are hungry."
+    if char.get_property(Property.IS_SLEEPY):
+        base = base + f"\n\n{_SLEEPY_MARKER}"
     # Nearby-affordances line (#613): visible-but-distant tagged arenas, so the
     # brain can choose to travel toward one (offers stay in-scope only). Gated
     # on the real-brain tool path -- the SAME predicate that guards the tool
@@ -1160,6 +1276,18 @@ def observe_and_decide(
         nearby = nearby_affordances_line(game, char)
         if nearby:
             base = f"{base}\n\n{nearby}"
+        # Campus-wide food/sleep hints (#931 follow-up): nearby_affordances_line
+        # above only names arenas already in sight, so a hungry/sleepy agent far
+        # from Houston Hall had no way to know where to travel until it wandered
+        # into view. These scan every location in the game, not just perceivable
+        # ones, and are conditional on the matching need -- same gate, same
+        # byte-identical-mock guarantee as nearby_affordances_line.
+        food = known_food_location_line(game, char)
+        if food:
+            base = f"{base}\n\n{food}"
+        sleep_spot = known_sleep_location_line(game, char)
+        if sleep_spot:
+            base = f"{base}\n\n{sleep_spot}"
     observation = format_observation_with_memories(base, relevant)
     agent.last_observation = observation
     # Per-action tools (issue #485): a real supplied brain picks between typed

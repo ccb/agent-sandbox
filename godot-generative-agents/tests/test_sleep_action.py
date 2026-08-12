@@ -9,23 +9,26 @@ there. Most of these tests use this file's own tiny world; the last one is a
 wiring check that the real Penn world actually furnishes one too.
 
 "Tired enough to sleep" is Property.IS_SLEEPY -- the same flag
-drives.accrue_energy flips once energy crosses its low-energy threshold, not
-a separate raw-energy comparison of Sleep's own. That keeps "the system says
-you're sleepy" and "you're allowed to sleep" as one signal instead of two
-independently tuned numbers that could disagree.
+drives.accrue_tiredness flips once its independent "restedness" resource
+crosses its low-restedness threshold, not a separate raw-energy comparison of
+Sleep's own. That keeps "the system says you're sleepy" and "you're allowed
+to sleep" as one signal instead of two independently tuned numbers that could
+disagree.
 
 Penn's step loop is externally ticked (live server / bake), unlike Action
 Castle's do_command single-command round, so Sleep can't fast-forward turns
 the way Action Castle's does. These tests reflect that: Sleep only sets
-is_sleeping; the *drive* (drives.sleep_accumulation, see test_energy_drive.py)
-restores energy on subsequent ticks instead.
+is_sleeping; the *drive* (drives.sleep_accumulation, see
+test_tiredness_drive.py) restores restedness on subsequent ticks instead --
+never Property.ENERGY, which is hunger's resource, not sleep's (#931
+follow-up).
 
 Run with: uv run pytest godot-generative-agents/tests/test_sleep_action.py -v
 """
 
 from backend.actions import Sleep  # noqa: E402
 from backend.build_world import _normalize_personas, build_world  # noqa: E402
-from backend.drives import accrue_energy  # noqa: E402
+from backend.drives import accrue_tiredness  # noqa: E402
 from text_adventure_games.enums import Property  # noqa: E402
 
 LOCATIONS = [
@@ -93,20 +96,19 @@ def test_sleep_succeeds_at_a_sleepable_location_when_tired():
     assert char.get_property(Property.IS_SLEEPING) is True
 
 
-def test_sleep_succeeds_once_accrue_energy_flips_is_sleepy():
-    # The unification this action relies on: Sleep doesn't compare energy
-    # itself, it trusts whatever accrue_energy already decided about
-    # IS_SLEEPY -- so decaying energy via the real drive is enough to make
-    # Sleep reachable, with no separate threshold of Sleep's own involved.
+def test_sleep_succeeds_once_accrue_tiredness_flips_is_sleepy():
+    # The unification this action relies on: Sleep doesn't compare restedness
+    # itself, it trusts whatever accrue_tiredness already decided about
+    # IS_SLEEPY -- so decaying restedness via the real drive is enough to
+    # make Sleep reachable, with no separate threshold of Sleep's own
+    # involved.
     game, char = _tiny_world(extra_actions=[Sleep])
-    char.set_property(Property.ENERGY, 100)
-    char.set_property("energy_decay_rate", 50)
+    char.set_property("restedness", 100)
     assert not char.get_property(Property.IS_SLEEPY)
-    accrue_energy(
-        char
-    )  # 100 -> 50, at the default energy_low_threshold (20)... not yet
+    accrue_tiredness(char)  # decays toward the low-restedness threshold (20)... not yet
     assert not game.parser.parse_command("sleep", actor=char)
-    accrue_energy(char)  # 50 -> 0, past the threshold
+    char.set_property("restedness", 20)  # at the threshold
+    accrue_tiredness(char)  # decays past it
     assert char.get_property(Property.IS_SLEEPY)
     assert game.parser.parse_command("sleep", actor=char)
     assert char.get_property(Property.IS_SLEEPING) is True

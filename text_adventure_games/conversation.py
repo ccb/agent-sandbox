@@ -35,6 +35,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .enums import Property
 from .memory import render_memories
 
 # Total lines across both speakers before the loop stops on its own. A meeting is
@@ -254,8 +255,23 @@ def _dialogue_observation(speaker, listener, convo: Conversation, turn: int) -> 
     decision-time recency), and replays the dialogue so far. The persona and
     goals ride on the agent's own system message (see ``LLMAgent``), so they are
     not repeated here.
+
+    Also surfaces the same perceivable-needs lines the decide observation
+    gets (backend/cognition.py's ``is_thirsty``/``is_low_energy``/
+    ``IS_SLEEPY`` block) -- without this, a speaker mid-conversation had no
+    way to know (or mention) that it was hungry, thirsty, or tired, unlike
+    every other observation it receives. Plain ``get_property`` checks, not a
+    backend import: this module is shared by every game, and a character
+    with none of these properties set (the common case outside Penn) simply
+    gets none of these lines.
     """
     lines = [f"You are talking with {listener.name}."]
+    if speaker.get_property("is_thirsty"):
+        lines.append("You are thirsty.")
+    if speaker.get_property("is_low_energy"):
+        lines.append("You are hungry.")
+    if speaker.get_property(Property.IS_SLEEPY):
+        lines.append("You are sleepy.")
     memory = getattr(getattr(speaker, "agent", None), "memory", None)
     if memory is not None:
         try:

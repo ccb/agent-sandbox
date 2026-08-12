@@ -51,5 +51,16 @@ schedule:
   - make boiled water          # -> boiled (consumes murky pot, produces boiled pot)
 - place: Houston Hall
   activity: feeling much better at last
+  steps: 60
   commands:
   - drink pot of boiled water  # -> recovery (the produced boiled pot)
+# Turns in for the night (#931 follow-up): Houston Hall -- Reading Room is
+# the only `sleepable`-tagged spot in the world, so every persona's bedtime
+# routes there. By this stop Property.IS_SLEEPY has been true for hours
+# (accrue_energy flips it ~1 in-game hour in), so the queued `sleep` command
+# clears Sleep.check_preconditions the moment she arrives.
+- place: Houston Hall — Reading Room
+  activity: turning in for the night
+  emoji: 😴
+  commands:
+  - sleep

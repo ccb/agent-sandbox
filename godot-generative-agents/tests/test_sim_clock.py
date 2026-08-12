@@ -22,8 +22,10 @@ START = datetime.datetime(2023, 2, 13, 8, 0, 0)  # 8:00 AM, the sim default
 
 def test_time_at_matches_exporter_formula():
     # SimClock and the exporter must compute the same instant per step, or a
-    # plan's clock would disagree with the navbar/memory timestamps.
-    clock = SimClock(START, sec_per_step=10)
+    # plan's clock would disagree with the navbar/memory timestamps. Built
+    # from exporter.SEC_PER_STEP itself (not a hardcoded number), so this
+    # keeps holding regardless of what that constant is tuned to.
+    clock = SimClock(START, sec_per_step=exporter.SEC_PER_STEP)
     for step in (0, 1, 17, 360, 1079):
         expected = START + datetime.timedelta(seconds=step * exporter.SEC_PER_STEP)
         assert clock.time_at(step) == expected
@@ -44,7 +46,7 @@ def test_steps_per_hour_default_and_custom():
 
 
 def test_minutes_for_steps_floors():
-    clock = SimClock(START)
+    clock = SimClock(START, sec_per_step=10)
     assert clock.minutes_for_steps(240) == 40  # 240 steps * 10s = 40 min
     assert clock.minutes_for_steps(5) == 0  # 50s: under a minute floors to 0
     with pytest.raises(ValueError):

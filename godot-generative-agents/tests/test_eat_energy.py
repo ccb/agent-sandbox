@@ -116,6 +116,44 @@ def test_eating_a_poisonous_item_does_not_restore_energy():
     assert char.get_property(Property.ENERGY) == 50
 
 
+def test_eating_clears_hunger_but_not_sleepy_once_energy_recovers():
+    # #931 follow-up: accrue_energy only ever SETS is_low_energy (it has no
+    # clearing branch, by design -- see drives.py's
+    # clear_low_energy_if_recovered docstring), so without EatPenn calling
+    # that helper, a character who just ate a full meal would still show
+    # "You are hungry." in the decide prompt forever. IS_SLEEPY belongs to a
+    # fully independent "restedness" resource now (see
+    # test_tiredness_drive.py) -- eating restores Property.ENERGY (hunger)
+    # and has no way to touch IS_SLEEPY at all, structurally, not just by
+    # convention: Sleep is what clears it, on waking.
+    game, char = _tiny_world(extra_actions=[EatPenn])
+    char.set_property(Property.ENERGY, 10)
+    char.set_property("is_low_energy", True)
+    char.set_property(Property.IS_SLEEPY, True)
+    game.locations["Union"].add_item(_sandwich(energy_value=20))
+    assert game.parser.parse_command("get sandwich", actor=char)
+    assert game.parser.parse_command("eat sandwich", actor=char)
+    assert char.get_property(Property.ENERGY) == 30
+    assert not char.get_property("is_low_energy")
+    assert char.get_property(Property.IS_SLEEPY)
+
+
+def test_eating_a_small_snack_leaves_hunger_flags_set_if_still_low():
+    # The flags only clear once ENERGY actually climbs back above the
+    # low-energy threshold -- a token nibble that doesn't cross it shouldn't
+    # lie to the brain that the need is satisfied.
+    game, char = _tiny_world(extra_actions=[EatPenn])
+    char.set_property(Property.ENERGY, 5)
+    char.set_property("is_low_energy", True)
+    char.set_property(Property.IS_SLEEPY, True)
+    game.locations["Union"].add_item(_sandwich(energy_value=2))
+    assert game.parser.parse_command("get sandwich", actor=char)
+    assert game.parser.parse_command("eat sandwich", actor=char)
+    assert char.get_property(Property.ENERGY) == 7
+    assert char.get_property("is_low_energy")
+    assert char.get_property(Property.IS_SLEEPY)
+
+
 def test_live_penn_world_meals_carry_energy_value():
     # Wiring check: the real Penn world (not this file's tiny synthetic one)
     # must actually furnish Houston Hall's meals with energy_value, or

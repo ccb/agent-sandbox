@@ -9,6 +9,9 @@ persona: I am Leon Brooks, 36, a circulation librarian at Van Pelt. I am quiet,
   exact, and quietly proud of the stacks -- a misshelved book bothers me more
   than I let on. I started this semester and I'm still learning everyone's names.
 emoji: 🗂️
+# Wage (#931 follow-up): paid per tick actually spent on a work stop below --
+# every stop of his day is a library duty, so every stop is tagged.
+wage_rate: 0.04
 # Starts on the walk outside Van Pelt's east door, a few tiles from where Maya
 # and Priya spawn, so his day opens with the walk in to the returns cart.
 start_tile:
@@ -18,23 +21,29 @@ schedule:
 - place: Van Pelt — Circulation Desk
   activity: sorting the overnight returns cart
   emoji: 🗂️
+  is_work: true
   steps: 120
 - place: Van Pelt — Book Stacks
   activity: reshelving returns row by row
   emoji: 📚
+  is_work: true
   steps: 90
 - place: Van Pelt — Microtext Collection
   activity: repairing a torn microfilm reel
   emoji: 🎞️
+  is_work: true
   steps: 60
 - place: Van Pelt — Circulation Desk
   activity: helping students at the front desk
   emoji: 🗂️
+  is_work: true
   steps: 200
 - place: Van Pelt — Kamin Gallery
   activity: straightening frames in the gallery
   emoji: 🖼️
+  is_work: true
   steps: 40
 - place: Van Pelt — Circulation Desk
   activity: closing out the register for the night
   emoji: 🌙
+  is_work: true

@@ -234,6 +234,212 @@ def test_absent_duration_falls_back_to_schedule_steps():
     assert state["Ada"]["perform_until"] == 0 + 7  # schedule.steps, unclamped
 
 
+def test_need_driven_interrupt_breaks_a_long_performing_block_early():
+    # #931 follow-up: a long duration_minutes/schedule-steps block otherwise
+    # gives zero decision points until it completes naturally -- so a need
+    # that flips true mid-block (accrue_energy/accrue_thirst) would have no
+    # way to be acted on until then, however long that takes. Proves the
+    # interrupt actually fires for a real brain: the same scripted "keep
+    # performing" brain is asked again well before its own 90-minute
+    # duration (540 steps) would otherwise have ended.
+    brain = PerActionBrain("perform", {"activity": "reading", "duration_minutes": 90})
+    game, ada = _world(llm_client=brain, place="The Green")
+    state = _state()
+    _run_step(game, {"Ada": ada}, state, 0, _clock())
+    assert state["Ada"]["performing"] is True
+    assert state["Ada"]["perform_until"] == 540
+    assert len(brain.offers) == 1
+
+    ada.set_property("is_low_energy", True)  # as if accrue_energy just flipped it
+    _run_step(game, {"Ada": ada}, state, 1, _clock())
+
+    assert len(brain.offers) == 2  # re-asked at step 1, nowhere near step 540
+
+
+def test_need_driven_interrupt_never_fires_twice_for_the_same_need_onset():
+    # The edge-trigger (needs_interrupt_seen) must not re-interrupt every
+    # tick while the need is still high -- only once, on the tick it's
+    # first seen -- otherwise a brain that chooses to keep doing the same
+    # thing would be re-asked every single step.
+    brain = PerActionBrain("perform", {"activity": "reading", "duration_minutes": 90})
+    game, ada = _world(llm_client=brain, place="The Green")
+    state = _state()
+    _run_step(game, {"Ada": ada}, state, 0, _clock())
+    ada.set_property("is_low_energy", True)
+    _run_step(game, {"Ada": ada}, state, 1, _clock())
+    assert len(brain.offers) == 2  # the one legitimate interrupt
+
+    # Brain re-affirmed the same long activity; still hungry one tick later.
+    _run_step(game, {"Ada": ada}, state, 2, _clock())
+    assert len(brain.offers) == 2  # NOT re-interrupted again
+
+
+def test_need_driven_interrupt_never_fires_while_actually_sleeping():
+    # IS_SLEEPING means the character is already asleep and recovering via
+    # sleep_accumulation -- interrupting that would wake it before it
+    # actually recovered, defeating the point of sleeping at all.
+    from text_adventure_games.enums import Property
+
+    brain = PerActionBrain("perform", {"activity": "napping", "duration_minutes": 90})
+    game, ada = _world(llm_client=brain, place="The Green")
+    state = _state()
+    _run_step(game, {"Ada": ada}, state, 0, _clock())
+    ada.set_property(Property.IS_SLEEPING, True)
+    ada.set_property(Property.IS_SLEEPY, True)
+    _run_step(game, {"Ada": ada}, state, 1, _clock())
+
+    assert len(brain.offers) == 1  # not interrupted -- still asleep
+    assert state["Ada"]["performing"] is True
+
+
+def test_mock_schedule_sleep_command_settles_and_sets_is_sleeping():
+    # #931 follow-up: "sleep" is not a pacing-slot verb (no duration_minutes
+    # -- its "duration" is drive-driven via sleep_accumulation, not
+    # model-picked), so without opting it into the settle branch the mock
+    # would fall through to a stale `perform <activity>` the very next tick
+    # and fail every remaining tick (Act blocks while IS_SLEEPING) -- the
+    # "mock never lands here" failure path run_simulation.step documents as
+    # unreachable. Proves the authored `commands: [sleep]` stop (the pattern
+    # persona schedules use for their bedtime stop) actually settles.
+    from backend.actions import Sleep
+    from text_adventure_games.enums import Property
+
+    dorm = {
+        "name": "Dorm",
+        "description": "a quiet dorm room",
+        "address": "T:Dorm:bed",
+        "properties": ["sleepable"],
+    }
+    persona = {
+        "name": "Ada",
+        "home": "Dorm",
+        "persona": "I am Ada, a curious first-year.",
+        "emoji": "\U0001f4d6",
+        "start_tile": [0, 0],
+        "destination": "Dorm",
+        "activity": "turning in for the night",
+        "schedule": [
+            {
+                "place": "Dorm",
+                "activity": "turning in for the night",
+                "emoji": "\U0001f634",
+                "steps": None,
+                "commands": ["sleep"],
+            }
+        ],
+    }
+    game, chars = build_world(
+        None, [persona], LOCATIONS + [dorm], extra_actions=[Sleep]
+    )
+    attach_agents(chars, [persona], llm_client=None)  # mock brain
+    ada = chars["Ada"]
+    ada.set_property(Property.IS_SLEEPY, True)  # as if accrue_energy already flipped it
+    state = _state()
+    _run_step(game, {"Ada": ada}, state, 0, _clock())
+
+    assert ada.get_property(Property.IS_SLEEPING) is True
+    assert ada.get_property("activity") == "sleeping"
+    assert state["Ada"]["performing"] is True  # settled -- no redecide next tick
+    assert state["Ada"]["perform_until"] is None  # steps: None -> stays asleep
+
+
+def test_reactive_sleep_overrides_the_schedule_off_plan_when_opted_in():
+    # #931 follow-up: attach_agents(game=...) is what turns this on -- every
+    # existing caller that omits it keeps sleeping only at an authored
+    # bedtime stop (byte-identical). With it, Ada is IS_SLEEPY while still
+    # scheduled at The Green: the override should send her to the Dorm
+    # instead of the stop she's actually on, and Sleep's settle must stay
+    # unbounded (perform_until is None) even though this is off-plan -- a
+    # generic deviation gets capped and re-decided, which would fail Sleep's
+    # "already asleep" gate every tick since she's actually IS_SLEEPING by
+    # then.
+    from backend.actions import Sleep
+    from text_adventure_games.enums import Property
+
+    dorm = {
+        "name": "Dorm",
+        "description": "a quiet dorm room",
+        "address": "T:Dorm:bed",
+        "properties": ["sleepable"],
+    }
+    persona = _persona(place="The Green", steps=None)
+    game, chars = build_world(
+        None, [persona], LOCATIONS + [dorm], extra_actions=[Sleep]
+    )
+    attach_agents(chars, [persona], llm_client=None, game=game)  # opted in
+    ada = chars["Ada"]
+    ada.set_property(Property.IS_SLEEPY, True)
+    state = _state()
+    _run_step(game, {"Ada": ada}, state, 0, _clock())  # decides: travel to Dorm
+    assert "Dorm" in state["Ada"]["desc"]
+    _run_step(game, {"Ada": ada}, state, 1, _clock())  # arrived: decides "sleep"
+
+    assert ada.get_property(Property.IS_SLEEPING) is True
+    assert state["Ada"]["performing"] is True
+    assert state["Ada"]["perform_until"] is None  # not capped like a deviation
+    assert state["Ada"]["on_plan"] is False  # Dorm != her scheduled "The Green"
+
+
+def test_reactive_sleep_wakes_and_resumes_the_original_schedule():
+    # #931 follow-up: sleep_accumulation wakes her (clears IS_SLEEPING) on its
+    # own tick, but perform_until was left None -- the ONLY thing that can
+    # end a None-bounded settle is the dedicated wake un-latch in the
+    # pre-pass. Without it she'd stay `performing` forever, never due again,
+    # frozen in bed for the rest of the run.
+    from backend.actions import Sleep
+    from text_adventure_games.enums import Property
+
+    dorm = {
+        "name": "Dorm",
+        "description": "a quiet dorm room",
+        "address": "T:Dorm:bed",
+        "properties": ["sleepable"],
+    }
+    persona = _persona(place="The Green", steps=None)
+    game, chars = build_world(
+        None, [persona], LOCATIONS + [dorm], extra_actions=[Sleep]
+    )
+    attach_agents(chars, [persona], llm_client=None, game=game)
+    ada = chars["Ada"]
+    ada.set_property(Property.IS_SLEEPY, True)
+    state = _state()
+    for i in range(2):  # travel to Dorm, then arrive and sleep
+        _run_step(game, {"Ada": ada}, state, i, _clock())
+    assert ada.get_property(Property.IS_SLEEPING) is True
+
+    step_idx = 2
+    while ada.get_property(Property.IS_SLEEPING) and step_idx < 100:
+        _run_step(game, {"Ada": ada}, state, step_idx, _clock())
+        step_idx += 1
+    assert step_idx < 100  # sanity: she actually woke, this isn't a timeout
+
+    # The un-latch fires on the NEXT pre-pass after IS_SLEEPING clears --
+    # this tick both un-latches (performing -> False) and, since she's due
+    # again, redecides: IS_SLEEPY is gone, so the override no longer applies
+    # and she resumes her original, untouched schedule pointer ("The Green").
+    _run_step(game, {"Ada": ada}, state, step_idx, _clock())
+    assert "The Green" in state["Ada"]["desc"]
+
+
+def test_need_driven_interrupt_is_gated_on_a_real_brain():
+    # accrue_energy runs unconditionally on every character (not opt-in --
+    # see drives.py), so a bare test character that never had
+    # Property.ENERGY furnished decays from an effective 0 and reads as
+    # "needy" from tick one. Without this gate, the mock/scripted brain's
+    # deterministic bake would stop being byte-identical the moment any
+    # engine test used a long performing block -- exactly the regression
+    # this test guards (test_dead_talk_settle_689.py hit it during
+    # development).
+    game, ada = _world(llm_client=None, place="The Green", steps=540)  # mock brain
+    state = _state()
+    _run_step(game, {"Ada": ada}, state, 0, _clock())
+    assert state["Ada"]["performing"] is True
+    ada.set_property("is_low_energy", True)
+    _run_step(game, {"Ada": ada}, state, 1, _clock())
+
+    assert state["Ada"]["performing"] is True  # NOT interrupted -- mock brain
+
+
 def test_model_emoji_wins_and_deviation_falls_to_persona_default():
     # Perform at The Green while scheduled for Cafe => place deviation. With no
     # model emoji, a deviation must NOT wear the (wrong) stop emoji: persona

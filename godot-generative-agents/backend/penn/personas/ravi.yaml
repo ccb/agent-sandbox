@@ -8,6 +8,9 @@ persona: I am Ravi Deshmukh, 25, a physics PhD student and teaching assistant at
   Penn. I run Professor Tanaka's problem sessions and I am patient, methodical,
   and happiest when a struggling student finally sees it click.
 emoji: 🧮
+# Wage (#931 follow-up): paid per tick actually spent on a work stop below --
+# every stop of his day is TA duty, so every stop is tagged.
+wage_rate: 0.06
 start_tile:
 - 131
 - 201
@@ -17,10 +20,12 @@ schedule:
 - place: Williams Hall — Classroom A
   activity: chalking up a worked example
   emoji: 🧮
+  is_work: true
   steps: 130
 - place: Van Pelt — Digital Scholarship Exchange
   activity: grading a stack of problem sets
   emoji: 📓
+  is_work: true
 
 relationships:
 - a: Ravi Deshmukh

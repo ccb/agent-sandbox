@@ -238,6 +238,15 @@ def _build_parser() -> argparse.ArgumentParser:
         "bake. scripted: the key-free full-feature brain (#563) -- bakes a replay "
         "that exercises the tool loop, cognition tools, conversation, reflection.",
     )
+    ap.add_argument(
+        "--reactive-sleep",
+        action="store_true",
+        help="(#931 follow-up) every persona walks to a `sleepable`-tagged "
+        "location the moment it's actually tired, instead of only sleeping at "
+        "its authored bedtime stop. OFF by default -- the plain bake stays "
+        "byte-identical; this changes when/where each persona's day gets "
+        "interrupted, so it's opt-in.",
+    )
     return ap
 
 
@@ -295,6 +304,12 @@ def main() -> int:
         ledger = UsageLedger()
         brain, reflector = build_scripted_brains(ledger=ledger)
         cognition = CognitionConfig(cognition_tools=True)
+
+    if args.reactive_sleep:
+        from backend.sim_config import CognitionConfig
+
+        cognition = cognition or CognitionConfig()
+        cognition.reactive_sleep = True
 
     frames = simulate(
         pw.world_map,

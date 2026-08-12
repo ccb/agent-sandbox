@@ -383,7 +383,9 @@ def test_meals_are_gated_on_the_authored_dining_tag():
     hall.set_property("dining", True)
     _furnish_meals(game)
     edible = [i for i in hall.items.values() if i.get_property(Property.EDIBLE)]
-    assert len(edible) == 3  # tagged (the full world's shape): stocked
+    # 2, not 3 (#931): the free sandwich moved to the Sell/Buy shop (carried
+    # by a worker persona, not left free in the hall) -- soup + apple remain.
+    assert len(edible) == 2  # tagged (the full world's shape): stocked
 
 
 def test_penn_world_offers_the_615_verbs():
@@ -399,23 +401,26 @@ def test_houston_hall_meals_support_the_get_eat_two_step():
     pw = build_penn_world()
     game, chars = pw.build_world_fn(pw.world_map)
     hall = game.locations["Houston Hall"]
-    # Three discrete meals ARE the portions (engine Eat has none -- #615
-    # issue-comment decision): each is EDIBLE and gettable.
+    # Discrete meals ARE the portions (engine Eat has none -- #615
+    # issue-comment decision): each is EDIBLE and gettable. 2, not 3 (#931):
+    # the free sandwich moved to the Sell/Buy shop -- soup + apple remain.
     meals = [i for i in hall.items.values() if i.get_property(Property.EDIBLE)]
-    assert len(meals) == 3
+    assert len(meals) == 2
     assert all(m.get_property(Property.GETTABLE) for m in meals)
 
     char = next(iter(chars.values()))
     _move(game, char, "Houston Hall")
     char.set_property(Property.IS_HUNGRY, True)
     # Eating before getting fails -- Eat only matches carried items, so the
-    # two-step is the shape (documented in the #615 issue comment).
-    assert not game.parser.parse_command("eat sandwich", actor=char)
-    assert game.parser.parse_command("get sandwich", actor=char)
-    assert game.parser.parse_command("eat sandwich", actor=char)
+    # two-step is the shape (documented in the #615 issue comment). "apple",
+    # not "sandwich" (#931): the sandwich is no longer a free gettable meal,
+    # it's sold by a Houston Hall worker (see test_sandwich_shop.py).
+    assert not game.parser.parse_command("eat apple", actor=char)
+    assert game.parser.parse_command("get apple", actor=char)
+    assert game.parser.parse_command("eat apple", actor=char)
     assert not char.get_property(Property.IS_HUNGRY)  # satiety (engine-modeled)
-    assert "sandwich" not in char.inventory  # consumed whole -- one portion
-    assert "sandwich" not in hall.items
+    assert "apple" not in char.inventory  # consumed whole -- one portion
+    assert "apple" not in hall.items
 
 
 def test_study_offered_in_van_pelt_reading_rooms_only():

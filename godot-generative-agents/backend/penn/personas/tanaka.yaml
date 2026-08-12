@@ -4,6 +4,8 @@ home: Penn campus
 persona: I am Professor Tanaka, 47, a physicist at Penn. I am precise and warm with
   students, and happiest explaining the universe with a marker in hand.
 emoji: 🔬
+# Wage (#931 follow-up): paid per tick actually spent on a work stop below.
+wage_rate: 0.1
 # Starts outside Irvine, where she is hosting an afternoon guest lecture, and stays
 # long enough that Diego and Sofia arrive while she is still setting up.
 start_tile:
@@ -13,6 +15,7 @@ schedule:
 - place: Irvine Auditorium
   activity: setting up for an afternoon guest lecture
   emoji: 🔬
+  is_work: true
   # Holds the hall all afternoon -- long enough that Sofia (who only drifts over
   # after a long spell in the gallery) arrives while she is still there (see
   # `meetings` below).
@@ -21,6 +24,15 @@ schedule:
   activity: holding a problem session for her physics class
   emoji: 🧮
   furniture: blackboard
+  is_work: true
+  steps: 200
+# Turns in for the night (#931 follow-up): see sofia.yaml's matching stop --
+# Houston Hall -- Reading Room is the only `sleepable` spot in the world.
+- place: Houston Hall — Reading Room
+  activity: turning in for the night
+  emoji: 😴
+  commands:
+  - sleep
 
 meetings:
 - label: Before the guest lecture at Irvine (Irvine Auditorium)

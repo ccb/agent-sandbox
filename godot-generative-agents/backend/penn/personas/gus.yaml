@@ -9,6 +9,9 @@ persona: I am Gus Kowalski, 58, a facilities mechanic at Penn. I have a cart, a
   radio, and a work-order list longer than my arm. There is no building on this
   block I haven't fixed something in, and no shortcut between them I don't know.
 emoji: 🔧
+# Wage (#931 follow-up): paid per tick actually spent on a work stop below --
+# every stop of his day is a work order, so every stop is tagged.
+wage_rate: 0.05
 # Starts on the doorstep just outside Houston Hall, where the first work order
 # of the day (Rosa's leaky kitchen sink) is waiting.
 start_tile:
@@ -18,25 +21,31 @@ schedule:
 - place: Houston Hall
   activity: swapping out a leaky trap under the kitchen sink
   emoji: 🔧
+  is_work: true
   # Rosa is opening the food court through this window -- their coffee-and-sink
   # exchange lives in rosa.yaml's `meetings`.
   steps: 120
 - place: Williams Hall
   activity: bleeding the radiator that bangs in the mornings
   emoji: 🔧
+  is_work: true
   steps: 60
 - place: College Hall
   activity: patching a cracked stair tread
   emoji: 🔨
+  is_work: true
   steps: 60
 - place: Van Pelt — Book Stacks
   activity: oiling a squeaky book cart in the stacks
   emoji: 🔧
+  is_work: true
   steps: 50
 - place: Meyerson Hall
   activity: replacing a dead ballast over the studio desks
   emoji: 🔧
+  is_work: true
   steps: 60
 - place: Irvine Auditorium
   activity: tightening loose bolts in the auditorium rows before the evening event
   emoji: 🔧
+  is_work: true
