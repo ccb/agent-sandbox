@@ -211,6 +211,8 @@ engine-overview.html
 
 # superpowers skill artifacts (brainstorming specs / implementation plans) — kept local
 docs/superpowers/
+# subagent-driven-development's per-plan ledger/workspace — kept local
+.superpowers/
 
 # uv project files ARE tracked: uv.lock pins exact versions for reproducible
 # `uv sync`, and .python-version pins the interpreter (3.12, within the CI range).
