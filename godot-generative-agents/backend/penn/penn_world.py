@@ -30,11 +30,13 @@ from typing import Callable
 from backend import path_finder
 from backend.actions import (
     Activate,
+    Buy,
     CheckOutBook,
     Deactivate,
     DrinkPenn,
     EatPenn,
     ReadPenn,
+    Sell,
     Study,
     TalkTo,
     WaitPenn,
@@ -45,6 +47,7 @@ from backend.world_map import WorldMap
 from text_adventure_games.actions.things import Craft
 from text_adventure_games.crafting import Recipe
 from text_adventure_games.enums import Property
+from text_adventure_games.things.characters import MAX_ENERGY
 from text_adventure_games.things.items import Item
 
 _SIM_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -69,8 +72,11 @@ WORLD_DATA_EAT = os.path.join(_SIM_DIR, "world_data_eat.yaml")
 # The Penn-local verb set (#300): registered on top of Travel/Act via
 # build_world(extra_actions=...). DrinkPenn overrides the engine's "drink"; Craft is
 # the engine crafting action that drives the boil-water Recipe (see _boil_recipe) --
-# boiling is now a declarative transform, not a bespoke action. Upstreaming these
-# into the engine library is #464.
+# boiling is now a declarative transform, not a bespoke action. Sell/Buy (#931) are
+# the Houston Hall sandwich-shop verbs: a worker `sell`s a for-sale item to a named
+# buyer (stamping dibs), the buyer then `buy`s to complete the trade -- both gated on
+# a `marketplace`-tagged location in scope. Upstreaming these into the engine
+# library is #464.
 PENN_EXTRA_ACTIONS = [
     Activate,
     Deactivate,
@@ -83,6 +89,8 @@ PENN_EXTRA_ACTIONS = [
     CheckOutBook,
     ReadPenn,
     Sleep,
+    Sell,
+    Buy,
 ]
 
 # The verb set a Penn brain may choose from (spec §3) -- the engine verbs the
@@ -95,7 +103,9 @@ PENN_EXTRA_ACTIONS = [
 # (Penn-local, #615) are affordance-curated -- offered only where an EDIBLE
 # meal / a `studyable` arena is in scope (#612). `check_out_book`
 # (Penn-local) and `read` (engine) are the #616 Van Pelt book loop,
-# curated to the shelf's arena / the borrower's pocket. Handed to
+# curated to the shelf's arena / the borrower's pocket. `sell`/`buy` (#931)
+# are the Houston Hall sandwich-shop verbs, affordance-curated the same way --
+# offered only where a `marketplace` arena is in scope. Handed to
 # attach_agents(extra_action_names=...) by every Penn entry point.
 PENN_ACTION_VERBS = [
     "get",
@@ -110,9 +120,11 @@ PENN_ACTION_VERBS = [
     "check_out_book",
     "read",
     "sleep",
+    "sell",
+    "buy",
 ]
 
-SEC_PER_STEP = 10  # in-game seconds per step, for a wall-clock label
+SEC_PER_STEP = 15  # in-game seconds per step, for a wall-clock label
 SIM_START = "2023-02-13 08:00:00"  # matches backend.sim_config default
 
 # How the Godot viewer (scripts/viewer.gd) plays a `chat` transcript back:
@@ -520,17 +532,16 @@ def _furnish_meals(game) -> None:
     arena tag (#613): a world that doesn't tag the hall -- the isolated boil
     scenario (#299/#301), whose one resident lives in Houston Hall and must
     keep a decision surface of only the drink/boil arc -- gets no meals, so
-    `eat` is never offered there."""
+    `eat` is never offered there.
+
+    No free sandwich here (#931): sandwiches used to be a free ambient meal,
+    but now come only from a Sell/Buy trade with a Houston Hall worker (see
+    `_furnish_sandwich_shop`) -- a free item sharing that name would also be
+    ambiguous to `match_item`, which matches by name, not by IS_FOR_SALE."""
     hall = game.locations.get("Houston Hall")
     if hall is None or not hall.get_property("dining"):
         return
     for name, description, examine, energy_value in (
-        (
-            "sandwich",
-            "a wrapped sandwich",
-            "A turkey club off the Houston Hall food-court counter.",
-            20,
-        ),
         (
             "bowl of soup",
             "a bowl of lentil soup",
@@ -577,6 +588,132 @@ def _furnish_drinks(game) -> None:
             10,
         )
     )
+
+
+# Houston Hall sandwich shop (#931): a couple of dining-staff personas sell
+# made-to-order sandwiches via the Sell/Buy trade, replacing the old free
+# ambient sandwich (see _furnish_meals). Named as distinct varieties, not one
+# stackable item -- Buy.apply_effects transfers a whole item on purchase, with
+# no partial-stack decrement (unlike Drink's multi-portion vessels), so one
+# customer buying "the sandwich" would otherwise walk off with the worker's
+# entire stock. SANDWICH_WORKERS names who's opted into the trade + the
+# restock drive (drives.restock_sandwiches); a persona not in this world's
+# cast is silently skipped -- the shop only furnishes for whoever's actually
+# staffing the counter this run.
+SANDWICH_WORKERS = ["Rosa Delgado", "Walt Higgins"]
+SANDWICH_PRICE = 5
+SANDWICH_VARIETIES = (
+    (
+        "turkey sandwich",
+        "a wrapped turkey sandwich",
+        "Turkey, lettuce, tomato, on rye.",
+    ),
+    ("ham sandwich", "a wrapped ham sandwich", "Ham and swiss on a hoagie roll."),
+    (
+        "veggie sandwich",
+        "a wrapped veggie sandwich",
+        "Hummus, greens, and peppers on wheat.",
+    ),
+)
+
+
+def make_sandwich_for_sale(
+    name: str, description: str, examine: str, owner: str
+) -> Item:
+    """A made-to-order Houston Hall sandwich (#931): EDIBLE (so it still
+    restores energy once bought and eaten, mirroring ``make_meal``) plus the
+    Buy/Sell trio -- ``IS_FOR_SALE``, ``PRICE``, and ``OWNER`` naming the
+    worker authorized to sell it (see ``Property.OWNER``'s docstring in
+    ``enums.py`` for why that's not the same thing as ``item.owner``)."""
+    sandwich = Item(name, description, examine)
+    sandwich.set_property(Property.EDIBLE, True)
+    sandwich.set_property("energy_value", 20)
+    sandwich.set_property(Property.IS_FOR_SALE, True)
+    sandwich.set_property(Property.PRICE, SANDWICH_PRICE)
+    sandwich.set_property(Property.OWNER, owner)
+    return sandwich
+
+
+DEFAULT_STARTING_MONEY = 20  # ~4 sandwiches at SANDWICH_PRICE, so a customer
+# who wanders to Houston Hall can plausibly afford to buy more than one.
+
+
+def _furnish_starting_money(game) -> None:
+    """Give every character in this run a default ``Property.MONEY`` (#931)
+    unless something already set one -- so ANY persona who wanders to
+    Houston Hall can buy a sandwich, not just a hardcoded customer list.
+    Runs after every other furnishing step, so a worker's own stock/sales
+    setup is never clobbered by this default."""
+    for character in game.characters.values():
+        if not character.get_property(Property.MONEY):
+            character.set_property(Property.MONEY, DEFAULT_STARTING_MONEY)
+
+
+def _furnish_starting_energy(game) -> None:
+    """Give every character a starting ``Property.ENERGY`` of ``MAX_ENERGY``
+    (#931) unless something already set one. The engine deliberately never
+    sets this itself (see the comment in ``Character.__init__``, "energy is
+    being scoped" per-game) -- without it, ``drives.accrue_energy``'s
+    exponential decay starts from 0/unset and every persona would already be
+    ``IS_SLEEPY`` on tick one, regardless of how the decay constant is tuned.
+    ``_ENERGY_DECAY_CONSTANT`` (drives.py) is calibrated against this exact
+    starting point: full energy, decaying to the sleepy threshold after 1
+    in-game hour."""
+    for character in game.characters.values():
+        if not character.get_property(Property.ENERGY):
+            character.set_property(Property.ENERGY, MAX_ENERGY)
+
+
+def _furnish_starting_restedness(game) -> None:
+    """Give every character a starting ``"restedness"`` of 100 (#931
+    follow-up), the same reasoning as :func:`_furnish_starting_energy`:
+    without it, ``drives.accrue_tiredness``'s exponential decay starts from
+    0/unset and every persona would already be ``IS_SLEEPY`` on tick one.
+    ``_RESTEDNESS_DECAY_CONSTANT`` (drives.py) is calibrated against this
+    exact starting point, mirroring energy's own tuning."""
+    for character in game.characters.values():
+        if not character.get_property("restedness"):
+            character.set_property("restedness", 100)
+
+
+def _furnish_sandwich_shop(game) -> None:
+    """Give each cast SANDWICH_WORKER a starting stock of for-sale sandwiches,
+    carried in their own inventory -- Sell.__init__ matches from the seller's
+    ``carried_items()``, so stock left on the counter instead of in a
+    worker's hands could never actually be sold. Also stamps the
+    ``sells_sandwiches`` opt-in marker ``drives.restock_sandwiches`` reads."""
+    for name in SANDWICH_WORKERS:
+        worker = game.characters.get(name)
+        if worker is None:
+            continue
+        worker.set_property("sells_sandwiches", True)
+        for variety_name, description, examine in SANDWICH_VARIETIES:
+            worker.add_to_inventory(
+                make_sandwich_for_sale(variety_name, description, examine, worker.name)
+            )
+
+
+def restock_sandwiches(char) -> None:
+    """Top up a sandwich worker's for-sale stock each tick (#931) -- a no-op
+    unless ``_furnish_sandwich_shop`` opted this character in
+    (``sells_sandwiches``) and they're currently standing in a
+    ``marketplace``-tagged location (the same affordance Sell/Buy themselves
+    gate on -- restocking off-shift, away from the counter, wouldn't make
+    sense). Mirrors ``drives.accrue_thirst``'s opt-in, no-op-by-default shape;
+    lives here rather than in ``drives.py`` because it needs
+    ``make_sandwich_for_sale``/``SANDWICH_VARIETIES``, Houston-Hall-specific
+    knowledge the generic drives don't carry."""
+    if not char.get_property("sells_sandwiches"):
+        return
+    location = char.location
+    if location is None or not location.get_property("marketplace"):
+        return
+    carried = char.carried_items()
+    for variety_name, description, examine in SANDWICH_VARIETIES:
+        if variety_name not in carried:
+            char.add_to_inventory(
+                make_sandwich_for_sale(variety_name, description, examine, char.name)
+            )
 
 
 def make_library_shelf() -> Item:
@@ -707,7 +844,11 @@ def build_penn_world(
         _furnish_boil_water(game)
         _furnish_meals(game)
         _furnish_drinks(game)
+        _furnish_sandwich_shop(game)
         _furnish_van_pelt(game)
+        _furnish_starting_money(game)
+        _furnish_starting_energy(game)
+        _furnish_starting_restedness(game)
         if not withhold_boil:
             game.add_recipe(_boil_recipe())  # boiling = Craft over this Recipe (#300)
         return _gate_conversations_by_perception((game, characters))

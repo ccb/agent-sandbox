@@ -86,7 +86,9 @@ locations:
 - name: Houston Hall
   description: The student union -- the nation's first -- with dining and lounges.
   address: UPenn:Houston Hall:lobby
-  properties: [dining]
+  # #931: marketplace alongside dining -- the food-court counter is where the
+  # Sell/Buy sandwich trade is gated (REQUIRED_AFFORDANCES = ("marketplace",)).
+  properties: [dining, marketplace]
 # Named rooms inside Houston Hall (furnished arenas, same pattern as the Van Pelt
 # rooms above). Schedule stops can target these to put an agent in a specific
 # room instead of wherever the whole-building lobby routing settles. Two
