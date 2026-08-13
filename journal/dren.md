@@ -13,6 +13,27 @@ on top; copy the template block each working day.
 **Next:**
 - ...
 -->
+## 2026-08-12
+**Focus:** Committing the 08-07/08-10/08-11 uncommitted sleep/wage/commerce work, a wage-to-food integration test, a Sweeten second-sleepable-location design, and a first real code review of the feature commits (which found and fixed a live bug)
+
+**Done today:**
+- Committed the prior sessions' uncommitted work (~1,780 lines, 41 files) in 4 logical chunks on `food-system-branch` rather than one blob: (1) the tiredness split + reactive sleep + wage drive + needs-surfacing-in-prompts, (2) the Houston Hall sandwich shop, (3) the belief-graph design doc, (4) the 08-07/08-10/08-11 journal entries. Deliberately left `runs/sim.db` and 16 dev-iteration `run-*` bake directories uncommitted (noise, not curated RunStore entries).
+- Brainstormed and spec'd a second sleepable location (Sweeten Alumni Building) + per-persona nearest-by-distance sleep-spot selection, replacing `attach_agents`' current "first sleepable location alphabetically, computed once at sim-build time" pick. Verified Sweeten's tile footprint is already fully indexed in `WorldMap` (no prerequisite geo-baking needed) and corrected a wrong claim in my own draft: the actual read site (`ScheduleMockClient._choose`, `cognition.py:426`) has no `game` reference at all, so the fix needs a new `game` parameter threaded through `ScheduleMockClient.__init__`, not "no new plumbing." Spec written to `docs/superpowers/specs/2026-08-12-sweeten-nearest-sleep-design.md` (gitignored, local only); awaiting final sign-off before writing the implementation plan.
+- Filed two follow-up issues surfaced by an advisor review: #995 (the 10 job personas' `wage_rate` values are flavor-only guesses, never balanced against `SANDWICH_PRICE`) and #996 (the meeting-injector's longest-co-location heuristic can hijack an authored-location room — tracked only, explicitly not to be touched).
+- Used subagent-driven-development on a small 2-task plan: added `test_wage_spend_loop.py`, the first test to exercise the full wage-earn → spend-on-food → eat loop end-to-end (nothing previously crossed `accrue_wage` and the commerce tests). Opened PR #997 against `food-system-branch`. CI came back red on every check, but traced every failure to pre-existing gaps on the base branch itself (black-format drift on 5 untouched files, the engine-level `#932` `Sell`/`Buy` scaffold's 7 permanently-failing `NotImplementedError` tests, a missing Godot map asset in CI) — `food-system-branch` had never had CI run against it directly before this PR.
+- Ran a real code review (never done before today) over the two feature commits from point 1 — they'd been bake-verified and test-verified but never actually reviewed. Found 10 issues; the most severe: `--reactive-sleep`'s own default (mock-brain) mode never actually interrupted a sleepy character mid-activity, because the need-driven interrupt was gated on real-brain-only (`_use_action_tools`), so the whole feature silently did nothing until a long schedule block ended on its own — contradicting its own help text. Fixed: the gate now also opens for `IS_SLEEPY` specifically when `cog.reactive_sleep` is on, scoped narrowly enough that every other mock/scripted test stays byte-identical. New regression test (`test_pacing_authority_581.py`) wires a real sleep-tagged location end-to-end rather than just flipping the flag in isolation — an earlier version of the test passed for the wrong reason (same-tick re-decision looping back to the same activity) until I actually wired `sleep_spot`.
+- The other 9 review findings are not yet fixed: a sleeping character can still be pulled into a real-LLM conversation (sleep-gating sweep missed `conversation.py`/`TalkTo`); `Buy` can resolve to the wrong seller when two co-located sellers stock identically-named items; a stale `needs_interrupt_seen` flag can suppress a legitimate need-interrupt after waking from a nap; plus several Moderate/Minor items (wage-accrual timing edge case, a demo world silently broken by the sandwich-shop change, an inconsistent `IS_SLEEPING` gate, two stale/duplicated bits of documentation-as-code).
+
+**Blockers / questions:**
+- The other 9 code-review findings from today are open and unfixed — worth a follow-up pass, possibly its own SDD plan given the volume.
+- `food-system-branch` itself has never been CI-clean; PR #997 exposed this but fixing it was explicitly deferred (not today's scope).
+- Sweeten spec still needs final sign-off before becoming an implementation plan.
+
+**Next:**
+- Decide whether/when to fix the remaining 9 review findings.
+- Get sign-off on the Sweeten spec, then write its implementation plan.
+- Merge or continue iterating on PR #997.
+
 ## 2026-08-11
 **Focus:** Making sleep actually happen (#931 follow-up), then splitting tiredness off hunger entirely, then a wage system for job personas
 
