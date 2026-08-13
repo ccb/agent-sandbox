@@ -440,6 +440,64 @@ def test_need_driven_interrupt_is_gated_on_a_real_brain():
     assert state["Ada"]["performing"] is True  # NOT interrupted -- mock brain
 
 
+def test_need_driven_interrupt_fires_for_mock_brain_when_reactive_sleep_is_on():
+    # #931 follow-up bug fix: --reactive-sleep's whole point is that a
+    # mock-driven agent's decision genuinely depends on IS_SLEEPY once
+    # reactive sleep is opted in (ScheduleMockClient._choose's sleep-spot
+    # branch, cognition.py) -- unlike a plain mock/scripted brain, whose
+    # decision is otherwise unconditional on drives (the case the sibling
+    # test above guards). Gating the interrupt on _use_action_tools alone
+    # (real brain only) meant a sleepy mock-driven character pinned in a
+    # long performing block was never re-decided, so --reactive-sleep
+    # silently did nothing until the block ended on its own -- falsifying
+    # its own help text ("walks... the moment it's actually tired").
+    #
+    # Wires sleep_spot for real (attach_agents(game=...), a Library tagged
+    # sleepable) rather than just flipping IS_SLEEPY in isolation: a bare
+    # interrupt with no sleep_spot wired would just get re-decided back to
+    # the SAME "perform reading a novel" within the same tick (sleep_spot
+    # unset => ScheduleMockClient._choose's reactive branch never fires),
+    # which would pass this test for the wrong reason.
+    #
+    # Furnishes a starting "restedness" (accrue_tiredness's own resource,
+    # drives.py) explicitly: it decays unconditionally on every character,
+    # same as accrue_energy, so a bare test character that never had one
+    # furnished reads as already sleepy from tick zero (the exact "reads as
+    # needy from tick one" trap the sibling real-brain-gate test's own
+    # comment describes for is_low_energy) -- which would make step 0 below
+    # immediately head for Library instead of ever starting to perform,
+    # before this test gets to flip IS_SLEEPY on purpose at step 1.
+    from text_adventure_games.enums import Property
+
+    personas = [_persona(steps=540, place="The Green")]  # spawn == the stop
+    game, chars = build_world(None, personas, LOCATIONS)
+    game.locations["Library"].set_property("sleepable", True)
+    attach_agents(chars, personas, llm_client=None, game=game)  # mock brain
+    ada = chars["Ada"]
+    ada.set_property("restedness", 100)  # well-rested going in
+
+    state = _state()
+    cog = CognitionConfig(reactive_sleep=True)
+    kwargs = dict(
+        order=["Ada"],
+        world_map=_StubMap(),
+        emoji={"Ada": "\U0001f4d6"},
+        cog=cog,
+    )
+    step(game, {"Ada": ada}, state, 0, clock=_clock(), **kwargs)
+    assert state["Ada"]["performing"] is True
+
+    ada.set_property(Property.IS_SLEEPY, True)  # as if accrue_tiredness just flipped it
+    step(game, {"Ada": ada}, state, 1, clock=_clock(), **kwargs)
+
+    # Interrupted AND actually re-decided to head for the sleep spot, not
+    # just re-issuing the same "perform reading a novel" -- proves
+    # ScheduleMockClient's reactive-sleep branch was reached this tick.
+    assert state["Ada"]["performing"] is False
+    assert ada.agent.schedule.sleep_spot == "Library"
+    assert ada.location.name == "Library"
+
+
 def test_model_emoji_wins_and_deviation_falls_to_persona_default():
     # Perform at The Green while scheduled for Cafe => place deviation. With no
     # model emoji, a deviation must NOT wear the (wrong) stop emoji: persona

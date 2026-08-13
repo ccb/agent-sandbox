@@ -386,11 +386,28 @@ def step(
         # layer); gating on a real brain here keeps every mock/scripted-only
         # test's behavior byte-identical, same as the rest of this file's
         # drive-adjacent additions.
+        #
+        # One exception (bug fix, #931 follow-up): when --reactive-sleep is
+        # on, a mock-driven agent's decision is NOT unconditional on drives
+        # for sleepiness specifically -- ScheduleMockClient._choose
+        # (cognition.py) has a dedicated branch that overrides the schedule
+        # the moment it observes IS_SLEEPY. Without also letting IS_SLEEPY
+        # through this gate in that mode, that reactive-sleep agent is never
+        # re-decided mid-block, so the whole feature silently does nothing
+        # until the block ends on its own. Scoped to IS_SLEEPY only (not
+        # thirst/low-energy) since those still have no mock-side reactive
+        # branch to act on, so interrupting for them would just be no-op
+        # churn -- keeping every other mock/scripted test byte-identical.
+        reactive_sleep_wakeup = (
+            cog is not None
+            and cog.reactive_sleep
+            and char.get_property(Property.IS_SLEEPY)
+        )
         if (
             st["performing"]
             and not st.get("conversing")
             and not char.get_property(Property.IS_SLEEPING)
-            and _use_action_tools(char.agent)
+            and (_use_action_tools(char.agent) or reactive_sleep_wakeup)
         ):
             # IS_SLEEPING itself is excluded from `needy` on purpose: it means
             # the character is already asleep and recovering via
