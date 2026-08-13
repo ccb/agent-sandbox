@@ -23,11 +23,19 @@
       content="Five LLM-driven agents with memory, plans and conversations walk a real map of Penn's campus for a simulated twelve-hour day — replayable in the browser."
     />
     <meta name="twitter:card" content="summary" />
-    <!-- No `robots` meta, on purpose (#882): the promoted URL is meant to be
-         indexable. Adding `<meta name="robots" content="noindex" />` here is the
-         one-line reversal — but de-indexing a page search engines have already
-         crawled is far slower than never publishing it, so that call belongs
-         before a promote, not after one. See README.md -> Deploying to Vercel. -->
+    <!-- HOLD, not the final answer (#882). The site went live 2026-08-13 while the
+         `index.pck` art-licensing question was still open, so indexing is switched
+         off until that is settled — the packs in ASSETS.md permit use but not
+         redistribution, and a search result is what turns a URL people are given
+         into a URL people find.
+
+         Deliberately NOT paired with a `Disallow` in robots.txt: a disallowed page
+         is never fetched, so the crawler never sees this tag and an already-indexed
+         URL can linger. Noindex requires crawling to work. `vercel.json` sends the
+         same directive as `X-Robots-Tag` for the non-HTML assets a meta tag cannot
+         reach (`/godot/index.pck`, `/replay/*`). Delete both together to reverse.
+         See README.md -> Deploying to Vercel. -->
+    <meta name="robots" content="noindex" />
   </head>
   <body>
     <div id="root"></div>

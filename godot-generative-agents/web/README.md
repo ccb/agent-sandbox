@@ -70,10 +70,17 @@ vercel login
 vercel link                      # writes .vercel/ (git-ignored: ids + pulled env)
 ```
 
-Then enable **Web Analytics** in the Vercel dashboard for the project. The
-`<Analytics />` in `src/main.tsx` is first-party and production-gated, but the
-dashboard toggle is what serves the script — without it the beacon 404s silently, and
-nothing in this repository can tell you (#961).
+Then enable **Web Analytics** in the Vercel dashboard for the project, **and redeploy**.
+The `<Analytics />` in `src/main.tsx` is first-party and production-gated, but the
+dashboard toggle is what serves the script, and Vercel wires that route in at *deploy*
+time — a deployment created before the toggle never picks it up, however long you wait
+(#961). Re-running `vercel deploy --prebuilt` on the same bytes is enough.
+
+Until both are done, `/_vercel/insights/script.js` is caught by the catch-all rewrite and
+answers with the landing page's HTML, which the browser parses as JavaScript and reports
+as `Uncaught SyntaxError: Unexpected token '<'` on every page load. It does not 404.
+Verify with `curl -sI <url>/_vercel/insights/script.js` and expect
+`content-type: application/javascript`.
 
 ### Every deploy
 
@@ -81,12 +88,21 @@ nothing in this repository can tell you (#961).
 pnpm export:godot                # re-export if the Godot side changed (needs ASSETS.md art)
 pnpm gen:replay                  # re-bake only if the showcased run changed
 pnpm lint && pnpm test           # the same gates CI runs
-vercel build                     # runs scripts/vercel-build.sh → dist/ → .vercel/output/
+vercel build --target=preview    # runs scripts/vercel-build.sh → dist/ → .vercel/output/
 du -sh dist                      # ~56 MB today; Hobby caps CLI uploads at 100 MB
-vercel deploy --prebuilt         # prints the preview URL
+vercel deploy --prebuilt --target=preview   # ← pass the target EXPLICITLY, see below
 #   … run the QA suite in #882 against that URL …
 vercel promote <preview-url>     # same bytes, now production
 ```
+
+> **Pass `--target` explicitly on both commands.** On 2026-08-13, a bare
+> `vercel deploy --prebuilt` (CLI 54.5.1) deployed straight to **production** and
+> aliased `pennagents.vercel.app` — no `--prod`, no promote, and the artifact
+> `vercel build` had just produced was tagged `"target": "preview"`. The build's
+> target does not constrain the deploy's. Read the CLI's own JSON back before
+> treating a URL as private: `"target"` and the `▲ Production` / `▲ Preview` line
+> are the authority, not which flags you left off. Getting this wrong publishes the
+> licensed art, which is the one step this runbook exists to gate.
 
 Rollback: `vercel rollback` (or `vercel rollback <url>`) re-points production at the
 previous deployment — instant, no rebuild, and it needs nothing from this repository
@@ -114,11 +130,16 @@ The trade-off: a *missing* asset now answers 200 with the landing page's HTML in
 of 404, so a hollow deploy fails in the Godot loader rather than in the network tab.
 That is what `vercel-build.sh`'s asset guard is for — the 404 is not the safety net.
 
-**Indexing is deliberate.** Nothing sets a `robots` meta, so a promoted URL is
-indexable; that is the decision, not an oversight (`index.html` records it). Reversing
-it is one `<meta name="robots" content="noindex" />` — but de-indexing an indexed page
-is far slower than never publishing it, so revisit the call *before* a promote, not
-after.
+**Indexing is currently OFF, as a hold.** The site went live 2026-08-13 with the
+`index.pck` art-licensing question still open, so `index.html` sets
+`<meta name="robots" content="noindex" />` and `vercel.json` sends `X-Robots-Tag:
+noindex` on `/(.*)`. Both are needed: the meta tag covers the HTML page, the header
+covers what a meta tag cannot reach — `/godot/index.pck` and `/replay/*` are not HTML.
+
+Do **not** add a `Disallow` to `robots.txt` to "reinforce" this. A disallowed URL is
+never fetched, so the crawler never sees the noindex and an already-indexed URL can
+linger; noindex only works if crawling is allowed. Reverse the hold by deleting the
+meta tag and the header together.
 
 **`/assets/*` is cached `max-age=31536000, immutable`** — Vite content-hashes every
 file there, so a new build gets new URLs. Everything else keeps Vercel's
