@@ -511,7 +511,15 @@ class Buy(base.Action):
         anyone else standing here carries (mirrors
         ``CheckOutBook._match_book`` above) -- the buyer doesn't hold the
         item yet, so it isn't in their own inventory or location items until
-        the trade completes."""
+        the trade completes.
+
+        Two co-located sellers can carry identically-named items (e.g. both
+        Rosa and Walt stock a "turkey sandwich"). A same-named item is keyed
+        once in ``items_in_scope``, so pooling by plain dict update would let
+        whichever seller is iterated last silently shadow the other's item --
+        even when the buyer already has dibs (``Property.BUYER``) on the
+        first one. Once this buyer has dibs on a same-named item, a
+        non-dibbed same-named item from another seller must not replace it."""
         if self.character is None:
             return None
         items_in_scope = dict(self.parser.get_items_in_scope(self.character))
@@ -520,7 +528,15 @@ class Buy(base.Action):
             for other in loc.characters.values():
                 if other is self.character:
                     continue
-                items_in_scope.update(other.carried_items())
+                for name, item in other.carried_items().items():
+                    existing = items_in_scope.get(name)
+                    if (
+                        existing is not None
+                        and existing.get_property(Property.BUYER) == self.character.name
+                        and item.get_property(Property.BUYER) != self.character.name
+                    ):
+                        continue
+                    items_in_scope[name] = item
         return self.parser.match_item(command, items_in_scope, hint="item for sale")
 
     def check_preconditions(self) -> bool:

@@ -180,3 +180,46 @@ def test_buy_succeeds_and_completes_the_trade(market):
     # A sold item shouldn't stay listed, or stay claimed by a stale buyer.
     assert not buyer.inventory["teapot"].get_property(Property.IS_FOR_SALE)
     assert not buyer.inventory["teapot"].get_property(Property.BUYER)
+
+
+def test_buy_matches_the_dibbed_item_even_when_a_second_seller_carries_the_same_name():
+    # Regression (code review, 2026-08-13): two co-located sellers can carry
+    # identically-named items (e.g. Rosa and Walt both stock "turkey
+    # sandwich" at Houston Hall). _match_for_sale_item pooled same-named
+    # items with a plain dict.update(), so whichever seller was iterated
+    # last silently overwrote the dict entry -- even when the buyer already
+    # had dibs on the OTHER seller's item.
+    market_loc = things.Location("Houston Hall", "a food court")
+    market_loc.set_property("marketplace", True)
+
+    buyer = things.Character("Diego", "a hungry student", "")
+    buyer.set_property(Property.MONEY, 20)
+
+    def _sandwich(owner):
+        item = things.Item("turkey sandwich", "a turkey sandwich", "On rye.")
+        item.set_property(Property.IS_FOR_SALE, True)
+        item.set_property(Property.PRICE, 5)
+        item.set_property(Property.OWNER, owner)
+        return item
+
+    rosa = things.Character("Rosa", "a counter worker", "")
+    rosa.set_property(Property.MONEY, 0)
+    rosa.add_to_inventory(_sandwich("Rosa"))
+
+    walt = things.Character("Walt", "another counter worker", "")
+    walt.set_property(Property.MONEY, 0)
+    walt.add_to_inventory(_sandwich("Walt"))
+
+    game = games.Game(market_loc, buyer, [rosa, walt], [Sell, Buy])
+    market_loc.add_character(rosa)
+    market_loc.add_character(walt)
+
+    assert (
+        game.parser.parse_command("sell turkey sandwich to Diego", actor=rosa) is True
+    )
+    assert game.do_command("buy turkey sandwich") is True
+
+    assert "turkey sandwich" in buyer.inventory
+    assert "turkey sandwich" in walt.inventory  # Walt's own stock is untouched
+    assert rosa.get_property(Property.MONEY) == 5  # Rosa was paid
+    assert walt.get_property(Property.MONEY) == 0  # not Walt
