@@ -2288,6 +2288,8 @@ def maybe_react(
                 st = state[me]
                 if not (st["path"] or st["performing"]):
                     continue
+                if chars[me].get_property(Property.IS_SLEEPING):
+                    continue
                 chars[me].agent.memory.add_observation(
                     render("encounter", partner=other, doing=_doing(chars[me], st)),
                     turn=step,
@@ -2300,6 +2302,10 @@ def maybe_react(
             continue
         other = b_name if reactor == a_name else a_name
         if state[reactor].get("conversing") or state[other].get("conversing"):
+            continue
+        if chars[reactor].get_property(Property.IS_SLEEPING) or chars[
+            other
+        ].get_property(Property.IS_SLEEPING):
             continue
         busy = {n for ac in active.values() for n in (ac.a, ac.b)}
         if reactor in busy or other in busy:
