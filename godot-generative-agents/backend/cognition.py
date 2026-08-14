@@ -2013,6 +2013,8 @@ def maybe_converse(
             or target.location is not char.location
             or state[target_name]["path"]
             or state[target_name].get("conversing")
+            or char.get_property(Property.IS_SLEEPING)
+            or target.get_property(Property.IS_SLEEPING)
         ):
             continue
         key = frozenset((name, target_name))
@@ -2061,7 +2063,10 @@ def maybe_converse(
     settled = [
         chars[name]
         for name in order
-        if state[name]["performing"] and not state[name]["path"] and name not in busy
+        if state[name]["performing"]
+        and not state[name]["path"]
+        and name not in busy
+        and not chars[name].get_property(Property.IS_SLEEPING)
     ]
     # First-come matching: once someone is conversing this step, skip any later
     # pair that includes them, so no agent double-writes in one tick (#187).
