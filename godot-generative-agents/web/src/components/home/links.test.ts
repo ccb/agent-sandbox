@@ -40,8 +40,18 @@ describe("repository links", () => {
     Object.entries(SOURCES).filter(([path]) => !ALLOWED.includes(path)),
     // biome-ignore lint/suspicious/noExplicitAny: it.each's tuple typing
   )("%s builds repo links from links.ts", (_path: any, src: any) => {
-    // Hard-coding the URL is how a link loses its branch. Import `repoTree` /
-    // `repoFile` (or `REPO_URL` for the citation) instead.
+    // Hard-coding the URL is how a link loses its branch. Import `repoTree` or
+    // `repoFile` instead — including in the citation, which names `prod` too.
     expect(src).not.toContain(REPO_URL);
+  });
+
+  it("cites prod, not the default branch", () => {
+    // The citation is the one repo link a reader copies away from the page, so
+    // it outlives every other one here. `not.toContain(REPO_URL)` above already
+    // rejects a hand-written URL; this pins what the template interpolates, so
+    // reverting it to the bare `REPO_URL` fails rather than silently shipping a
+    // citation that resolves to `main`.
+    const home = SOURCES["./HomeView.tsx"];
+    expect(home).toContain("url    = {${repoTree}}");
   });
 });

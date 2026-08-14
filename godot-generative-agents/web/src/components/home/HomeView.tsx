@@ -12,7 +12,7 @@ import { CaseStudySection } from "./CaseStudySection";
 import { CodeRef } from "./CodeRef";
 import { CostSection } from "./CostSection";
 import { ImplementationSection } from "./ImplementationSection";
-import { REPO_URL, repoTree } from "./links";
+import { repoTree } from "./links";
 import { ReflectionsSection } from "./ReflectionsSection";
 import { RunLocallySection } from "./RunLocallySection";
 import { SectionHeading } from "./SectionHeading";
@@ -336,7 +336,7 @@ const BIBTEX = `@misc{king2026penncampusagents,
   author = {King, Alistair and L, Frankie and Callison-Burch, Chris},
   year   = {2026},
   note   = {PURM, University of Pennsylvania},
-  url    = {${REPO_URL}},
+  url    = {${repoTree}},
 }`;
 
 /** The citation block, plus a copy button. Its own component so the "copied"

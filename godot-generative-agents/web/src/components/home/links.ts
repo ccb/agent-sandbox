@@ -16,8 +16,11 @@ export const REPO_URL = "https://github.com/ccb/agent-sandbox";
  * below rather than by hand, so a new link can't forget the branch;
  * `links.test.ts` fails if one does.
  *
- * The BibTeX `url` deliberately stays the bare `REPO_URL`: a citation cites the
- * repository, not a branch that may not exist in five years.
+ * The BibTeX `url` names the branch too (`repoTree`), reversing an earlier call
+ * that a citation should cite the repository rather than a branch that may not
+ * exist in five years. A bare repo URL sends a reader to `main`, which is not
+ * the work being cited — a wrong-branch citation is a worse failure than a
+ * someday-stale one, and `main` going away would break the bare URL anyway.
  */
 const BRANCH = "prod";
 
