@@ -22,6 +22,13 @@ _SIM_DIR = (
 sys.path.insert(0, str(_SIM_DIR))
 
 from backend.drives import accrue_wage  # noqa: E402
+import datetime
+
+from backend.build_world import build_world  # noqa: E402
+from backend.cognition import attach_agents  # noqa: E402
+from backend.run_simulation import step  # noqa: E402
+from backend.sim_clock import SimClock  # noqa: E402
+from backend.sim_config import CognitionConfig  # noqa: E402
 from text_adventure_games.enums import Property  # noqa: E402
 from text_adventure_games.things import Character  # noqa: E402
 
@@ -91,3 +98,114 @@ def test_wage_does_not_accrue_without_an_attached_agent():
     c.set_property(Property.MONEY, 20)
     accrue_wage(c)
     assert c.get_property(Property.MONEY) == 20
+
+
+_WAGE_LOCATIONS = [
+    {
+        "name": "Library",
+        "description": "a small library",
+        "address": "T:Library:desks",
+        "hub": True,
+    },
+    {
+        "name": "Houston Hall",
+        "description": "a food court",
+        "address": "T:HoustonHall:counter",
+    },
+]
+
+
+class _TwoTileStubMap:
+    def walk_path(self, src, address, furniture=None):
+        return [(1, 1), (2, 2)]
+
+
+def _wage_clock():
+    return SimClock(datetime.datetime(2023, 2, 13, 12, 0, 0), sec_per_step=10)
+
+
+def _wage_persona():
+    return {
+        "name": "Rosa",
+        "home": "Library",
+        "persona": "Rosa runs the Houston Hall counter.",
+        "emoji": "\U0001f956",
+        "start_tile": [0, 0],
+        "destination": "Library",
+        "activity": "reading",
+        "wage_rate": 5,
+        "schedule": [
+            {
+                "place": "Library",
+                "activity": "reading",
+                "emoji": "\U0001f4d6",
+                "steps": 1,
+            },
+            {
+                "place": "Houston Hall",
+                "activity": "ringing up a sale",
+                "emoji": "\U0001f956",
+                "steps": None,
+                "is_work": True,
+            },
+        ],
+    }
+
+
+def _wage_state():
+    return {
+        "Rosa": {
+            "tile": (0, 0),
+            "path": [],
+            "pron": "\U0001f4d6",
+            "desc": "waking up",
+            "performing": False,
+            "perform_until": None,
+            "reasoning": "(waking up)",
+            "memories": [],
+            "chat": None,
+            "stop_since": 0,
+        }
+    }
+
+
+def test_wage_does_not_accrue_while_walking_to_the_next_work_stop():
+    # Regression (code review, 2026-08-13): the travel branch in
+    # run_simulation.step never cleared Property "activity" when a new
+    # travel command started, so accrue_wage's "settled, not still walking"
+    # check (a truthy `activity`) stayed true from the PREVIOUS stop's
+    # activity string for the whole walk to the next stop -- paying wage
+    # while Rosa is still in transit to Houston Hall.
+    persona = _wage_persona()
+    game, chars = build_world(None, [persona], _WAGE_LOCATIONS)
+    attach_agents(chars, [persona], llm_client=None)  # mock brain
+    rosa = chars["Rosa"]
+    rosa.set_property(Property.MONEY, 0)
+    state = _wage_state()
+    kwargs = dict(
+        order=["Rosa"],
+        world_map=_TwoTileStubMap(),
+        emoji={"Rosa": "\U0001f956"},
+        clock=_wage_clock(),
+        cog=CognitionConfig(),
+    )
+
+    # Step 0: settles into stop 0 (Library, on-plan, non-work).
+    step(game, {"Rosa": rosa}, state, 0, **kwargs)
+    assert state["Rosa"]["performing"] is True
+    assert rosa.get_property("activity")  # settled with a real activity label
+
+    # Step 1: the 1-step stop completes -> advances -> re-decides -> travels
+    # to Houston Hall. The stale "reading" activity must be cleared the
+    # instant travel starts.
+    step(game, {"Rosa": rosa}, state, 1, **kwargs)
+    assert not rosa.get_property("activity")
+    assert rosa.get_property(Property.MONEY) == 0
+
+    # Keep stepping through the walk; wage must stay at 0 the whole time.
+    step_idx = 2
+    while state["Rosa"]["path"] and step_idx < 20:
+        step(game, {"Rosa": rosa}, state, step_idx, **kwargs)
+        assert rosa.get_property(Property.MONEY) == 0
+        step_idx += 1
+    assert step_idx < 20  # sanity: she actually arrived

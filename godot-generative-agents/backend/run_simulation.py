@@ -659,6 +659,13 @@ def step(
                     )
                     st["pron"] = WALK_EMOJI
                     st["desc"] = f"walking to {dest.name} @ {address}"
+                    # Clear the previous stop's activity label the instant
+                    # travel starts (#931 follow-up): accrue_wage's "settled,
+                    # not still walking" check reads Property "activity" for
+                    # truthiness, and nothing else clears it -- left stale, a
+                    # newly-arrived work stop reads as already settled for the
+                    # whole walk there, paying wage mid-transit.
+                    char.set_property("activity", False)
                 elif (
                     command.startswith("perform")
                     or is_sleep
