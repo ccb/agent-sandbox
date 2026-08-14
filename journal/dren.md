@@ -13,6 +13,22 @@ on top; copy the template block each working day.
 **Next:**
 - ...
 -->
+## 2026-08-13
+**Focus:** Turning yesterday's 9 open code-review findings into a 4-task implementation plan; syncing journal entries to `main`
+
+**Done today:**
+- Merged PR #998 (journal entries for 08-04/08-07/08-10/08-11/08-12) into `main`.
+- Wrote `docs/superpowers/plans/2026-08-13-sleep-gating-and-wage-commerce-fixes.md`: 4 independent TDD tasks covering 4 of the 9 open findings from the 08-12 code review — `maybe_converse` pairing a sleeping character into a conversation, `Buy` matching the wrong seller's same-named item, `accrue_wage` paying mid-walk on a stale `activity` flag, and `needs_interrupt_seen` staying frozen through sleep. Each fix was implemented and test-verified (fail → fix → pass) while drafting, then reverted, so the plan's diffs are exact. Deliberately scoped out the remaining findings (Craft/persona YAML/`world_data_eat.yaml`) as separate follow-ups.
+
+**Blockers / questions:**
+- None blocking.
+- PR #997 (wage-spend-loop test) is still open/unmerged.
+
+**Next:**
+- Execute the 4-task plan via subagent-driven-development, one commit per task.
+- Decide on the remaining out-of-scope review findings.
+- Merge PR #997.
+
 ## 2026-08-12
 **Focus:** Committing the 08-07/08-10/08-11 uncommitted sleep/wage/commerce work, a wage-to-food integration test, a Sweeten second-sleepable-location design, and a first real code review of the feature commits (which found and fixed a live bug)
 
