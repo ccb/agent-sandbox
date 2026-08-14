@@ -421,6 +421,103 @@ def test_reactive_sleep_wakes_and_resumes_the_original_schedule():
     assert "The Green" in state["Ada"]["desc"]
 
 
+def test_need_driven_interrupt_fires_again_after_waking_for_a_need_that_persisted_through_sleep():
+    # Regression (code review, 2026-08-13): needs_interrupt_seen is only ever
+    # updated in the block gated on `not IS_SLEEPING`, so it freezes at
+    # whatever it was when sleep began. is_low_energy persists through sleep
+    # by design (accrue_energy is never restored by sleep_accumulation), so
+    # on waking into a BRAND-NEW long performing block, the stale True from
+    # before the nap must not suppress a legitimate fresh interrupt.
+    from backend.actions import Sleep
+    from text_adventure_games.enums import Property
+
+    class _ScriptedThenDefaultBrain:
+        """Answers a scripted queue, then falls back to a fixed long
+        `perform` forever -- unlike the shared SequenceBrain (whose default
+        fallback carries no duration_minutes), this needs a fallback that
+        keeps re-settling into a 90-minute block so the interrupt (not a
+        natural block end) is what's under test."""
+
+        def __init__(self, script):
+            self._script = list(script)
+            self.offers = 0
+
+        def call_tools(
+            self, messages, tools, tool_choice="auto", max_tokens=256, temperature=0.0
+        ):
+            self.offers += 1
+            name, arguments = (
+                self._script.pop(0)
+                if self._script
+                else ("perform", {"activity": "reading", "duration_minutes": 90})
+            )
+            return ToolCallResult(
+                text=None,
+                tool_calls=[{"id": "c", "name": name, "arguments": dict(arguments)}],
+            )
+
+    persona = _persona(place="The Green", steps=None)
+    game, chars = build_world(None, [persona], LOCATIONS, extra_actions=[Sleep])
+    game.locations["The Green"].set_property("sleepable", True)
+    brain = _ScriptedThenDefaultBrain(
+        [
+            ("perform", {"activity": "reading", "duration_minutes": 90}),
+            ("sleep", {}),
+        ]
+    )
+    attach_agents(chars, [persona], llm_client=brain)
+    ada = chars["Ada"]
+    state = _state()
+    clock = _clock()
+    kwargs = dict(
+        order=["Ada"],
+        world_map=_StubMap(),
+        emoji={"Ada": "\U0001f4d6"},
+        clock=clock,
+        cog=CognitionConfig(),
+    )
+
+    step(game, {"Ada": ada}, state, 0, **kwargs)
+    assert state["Ada"]["performing"] is True
+
+    # Need fires mid-block -> the one legitimate interrupt; she decides to sleep.
+    ada.set_property("is_low_energy", True)
+    ada.set_property(Property.IS_SLEEPY, True)
+    step(game, {"Ada": ada}, state, 1, **kwargs)
+    assert ada.get_property(Property.IS_SLEEPING) is True
+    assert state["Ada"]["needs_interrupt_seen"] is True
+
+    # Asleep: the interrupt block is skipped entirely every tick (frozen
+    # flag) until sleep_accumulation actually wakes her.
+    step_idx = 2
+    while ada.get_property(Property.IS_SLEEPING) and step_idx < 100:
+        step(game, {"Ada": ada}, state, step_idx, **kwargs)
+        step_idx += 1
+    assert step_idx < 100  # sanity: she actually woke
+
+    # is_low_energy never got resolved (hunger persists through sleep by
+    # design) -- still needy right as she wakes.
+    assert ada.get_property("is_low_energy") is True
+
+    # The wake tick un-latches performing, resets the interrupt flag, and
+    # (same tick) redecides into a brand-new long block (the brain's default
+    # fallback: perform reading, 90 min) -- still needy the whole time.
+    offers_before_wake = brain.offers
+    step(game, {"Ada": ada}, state, step_idx, **kwargs)
+    assert state["Ada"]["needs_interrupt_seen"] is False
+    assert state["Ada"]["performing"] is True  # settled into the new block
+    assert brain.offers == offers_before_wake + 1
+    step_idx += 1
+
+    # Next tick: the fresh block is re-evaluated for neediness. Without the
+    # fix, needs_interrupt_seen's stale True (frozen through sleep) would
+    # suppress this and pin her in the new 540-step block for its full
+    # duration; with it, she's interrupted (brain re-asked) immediately.
+    offers_before = brain.offers
+    step(game, {"Ada": ada}, state, step_idx, **kwargs)
+    assert brain.offers == offers_before + 1
+
+
 def test_need_driven_interrupt_is_gated_on_a_real_brain():
     # accrue_energy runs unconditionally on every character (not opt-in --
     # see drives.py), so a bare test character that never had

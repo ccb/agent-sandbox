@@ -360,6 +360,14 @@ def step(
             st["performing"] = False
             st["sleep_settle"] = False
             st["stop_since"] = step_idx
+            # The need-driven interrupt below is never re-evaluated while
+            # IS_SLEEPING (it's gated on `not IS_SLEEPING`), so this flag is
+            # frozen at whatever it was when sleep began. Hunger/thirst persist
+            # through sleep by design (#931 follow-up, accrue_energy), so on
+            # waking the character can still be needy -- reset the flag so the
+            # fresh performing block that follows gets one legitimate
+            # interrupt, instead of reading the stale True as "already seen".
+            st["needs_interrupt_seen"] = False
 
         # Need-driven interrupt (#931 follow-up): a long `steps:` schedule
         # block (Professor Tanaka's 800-step lecture prep, e.g.) would
