@@ -1,14 +1,21 @@
 # Penn Generative Agents
 
+[![Live site](https://img.shields.io/badge/Live_site-pennagents.vercel.app-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://pennagents.vercel.app/)
+[![Python](https://img.shields.io/badge/Python-3.11%E2%80%933.13-3776AB?style=for-the-badge&logo=python&logoColor=white)](pyproject.toml)
+[![Godot](https://img.shields.io/badge/Godot-4.6-478CBF?style=for-the-badge&logo=godotengine&logoColor=white)](godot-generative-agents/godot)
+[![License](https://img.shields.io/badge/License-MIT-011F5B?style=for-the-badge)](LICENSE)
+
 Penn Generative Agents is a forkable multi-agent simulation of a day on the
 University of Pennsylvania campus. LLM-driven characters perceive a shared
 world, form daily plans, remember events, travel, use grounded actions, and talk
 to one another. A Godot 4 viewer and a browser companion make the simulation
 inspectable rather than leaving it as a stream of model output.
 
-This repository is the source package behind the public project writeup. The
-`prod` branch intentionally matches that published showcase; ongoing research
-may live on other branches.
+This repository is the source package behind the public project writeup at
+**[pennagents.vercel.app](https://pennagents.vercel.app/)**, where the writeup
+explains how an agent works and the viewer plays a recorded run in the browser.
+The `prod` branch intentionally matches that published showcase; ongoing
+research may live on other branches.
 
 ## How it fits together
 
