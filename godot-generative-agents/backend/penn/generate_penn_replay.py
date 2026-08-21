@@ -47,6 +47,8 @@ from penn_world import (
     WORLD_DATA,
     WORLD_DATA_BOIL,
     WORLD_DATA_EAT,
+    WORLD_DATA_SLEEP,
+    WORLD_DATA_WORK,
     build_penn_world,
     persona_meta_entry,
     replay_frame_entry,
@@ -91,12 +93,31 @@ SCENARIOS = {
         "steps": DEFAULT_BOIL_STEPS,
         "out": "penn_replay_boil.json",
     },
-    #adding a eat scene to the baked version
+    # adding a eat scene to the baked version
     "eat": {
-        "world_data" : WORLD_DATA_EAT,
+        "world_data": WORLD_DATA_EAT,
         "steps": 40,
-        "out" :"penn_replay_eat.json",
-    }
+        "out": "penn_replay_eat.json",
+    },
+    # Wage regression demo (cf7ef4fb): a Houston Hall cashier who walks in
+    # from the open campus (~22 steps) before settling into a work stop, so
+    # money visibly holds flat through the commute and only accrues once
+    # settled.
+    "work": {
+        "world_data": WORLD_DATA_WORK,
+        "steps": 100,
+        "out": "penn_replay_work.json",
+    },
+    # Sleep-interrupt regression demo (45df120b, c12b3723, 44729cf5): a
+    # resident sleeps through the night in Houston Hall's Reading Room while a
+    # passerby's errand brings them into the same room during the sleep
+    # window. 500 covers her ~240-tick wait to get sleepy, the sleep itself,
+    # and the passerby's full there-and-back walk with a settled tail.
+    "sleep": {
+        "world_data": WORLD_DATA_SLEEP,
+        "steps": 500,
+        "out": "penn_replay_sleep.json",
+    },
 }
 
 
@@ -199,8 +220,10 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=sorted(SCENARIOS),
         default="penn",
         help="which world to bake: 'penn' (the full campus cast, the bundled "
-        "replay) or 'boil' (the one-persona boil-water demo, #592). Sets the "
-        "default world YAML, step budget, and output file.",
+        "replay), 'boil' (the one-persona boil-water demo, #592), 'eat' (the "
+        "one-persona eat-a-sandwich demo, #931), 'work' (the one-persona "
+        "wage-drive demo), or 'sleep' (the two-persona sleep-interrupt demo). "
+        "Sets the default world YAML, step budget, and output file.",
     )
     ap.add_argument(
         "--steps",
