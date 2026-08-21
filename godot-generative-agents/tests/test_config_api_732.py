@@ -71,6 +71,7 @@ def test_library_personas_catalog():
         "sam",
         "tessa",
         "victor",
+        "walt",
         "wesley",
         "yuki",
     }
@@ -131,8 +132,8 @@ def test_describe_config_shape(monkeypatch):
     assert cfg["run"]["brain"] == "mock"
     assert cfg["run"]["steps"] == 6
     assert cfg["run"]["max_cost"] is None
-    # 6 steps x 10s from the 08:00 start
-    assert cfg["run"]["stop_time"] == "2023-02-13 08:01:00"
+    # 6 steps x 15s from the 08:00 start
+    assert cfg["run"]["stop_time"] == "2023-02-13 08:01:30"
     # knob defaults == an empty SimulationConfig, with the key-carrying
     # sections stripped; an unconfigured server's current == defaults.
     assert "llm" not in cfg["knobs"]["defaults"]["game"]
