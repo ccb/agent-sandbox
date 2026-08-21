@@ -25,7 +25,7 @@ class Location(Thing):
     """
 
     def __init__(self, name: str, description: str):
-        super().__init__(name, description) # what is this syntax?
+        super().__init__(name, description)  # what is this syntax?
         # Dictionary mapping from directions to other Location objects
         self.connections = {}
 

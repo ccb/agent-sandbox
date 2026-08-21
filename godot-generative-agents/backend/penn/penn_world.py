@@ -69,6 +69,18 @@ WORLD_DATA_BOIL_HARD = os.path.join(_SIM_DIR, "world_data_boil_hard.yaml")
 UPENN_DIR = os.path.join(_SIM_DIR, "the_upenn")
 # adding a eat scene to the baked version of the penn sim
 WORLD_DATA_EAT = os.path.join(_SIM_DIR, "world_data_eat.yaml")
+# A one-persona wage DEMO world (regression demo for cf7ef4fb): a Houston Hall
+# cashier who walks in from the open campus before settling into a work stop,
+# so the bake visibly separates "still walking" (wage must stay 0) from
+# "settled and on the clock" (wage accrues). `generate_penn_replay.py
+# --scenario work` loads this instead of the full cast.
+WORLD_DATA_WORK = os.path.join(_SIM_DIR, "world_data_work.yaml")
+# A two-persona sleep-interrupt DEMO world (regression demo for 45df120b,
+# c12b3723, 44729cf5): a resident sleeps in Houston Hall's Reading Room while
+# a passerby's errand brings them into the same room during the sleep window.
+# `generate_penn_replay.py --scenario sleep` loads this instead of the full
+# cast.
+WORLD_DATA_SLEEP = os.path.join(_SIM_DIR, "world_data_sleep.yaml")
 # The Penn-local verb set (#300): registered on top of Travel/Act via
 # build_world(extra_actions=...). DrinkPenn overrides the engine's "drink"; Craft is
 # the engine crafting action that drives the boil-water Recipe (see _boil_recipe) --

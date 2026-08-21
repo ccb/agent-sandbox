@@ -152,7 +152,7 @@ class Parser:
         terminal draws the card inline. Never enters command history."""
         self._emit(Channel.FIGURE, key)
 
-    @staticmethod # HOW IS THIS POSSIBLE
+    @staticmethod  # HOW IS THIS POSSIBLE
     def wrap_text(text: str, width: int = 80) -> str:
         """
         Keeps text output narrow enough to easily be read
@@ -406,7 +406,9 @@ class Parser:
                             best_name, best_len = action.action_name(), len(phrase)
             return best_name
 
-    def _match_specific_action(self, command): #how to you match? Use vector emdedding?
+    def _match_specific_action(
+        self, command
+    ):  # how to you match? Use vector emdedding?
         """The longest registered ACTION_NAME / ACTION_ALIAS that is MULTI-WORD
         and appears in *command* (already lowercased), or None.
 

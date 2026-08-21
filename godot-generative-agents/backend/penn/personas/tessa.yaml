@@ -9,6 +9,10 @@ persona: I am Tessa Byrne, 21, a junior and a reporter for the Daily
   Pennsylvanian. I am curious, quick with a follow-up question, and always
   chasing the next campus story.
 emoji: 📰
+# Daily Pennsylvanian reporter's stipend (job-expansion pass): paid per tick
+# actually spent on her own reporting-shift stop below (is_work: true); the
+# College Hall interview stop with Ellis stays untouched.
+wage_rate: 0.03
 start_tile:
 - 34
 - 262
@@ -16,6 +20,7 @@ schedule:
 - place: Houston Hall — Reading Room
   activity: drafting interview questions
   emoji: 📰
+  is_work: true
   steps: 230
 - place: College Hall
   activity: conducting an interview for the paper
