@@ -720,49 +720,77 @@ class Buy(Action):
     def __init__(self, game, command: str, actor=None):
         super().__init__(game, actor=actor)
         self.character = self.acting_character(command, hint="buyer")
-        # TODO (#932): match the named item. It won't be in
-        # self.character's own scope (they don't have it yet) -- pool
-        # self.parser.get_items_in_scope(self.character) with whatever
-        # anyone ELSE standing in self.character.location is carrying (the
-        # CheckOutBook._match_book pattern cited above), then
-        # self.parser.match_item(command, that_pool, hint="item for sale").
-        self.item = None
-        # TODO: resolve the seller FROM Property.OWNER on the matched item
-        # (self.game.characters.get(item.get_property(Property.OWNER))),
-        # not from the command text -- "buy teapot" should work without
-        # ever naming the seller, since the item already names its owner.
+        self.item = self._match_for_sale_item(command)
         self.seller = None
+        if self.item is not None:
+            self.seller = self.game.characters.get(
+                self.item.get_property(Property.OWNER)
+            )
+
+    def _match_for_sale_item(self, command: str):
+        """The named item, pooled from the buyer's own scope plus whatever
+        anyone else standing here carries -- the buyer doesn't hold the item
+        yet, so it isn't in their own inventory or location items until the
+        trade completes (mirrors ``CheckOutBook._match_book``'s combined-scope
+        pattern, ``godot-generative-agents/backend/actions.py``)."""
+        if self.character is None:
+            return None
+        items_in_scope = dict(self.parser.get_items_in_scope(self.character))
+        loc = self.character.location
+        if loc is not None:
+            for other in loc.characters.values():
+                if other is self.character:
+                    continue
+                for name, item in other.carried_items().items():
+                    items_in_scope[name] = item
+        return self.parser.match_item(command, items_in_scope, hint="item for sale")
 
     def check_preconditions(self) -> bool:
-        # TODO (#932) -- one test per check in test_commerce_scaffold.py:
-        # 1. was_matched(self.character, ...) / was_matched(self.item, ...)
-        # 2. self.item.get_property(Property.IS_FOR_SALE)
-        # 3. was_matched(self.seller, ...) -- Property.OWNER must name a
-        #    real, living character ("there must be a person they're
-        #    buying from").
-        # 4. not self.character.get_property(Property.IS_SLEEPING) --
-        #    "they must not be asleep."
-        # 5. self.at(self.seller, self.character.location) -- "locations
-        #    must match."
-        # 6. self.character.get_property(Property.MONEY) >=
-        #    self.item.get_property(Property.PRICE) -- "money must be
-        #    sufficient."
-        # Optional (contention, the CheckOutBook.checked_out_by precedent):
-        # if Property.BUYER is already set to someone else, fail -- someone
-        # else has dibs on this item this round. Otherwise stamp
-        # Property.BUYER = self.character.name here, and clear it again in
-        # apply_effects (or on any later failure) so it doesn't stick.
-        raise NotImplementedError("#932: implement Buy.check_preconditions")
+        if not self.was_matched(self.character, "No one is buying."):
+            return False
+        if not self.was_matched(self.item, "I don't see anything for sale like that."):
+            return False
+        if not self.item.get_property(Property.IS_FOR_SALE):
+            self.parser.fail(f"The {self.item.name} isn't for sale.")
+            return False
+        if not self.was_matched(
+            self.seller, f"No one is selling the {self.item.name}."
+        ):
+            return False
+        if self.character.get_property(Property.IS_SLEEPING):
+            self.parser.fail(f"{self.character.name.capitalize()} is asleep.")
+            return False
+        if not self.at(self.seller, self.character.location):
+            return False
+        price = self.item.get_property(Property.PRICE)
+        if self.character.get_property(Property.MONEY) < price:
+            self.parser.fail(
+                f"{self.character.name.capitalize()} can't afford the "
+                f"{self.item.name}."
+            )
+            return False
+        return True
 
     def apply_effects(self):
-        # TODO (#932): move the item seller -> buyer (self.seller.
-        # discard_item(self.item) + self.character.accept_item(self.item),
-        # the same pair Give.apply_effects uses in actions/things.py), debit
-        # Property.PRICE from the buyer's Property.MONEY, credit it to the
-        # seller's, clear Property.IS_FOR_SALE and Property.BUYER (a sold
-        # item shouldn't stay listed or stay claimed), and self.parser.ok(
-        # ...) a message naming buyer, seller, item, and price.
-        raise NotImplementedError("#932: implement Buy.apply_effects")
+        price = self.item.get_property(Property.PRICE)
+        self.seller.discard_item(self.item)
+        self.character.accept_item(self.item)
+        self.character.set_property(
+            Property.MONEY, self.character.get_property(Property.MONEY) - price
+        )
+        self.seller.set_property(
+            Property.MONEY, self.seller.get_property(Property.MONEY) + price
+        )
+        self.item.set_property(Property.IS_FOR_SALE, False)
+        self.item.set_property(Property.BUYER, False)
+        return self.parser.ok(
+            "{buyer} buys the {item} from {seller} for {price}.".format(
+                buyer=self.character.name.capitalize(),
+                item=self.item.name,
+                seller=self.seller.name,
+                price=price,
+            )
+        )
 
 
 class Sell(Action):
@@ -786,23 +814,62 @@ class Sell(Action):
         self.seller = self.acting_character(
             command, hint="seller", split_words=sell_words, position="before"
         )
-        # TODO (#932): resolve the buyer the same way Give resolves its
-        # recipient -- self.target_character(command, hint="buyer",
-        # split_words=sell_words, position="after", exclude=self.seller).
-        self.buyer = None
-        # TODO: match the named item among what self.seller carries (see
-        # Give.__init__'s giver_held dict in actions/things.py).
-        self.item = None
+        self.buyer = self.target_character(
+            command,
+            hint="buyer",
+            split_words=sell_words,
+            position="after",
+            exclude=self.seller,
+        )
+        seller_held = self.seller.carried_items() if self.seller else {}
+        self.item = self.parser.match_item(command, seller_held, hint="item being sold")
 
     def check_preconditions(self) -> bool:
-        # TODO (#932) -- the same checks Buy needs, from the seller's side:
-        # matched seller/buyer/item, Property.IS_FOR_SALE, buyer not
-        # asleep, same location, buyer's Property.MONEY >= item's
-        # Property.PRICE. Give.check_preconditions (actions/things.py) has
-        # working location/capacity checks to reuse rather than rewrite.
-        raise NotImplementedError("#932: implement Sell.check_preconditions")
+        if not self.was_matched(self.seller, "No one is selling."):
+            return False
+        if not self.was_matched(self.item, "I don't see anything like that to sell."):
+            return False
+        if self.item.get_property(Property.OWNER) != self.seller.name:
+            self.parser.fail(
+                f"{self.seller.name.capitalize()} isn't authorized to sell the "
+                f"{self.item.name}."
+            )
+            return False
+        if not self.item.get_property(Property.IS_FOR_SALE):
+            self.parser.fail(f"The {self.item.name} isn't for sale.")
+            return False
+        if not self.was_matched(self.buyer, "Sell it to whom?"):
+            return False
+        if self.buyer.get_property(Property.IS_SLEEPING):
+            self.parser.fail(f"{self.buyer.name.capitalize()} is asleep.")
+            return False
+        if not self.at(self.buyer, self.seller.location):
+            return False
+        price = self.item.get_property(Property.PRICE)
+        if self.buyer.get_property(Property.MONEY) < price:
+            self.parser.fail(
+                f"{self.buyer.name.capitalize()} can't afford the {self.item.name}."
+            )
+            return False
+        return True
 
     def apply_effects(self):
-        # TODO (#932): same transfer as Buy.apply_effects, just initiated
-        # from the seller's command instead of the buyer's.
-        raise NotImplementedError("#932: implement Sell.apply_effects")
+        price = self.item.get_property(Property.PRICE)
+        self.seller.discard_item(self.item)
+        self.buyer.accept_item(self.item)
+        self.buyer.set_property(
+            Property.MONEY, self.buyer.get_property(Property.MONEY) - price
+        )
+        self.seller.set_property(
+            Property.MONEY, self.seller.get_property(Property.MONEY) + price
+        )
+        self.item.set_property(Property.IS_FOR_SALE, False)
+        self.item.set_property(Property.BUYER, False)
+        return self.parser.ok(
+            "{seller} sells the {item} to {buyer} for {price}.".format(
+                seller=self.seller.name.capitalize(),
+                item=self.item.name,
+                buyer=self.buyer.name,
+                price=price,
+            )
+        )
