@@ -7,6 +7,10 @@ persona: I am Elena Vasquez, 22, a senior at Penn. My little brother Mateo just
   started here as a first-year, and I have appointed myself his campus guide
   whether he likes it or not.
 emoji: 🎓
+# Circulation-desk job (job-expansion pass): paid per tick actually spent on
+# her own Circulation Desk stop below (is_work: true) -- her College Hall
+# stop with Mateo stays unpaid family time.
+wage_rate: 0.04
 start_tile:
 - 113
 - 216
@@ -18,6 +22,7 @@ schedule:
 - place: Van Pelt — Circulation Desk
   activity: helping with a first library card
   emoji: 🎓
+  is_work: true
 
 relationships:
 - a: Elena Vasquez

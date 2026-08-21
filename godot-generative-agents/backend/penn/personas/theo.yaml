@@ -10,6 +10,11 @@ persona: I am Theo Lindqvist, 21, a philosophy junior at Penn. I do my best
   with anyone who sits still long enough. My housemate Imani says I keep
   philosopher's hours; she is correct.
 emoji: 🦉
+# Late-night circulation-desk job (job-expansion pass): fits the night-owl
+# shape -- he's already on campus at odd hours. Only his own Circulation Desk
+# stop below is retargeted for it (is_work: true); nothing else in his day
+# depends on that stop's old place/activity, and no meeting is anchored here.
+wage_rate: 0.03
 # Starts on the doorstep outside Houston Hall -- surfacing for brunch while the
 # early risers are already halfway through their day.
 start_tile:
@@ -20,9 +25,10 @@ schedule:
   activity: surfacing for brunch long after sunrise
   emoji: ☕
   steps: 60
-- place: Van Pelt — Moelis Reading Room
-  activity: annotating a stack of philosophy papers
-  emoji: 📝
+- place: Van Pelt — Circulation Desk
+  activity: shelving returns during a work shift
+  emoji: 📚
+  is_work: true
   steps: 150
 - place: Houston Hall — Reading Room
   activity: arguing footnotes with anyone who sits down

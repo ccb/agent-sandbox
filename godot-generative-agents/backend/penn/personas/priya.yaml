@@ -7,6 +7,10 @@ persona: I am Priya Nair, 20, a junior studying computer science at Penn. I am
   sharp, social, and always somewhere between a problem set and a coffee. Maya and
   I have been study buddies since freshman bio.
 emoji: 💻
+# Research assistantship (job-expansion pass): paid per tick actually spent
+# on her own DSE stop below (is_work: true) -- the Moelis stop with Maya
+# stays untouched, its timing unaffected.
+wage_rate: 0.04
 # Starts on the walk beside Van Pelt's east door, next to Maya, so the two of them
 # head into the reading room together.
 start_tile:
@@ -25,8 +29,9 @@ schedule:
   emoji: 🥪
   steps: 50
 - place: Van Pelt — Digital Scholarship Exchange
-  activity: pulling a dataset for a course project
+  activity: pulling a dataset for her research assistantship
   emoji: 💻
+  is_work: true
   steps: 40
 - place: College Hall
   activity: heading to an afternoon lecture
