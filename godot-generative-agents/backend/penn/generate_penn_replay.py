@@ -91,12 +91,12 @@ SCENARIOS = {
         "steps": DEFAULT_BOIL_STEPS,
         "out": "penn_replay_boil.json",
     },
-    #adding a eat scene to the baked version
+    # adding a eat scene to the baked version
     "eat": {
-        "world_data" : WORLD_DATA_EAT,
+        "world_data": WORLD_DATA_EAT,
         "steps": 40,
-        "out" :"penn_replay_eat.json",
-    }
+        "out": "penn_replay_eat.json",
+    },
 }
 
 
