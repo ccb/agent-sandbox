@@ -56,7 +56,7 @@ class Eat(base.Action):
         """
         self.character.discard_item(self.item)
         self.character.set_property(Property.IS_HUNGRY, False)
-        
+
         description = "{name} {verb} the {food}.".format(
             name=self.character.name.capitalize(),
             verb=_conj(self.character, "eat", "eats"),
