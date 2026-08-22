@@ -26,12 +26,12 @@ on top; copy the template block each working day.
 - Traced the `godot (smoke)` CI failure past the UI theme to its real, bigger cause: 8 licensed Kenney tileset images (`decor_plants.png`, `interior_*.png`) the actual campus tileset depends on are also `.gitignore`'d, so the whole `TileSet` atlas fails to build in any bare checkout. Filed/updated #1005 with the full picture.
 - Per request, consolidated all 5 PRs into one (#1007) -- resolved one real merge conflict (the work/sleep `SCENARIOS` additions and the black-format fix touched adjacent lines in the same dict). Found and fixed 2 more pre-existing stale test pins along the way in `test_config_api_732.py` (a missing `"walt"` in an expected persona-id set; a `stop_time` assertion still assuming the old `SEC_PER_STEP=10` instead of `15`) -- `godot-generative-agents/tests/` is now 774 passed, 0 failed. PR #1007 sits at 6/7 checks green; only `godot (smoke)` remains red.
 - Attempted a targeted fix for `godot (smoke)` (skip the tile-paint check when the licensed images are known-absent) and caught it failing its own safety test before shipping it: with a deliberately corrupted `.tmj`, the fix still reported PASS, because Godot fails the whole `TileSet` atomically on any missing source image -- there's no way to tell "images legitimately absent" apart from "the tileset is actually broken" from the 0-cells symptom alone, and CI *always* has the images absent. Reverted; verified the repo was left exactly as found (the licensed assets and `.godot/` cache were moved aside to reproduce CI locally, then restored).
+- Merged #1007 into `food-system-branch` (fast-forwarded local to `eb156be9`) and closed out #999/#1000/#1001/#1004/#1006 -- GitHub auto-recognized all 5 as `MERGED` rather than needing an explicit close, since their exact commits are now ancestors of `food-system-branch` via #1007's own merges. `food-system-branch` carries everything from today and 08-15/08-16/08-19/08-20 now; only `godot (smoke)` stays red, for the documented licensing reason.
 
 **Blockers / questions:**
 - `godot (smoke)` can only be fixed with CI-side secure asset provisioning, or a maintainer decision to accept it as permanently red -- not something fixable in code without weakening real regression protection (see #1005).
 
 **Next:**
-- Merge PR #1007 into `food-system-branch`, then close the 5 superseded PRs (#999, #1000, #1001, #1004, #1006).
 - Decide on #1005 (CI asset provisioning) as separate, later infra work.
 - Fill in real author names, group/department logo, and contact info on the poster once available.
 
