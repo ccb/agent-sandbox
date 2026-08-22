@@ -13,6 +13,23 @@ on top; copy the template block each working day.
 **Next:**
 - ...
 -->
+## 2026-08-22
+**Focus:** The real fix for `godot (smoke)`, instead of the workaround I'd proposed
+
+**Done today:**
+- Was about to ship a `continue-on-error: true` workaround on the `godot` CI job (already approved) when a quick check first turned up something better: `main` already has the real fix for this exact problem (#876, merged back on 08-04) -- a "Restore licensed art" CI step that pulls the Kenmi/Franuka packs from a private release repo (`aking526/agent-sandbox-assets`) via an `ASSETS_REPO_TOKEN` secret, skipping the smoke test gracefully on forks without it. Confirmed the secret is actually configured on this repo before recommending it over the workaround.
+- `food-system-branch` had only ported #876's `.gitignore` half (an earlier commit, "Add missing licensed-asset gitignore rules"), never its CI/`ASSETS.md` half -- an incomplete port from before my time on this branch.
+- `main` and `food-system-branch` have diverged far more than this one file (566 files, ~68k lines) -- full-merging was clearly out of scope, so cherry-picked just the two relevant commits (`e5daab5e`, `32232587`) instead of the whole branch.
+- Two merge conflicts, both resolved by keeping both sides rather than picking one (`README.md`'s file-tree listing, `HomeView.tsx`'s asset-credits paragraph) -- dropped one unrelated line (`AGENT-ARCHITECTURE.md`, referenced only because it sat adjacent in the diff hunk; that file doesn't exist on this branch).
+- The cherry-pick's `HomeView.tsx` content used `<SectionHeading>`, a component that only exists in `main`'s far-more-evolved version of that file (its own file + a dozen usages) -- broke the `web` build (`TS2304: Cannot find name 'SectionHeading'`). Swapped for a plain `<h3>`, matching every other heading in this branch's actual (much simpler) version of the file.
+- PR #1008: all 7 CI checks green, including `godot (smoke)` genuinely passing (not skipped) -- confirmed via a live watched run, twice (once to catch the build break, once to confirm the fix). Merged into `food-system-branch`.
+
+**Blockers / questions:**
+- None blocking.
+
+**Next:**
+- Still open: real author names/logo/contact for the poster.
+
 ## 2026-08-21
 **Focus:** A poster for the project, grounded in real repo data
 
