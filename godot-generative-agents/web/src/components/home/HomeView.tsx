@@ -211,9 +211,9 @@ export function HomeView() {
               </p>
             </div>
 
-            <SectionHeading id="references" level={3} className="nrf-title nrf-title-4">
+            <h3 id="references" className="nrf-title nrf-title-4">
               References
-            </SectionHeading>
+            </h3>
             <div className="nrf-content">
               <p>
                 Joon Sung Park, Joseph C. O'Brien, Carrie J. Cai, Meredith Ringel Morris, Percy
