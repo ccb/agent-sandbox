@@ -857,6 +857,193 @@ def test_evidence_text_lists_the_worlds_places():
     assert "Places that exist in this world: Cafe, Gym, Library" in text
 
 
+# ------------------------------------------------------------ memory carry
+#
+# #814: does a later conversation reuse a specific detail that first entered
+# this agent's stream in an EARLIER conversation? The windows are the whole
+# signal, so the fixtures below hand-build them on a three-persona world.
+
+
+def _carry_evidence(conversations):
+    """Evidence for a three-persona world whose only signal is *conversations*.
+
+    Memory carry reads conversation windows, not frames, so the frames stay
+    empty and each agent gets exactly the windows it took part in -- the same
+    shape ``build_evidence`` produces from a real replay.
+    """
+    replay = {
+        "meta": {
+            "personas": [
+                {
+                    "name": "Ada",
+                    "persona": "Ada is a busy student.",
+                    "schedule": [{"place": "Library", "activity": "shelving books"}],
+                },
+                {"name": "Bianca", "persona": "Bianca is a rower."},
+                {"name": "Cyrus", "persona": "Cyrus is a physicist."},
+            ],
+        },
+        "frames": [],
+        "memory_streams": {},
+    }
+    evidence = build_evidence(replay)
+    for ev in evidence.values():
+        ev.conversations = [c for c in conversations if ev.name in c.participants]
+    return evidence
+
+
+# Bianca tells Ada a fact carrying a rare detail ("chestnut paneling" -- the
+# same shape as R1's "warm wood paneling", the run that motivated #814).
+CARRY_INTRO = [
+    ["Bianca", "We store the racing shells behind the chestnut paneling."],
+    ["Ada", "That sounds beautiful."],
+]
+
+
+def test_memory_carry_is_a_rubric_dimension():
+    from backend.eval.believability import BELIEVABILITY_TOOL
+
+    assert "memory_carry" in DIMENSIONS
+    props = BELIEVABILITY_TOOL["parameters"]["properties"]
+    assert "memory_carry" in props
+    assert "memory_carry" in BELIEVABILITY_TOOL["parameters"]["required"]
+
+
+def test_memory_carry_credits_a_rare_detail_reused_with_a_new_partner():
+    """The #814 acceptance shape: a fact heard from one person resurfaces in a
+    conversation with a third party -- cross-partner carry, full credit."""
+    judge = HeuristicJudge()
+    evidence = _carry_evidence(
+        [
+            _convo(1, 5, CARRY_INTRO, ("Ada", "Bianca")),
+            _convo(
+                50,
+                55,
+                [["Ada", "I heard the rowers keep things behind chestnut paneling."]],
+                ("Ada", "Cyrus"),
+            ),
+        ]
+    )
+    score = judge._memory_carry(evidence["Ada"], evidence)
+    assert score.score == 10.0
+    assert "1/1 later conversation(s)" in score.note
+    assert "1 across partners" in score.note
+    assert any("first heard from Bianca" in e for e in score.evidence)
+
+
+def test_memory_carry_cross_partner_beats_same_partner():
+    """Retelling your source is weaker evidence than telling a third party."""
+    judge = HeuristicJudge()
+    cross = _carry_evidence(
+        [
+            _convo(1, 5, CARRY_INTRO, ("Ada", "Bianca")),
+            _convo(
+                50,
+                55,
+                [["Ada", "I heard the rowers keep things behind chestnut paneling."]],
+                ("Ada", "Cyrus"),
+            ),
+        ]
+    )
+    same = _carry_evidence(
+        [
+            _convo(1, 5, CARRY_INTRO, ("Ada", "Bianca")),
+            _convo(
+                50,
+                55,
+                [["Ada", "Still thinking about that chestnut paneling."]],
+                ("Ada", "Bianca"),
+            ),
+        ]
+    )
+    cross_score = judge._memory_carry(cross["Ada"], cross).score
+    same_score = judge._memory_carry(same["Ada"], same).score
+    assert same_score > 1.0  # a same-partner carry still counts...
+    assert cross_score > same_score  # ...but cross-partner is the strong form
+    assert "0 across partners" in judge._memory_carry(same["Ada"], same).note
+
+
+def test_memory_carry_gives_no_credit_to_converged_loop_vocabulary():
+    """#814: the trap that broke every bag-of-words proxy -- a #778 loop pair's
+    whole stream converges on one vocabulary (the word 'aiden' alone was 4,775
+    of Chris Donnelly's overlaps). A word the pair repeats every window is
+    conversational currency, not a carried detail."""
+    judge = HeuristicJudge()
+    loop = [
+        ["Bianca", "Boxes everywhere, and that chestnut paneling still unpainted."],
+        ["Ada", "Chestnut paneling and boxes, same as yesterday."],
+    ]
+    evidence = _carry_evidence(
+        [_convo(i * 10, i * 10 + 5, loop, ("Ada", "Bianca")) for i in range(5)]
+    )
+    score = judge._memory_carry(evidence["Ada"], evidence)
+    assert score.score == 1.0
+    assert "0/4 later conversation(s)" in score.note
+
+
+def test_memory_carry_carries_a_number():
+    judge = HeuristicJudge()
+    evidence = _carry_evidence(
+        [
+            _convo(
+                1, 5, [["Bianca", "By the way: crew moved to 6:15."]], ("Ada", "Bianca")
+            ),
+            _convo(
+                50, 55, [["Ada", "Apparently crew is at 6:15 now."]], ("Ada", "Cyrus")
+            ),
+        ]
+    )
+    assert judge._memory_carry(evidence["Ada"], evidence).score == 10.0
+
+
+def test_memory_carry_ignores_a_detail_the_agent_already_owned():
+    """'shelving books' is Ada's own schedule: hearing her innate vocabulary
+    said back is not a fact that entered her stream via a conversation."""
+    judge = HeuristicJudge()
+    evidence = _carry_evidence(
+        [
+            _convo(
+                1,
+                5,
+                [["Bianca", "I spent ages shelving books once."]],
+                ("Ada", "Bianca"),
+            ),
+            _convo(50, 55, [["Ada", "I adore shelving books."]], ("Ada", "Cyrus")),
+        ]
+    )
+    assert judge._memory_carry(evidence["Ada"], evidence).score == 1.0
+
+
+def test_memory_carry_names_travel_but_direct_address_does_not():
+    """Saying your partner's name back to them is address, not carry; naming
+    an absent person you met earlier to a third party is R1's exact evidence
+    ('My friend Diego mentioned it might be interesting')."""
+    judge = HeuristicJudge()
+    evidence = _carry_evidence(
+        [
+            _convo(1, 5, [["Bianca", "Hi there, lovely weather!"]], ("Ada", "Bianca")),
+            _convo(
+                30, 35, [["Ada", "Great to see you again, Bianca!"]], ("Ada", "Bianca")
+            ),
+            _convo(60, 65, [["Ada", "I ran into Bianca just now."]], ("Ada", "Cyrus")),
+        ]
+    )
+    score = judge._memory_carry(evidence["Ada"], evidence)
+    # Window two ('Bianca' said to Bianca) earns nothing; window three
+    # ('Bianca' named to Cyrus) is a cross-partner carry: (0 + 1.0) / 2.
+    assert score.score == 5.5
+    assert "1/2 later conversation(s)" in score.note
+    assert any("'bianca'" in e for e in score.evidence)
+
+
+def test_memory_carry_is_na_without_an_earlier_conversation():
+    judge = HeuristicJudge()
+    evidence = _carry_evidence([_convo(1, 5, CARRY_INTRO, ("Ada", "Bianca"))])
+    # One conversation has no earlier one to draw on; zero even less so.
+    assert judge._memory_carry(evidence["Ada"], evidence).score is None
+    assert judge._memory_carry(evidence["Cyrus"], evidence).score is None
+
+
 # ------------------------------------------------------------ heuristic judge
 
 
@@ -865,6 +1052,11 @@ def test_heuristic_scores_the_coherent_fixture_high():
     ada = report["agents"]["Ada"]
     for dim in DIMENSIONS:
         entry = ada["dimensions"][dim]
+        if dim == "memory_carry":
+            # The fixture holds one conversation, so there is no earlier one
+            # to carry from -- n/a, which the means exclude.
+            assert entry["score"] is None
+            continue
         assert entry["score"] >= 7, f"{dim} scored {entry['score']}"
         # Every dimension cites at least one concrete step example.
         assert entry["evidence"], f"{dim} cited no evidence"
@@ -977,6 +1169,7 @@ GRADE = {
     "social_grounding": {"score": 7, "evidence": ["steps 12-20: cafe chat"]},
     "world_grounding": {"score": 10, "evidence": ["no off-map places mentioned"]},
     "memory_use": {"score": 6, "evidence": ["step 10: plan memory retrieved"]},
+    "memory_carry": {"score": 5, "evidence": ["steps 12-20: no earlier detail"]},
 }
 
 
@@ -996,6 +1189,7 @@ def test_llm_judge_scores_from_the_model_and_bills_the_ledger():
     assert ada["plan_coherence"]["evidence"] == GRADE["plan_coherence"]["evidence"]
     assert ada["plan_coherence"]["note"] == "clean plan"
     assert ada["memory_use"]["score"] == 6.0
+    assert ada["memory_carry"]["score"] == 5.0
     # One judge call per agent, every one recorded in the ledger.
     assert len(client.tool_calls) == 2
     assert report["judge"]["kind"] == "llm"
@@ -1037,7 +1231,8 @@ def test_llm_judge_stops_calling_once_the_ledger_ceiling_is_hit():
     assert client.tool_calls == []  # no model calls fired at all
     ada = report["agents"]["Ada"]["dimensions"]
     for dim in DIMENSIONS:
-        assert ada[dim]["score"] is not None  # heuristic still scored it
+        if dim != "memory_carry":  # n/a on the one-conversation fixture
+            assert ada[dim]["score"] is not None  # heuristic still scored it
         assert "budget" in ada[dim]["note"]
 
 
@@ -1085,8 +1280,11 @@ def test_rubric_prompt_renders_exactly():
         "  meet there.\n"
         "- memory_use: the memories retrieved for each decision were relevant\n"
         "  to the decision made.\n"
+        "- memory_carry: a later conversation reuses a specific detail (a name,\n"
+        "  a number, a rare word) that first entered the agent's stream in an\n"
+        "  earlier conversation -- the strongest carry reaches a new partner.\n"
         "\n"
-        "Call grade_believability once, with all five dimensions."
+        "Call grade_believability once, with all six dimensions."
     )
 
 
