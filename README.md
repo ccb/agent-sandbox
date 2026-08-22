@@ -56,6 +56,8 @@ notebooks/                 Notebooks: HW1 "Action Castle" onboarding + framework
 tests/                     Pytest suite (agent layer, ReAct live game, NPC behaviors)
 godot-generative-agents/   Godot 2D frontend + UPenn campus replay  (reviewed by the
   tools/geo/               OSM → tilemap map-generation tooling       Godot/geo owners; see ONBOARDING §6)
+ASSETS.md                  The viewer's licensed art packs — not in the repo; where
+                           to buy them and where the files go
 FEATURE-ROADMAP.md         Technical specs for the framework features to build
 ROADMAP.md                 The summer plan: phases, who owns what
 ONBOARDING.md              Start here on day one
