@@ -197,18 +197,36 @@ def _tool_name(verb: str) -> str:
     return safe[:64] or "action"
 
 
-def _scope_enum(kind: str, parser, actor) -> list[str] | None:
+def _scope_enum(kind: str, parser, actor, required_property=None) -> list[str] | None:
     """In-scope entity names for a scope-category slot, or ``None`` when *kind*
     is a plain JSON type (not a scope category) or there's no actor to scope to.
 
     Reuses the parser's own scope resolution so the enum and ``describe_for()``
     never disagree about what's here: items the actor can see or carry, other
-    characters in the room, or exits."""
+    characters in the room, or exits.
+
+    ``required_property`` (issue #924) narrows an ITEM enum to the items the
+    verb's gate can actually accept -- a property name, or a tuple of names
+    for an OR gate (any one qualifies). Scope itself is untouched: the other
+    slots, and the affordance scan that offered the verb at all, still see
+    everything here."""
     if kind not in _SCOPE_KINDS or actor is None:
         return None
     loc = getattr(actor, "location", None)
     if kind == "item":
-        return sorted(parser.get_items_in_scope(actor).keys())
+        items = parser.get_items_in_scope(actor)
+        if required_property is not None:
+            wanted = (
+                (required_property,)
+                if isinstance(required_property, str)
+                else tuple(required_property)
+            )
+            items = {
+                name: item
+                for name, item in items.items()
+                if any(item.get_property(p) for p in wanted)
+            }
+        return sorted(items.keys())
     if loc is None:
         return []
     if kind == "character":
@@ -221,10 +239,13 @@ def _slot_property(slot: dict, parser, actor, max_enum: int | None) -> dict:
 
     A scope slot becomes a string constrained to an enum of the actor's in-scope
     entities (dropped when there are none, or too many to list within
-    *max_enum*); a plain-typed slot passes its JSON type through."""
+    *max_enum*); a plain-typed slot passes its JSON type through. A slot's
+    ``property`` key narrows an item enum to gate-passable items (#924);
+    narrowing to nothing drops the enum, the same free-text degradation an
+    empty scope already gets."""
     kind = slot.get("type", "string")
     prop = {"type": "string", "description": slot.get("description", "")}
-    enum = _scope_enum(kind, parser, actor)
+    enum = _scope_enum(kind, parser, actor, slot.get("property"))
     if enum is None:
         prop["type"] = kind if kind in _JSON_TYPES else "string"
     elif enum and (max_enum is None or len(enum) <= max_enum):

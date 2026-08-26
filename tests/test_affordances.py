@@ -496,6 +496,111 @@ def test_tools_for_without_actor_does_not_curate():
     assert "study" in names
 
 
+# --- slot-level property narrowing (#924) ---
+#
+# A scope-enum'd "item" slot may declare the property its verb's gate will
+# demand, so the argument menu only offers things the gate can accept -- the
+# #612 offered <=> place-check invariant, extended to the argument level.
+# Without it, the slot is enum'd with EVERYTHING in scope, and the model can
+# spend a tick (and a paid call, and a failure memory) on check_out_book(
+# book="book shelf").
+
+
+class _Borrow(actions.Action):
+    """A verb whose item slot narrows to what its gate accepts (#924)."""
+
+    ACTION_NAME = "borrow"
+    ACTION_DESCRIPTION = "Borrow a library book"
+    ARGUMENTS_SCHEMA = {
+        "book": {
+            "type": "item",
+            "description": "the book to borrow",
+            "property": "library_book",
+            "required": True,
+        },
+    }
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.character = self.acting_character(command, hint="borrower")
+
+    def check_preconditions(self):
+        return True
+
+    def apply_effects(self):
+        self.parser.ok("You borrow it.")
+
+
+def _slot_of(game, actor, tool_name, slot):
+    tools = {t["name"]: t for t in tools_for(game.parser, actor=actor)}
+    return tools[tool_name]["parameters"]["properties"][slot]
+
+
+def test_item_slot_property_narrows_the_enum_to_gate_passable_items():
+    game = _one_char_game()
+    game.parser.add_action(_Borrow)
+    shelf = things.Item("book shelf", "a tall book shelf")
+    shelf.set_property("book_shelf", True)
+    book = things.Item("field guide", "a field guide")
+    book.set_property("library_book", True)
+    game.player.location.add_item(shelf)
+    game.player.location.add_item(book)
+
+    # The shelf stays in scope (and in un-narrowed slots) -- only this verb's
+    # menu is narrower than the room.
+    assert _slot_of(game, game.player, "borrow", "book")["enum"] == ["field guide"]
+
+
+def test_slot_property_accepts_a_tuple_as_any_of():
+    # An OR gate (Read: READ_TEXT *or* READABLE) narrows with a tuple; an item
+    # carrying ANY of the named properties stays offered.
+    class _Peruse(actions.Action):
+        ACTION_NAME = "peruse"
+        ACTION_DESCRIPTION = "Peruse something readable"
+        ARGUMENTS_SCHEMA = {
+            "item": {
+                "type": "item",
+                "description": "the thing to peruse",
+                "property": ("read_text", "is_readable"),
+                "required": True,
+            },
+        }
+
+        def __init__(self, game, command, actor=None):
+            super().__init__(game, actor=actor)
+
+        def check_preconditions(self):
+            return True
+
+        def apply_effects(self):
+            self.parser.ok("You peruse it.")
+
+    game = _one_char_game()
+    game.parser.add_action(_Peruse)
+    sign = things.Item("sign", "a painted sign")
+    sign.set_property("read_text", "Keep off the grass.")
+    scroll = things.Item("scroll", "a scroll")
+    scroll.set_property("is_readable", True)
+    rock = things.Item("rock", "a plain rock")
+    for item in (sign, scroll, rock):
+        game.player.location.add_item(item)
+
+    assert _slot_of(game, game.player, "peruse", "item")["enum"] == ["scroll", "sign"]
+
+
+def test_slot_property_narrowing_to_nothing_drops_the_enum():
+    # Nothing gate-passable in scope -> the enum is dropped (free text), the
+    # same degradation an empty scope already gets -- never an empty enum,
+    # which would make every argument invalid.
+    game = _one_char_game()
+    game.parser.add_action(_Borrow)
+    shelf = things.Item("book shelf", "a tall book shelf")
+    shelf.set_property("book_shelf", True)
+    game.player.location.add_item(shelf)
+
+    assert "enum" not in _slot_of(game, game.player, "borrow", "book")
+
+
 # --- the gate half of the invariant ---
 
 
