@@ -7,6 +7,7 @@ from .base import (
     Describe,
 )
 from .consume import Eat, Drink, Light, Douse
+from .devices import Activate, Deactivate
 from .equipment import Wear, Take_Off, Wield, Unwield
 from .fight import Attack
 from .fish import Catch_Fish
@@ -62,6 +63,8 @@ __all__ = [
     "Drink",
     "Light",
     "Douse",
+    "Activate",
+    "Deactivate",
     "Wear",
     "Take_Off",
     "Wield",

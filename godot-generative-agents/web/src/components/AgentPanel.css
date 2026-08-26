@@ -104,7 +104,7 @@
 }
 
 .agent-live-badge.is-paused {
-  color: #8a5b00;
+  color: var(--color-warn);
   background: #fdf3dd;
   border-color: #f0dcae;
 }

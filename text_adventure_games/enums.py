@@ -55,6 +55,10 @@ class Property(_StrEnum):
     IS_HUNGRY = "is_hungry"
     IS_THIRSTY = "is_thirsty"
     IS_DRUNK = "is_drunk"
+    # Sick from a bad drink (#464): set by Drink on a contaminated liquid,
+    # cleared by drinking safe water. describe_for emits a self-line while
+    # this is set (wordable via a "sick_self_description" property, #634).
+    IS_SICK = "is_sick"
     CHARACTER_TYPE = "character_type"
     EMOTIONAL_STATE = "emotional_state"
 
@@ -69,14 +73,27 @@ class Property(_StrEnum):
     WEARABLE = "wearable"
     WIELDABLE = "wieldable"
     READABLE = "is_readable"  # has writing the READ action can show
+    # A fixture you can switch on and off -- a stove, a sink (#464). The
+    # ACTIVATE/DEACTIVATE actions gate on this; IS_ON below is the state
+    # they toggle.
+    IS_DEVICE = "is_device"
 
     # Other item flags (state or descriptors, not affordances)
     IS_WEAPON = "is_weapon"
     IS_FRAGILE = "is_fragile"
     IS_ALCOHOL = "is_alcohol"
     IS_POISONOUS = "is_poisonous"
+    # The sickness arc (#464): drinking a contaminated liquid sets IS_SICK on
+    # the drinker; drinking boiled water cures it. REQUIRES_BOILING marks raw
+    # water a game expects to be boiled first; IS_BOILED is what a boil
+    # recipe/action sets to make it safe.
+    IS_CONTAMINATED = "is_contaminated"
+    REQUIRES_BOILING = "requires_boiling"
+    IS_BOILED = "is_boiled"
     IS_LIT = "is_lit"
-
+    # Whether a device (IS_DEVICE) is currently switched on. The engine only
+    # flips the flag; a game gives it meaning (a recipe, a trigger, a block).
+    IS_ON = "is_on"
     # Concealed until found: a hidden item is not described, in scope, or
     # gettable until a SEARCH of its location/holder reveals it (clears this).
     IS_HIDDEN = "is_hidden"
@@ -217,6 +234,11 @@ class ActionName(_StrEnum):
     DRINK = "drink"
     LIGHT = "light"
     DOUSE = "douse"
+
+    # Devices: switch a fixture (a stove, a sink) on and off -- the no-flame
+    # cousins of LIGHT/DOUSE (see actions/devices.py, #464).
+    ACTIVATE = "activate"
+    DEACTIVATE = "deactivate"
 
     # Crafting: combine ingredients (optionally at a station/with a tool) into
     # a new item (see crafting.py). Games opt in by registering recipes.

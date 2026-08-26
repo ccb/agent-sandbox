@@ -1,0 +1,38 @@
+---
+name: recent_actions
+description: >
+  The agent's own last few actions, appended to a live decide observation
+  (issue #826). Rendered by cognition.recent_actions_block() and folded into
+  observe_and_decide's observation when the step loop threads a SimClock.
+  Retrieval alone cannot be relied on for this: retrieve(touch=True) refreshes
+  a high-importance commitment memory's recency on every hit, while the
+  agent's own importance-2.0 outcome records decay out of contention -- over a
+  57-minute walk, to nothing -- so an agent could read only its intentions and
+  re-form them at every arrival, believing an errand it never performed was
+  done. This block is a guarantee rather than a bid: it bypasses scoring
+  entirely. Appended AFTER the retrieve, so it can never shift which memories
+  surface (frames embed that list). The deterministic mock reads only the
+  observation's first line, so this can never change a mock decision.
+  Which records, and how long ago, are computed in Python (they are data);
+  only the wording lives here.
+inputs:
+  actions:
+    type: array
+    description: >
+      The actions to show, newest first, each {minutes, text}. `minutes` is how
+      long ago it happened; 0 renders as "just now". `text` is the memory
+      record verbatim -- these are the agent's own words, not prose to rewrite,
+      so whatever reflection.prompty wrote is passed through unchanged. Every
+      reflection branch is past tense (#851 fixed the one that was not), which
+      is what makes it safe to stamp a "how long ago" prefix onto it here.
+sample:
+  actions:
+    - minutes: 57
+      text: I traveled to Van Pelt — Moelis Reading Room.
+    - minutes: 0
+      text: I studied genetics for 30 minutes.
+---
+Recently, you:
+{%- for a in actions %}
+ - {% if a.minutes %}{{ a.minutes }} min ago{% else %}just now{% endif %}: {{ a.text }}
+{%- endfor -%}

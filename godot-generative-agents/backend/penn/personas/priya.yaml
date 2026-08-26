@@ -34,5 +34,5 @@ schedule:
   is_work: true
   steps: 40
 - place: College Hall
-  activity: heading to an afternoon lecture
+  activity: heading to a lecture
   emoji: 🎓

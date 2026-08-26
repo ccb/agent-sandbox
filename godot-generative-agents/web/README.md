@@ -10,8 +10,9 @@ and so on. Those panels read the *same* `penn_replay.json` the Godot canvas play
 (typed in [`src/types/replay.ts`](src/types/replay.ts)), so they never have to pull
 state out of Godot.
 
-> **Status:** local viewer only — not deployed. See [Licensing](#licensing) before
-> you ever put this on a public URL.
+> **Status:** local viewer only — not deployed yet. The Vercel path is configured
+> ([Deploying to Vercel](#deploying-to-vercel-882)); read [Licensing](#licensing)
+> before you put this on a public URL.
 
 ---
 
@@ -197,16 +198,23 @@ stalled agent is spottable at a glance, and the agent's own slice of the
 request log — under a run strip with **Start / Stop / Reset buttons** (the
 backend's resume/pause/reset controls, so you can drive the whole sim from
 this page and watch the calls instead of the Godot map), the exact run totals,
-the remaining budget (from one `GET /usage` read at connect), and the driving
-model. Agents seen on the stream but missing from the roster get their own
+the remaining budget, this run's **social opportunity** (co-settled pair-steps +
+conversations, #795/#819), and the driving model. The budget and social counters
+are seeded by one `GET /usage` read at connect and then ride the live feed's
+`run_usage` (below), so they move with the run and clear on reset without a
+second poll. Agents seen on the stream but missing from the roster get their own
 cells, and calls with no `actor` land in an *Unattributed* catch-all, so the
 dashboard works pointed at any live backend.
 
 How it works: [`src/useLive.ts`](src/useLive.ts) reads the `GET /live`
-handshake once (the world's replay-meta shape), then polls the backend's
-change feed (`GET /events?since=<cursor>`) and keeps the latest `frame` and
-`status` records plus every `engine` record whose payload is
-`kind: "llm_call"` — the wire contract is documented in
+handshake once (the world's replay-meta shape) plus one `GET /usage` for the
+opening budget/social snapshot, then polls the backend's change feed
+(`GET /events?since=<cursor>`) and keeps the latest `frame` and `status`
+records plus every `engine` record whose payload is `kind: "llm_call"`. The
+`frame` record (and the `reset` status record) also carries `run_usage` — the
+run-scoped call/cost counters and the #795 social block — which the reducer
+merges over the handshake snapshot, so those counters stay live off the one
+feed rather than a separate `/usage` poll. The wire contract is documented in
 [`backend/README.md`](../backend/README.md). The backend's CORS already
 allows any localhost origin, so the dev server needs no proxy.
 
@@ -223,6 +231,116 @@ allows any localhost origin, so the dev server needs no proxy.
 | `pnpm export:godot` | Headless Godot Web export → `public/godot/`. |
 | `pnpm gen:replay [-- <args>]` | Run the sim and copy the replay into `public/replay/`. Args pass through, e.g. `pnpm gen:replay --steps 600`. |
 | `pnpm gen:docs` | Build the MkDocs site (`mkdocs build --strict`) into `public/docs/`, served at `/docs/`. |
+
+---
+
+## Deploying to Vercel (#882)
+
+> **Read [Licensing](#licensing) first.** The web export bakes the *Cute Fantasy
+> (Free)* sprite art into `index.pck`, and a public URL **redistributes** it. That
+> audit is [#876](https://github.com/ccb/agent-sandbox/issues/876); it gates the
+> production promote, not a preview.
+
+**Deploys are built locally and uploaded prebuilt — never built from a clone.**
+`public/godot/` (the ~52 MB WASM export) is git-ignored, so a Vercel *Git* build
+would ship a site with a hole where the demo goes: Vite only copies `public/`, so
+a missing export isn't a build error. Hence
+[`vercel.json`](vercel.json)'s `git.deploymentEnabled: false` plus
+[`scripts/vercel-build.sh`](scripts/vercel-build.sh), which fails the build when
+the export is absent. Building locally is also what [#882](https://github.com/ccb/agent-sandbox/issues/882)
+asks for: the artifact you QA'd is the one that gets promoted, not a rebuild.
+
+### One-time setup
+
+```bash
+brew install vercel-cli          # or: pnpm add -g vercel
+cd godot-generative-agents/web   # link from HERE — it sets Root Directory for the monorepo
+vercel login
+vercel link                      # writes .vercel/ (git-ignored: ids + pulled env)
+```
+
+### Every deploy
+
+```bash
+pnpm export:godot                # re-export if the Godot side changed
+pnpm gen:replay                  # re-bake if the sim/replay changed
+pnpm lint && pnpm test           # the same gates CI runs
+vercel build                     # runs scripts/vercel-build.sh → dist/ → .vercel/output/
+vercel deploy --prebuilt         # prints the preview URL
+#   … run the #882 QA suite against that URL …
+vercel promote <preview-url>     # same bytes, now production
+```
+
+Rollback: `vercel rollback` (or `vercel rollback <url>`) re-points production at
+the previous deployment — instant, no rebuild. `vercel ls` lists deployments and
+`vercel inspect <url>` prints the identity to record in #882.
+
+### What the public site exposes
+
+The landing page is the whole public surface (#879 retired the nav; every other view
+is a `#hash` route, which never reaches the server). Two rules keep it that way:
+
+- **No docs.** `pnpm gen:docs` output is a local dev convenience — the dev server
+  serves it at `/docs/`, but `vercel-build.sh` deletes `dist/docs` so it is never
+  deployed. Whether or not you ran `gen:docs` before deploying makes no difference.
+- **Any other path lands on the landing page**, via
+  `"rewrites": [{ "source": "/(.*)", "destination": "/" }]`. It's a *rewrite*, not a
+  redirect, because Vercel gives ["precedence … to the filesystem prior to rewrites
+  being applied"](https://vercel.com/docs/project-configuration/vercel-json#rewrites)
+  — real files (`/godot/*`, `/replay/*`, `/assets/*`) still serve, and only paths that
+  match nothing fall through. A catch-all `redirects` entry would do the opposite:
+  redirects run *before* the filesystem, so it would bounce the engine and the replay
+  to `/` too and the demo would never load. The URL bar keeps `/xyz` rather than
+  snapping to `/`; if you'd rather it snapped, that needs a redirect with every asset
+  prefix negated by hand — brittle, and one forgotten prefix silently breaks an asset.
+
+The trade-off: a *missing* asset now answers 200 with the landing page's HTML instead
+of 404, so a hollow deploy fails in the Godot loader rather than at the network tab.
+That's what `vercel-build.sh`'s asset guard is for — the 404 isn't the safety net.
+
+Two more launch details:
+
+- **Shared-link metadata** lives in `index.html`: title (matching the `<h1>`), the
+  favicon, and a description/OG card condensed from the page's own Abstract. There is
+  no `og:image` — the poster frame was going to come from #881's video, which is now
+  deferred, so link previews render as a text card rather than a broken image. If a card
+  image starts to matter, a still from the frozen showcase replay (#878) is the cheap
+  substitute; a text card is not a defect.
+- **`/assets/*` is cached `max-age=31536000, immutable`** — Vite content-hashes every
+  file there, so a new build gets new URLs. Everything else keeps Vercel's
+  `public, max-age=0, must-revalidate` default *on purpose*: `/godot/index.wasm`,
+  `index.pck` and `/replay/penn_replay.json` keep the same names across deploys, so
+  they must revalidate or a promote would leave visitors on a stale engine.
+
+**Open decision — indexing.** Nothing sets `robots` today, so a promoted production URL
+is indexable. If #876 hasn't cleared, add `<meta name="robots" content="noindex" />` to
+`index.html` before promoting rather than after.
+
+### Verify on the deployed origin
+
+| Check | How | Why it matters |
+| --- | --- | --- |
+| Cross-origin isolation | `curl -sI <url> \| grep -i cross-origin` — expect both COOP + COEP | Godot's *threaded* WASM needs `SharedArrayBuffer`. `vite.config.ts` sets these for `dev`/`preview` only; on Vercel they come from `vercel.json`. Missing ⇒ the figure says "This browser can't run the replay demo" and names them (#957) — which is also the only visitor-facing sign of a header regression, since nothing in CI boots the engine. |
+| `.pck` compression | `curl -sI -H 'accept-encoding: br' <url>/godot/index.pck \| grep -i content-encoding` | `index.pck` is 16 MB raw and **4 %** gzipped, but Vercel compresses an [MIME allowlist](https://vercel.com/docs/how-vercel-cdn-works/compression) that `.pck` isn't on — so `vercel.json` labels that one path `application/wasm`, which is. Godot's loader reads the `.pck` as an ArrayBuffer and ignores the type. No `content-encoding` ⇒ the override didn't take; drop it and eat the 16 MB. |
+| Payload | DevTools → Network, hard reload | ~10 MB compressed per cold visit (the 35 MB engine gzips to ~9 MB) against 57 MB of `dist/`. Hobby includes 100 GB/month of transfer. |
+| Stray URLs | `curl -sI <url>/docs/ <url>/nope` → 200, and the browser shows the landing page | Proves both the `dist/docs` strip and the catch-all rewrite took. A 404 means the rewrite didn't apply; MkDocs HTML at `/docs/` means the strip didn't. |
+
+### Limits worth knowing
+
+- **CLI upload cap: 100 MB on Hobby, 1 GB on Pro.** `dist/` is ~57 MB today
+  (`du -sh dist` after `vercel build`, i.e. with `dist/docs` already stripped).
+  Check before the release build.
+- **100 deployments/day** on Hobby.
+- Preview URLs are protected by default — share QA links via the deployment's
+  *Protection Bypass*, not by disabling protection.
+- `COEP: require-corp` blocks **every** cross-origin `<iframe>`, `<script>` and
+  `<img>`. Today the page loads nothing cross-origin (external URLs are all plain
+  links, which are unaffected), and anything added later must be same-origin, send
+  `CORP`, or wait for the headers to be scoped to the demo alone. This is why
+  analytics has to be first-party ([#961](https://github.com/ccb/agent-sandbox/issues/961))
+  and one of the reasons the demo video was dropped rather than embedded
+  ([#881](https://github.com/ccb/agent-sandbox/issues/881)) — a YouTube/Vimeo embed
+  would simply be blocked.
 
 ---
 
@@ -305,7 +423,7 @@ The first panels exist (the **Agent cards** view — `src/components/AgentPanel.
 | `ERR_PNPM_IGNORED_BUILDS: esbuild` on `pnpm install`/`build` | pnpm blocks dependency build scripts by default. We allow esbuild in `pnpm-workspace.yaml` (`allowBuilds: { esbuild: true }`). On pnpm 11 this setting lives in `pnpm-workspace.yaml`, **not** the `package.json` `pnpm` field. Run `pnpm install` after editing it. |
 | Canvas loads but the map is blank/grey | The `.tmj` maps weren't packed. They're plain JSON (not Godot resources), so the `Web` preset must keep `include_filter="*.tmj"`. (Note: `export_presets.cfg` uses `;` for comments, **not `#`** — a `#` silently drops the next setting.) |
 | `Invalid URL scheme` / replay won't load on web | Godot's `HTTPRequest` needs an absolute URL; `viewer.gd` resolves the relative path via `JavaScriptBridge`. Make sure the replay is reachable at `/replay/penn_replay.json` (run `pnpm gen:replay`). |
-| Blank page / `SharedArrayBuffer is not defined` | The page isn't cross-origin isolated. Use `pnpm dev`/`pnpm preview` (they set COOP/COEP). If serving another way, send those headers, or export single-threaded (`variant/thread_support=false`). |
+| The demo says **"This browser can't run the replay demo"** | The engine's preflight found something missing — the names are in the message, the full strings in the console (#957). Almost always cross-origin isolation: use `pnpm dev`/`pnpm preview` (they set COOP/COEP). If serving another way, send those headers, or export single-threaded (`variant/thread_support=false`). |
 | Port 5173 already in use | Another Vite is running. Stop it, or Vite will pick the next free port (check its printed URL). |
 
 ---

@@ -60,7 +60,7 @@ schedule:
 # (accrue_energy flips it ~1 in-game hour in), so the queued `sleep` command
 # clears Sleep.check_preconditions the moment she arrives.
 - place: Houston Hall — Reading Room
-  activity: turning in for the night
+  activity: turning in for bed
   emoji: 😴
   commands:
   - sleep

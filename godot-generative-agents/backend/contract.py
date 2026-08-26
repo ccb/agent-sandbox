@@ -5,7 +5,7 @@ and played by the Godot viewer) is::
 
     {
       "meta": {
-        "schema_version": "1.0",         # this contract's version
+        "schema_version": "1.1",         # this contract's version
         "tile_px", "width", "height",    # world geometry (ints)
         "sec_per_step",                  # in-game seconds per step (int)
         "start",                         # sim-start wall clock, "YYYY-MM-DD HH:MM:SS"
@@ -17,10 +17,16 @@ and played by the Godot viewer) is::
         "personas": [                    # penn_world.persona_meta_entry
           {"name", "emoji", "persona", "home",
            "schedule": [{"place", "activity", "emoji", "steps"}]}
+                                         #   `schedule` is the AUTHORED seed
+                                         #   YAML, not the day a run executed
+                                         #   (#824) -- see the manifest's
+                                         #   `daily_plans` for that
         ],
         "relationships": [               # penn_world.relationships_meta
           {"a", "b", "kind", "closeness", "description"}
-        ]
+        ],
+        "locations",                     # world place names, sorted (#780) --
+                                         #   additive, absent pre-#780
       },
       "frames": [ {persona_name: AgentFrame}, ... ],   # one dict per step
       "memory_streams": {persona_name: [MemoryRecord, ...]},
@@ -53,7 +59,14 @@ provides it: ``server`` / ``llm`` / ``openai`` / ``anthropic``); the
 TypeScript mirror is ``godot-generative-agents/web/src/types/replay.ts``.
 """
 
-SCHEMA_VERSION = "1.0"
+# 1.1 (#941): a *written file's* frame rows may OMIT the carry-forward fields
+# ("reasoning", "chat", "memories", "trace") when the value is unchanged from
+# the same agent's previous frame — absent = carry forward, present (including
+# an explicit null) = a new value. `backend.replay_codec` is the one
+# slim/fatten implementation; readers fatten back to the full row, so every
+# in-memory consumer still sees all eight keys. 1.0 files (every key on every
+# row) remain valid 1.1 files, and fattening them is the identity.
+SCHEMA_VERSION = "1.1"
 
 # One persona's per-step entry (penn_world.replay_frame_entry), in emitted order.
 AGENT_FRAME_FIELDS = ("x", "y", "act", "e", "reasoning", "chat", "memories", "trace")

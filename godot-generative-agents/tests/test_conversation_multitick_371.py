@@ -432,7 +432,7 @@ def test_step_pins_conversing_agents_from_deciding_and_moving():
                 "reasoning": "",
                 "memories": [],
                 "stop_since": 0,
-                "on_plan": True,
+                "credit_stop": True,
             }
         )
     active: dict = {}
@@ -508,7 +508,7 @@ def test_step_perform_until_gate_holds_conversing_agent_pinned():
                 "reasoning": "",
                 "memories": [],
                 "stop_since": 0,
-                "on_plan": True,
+                "credit_stop": True,
             }
         )
     active: dict = {}
@@ -576,7 +576,7 @@ def test_step_holds_pair_through_playback_window_then_releases():
                 "reasoning": "",
                 "memories": [],
                 "stop_since": 0,
-                "on_plan": True,
+                "credit_stop": True,
             }
         )
     active: dict = {}
@@ -678,3 +678,73 @@ def test_step_rejects_conversation_enabled_without_active_dict():
             emoji=emoji,
             conversation_enabled=True,  # active_conversations omitted -> None
         )
+
+
+# --- the escalating pair cooldown (issue #803) -------------------------------
+
+_PAIR = frozenset(("Maria Lopez", "Ayesha Khan"))
+
+
+def _open_at(step_idx, cooldowns, *, brain=None):
+    """Try to open a proximity conversation at *step_idx*. Returns the number of
+    conversations that completed (the one-line brain finishes on its first line)."""
+    brain = brain or _ScriptedConvoBrain(["Hi again!"])
+    game, chars, state, frame, order = _colocated_pair(brain)
+    return maybe_converse(
+        game,
+        chars,
+        state,
+        frame,
+        step_idx,
+        cooldowns,
+        order,
+        active={},
+        cooldown_steps=10,
+        line_playback_steps=1,
+    )
+
+
+def test_repeat_conversations_wait_an_escalated_cooldown():
+    """#803: each conversation a pair holds adds another cooldown_steps to their
+    next wait -- their 3rd owes two windows, their 4th three.
+
+    A flat window set the *tempo* of repetition rather than bounding it: the
+    reported run held four near-identical Omar/Tanaka meetings exactly 95 steps
+    apart -- cooldown plus one open -- each greeting the other cold."""
+    cooldowns = {_PAIR: (0, 2)}  # two conversations held, the last ending at step 0
+
+    # The plain window (10) lapsed long ago, but the third conversation owes 2 x 10.
+    assert _open_at(19, cooldowns) == 0
+    assert cooldowns == {_PAIR: (0, 2)}  # blocked, so nothing is recorded
+
+    assert _open_at(20, cooldowns) == 1
+    # The count rides along, so their FOURTH conversation owes 3 x 10.
+    assert cooldowns == {_PAIR: (20, 3)}
+
+
+def test_a_pair_that_talked_once_waits_only_the_plain_window():
+    """The #803 escalation must not deaden a sim that was socializing normally
+    (a live run once logged zero conversations): after ONE conversation the next
+    still opens the moment the plain window lapses.
+
+    A bare int is also what every pre-#803 entry and test seed looks like, and it
+    reads as exactly that -- one conversation, ended then."""
+    cooldowns = {_PAIR: 0}
+
+    assert _open_at(9, cooldowns) == 0
+    assert _open_at(10, cooldowns) == 1
+    assert cooldowns == {_PAIR: (10, 2)}
+
+
+def test_the_escalated_cooldown_stops_growing_at_the_cap():
+    """The wait tops out at CONVERSATION_COOLDOWN_MAX_ESCALATION windows (#803).
+
+    Nothing decays the count, and both `simulate()` and an `--endless` live run
+    keep ONE cooldowns dict for the whole run -- so without a ceiling a pair that
+    talked ten times would owe ten windows and effectively never speak again."""
+    assert cognition.CONVERSATION_COOLDOWN_MAX_ESCALATION == 3
+    cooldowns = {_PAIR: (0, 9)}  # nine conversations held, the last ending at step 0
+
+    assert _open_at(29, cooldowns) == 0  # still owes the capped 3 x 10
+    assert _open_at(30, cooldowns) == 1  # not 9 x 10
+    assert cooldowns == {_PAIR: (30, 10)}

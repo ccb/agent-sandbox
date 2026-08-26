@@ -195,6 +195,24 @@ class ConfigRequest(BaseModel):
         description="one of GET /config's advertised `brains`; "
         "'llm' constructs the client at apply time (keys stay server-side)",
     )
+    plan: str | None = Field(
+        default=None,
+        description="the daily planner (#787): one of GET /config's `plans` -- "
+        "'auto' (llm under the llm brain, schedule otherwise), 'schedule' "
+        "(the authored YAML day), or 'llm' (model-authored, llm brain only)",
+    )
+    model: str | None = Field(
+        default=None,
+        description="the model to drive (#887): one of GET /config's `models` -- "
+        "the priced Anthropic models, so a run's spend can't silently price at "
+        "$0. llm brain only",
+    )
+    effort: str | None = Field(
+        default=None,
+        description="adaptive thinking depth (#845): one of GET /config's "
+        "`efforts` -- a level, or 'default' to send no thinking config at all "
+        "(the only way to clear a launch --effort). llm brain only",
+    )
     sim_config: dict | None = Field(
         default=None, description="a SimulationConfig mapping (#564 sections)"
     )
@@ -665,12 +683,23 @@ def create_app(
         if authorization != expected:
             raise HTTPException(status_code=401, detail="invalid or missing token")
 
+    def _reset_run_usage() -> dict:
+        """The stepper's fresh run_usage() to ride a `reset` status record
+        (#819), so a follower's run-scoped counters and the #795 social card
+        zero the instant the reset lands instead of trailing until the next
+        frame. Probed like the drains -- a stepper without run_usage() adds
+        nothing, and the reset record stays its old shape."""
+        run_usage = getattr(stepper, "run_usage", None)
+        return {"run_usage": run_usage()} if callable(run_usage) else {}
+
     def _publish_adoption(run_id: str) -> dict:
         """Emit the follower adoption signal (status record, reason 'reset',
         additive run_id) and return the route body. Shared by POST /runs and
         POST /runs/{id}/resume."""
         status = controller.status()
-        record = log.append("status", reason="reset", run_id=run_id, **status)
+        record = log.append(
+            "status", reason="reset", run_id=run_id, **status, **_reset_run_usage()
+        )
         return {**status, "cursor": record["cursor"], "run_id": run_id}
 
     @app.get("/health")
@@ -1136,7 +1165,9 @@ def create_app(
         rebuild in a worker thread -- it takes the app lock and may be slow."""
         ctl = _require_loop()
         await asyncio.get_running_loop().run_in_executor(None, ctl.reset)
-        record = log.append("status", reason="reset", **ctl.status())
+        record = log.append(
+            "status", reason="reset", **ctl.status(), **_reset_run_usage()
+        )
         return {**ctl.status(), "cursor": record["cursor"]}
 
     @app.post("/shutdown")
@@ -1224,7 +1255,8 @@ def create_app(
         cast/knobs/brain through the stepper's reset path and echo what was
         applied. Accepted only while paused at tick 0 (409 after the run
         starts); bad input (empty cast, unknown persona id, unknown or
-        unavailable brain, bad sim_config) is a 400. Followers see the same
+        unavailable brain, an llm planner or a thinking depth or a model on a
+        free brain, an unknown effort level or model, bad sim_config) is a 400. Followers see the same
         status(reason="reset") + run_id record every world rebuild publishes."""
         apply_config = getattr(stepper, "apply_config", None)
         if controller is None or apply_config is None:
@@ -1254,6 +1286,9 @@ def create_app(
                 applied = apply_config(
                     cast=req.cast,
                     brain=req.brain,
+                    plan=req.plan,
+                    effort=req.effort,
+                    model=req.model,
                     sim_config=req.sim_config,
                     steps=req.steps,
                     max_cost=req.max_cost,

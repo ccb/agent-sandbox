@@ -26,6 +26,12 @@ export function initialApiBase(): string | null {
 const POLL_MS = 1000; // ~the loop's pace; a missed tick just arrives next poll
 const MAX_ROWS_PER_AGENT = 200; // plenty for a day (~55-60 calls); keeps re-renders cheap
 const MAX_EVENT_ROWS = 200; // world-level rows are rarer than calls; one shared cap
+// Wishes also keep their own retention (#873): they ride the shared events feed
+// for the interleaved EventFeed panel, but a busy day's game_events would evict
+// early wishes out of that 200-row cap — and WishFeed presents itself as the
+// run's whole demand log, so its count must never shrink. Wishes are rare
+// (~10 on a busy live day), so a small cap outlasts any healthy run.
+const MAX_WISH_ROWS = 30;
 
 /** A stream record plus the client wall-clock ms it reached the page — the LLM
  * dashboard's recency signal (the wire record carries only a "HH:MM:SS" time). */
@@ -39,6 +45,10 @@ export type ReceivedFeedEvent = { cursor: number; receivedAt: number } & (
   | ({ kind: "game_event" } & EventState)
   | ({ kind: "wish" } & WishState)
 );
+
+/** A wish row alone (#873): WishFeed's dedicated retention, so game_event
+ * eviction in the shared feed can't shrink the run's demand log. */
+export type ReceivedWish = { cursor: number; receivedAt: number; kind: "wish" } & WishState;
 
 // Retention is capped per actor (actor: null is its own bucket), not globally,
 // so one chatty agent can't evict everyone else's rows off the dashboard (#519).
@@ -61,13 +71,14 @@ export interface LiveState {
   connected: boolean; // the last poll succeeded
   live: boolean; // the handshake reported a live loop (GET /live enabled: true)
   meta: LiveMeta | null; // the world's replay-meta shape, from the handshake
-  usage: UsageSummary | null; // one GET /usage read at handshake (budget ceiling)
+  usage: UsageSummary | null; // GET /usage seeds it; run counters + social ride the feed (#819)
   running: boolean;
   paused: boolean;
   step: number; // latest completed sim step seen on the feed
   frame: Frame | null; // the latest frame record's agents (same shape as replay.frames[i])
   calls: ReceivedLlmCall[]; // oldest → newest, capped per agent
   events: ReceivedFeedEvent[]; // game_event + wish rows, oldest → newest, capped
+  wishes: ReceivedWish[]; // the wish rows again, own cap (#873) — event eviction can't touch them
   // Agents mid-decision right now (#525): name → the wall-clock ms their
   // `deciding: begin` record arrived, deleted again on the matching `end`
   // (#551's lifecycle). Cleared on reset/restart, mirroring the Godot
@@ -91,6 +102,7 @@ const IDLE: LiveState = {
   frame: null,
   calls: [],
   events: [],
+  wishes: [],
   deciding: {},
   lastFrameAt: null,
 };
@@ -111,7 +123,12 @@ const IDLE: LiveState = {
  *   flicker at mock speeds — while a tick-spanning decide leaves its agent lit;
  * - the latest `frame` record (step + per-agent state, the live counterpart of
  *   `replay.frames[step]`);
- * - the latest `status` record (running / paused, from the run controls).
+ * - the latest `status` record (running / paused, from the run controls);
+ * - the run-scoped usage + social block (#819), which rides the `frame` record
+ *   (and the `reset` status record) as `run_usage`: merged over the handshake's
+ *   `/usage` snapshot so the run counters and the #795 social card refresh off
+ *   this one feed — no separate poll to drift out of lifecycle sync (a reset
+ *   clears them for free, the same walk that drops the dead run's rows).
  */
 export function applyFeedRecords(
   s: LiveState,
@@ -124,12 +141,14 @@ export function applyFeedRecords(
   let wasReset = false;
   const fresh: ReceivedLlmCall[] = [];
   const freshEvents: ReceivedFeedEvent[] = [];
+  const freshWishes: ReceivedWish[] = [];
   let deciding: Record<string, number> | null = null; // null = untouched this batch
   for (const r of records) {
     if (r.kind === "status" && r.reason === "reset") {
       wasReset = true;
       fresh.length = 0;
       freshEvents.length = 0;
+      freshWishes.length = 0;
       deciding = {};
     } else if (r.kind === "engine" && r.event?.kind === "llm_call") {
       fresh.push({ ...(r.event as unknown as LlmCallRecord), receivedAt });
@@ -142,13 +161,17 @@ export function applyFeedRecords(
       });
     } else if (r.kind === "wish") {
       // A wish rides its own top-level kind — its WishState fields sit beside
-      // cursor/kind on the record itself, not inside an `event` payload.
-      freshEvents.push({
+      // cursor/kind on the record itself, not inside an `event` payload. It
+      // lands in both logs: `events` for the interleaved feed, `wishes` for
+      // the demand log with its own retention (#873).
+      const row: ReceivedWish = {
         ...(r as unknown as WishState),
         kind: "wish",
         cursor: r.cursor,
         receivedAt,
-      });
+      };
+      freshEvents.push(row);
+      freshWishes.push(row);
     } else if (r.kind === "deciding" && typeof r.agent === "string") {
       deciding = deciding ?? { ...s.deciding };
       if (r.state === "begin") deciding[r.agent] = receivedAt;
@@ -160,6 +183,11 @@ export function applyFeedRecords(
   const lastFrame = frames[frames.length - 1];
   const statuses = records.filter((r) => r.kind === "status");
   const lastStatus = statuses[statuses.length - 1];
+  // Run-scoped usage + social (#819): the newest frame carries it every tick,
+  // and a `reset` status carries a freshly-zeroed one so the counters drop the
+  // instant the reset lands (not a tick later). Merged over the handshake's
+  // /usage snapshot below, so the lifetime totals + budget it seeded survive.
+  const runUsage = lastFrame?.run_usage ?? lastStatus?.run_usage;
   // Skip the state update when nothing changed, so an idle (or paused)
   // backend doesn't re-render the panel once a second.
   if (
@@ -172,6 +200,7 @@ export function applyFeedRecords(
   )
     return s;
   const heldEvents = wasReset ? [] : s.events;
+  const heldWishes = wasReset ? [] : s.wishes;
   return {
     ...s,
     connected: true,
@@ -179,6 +208,7 @@ export function applyFeedRecords(
     events: freshEvents.length
       ? [...heldEvents, ...freshEvents].slice(-MAX_EVENT_ROWS)
       : heldEvents,
+    wishes: freshWishes.length ? [...heldWishes, ...freshWishes].slice(-MAX_WISH_ROWS) : heldWishes,
     deciding: deciding ?? s.deciding,
     lastFrameAt: lastFrame ? receivedAt : s.lastFrameAt,
     // frame is deliberately NOT dropped on reset: calls/events are append-only
@@ -189,6 +219,9 @@ export function applyFeedRecords(
     step: lastFrame?.step ?? lastStatus?.step ?? s.step,
     running: lastStatus?.running ?? s.running,
     paused: lastStatus?.paused ?? s.paused,
+    // Merge the run-scoped subset over the handshake snapshot (keeping the
+    // lifetime totals + budget); if none rode this batch, leave usage as-is.
+    usage: runUsage && s.usage ? { ...s.usage, ...runUsage } : s.usage,
   };
 }
 
@@ -283,9 +316,11 @@ export function followLive(
     const res = await fetch(`${base}/live`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const hs = (await res.json()) as LiveStatusResponse;
-    // One /usage read alongside the handshake, for the dashboard's budget
-    // line: max_cost_usd never changes, and every stream record carries
-    // the running total (cum_cost_usd), so this needn't repeat.
+    // One /usage read alongside the handshake seeds the budget line + lifetime
+    // totals; the run-scoped counters and the #795 social block ride the feed's
+    // `run_usage` from then on (#819). Degrades to null on any non-ok/error —
+    // written below as `usage ?? s.usage` so a transient failure on a reconnect
+    // keeps the last good snapshot instead of blanking the strip + card.
     const usage = await fetch(`${base}/usage`)
       .then((r) => (r.ok ? (r.json() as Promise<UsageSummary>) : null))
       .catch(() => null);
@@ -318,7 +353,7 @@ export function followLive(
       connected: true,
       live: hs.enabled,
       meta: hs.meta,
-      usage,
+      usage: usage ?? s.usage,
       running: hs.running,
       paused: hs.paused,
       step: hs.step ?? 0,
@@ -328,6 +363,7 @@ export function followLive(
       // synthetic one would have to carry the whole meta/usage/step snapshot too.
       calls: restarted ? [] : s.calls,
       events: restarted ? [] : s.events,
+      wishes: restarted ? [] : s.wishes,
       // A restarted backend's in-flight decisions died with it — clear the
       // bubbles like the Godot viewer's DecidingState.clear() on #549 restart,
       // so a dropped `end` can't wedge one across runs.

@@ -133,6 +133,15 @@ def test_add_accrues_importance_since_reflection():
     assert mem.importance_since_reflection == 8.0
 
 
+def test_plan_importance_accrues_toward_reflection():
+    # #815 re-admits plans as tagged intentions, so their importance once again
+    # contributes to the reflection pass that can see them.
+    mem = AgentMemory()
+    mem.add_observation("x", turn=0, importance=3)
+    mem.add_plan("head to the hall for dinner", turn=0, importance=8)
+    assert mem.importance_since_reflection == 11.0
+
+
 def test_agent_memory_round_trips():
     mem = AgentMemory(owner="troll")
     mem.add_observation("saw the player", turn=1, importance=2)
@@ -321,6 +330,36 @@ def test_landmark_importance_exempts_a_seed_from_recency_burial_633():
     # None == omitting the knob (no behavior change for existing callers).
     assert mem.retrieve(query, turn=40, touch=False) == mem.retrieve(
         query, turn=40, touch=False, landmark_importance=None
+    )
+
+
+def test_retrieve_exclude_kinds_backfills_the_slots():
+    # #777: excluded kinds are dropped *inside* the ranking, so each freed slot
+    # goes to the next-best surviving record and max_records still means what
+    # it says -- unlike post-filtering the returned list, which silently thins
+    # it. Strings work because MemoryKind is a str Enum (reflection.py passes
+    # "plan" without importing the engine).
+    mem = AgentMemory(owner="nadia")
+    for i in range(4):
+        mem.add_observation(f"caught a fish at the river ({i})", turn=i, importance=2)
+    for i in range(4):
+        mem.add_plan(f"plan: fish at the river tomorrow ({i})", turn=10, importance=9)
+
+    # Plans out-rank the observations (fresher + more important), so by default
+    # they fill every slot of a max_records=4 retrieval.
+    top = mem.retrieve("fish river", turn=10, max_records=4, touch=False)
+    assert all(r.kind is MemoryKind.PLAN for r in top)
+
+    # Excluded from the ranking, their slots backfill with the observations.
+    lived = mem.retrieve(
+        "fish river", turn=10, max_records=4, touch=False, exclude_kinds=("plan",)
+    )
+    assert len(lived) == 4
+    assert all(r.kind is MemoryKind.OBSERVATION for r in lived)
+
+    # The default () excludes nothing (no behavior change for existing callers).
+    assert mem.retrieve("fish river", turn=10, touch=False) == mem.retrieve(
+        "fish river", turn=10, touch=False, exclude_kinds=()
     )
 
 

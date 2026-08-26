@@ -28,7 +28,7 @@ from dataclasses import dataclass, replace
 from text_adventure_games import conversation as convo
 from text_adventure_games.llm_client import MockReActClient, run_tool_loop
 from text_adventure_games.memory import MemoryKind
-from text_adventure_games.planning import RevisionTrigger
+from text_adventure_games.planning import IMMEDIATE_URGENCY, RevisionTrigger
 from text_adventure_games.npc import (
     COGNITION_BUDGET,
     LLMAgent,
@@ -43,8 +43,15 @@ from text_adventure_games.usage import UsageLedger, record_call
 
 # Conversation pacing (issue #86). A settled pair talks at most once per this many
 # steps, so co-located residents don't re-converse every tick of a long stay; and
-# a single meeting is capped at this many lines.
+# a single meeting is capped at this many lines. Each conversation a pair holds
+# adds another window to their next wait -- 2nd after one, 3rd after two -- so a
+# pair can't re-open the same meeting on a clock (#803, see _on_pair_cooldown).
 CONVERSATION_COOLDOWN_STEPS = 90
+# How many windows that wait may grow to (#803). Nothing decays the count, and
+# `simulate()` and an `--endless` live run each keep ONE cooldowns dict for a
+# whole run, so an uncapped multiplier would eventually lock a chatty pair out
+# for good. Three windows already breaks a clockwork re-open.
+CONVERSATION_COOLDOWN_MAX_ESCALATION = 3
 CONVERSATION_MAX_EXCHANGES = 6
 # After its last line a conversation HOLDS both participants in place for the
 # viewer's playback window -- this many steps per transcript line (issue #673).
@@ -53,6 +60,10 @@ CONVERSATION_MAX_EXCHANGES = 6
 # link would stretch between them across the map. Keep in sync with viewer.gd's
 # DIALOGUE_LINE_STEPS and penn_world.py's injector mirror of the same name.
 CONVERSATION_LINE_PLAYBACK_STEPS = 14
+# How long an agent settles after a talk that produced no conversation (#689,
+# #793). Mirrored by sim_config.CognitionConfig.dead_talk_settle_steps, which is
+# what the live path actually threads; this is the offline/test default.
+DEAD_TALK_SETTLE_STEPS = 30
 
 # React-or-continue (issue #370): guards on the perception-driven interruption
 # consult. Per-agent cooldown + a hard per-sim-hour cap, so a busy hallway is
@@ -83,6 +94,9 @@ def _consult_entry(summary: str) -> dict:
 # engine's RevisionTrigger.reason is a plain string (planning.py), so an
 # agreement reached in dialogue needs no engine change to reach a planner.
 CONVERSATION = "conversation"
+COMMITMENT_IMMEDIATE = IMMEDIATE_URGENCY
+COMMITMENT_SCHEDULED = "scheduled"
+COMMITMENT_UNSPECIFIED = "unspecified"
 
 # React-or-continue (issue #370). A backend-local revision reason, like
 # CONVERSATION/DEVIATED: an agent chose "replan" when it noticed someone
@@ -114,10 +128,11 @@ _SLEEPY_MARKER = "You are sleepy."
 RELATIONSHIP_NOTE_IMPORTANCE = 8.0
 
 # The post-conversation outcome tool (#582): one structured call per participant
-# after a meeting. plans_changed gates a plan revision; the two strings are
-# optional (small talk fills neither). Normalized {name, description, parameters}
-# -- the shape llm_client.call_tool translates per provider, like the planner's
-# tools.
+# after a meeting. plans_changed gates a plan revision; commitment_timing tells
+# the executor whether a concrete agreement starts at the first action boundary
+# after playback (#829); the two note strings are optional (small talk fills
+# neither). Normalized {name, description, parameters} -- the shape
+# llm_client.call_tool translates per provider, like the planner's tools.
 CONVERSATION_OUTCOME_TOOL = {
     "name": "conversation_outcome",
     "description": (
@@ -142,6 +157,22 @@ CONVERSATION_OUTCOME_TOOL = {
                     "and when. Omit if nothing changed."
                 ),
             },
+            "commitment_timing": {
+                "type": "string",
+                "enum": [
+                    COMMITMENT_IMMEDIATE,
+                    COMMITMENT_SCHEDULED,
+                    COMMITMENT_UNSPECIFIED,
+                ],
+                "description": (
+                    "When the concrete commitment starts. immediate only when "
+                    "you agreed to begin as soon as this conversation ends "
+                    "(now/right now/let's go); scheduled for a later time or "
+                    "delay; unspecified when there is no concrete timing or "
+                    "plans did not change. Immediate is a behavioral promise, "
+                    "not a synonym for important."
+                ),
+            },
             "relationship_note": {
                 "type": "string",
                 "description": (
@@ -150,7 +181,7 @@ CONVERSATION_OUTCOME_TOOL = {
                 ),
             },
         },
-        "required": ["plans_changed"],
+        "required": ["plans_changed", "commitment_timing"],
     },
 }
 
@@ -196,6 +227,32 @@ REACT_TOOL = {
 _IMPORTANCE_LOCKED = "importance_locked"
 _IMPORTANCE_SCORED = "importance_scored"
 _IMPORTANCE_ATTEMPTS = "importance_score_attempts"
+
+# #795: a public announcement sits above a background acquaintance (the 3.0
+# relationship seed) and below the agent's own commitments (the 5.0 plan
+# memory) -- it should inform the day without outranking an obligation.
+EVENT_IMPORTANCE = 4.0
+
+# #826: the tag marking a memory as this agent's OWN action, and how many of
+# them the decide prompt shows. Reuses the `tags` field AgentMemory.perceive
+# already uses for {"presence"} -- no new MemoryKind, so nothing in
+# serialization, the reflection filters, or the viewer has to learn about it.
+ACTION_TAG = "action"
+RECENT_ACTIONS_MAX = 3
+# #905: minutes one unchanged activity must hold before the decide context
+# says so. An open-ended wait premised on a person ("waiting for Theo") decays
+# with every minute that person doesn't show, but nothing in the prompt ever
+# said "you have been doing exactly this for 5 hours" -- the agent re-chose a
+# 340-minute wait one plausible decision at a time. ponytail: 90 min is a
+# calibration knob -- wide enough that a long study block isn't nagged,
+# narrow enough that a dead afternoon gets one true sentence in time to save
+# most of it.
+SAME_ACT_CONTEXT_MIN = 90
+# #826 review (minor 6): most record text is a short authored reflection.prompty
+# sentence, but the `read` verb embeds an item's whole `read_text` -- authored
+# world data of arbitrary length that could carry a newline -- straight into the
+# memory. Latent today (no Penn location authors `read_text`), cheap to cap.
+RECENT_ACTION_TEXT_MAX = 200
 
 # Bounds on the scorer's retry loop (issue #759). The rescan deliberately has no
 # cursor, so a malformed reply is retried next tick -- but unbounded, a brain
@@ -249,7 +306,7 @@ from text_adventure_games.actions.things import CRAFT_VERBS
 from text_adventure_games.enums import ActionName, Property
 
 from . import seed
-from .actions import TalkTo, Travel
+from .actions import TalkTo, Travel, travel_destination_allowed
 from .planner import LLMPlanner, MockPlanner
 from .prompt_templates import render
 
@@ -348,13 +405,47 @@ class ScheduleMockClient(MockReActClient):
         (#559). Read at travel time by run_simulation to bias walk_path."""
         return self._stop.get("furniture")
 
-    def advance(self) -> bool:
-        """Move to the next scheduled stop. Returns ``False`` if none remain."""
-        if self.stop_index + 1 < len(self.schedule):
-            self.stop_index += 1
-            self._commands_used = 0
-            return True
-        return False
+    @property
+    def has_next(self) -> bool:
+        """Whether another scheduled stop remains after the current one."""
+        return self.stop_index + 1 < len(self.schedule)
+
+    @property
+    def next_stop(self) -> dict | None:
+        """The stop after the current one, or ``None`` at the last stop.
+
+        One definition, read by both :meth:`advance`'s clock gate (#838) and the
+        decide-context block's held-stop sentences (#826), so "what comes next"
+        cannot drift between the mechanism and what the agent is told about it.
+        """
+        return self.schedule[self.stop_index + 1] if self.has_next else None
+
+    def advance(self, current_hour: int | None = None) -> bool:
+        """Move to the next due stop.
+
+        ``start_hour`` pins an upcoming stop to a clock hour (#838). When the
+        caller supplies ``current_hour``, do not let a completed activity run
+        the schedule ahead of that anchor. Omitting the hour preserves the
+        clockless/mock behavior, including the committed bake path whose stops
+        carry no anchors.
+
+        Returns ``False`` both when no stop remains and when the next stop is
+        not due; callers that distinguish those states can inspect
+        :attr:`has_next`.
+        """
+        next_stop = self.next_stop
+        if next_stop is None:
+            return False
+        start_hour = next_stop.get("start_hour")
+        if (
+            current_hour is not None
+            and start_hour is not None
+            and current_hour < start_hour
+        ):
+            return False
+        self.stop_index += 1
+        self._commands_used = 0
+        return True
 
     def replace_schedule(self, schedule: list[dict]) -> None:
         """Swap in a revised schedule, keeping the current ``stop_index``.
@@ -510,6 +601,8 @@ def attach_agents(
     llm_client=None,
     clock=None,
     num_steps: int | None = None,
+    travel_minutes: int | None = None,
+    events: list[dict] | None = None,
     out_planner_sources: dict | None = None,
     out_plans: dict | None = None,
     extra_action_names: list[str] | None = None,
@@ -545,6 +638,26 @@ def attach_agents(
     optional -- the assets are git-ignored and absent on a fresh checkout, so an
     unset (or missing) path simply skips that seeding and leaves the agent
     byte-identical to before.
+
+    A world YAML's own ``relationships`` edges reach memory the same way (issue
+    #779): a spec carrying ``relationship_edges`` -- the validated edges it is an
+    endpoint of, attached by ``penn_world.build_penn_world`` -- gets one seeded
+    memory per edge, naming the other person, the ``kind``, and the ``closeness``
+    in words (:func:`seed.relationship_statements`). This is what the Penn path
+    always lacked: the edges were validated and drawn in the viewer's
+    social-graph card but never delivered to an agent, so authored rivals,
+    siblings, and TAs behaved like strangers who happened to be standing nearby.
+    No key -> nothing seeded, so a world without a social graph is unchanged.
+
+    Pass ``events`` (a world YAML's validated ``events:`` list, issue #795) to
+    seed each announced happening as a t=0 observation into every agent's
+    memory *except* its host's -- the host already carries it as their own
+    commitment, at higher importance, from their schedule. Seeded only when
+    ``planner_client`` is also given: :class:`~backend.planner.MockPlanner`
+    ignores memory entirely, so seeding under the mock would shift the
+    top-6 retrieval and move the replay while informing nothing. With
+    ``events=None`` -- the default -- nothing is seeded and the replay is
+    unchanged.
 
     Pass a ``planner_client`` (an engine ``LlmClient``) to plan each day with a
     real model (:class:`~backend.planner.LLMPlanner`, issue #83). With none -- the
@@ -657,7 +770,9 @@ def attach_agents(
         # replay stays byte-identical. The threshold is the agent's
         # reflection_threshold (LLMAgent's default unless #564's config passed one).
         if reflector_client is not None:
-            agent.reflector = LLMReflector(reflector_client)
+            # actor=char.name (#847): the reflect client is shared across the cast,
+            # so tag each reflection with its agent for per-actor cost attribution.
+            agent.reflector = LLMReflector(reflector_client, actor=char.name)
         # The verbs the structured tool may offer; the mock ignores the enum but a
         # well-formed schema keeps the seam honest for a real brain. Order:
         # the base travel/perform, then any caller-supplied extra_action_names
@@ -730,7 +845,46 @@ def attach_agents(
         # Seed t=0 social structure (memory) and partial world knowledge
         # (knowledge) when the upstream assets are available (issue #79). Done
         # before planning so a generative planner can reason over them.
-        seed.seed_relationships(agent.memory, relationships.get(char.name, []))
+        # Two sources, one seeder: the upstream Smallville CSV (above) and the
+        # world YAML's own `relationships` edges, handed to each persona spec as
+        # `relationship_edges` by penn_world.build_penn_world (#779 -- before
+        # that these edges reached meta.relationships for the viewer's
+        # social-graph card and NOWHERE else, so an authored `rivals` pair had
+        # no idea they were rivals).
+        statements = list(relationships.get(char.name, []))
+        statements += seed.relationship_statements(
+            char.name, spec.get("relationship_edges") or []
+        )
+        # #794: lock the seeded importance, matching the note/commitment
+        # locks below -- score_new_memories would otherwise re-guess the
+        # authored 3.0 (a deliberately-background social prior) as 6-8.
+        for rec in seed.seed_relationships(agent.memory, statements):
+            rec.metadata[_IMPORTANCE_LOCKED] = True
+        # Public events (#795): announced happenings anyone on campus could know
+        # about. Seeded ONLY when an LLM planner will actually read them --
+        # MockPlanner replays the authored schedule and ignores memory entirely,
+        # so seeding under the mock would shift the top-6 retrieval, change
+        # st["memories"], and move the bake while informing nothing. Same
+        # reasoning as the score_new_memories / maybe_reflect gates.
+        # The host is skipped: their own schedule already gives them this at
+        # importance 5.0, and the noticeboard phrasing would read "hosted by me".
+        if planner_client is not None:
+            announcements = [
+                render(
+                    "public_event",
+                    label=event["label"],
+                    at=event["at"],
+                    when=event["when"],
+                    host=event.get("host") or "",
+                )
+                for event in (events or [])
+                if event.get("host") != char.name
+            ]
+            for rec in seed.seed_relationships(
+                agent.memory, announcements, importance=EVENT_IMPORTANCE
+            ):
+                rec.metadata[_IMPORTANCE_LOCKED] = True
+                rec.tags = {"seed", "event"}
         # -- Opt-in seeded memories (#595): author t=0 observations (e.g. an aversive
         # -- "the unboiled water made me sick" memory) so a live brain can retrieve
         # -- and reason from them. Importance 5.0 matches the plan-memory seed so it
@@ -752,7 +906,12 @@ def attach_agents(
                 | {stop["place"] for p in personas for stop in p["schedule"]}
             )
             planner = LLMPlanner(
-                planner_client, plan_locations, clock=clock, num_steps=num_steps
+                planner_client,
+                plan_locations,
+                clock=clock,
+                num_steps=num_steps,
+                actor=char.name,  # #847: shared plan client -> attribute per agent
+                travel_minutes=travel_minutes,
             )
             plan = planner.generate(persona=spec, memory=agent.memory)
             if plan.stops:
@@ -820,10 +979,10 @@ def action_tools_for(game, char, max_enum: int = DECIDE_MAX_ENUM):
     scope kinds (item / character / direction) can't describe travel's "any
     named location in town" -- the campus is wired hub-and-spoke purely so the
     engine discovers every location, not as a compass maze -- so the enum of
-    destinations is filled in here, from the same ``game.locations`` the
-    :class:`~backend.actions.Travel` action matches a command against. The
-    menu and the precondition gate can therefore never disagree about which
-    venues exist.
+    destinations is filled in here, filtering the same ``game.locations`` the
+    :class:`~backend.actions.Travel` action matches through its shared
+    schedule-aware eligibility predicate. The menu and precondition gate can
+    therefore never disagree about which venues are legal this tick.
 
     The same enrichment (#635) covers the item-bearing verbs: without it a
     tool-calling brain must blind-guess the exact item string into the engine's
@@ -842,7 +1001,11 @@ def action_tools_for(game, char, max_enum: int = DECIDE_MAX_ENUM):
     tools = tools_for(
         game.parser, actor=char, names=agent.action_names, max_enum=max_enum
     )
-    destinations = sorted(game.locations)
+    destinations = sorted(
+        name
+        for name, location in game.locations.items()
+        if travel_destination_allowed(game, char, location)
+    )
     # Per-verb enum of the exact argument string the model should emit. Keyed by
     # the verb (== tool name); the craft verbs are matched separately below since
     # any of CRAFT_VERBS ("make"/"cook"/...) may be the authored one.
@@ -856,11 +1019,14 @@ def action_tools_for(game, char, max_enum: int = DECIDE_MAX_ENUM):
         ),
     }
     craftable = sorted({n for r in getattr(game, "recipes", []) for n in r.names()})
+    remove_travel = False
     for tool in tools:
         name = tool["name"]
         props = tool["parameters"]["properties"]
         if name == Travel.ACTION_NAME:
-            if len(destinations) <= max_enum and "destination" in props:
+            if not destinations:
+                remove_travel = True
+            elif len(destinations) <= max_enum and "destination" in props:
                 props["destination"]["enum"] = destinations
             continue
         values = craftable if name in CRAFT_VERBS else arg_enums.get(name)
@@ -869,6 +1035,8 @@ def action_tools_for(game, char, max_enum: int = DECIDE_MAX_ENUM):
             # Overwrite the engine's generic placeholder ("... e.g. 'player with
             # club'"), which actively misleads once the slot is a closed menu.
             props["arguments"]["description"] = "choose exactly one of the listed names"
+    if remove_travel:
+        tools = [tool for tool in tools if tool["name"] != Travel.ACTION_NAME]
 
     # Bespoke curation for talk_to (#614): "another living character is
     # co-located" is not expressible as a REQUIRED_AFFORDANCES tag -- the #612
@@ -1092,6 +1260,8 @@ def nearby_affordances_line(game, char) -> str:
     ):
         if loc is here:
             continue
+        if not travel_destination_allowed(game, char, loc):
+            continue
         tags = [tag for tag in ARENA_AFFORDANCE_TAGS if loc.get_property(tag)]
         if tags:
             fragments.append(f"{loc.name} ({', '.join(tags)})")
@@ -1144,35 +1314,324 @@ def known_sleep_location_line(game, char) -> str:
     return render("known_sleep_location", places="; ".join(fragments))
 
 
-def decide_context_block(agent, step: int, clock, stop_since: int = 0) -> str:
+def at_scheduled_stop(char) -> bool:
+    """Is ``char`` standing at the place its current schedule stop names?
+
+    The one definition of "on plan" (#826 review): the furniture bias, the
+    perform settle's emoji/furniture signal, the instantaneous-command emoji,
+    the arrival re-anchor, and the pre-pass's end-of-day check
+    (``done_for_the_day``, #831) all ask this same question instead of keeping
+    their own inline copy, so a change to what "at the scheduled stop" means
+    (room-level addresses, a stop with no place) has one place to miss, not
+    several. (The conversation stop-credit was a caller too, until #831
+    dropped its place check there -- a completed settle credits its stop
+    wherever it ran, conversation or not.) False when the agent is nowhere, or
+    the stop names no place -- an unplaced stop is not somewhere you can be
+    standing.
+    """
+    place = getattr(getattr(char.agent, "schedule", None), "destination", None)
+    return bool(place) and char.location is not None and char.location.name == place
+
+
+def _hour_words(hour: int) -> str:
+    """A whole hour of the day in words: ``14`` -> ``"2 PM"``.
+
+    Plain arithmetic rather than ``strftime``, which zero-pads ("02 PM") and
+    would need a date to anchor a bare hour to.
+    """
+    return f"{hour % 12 or 12} {'AM' if hour < 12 else 'PM'}"
+
+
+def _absent_person(game, char, activity: str | None):
+    """The first name of a cast member ``activity`` mentions who is NOT here.
+
+    #905's missing observation: "waiting for theo" while Theo is neither
+    co-located nor ever going to send a perceivable departure event. A
+    first-name word match against the cast is deliberately simple -- it only
+    ever adds one true clause to the #905 hold sentence, and a miss just
+    means the clause is omitted.
+    """
+    if not activity:
+        return None
+    text = activity.lower()
+    location = getattr(char, "location", None)
+    here = set(getattr(location, "characters", {}) or {})
+    for name in getattr(game, "characters", {}) or {}:
+        if name == char.name or name in here:
+            continue
+        first = name.split()[0]
+        if len(first) >= 3 and re.search(rf"\b{re.escape(first.lower())}\b", text):
+            return first
+    return None
+
+
+def decide_context_block(
+    agent,
+    step: int,
+    clock,
+    stop_since: int = 0,
+    waiting: bool = False,
+    day_steps: int | None = None,
+    act_since: int | None = None,
+    activity_text: str | None = None,
+    absent: str | None = None,
+    walking: int | None = None,
+) -> str:
     """Render the always-on decide context (issue #580), or ``""``.
 
-    Sim time of day, the plan's current stop, and how long the agent has been
-    on it (``stop_since`` is the step the stop began -- stamped when the
-    schedule advances and re-anchored on arrival, so once the agent is at the
-    place ``elapsed`` counts time *at* the stop, commensurate with the planned
-    minutes) -- the always-relevant slice a live brain needs on every decision
-    without spending a ``read_plan`` tool round. Needs a clock (the bake and
-    the offline tests thread none, so their prompts are unchanged) and a
-    schedule (every attach_agents persona has one; a bare engine agent
-    yields "").
+    Sim time of day, the plan's current stop, and how long that stop has been
+    the current one (``stop_since`` is the step it became current -- stamped
+    when the schedule advances, and re-anchored on arrival at the stop's own
+    place so the walk there is excluded) -- the always-relevant slice a
+    live brain needs on every decision without spending a ``read_plan`` tool
+    round. Needs a clock (the bake and the offline tests thread none, so
+    their prompts are unchanged) and a schedule (every attach_agents persona
+    has one; a bare engine agent yields "").
+
+    ``elapsed`` is deliberately *not* "time spent at the place". An agent that
+    wanders off-plan never arrives, so nothing re-anchors and the clock keeps
+    running on the stop it is neglecting -- which is the whole point for #826,
+    where a 10-minute coffee run stayed current for 2 h 15 min. The template
+    says "this has been your current stop", not "you have been here", because
+    for that agent the second sentence would be false.
+
+    ``waiting`` (#826) means the loop credited this stop but is holding the
+    pointer until the next stop's ``start_hour`` (#838). It replaces the elapsed
+    clause with "you have already finished this stop" plus what comes next and
+    when: the elapsed number is *true* in that state but reads as debt, and an
+    agent acted on it by walking 62 sim-minutes back to an errand it had
+    finished. Only the loop knows this -- the schedule alone cannot tell a
+    finished stop from one still being worked on.
+
+    ``day_steps`` (#891) is the run's total step count; inside the final
+    stretch the block adds when the day ends and in how many minutes. Agents
+    know the time and every walk's price but not that the world stops at the
+    run boundary -- batch 8's criterion-2 breach was an agent starting a
+    ~50-minute walk 23 minutes before an end nothing had told it about.
+
+    ``walking`` (#916) is the whole-minute walk remaining when the agent is
+    mid-walk *toward the current scheduled stop* -- it replaces the elapsed
+    clause, whose number otherwise reads as time already spent at the stop:
+    70 minutes into a correct 68-minute leg, batch 11's Tanaka concluded her
+    session "ran well past its planned time" and turned around 11 tiles from
+    the door. A walk away from the plan threads ``None`` and keeps the
+    neglect semantics unchanged.
+
+    ``act_since``/``activity_text``/``absent`` (#905): the step the agent's
+    current *performed activity* text last changed, that text, and a named
+    person it mentions who is not co-located. Past ``SAME_ACT_CONTEXT_MIN``
+    minutes the block states the hold -- purely factual, no directive -- so
+    an open-ended wait ("reviewing problems while waiting for theo", 340 min
+    in batch 10) finally has its decayed premise in the prompt instead of
+    being re-chosen one plausible decision at a time. Distinct from
+    ``elapsed``, which clocks the *schedule stop*: Maya's wait was a
+    deviation, held across two different stops.
     """
     schedule = getattr(agent, "schedule", None)
     if clock is None or schedule is None:
         return ""
     steps = schedule.steps
+    next_stop = getattr(schedule, "next_stop", None) if waiting else None
+    next_hour = next_stop.get("start_hour") if next_stop else None
+    if next_hour not in range(24):
+        # Two ways there is no usable hour here. A revision can replace the tail
+        # while a hold stands (#826 Task 2's test_hold_survives_schedule_replacement
+        # pins that state), so the next stop may have lost the very anchor that
+        # caused the hold; and planner.py deliberately keeps a model's
+        # `start_hour` raw, so it can be a 99 or a -1 that no clock hour matches.
+        # Either way there is no hour to report and no wait to describe -- say
+        # only that this stop is finished, rather than rendering "starting at
+        # None" or, from a 99, the self-contradicting "starting at 3 PM (5445 min
+        # from now)". One membership test covers both, since None is not a member.
+        next_stop, next_hour = None, None
+    now = clock.time_at(step)
+    day_end, day_end_in = None, None
+    if day_steps is not None:
+        remaining = clock.minutes_for_steps(max(0, day_steps - step))
+        # ponytail: 120 min is a calibration knob, not a magic number -- wide
+        # enough that an agent can still wrap up a last errand deliberately,
+        # narrow enough that the sentence isn't nagging all day. Widen it if
+        # runs still end with agents mid-walk; narrow it if evenings go idle.
+        if 0 < remaining <= 120:
+            end = clock.time_at(day_steps)
+            day_end = (
+                _hour_words(end.hour)
+                if end.minute == 0
+                else end.strftime("%I:%M %p").lstrip("0")
+            )
+            day_end_in = remaining
+    held = None
+    if act_since is not None and activity_text:
+        held_min = clock.minutes_for_steps(max(0, step - act_since))
+        if held_min >= SAME_ACT_CONTEXT_MIN:
+            held = held_min
     return render(
         "decide_context",
-        time=clock.time_at(step).strftime("%A %I:%M %p"),
+        time=now.strftime("%A %I:%M %p"),
         place=schedule.destination,
         activity=schedule.activity,
+        held=held,
+        held_activity=activity_text if held else None,
+        absent=absent if held else None,
+        walking=walking,
         minutes=clock.minutes_for_steps(steps) if steps is not None else None,
         elapsed=clock.minutes_for_steps(max(0, step - stop_since)),
+        finished=bool(waiting),
+        next_place=next_stop.get("place") if next_stop else None,
+        next_activity=next_stop.get("activity") if next_stop else None,
+        next_hour=_hour_words(next_hour) if next_hour is not None else None,
+        next_in=(
+            max(0, (next_hour - now.hour) * 60 - now.minute)
+            if next_hour is not None
+            else None
+        ),
+        next_due=next_hour is not None and now.hour >= next_hour,
+        day_end=day_end,
+        day_end_in=day_end_in,
+    )
+
+
+def recent_actions_block(agent, step: int, clock) -> str:
+    """The agent's own last few actions, newest first (issue #826), or ``""``.
+
+    Retrieval cannot be relied on to surface these. ``retrieve(touch=True)`` --
+    the decision-time path -- resets ``last_accessed_turn`` on every hit, so an
+    importance-8.0 commitment memory (#778) scores recency 1.0 for the rest of
+    the run, while this agent's own importance-2.0 outcome records decay as
+    ``0.95**n``: across a 344-step (57-minute) walk, to ``3e-8``. In #760 batch 4
+    that left an agent reading six intention memories and no record of anything
+    it had done, so it re-formed the same intention at every arrival and spent
+    2 h 15 min walking between two errands it believed it had finished.
+
+    So this is a *guarantee*, not a bid: it bypasses retrieval scoring rather
+    than fighting it. Record text is rendered verbatim -- these are the agent's
+    own memories, not prose to rewrite -- except for a defensive newline-collapse
+    and length cap (:data:`RECENT_ACTION_TEXT_MAX`): most verbs render a short
+    authored sentence, but the `read` verb embeds an item's whole `read_text`,
+    which is authored world data of arbitrary length and could carry a newline
+    that would deform this block's one-line-per-action shape.
+
+    A just-written record can also independently surface in the *retrieved*
+    memory block below this one (its recency score is a fresh 1.0) -- accepted,
+    harmless double-exposure rather than an oversight, since the two blocks
+    serve different jobs (a guarantee vs. a relevance bid).
+
+    Needs a clock (the bake and the offline tests thread none, so their prompts
+    are unchanged) and at least one tagged record.
+    """
+    if clock is None:
+        return ""
+    actions = []
+    seen = set()
+    for record in reversed(getattr(agent.memory, "records", [])):
+        if ACTION_TAG not in record.tags:
+            continue
+        # Collapse arbitrary whitespace, not just "\n": `read` embeds an item's
+        # whole authored `read_text`, and a stray \r or tab would deform this
+        # block's one-line-per-action shape just as badly as a newline.
+        text = " ".join(record.text.split())[:RECENT_ACTION_TEXT_MAX]
+        # Keep only the most recent of each distinct action. #636 writes a
+        # failure memory every tick a gate blocks the *same* re-picked action,
+        # and by design does not dedupe at write time -- so without this the
+        # agent most likely to be stuck (exactly #826's target) spends its whole
+        # block on three identical "I tried X but it didn't work" lines, with
+        # its actual history evicted. Same for a burst of instantaneous verbs.
+        if text in seen:
+            continue
+        seen.add(text)
+        actions.append(
+            {
+                "minutes": clock.minutes_for_steps(max(0, step - record.created_turn)),
+                "text": text,
+            }
+        )
+        if len(actions) == RECENT_ACTIONS_MAX:
+            break
+    if not actions:
+        return ""
+    return render("recent_actions", actions=actions)
+
+
+def walk_minutes_line(game, char, clock) -> str:
+    """Price every travel destination from where *char* stands (#826), or ``""``.
+
+    Penn legs are long -- Van Pelt to Houston Hall is ~57 sim-minutes -- but the
+    observation's exits list prices a 0-minute in-building hop identically to a
+    cross-campus leg, so an agent forms "quick coffee run" intentions that are
+    two-hour round trips. The planner gets a travel budget
+    (``planner.median_travel_minutes``, #795); this is the per-tick decide's
+    equivalent.
+
+    Scoped to the destinations the ``travel`` tool actually offers: the shared
+    schedule-aware eligibility predicate filters ``game.locations`` before
+    either this context line or :func:`action_tools_for` sees them. Two gaps
+    between this list and that enum are benign: a legal location with no
+    ``tile_address`` (Penn's ``Penn campus`` hub) is selectable but cannot be
+    priced, and past :data:`DECIDE_MAX_ENUM` the enum falls back to free text
+    while this line stays capped. Neither hides a price the agent would
+    otherwise have seen -- an unmapped place has no distance to report. Capped
+    at :data:`DECIDE_MAX_ENUM`, nearest first, for the same reason
+    :func:`action_tools_for` caps its destination enum at that size: past it the
+    enum itself falls back to free text, so pricing every destination anyway
+    would grow this line unboundedly on a larger world for no benefit past the
+    cap the model can no longer see reflected in its own tool schema.
+
+    Priced with the map's BFS distance fields (``walk_steps_from``, #866): the
+    Chebyshev bbox gap it replaced ignored walls and under-reported ~2x on
+    this campus, and in #760 batch 6 that provably changed a decision (26 min
+    advertised, ~52 real -- Maya budgeted a lecture arrival against it), the
+    documented upgrade condition. The fields are lazy and ~0.03 s per priced
+    address, superseding the ~18 s all-pairs-matrix estimate that had deferred
+    this. The template keeps "at least about": the BFS lands at the nearest
+    destination tile, and the patched walk_path routes a few tiles further (a
+    furniture or rendezvous spot), so the price stays a tight lower bound. The
+    getattr fallback keeps map doubles that only implement ``tile_gap_from``
+    (tests) working.
+    """
+    world_map = getattr(game, "world_map", None)
+    tile = getattr(char, "tile", None)
+    if world_map is None or clock is None or tile is None:
+        return ""
+    gap_from = getattr(world_map, "walk_steps_from", world_map.tile_gap_from)
+    priced = []
+    for name, location in game.locations.items():
+        if not travel_destination_allowed(game, char, location):
+            continue
+        address = getattr(location, "tile_address", None)
+        if not address or not world_map.tiles_for(address):
+            continue
+        priced.append((gap_from(tuple(tile), address), name))
+    if not priced:
+        return ""
+    # Sort on the raw tile gap, not the rendered minutes: minutes_for_steps
+    # floors, so at 10 s/step everything within 5 tiles renders "0 min" and
+    # sorting on that would order a whole bucket alphabetically ("Loc10" before
+    # "Loc6") while calling itself nearest-first. Name breaks true ties, so the
+    # order stays deterministic.
+    priced.sort()
+    # #826 review (minor 3): cap to match action_tools_for's own enum cap --
+    # nearest-first is already the right truncation order, so this just keeps
+    # the destinations closest to the agent.
+    priced = priced[:DECIDE_MAX_ENUM]
+    return render(
+        "walk_minutes",
+        destinations="; ".join(
+            f"{name} {clock.minutes_for_steps(gap)} min" for gap, name in priced
+        ),
     )
 
 
 def observe_and_decide(
-    game, char, step: int, retrieval=None, *, clock=None, stop_since=0
+    game,
+    char,
+    step: int,
+    retrieval=None,
+    *,
+    clock=None,
+    stop_since=0,
+    waiting=False,
+    act_since=None,
+    walking=None,
 ):
     """Build ``char``'s observation, fold in memory, and ask its agent to decide.
 
@@ -1194,12 +1653,21 @@ def observe_and_decide(
        the first line -- the decision stays deterministic).
     4. **Contextualize** (#580): when the loop threads a ``clock``, append the
        decide-context block -- sim time, current plan stop, elapsed -- after
-       the environment text (never read by the deterministic mock).
+       the environment text (never read by the deterministic mock). A held
+       stop (#826) reports itself finished instead of accruing elapsed
+       minutes.
     5. **Nearby affordances** (#613): append the visible-but-distant tagged
        arenas (:func:`nearby_affordances_line`) so a live brain can choose to
        *travel* toward one. Gated on the same real-brain tool-path predicate
        (:func:`_use_action_tools`) as the decide route below, so the
        deterministic mock never reads this line and the bake stays
+       byte-identical.
+    6. **Walk cost + own recent actions** (#826): append what a walk to each
+       destination costs (:func:`walk_minutes_line`) and then this agent's own
+       last few actions (:func:`recent_actions_block`) -- both after the
+       retrieve above, like the #580 block, and gated on ``clock`` rather than
+       ``_use_action_tools`` (unlike #613's line, these are plain context the
+       mock's first-line read ignores either way), so the bake stays
        byte-identical.
 
     Pass a ``retrieval`` (:class:`sim_config.RetrievalConfig`) to tune the
@@ -1252,7 +1720,27 @@ def observe_and_decide(
     # AFTER the environment text (the mock brain reads only the first line)
     # and AFTER the retrieve above ran on the plain `base` -- the block must
     # never shift which memories surface, because frames embed that list.
-    context = decide_context_block(agent, step, clock, stop_since)
+    activity_now = char.get_property("activity") if act_since is not None else None
+    context = decide_context_block(
+        agent,
+        step,
+        clock,
+        stop_since,
+        waiting,
+        # The run's length rides on the game like sim_clock does (#885's
+        # stamp pattern): only the loop's callers know it, and actions and
+        # this block both read it off the shared object (#891).
+        day_steps=getattr(game, "sim_day_steps", None),
+        # #905: how long the current performed activity has been held, and a
+        # named no-show it is premised on. Threaded only by the live step
+        # loop, like clock -- the bake and offline tests pass none.
+        act_since=act_since,
+        activity_text=activity_now,
+        absent=_absent_person(game, char, activity_now),
+        # #916: mid-walk toward the current stop, say how far from arrival
+        # instead of letting elapsed read as time already spent at the stop.
+        walking=walking,
+    )
     if context:
         base = f"{base}\n\n{context}"
     # Perceivable needs (#594): surface thirst in the decide prompt so a live
@@ -1288,6 +1776,18 @@ def observe_and_decide(
         sleep_spot = known_sleep_location_line(game, char)
         if sleep_spot:
             base = f"{base}\n\n{sleep_spot}"
+    # #826: what a walk costs, and what this agent itself just did. Both are
+    # appended AFTER the retrieve above (like the #580 block), so neither can
+    # shift which memories surface -- frames embed that list. Clock-gated, so
+    # the bake's prompts are unchanged; NOT gated on _use_action_tools, because
+    # (unlike the #613 affordances line, which advertises verbs) these two are
+    # plain context that the mock's first-line read ignores either way.
+    walk = walk_minutes_line(game, char, clock)
+    if walk:
+        base = f"{base}\n\n{walk}"
+    recent = recent_actions_block(agent, step, clock)
+    if recent:
+        base = f"{base}\n\n{recent}"
     observation = format_observation_with_memories(base, relevant)
     agent.last_observation = observation
     # Per-action tools (issue #485): a real supplied brain picks between typed
@@ -1303,14 +1803,30 @@ def observe_and_decide(
     return agent.decide(observation)
 
 
-def maybe_revise_plan(char, trigger, clock=None) -> bool:
+@dataclass(frozen=True)
+class PlanRevisionResult:
+    """What committing a planner proposal changed (#829).
+
+    ``immediate_next`` is deliberately narrower than ``changed``: it is true
+    only when an immediate trigger produced and committed a real first tail
+    stop. Callers use it as authority to end the current activity; a durable
+    commitment memory alone must never interrupt execution.
+    """
+
+    changed: bool = False
+    immediate_next: bool = False
+
+
+def maybe_revise_plan(char, trigger, clock=None) -> PlanRevisionResult:
     """Offer the agent's planner a chance to re-plan the rest of its day.
 
     The step loop calls this at a revision trigger (issue #83, design doc §8): an
     action that failed the precondition gate, or the agent running behind its
     schedule. It hands the trigger to ``planner.revise``; if that proposes a
     *changed* plan, it commits the revised tail onto the running schedule and
-    stashes the new plan on the agent. Returns ``True`` iff the plan changed.
+    stashes the new plan on the agent. Returns a :class:`PlanRevisionResult`;
+    most trigger sites ignore it, while conversation outcomes use
+    ``immediate_next`` to preempt only after a usable next stop was committed.
 
     **The executed/current stop is never disturbed** (design invariant §8). The
     loop, not the planner, is the authority on how far the agent has got: this
@@ -1327,32 +1843,52 @@ def maybe_revise_plan(char, trigger, clock=None) -> bool:
     planner = getattr(agent, "planner", None)
     plan = getattr(agent, "plan", None)
     if planner is None or plan is None:
-        return False
+        return PlanRevisionResult()
+    # The schedule driver, not the planner's possibly stale plan, owns the real
+    # execution boundary. Tell the planner where it is before asking for a
+    # revision, then re-apply the same boundary below as defense in depth.
+    after = getattr(agent.schedule, "stop_index", -1)
+    if isinstance(trigger, RevisionTrigger):
+        trigger = replace(trigger, current_stop_index=after)
     proposed = planner.revise(plan, trigger, agent.memory, clock)
     if proposed is plan or proposed == plan:
-        return False
+        return PlanRevisionResult()
     # Re-anchor: keep the stops the agent has executed or is performing (ground
     # truth from the schedule driver), take only the planner's stops past the
     # current one. Pacing lives on agent.schedule -- the mock client that drives
     # advance()/steps even when a real LLM is the decision brain (Phase A).
-    after = getattr(agent.schedule, "stop_index", -1)
+    proposed_tail = list(proposed.stops[after + 1 :])
+    immediate = (
+        getattr(trigger, "urgency", "normal") == IMMEDIATE_URGENCY
+        and proposed.immediate_next
+        and bool(proposed_tail)
+    )
+    if immediate and proposed_tail:
+        # #838 treats start_hour as a hard "not before" gate. The first tail
+        # stop is due now by the planner's structural proposal marker, so clear
+        # any stale/future anchor.
+        proposed_tail[0] = replace(proposed_tail[0], start_hour=None)
     guarded = replace(
         proposed,
-        stops=plan.stops[: after + 1] + proposed.stops[after + 1 :],
+        stops=plan.stops[: after + 1] + proposed_tail,
         revision=plan.revision + 1,
+        immediate_next=False,
     )
     if guarded.stops == plan.stops:
-        return False  # only higher-level reasoning moved; schedule is unchanged
+        return PlanRevisionResult()  # only higher-level reasoning moved
     agent.plan = guarded
     agent.schedule.replace_schedule(
         [stop.to_schedule_entry() for stop in guarded.stops]
     )
-    return True
+    return PlanRevisionResult(
+        changed=True,
+        immediate_next=immediate,
+    )
 
 
 def apply_conversation_outcome(
     char, partner_name: str, transcript: str, step: int, clock=None
-) -> bool:
+) -> PlanRevisionResult:
     """One post-conversation outcome pass for a single participant (issue #582).
 
     After a meeting actually happened, ask *char*'s brain -- via the
@@ -1362,7 +1898,12 @@ def apply_conversation_outcome(
       the backend-local :data:`CONVERSATION` reason, the ``commitment`` (falling
       back to the transcript) carried as the trigger detail. The existing
       re-anchor guard protects executed/current stops; ``LLMPlanner.revise``
-      already reads trigger detail, and ``MockPlanner.revise`` is a no-op.
+      already reads trigger detail, and ``MockPlanner.revise`` is a no-op. A
+      non-blank ``commitment`` also becomes its own locked PLAN memory
+      (issue #778) in *char*'s own stream -- written before the revision, so
+      the intention survives regardless of what ``maybe_revise_plan`` returns;
+      ``MockPlanner.revise`` being a no-op no longer means the commitment is
+      dropped.
     * ``relationship_note`` -> a high-importance, partner-attributed CHAT memory
       in *char*'s own stream, so retrieval and reflection pick it up, and the
       record is partner-attributed for future social-graph work. Note this does
@@ -1374,13 +1915,14 @@ def apply_conversation_outcome(
     and inert when the brain can't tool-call, or returns nothing usable -- the
     same graceful contract the planner and decide paths follow -- which is also
     why the mock bake (no conversation, so this is never reached) is unchanged.
-    Returns whether the plan changed.
+    Returns the committed revision result. ``immediate_next`` is the narrow
+    authority the conversation lifecycle uses to end a settled current stop.
     """
     agent = char.agent
     client = getattr(agent, "llm_client", None)
     call = getattr(client, "call_tool", None)
     if not callable(call):
-        return False
+        return PlanRevisionResult()
     # Attribute the call to this speaker (usage.py); "role" labels the monitor
     # line. Stamped right before the (sequential) call, so a shared client is
     # attributed correctly per participant.
@@ -1404,7 +1946,7 @@ def apply_conversation_outcome(
     # pass agent.temperature). Don't "fix" this to agent.temperature.
     result = call(messages, CONVERSATION_OUTCOME_TOOL, max_tokens=agent.max_tokens)
     if not isinstance(result, dict):
-        return False
+        return PlanRevisionResult()
     note = result.get("relationship_note")
     if isinstance(note, str) and note.strip():
         note_record = agent.memory.add_chat(
@@ -1421,14 +1963,53 @@ def apply_conversation_outcome(
     # revision; the schema declares plans_changed as a required boolean, so a
     # strict provider always sends one.
     if result.get("plans_changed") is not True:
-        return False
+        return PlanRevisionResult()
     commitment = result.get("commitment")
-    detail = (
-        commitment.strip()
-        if isinstance(commitment, str) and commitment.strip()
-        else transcript
+    has_commitment = isinstance(commitment, str) and bool(commitment.strip())
+    detail = commitment.strip() if has_commitment else transcript
+    # #778: the commitment becomes a durable INTENTION in this agent's own
+    # stream, not merely a revision trigger. Before this, maybe_revise_plan was
+    # its ONLY consumer -- and the default plan_mode "schedule" wires
+    # MockPlanner, whose revise() returns the plan unchanged, so an agreement
+    # the model stated outright ("leaving right now to grab food") was silently
+    # dropped and re-negotiated on every cooldown expiry. Written here, BEFORE
+    # the revision, so it lands whether or not the planner does anything.
+    #
+    # RELATIONSHIP_NOTE_IMPORTANCE, not add_plan's 5.0 default, is load-bearing:
+    # the same conversation mints an 8.0 relationship note and 7-8 #583-scored
+    # talk observations, so a 5.0 intention is crowded out of the retrieved
+    # block by its own partner-chatter.
+    # The transcript fallback is deliberately NOT written: a whole transcript
+    # stored as a "plan" is noise, so only a real commitment persists.
+    #
+    # The lock is INERT today, unlike the note's above: score_new_memories
+    # filters to OBSERVATION/CHAT *before* it consults _IMPORTANCE_LOCKED, so a
+    # PLAN record is already exempt (pinned by
+    # test_reflection_and_plan_records_are_not_rescored). Written anyway so that
+    # widening that kind filter can't silently re-guess an authored importance.
+    #
+    # #815: reflection now sees this PLAN as an explicitly tagged intention, so
+    # it pays into importance_since_reflection again. A conversation with both
+    # a relationship note and a commitment contributes 16.0 toward the default
+    # 30.0 reflection threshold (8.0 from each record).
+    if has_commitment:
+        intent = agent.memory.add_plan(
+            render("commitment_memory", other=partner_name, commitment=detail),
+            turn=step,
+            importance=RELATIONSHIP_NOTE_IMPORTANCE,
+        )
+        intent.metadata[_IMPORTANCE_LOCKED] = True
+    timing = result.get("commitment_timing")
+    urgency = (
+        COMMITMENT_IMMEDIATE
+        if has_commitment and timing == COMMITMENT_IMMEDIATE
+        else "normal"
     )
-    return maybe_revise_plan(char, RevisionTrigger(CONVERSATION, step, detail), clock)
+    return maybe_revise_plan(
+        char,
+        RevisionTrigger(CONVERSATION, step, detail, urgency=urgency),
+        clock,
+    )
 
 
 def score_new_memories(char, step: int) -> None:
@@ -1659,11 +2240,14 @@ def remember_outcome(
     # under the mock and the bundled replay stays byte-identical by vacuity.
     # ponytail: no write-time dedupe -- a real brain that re-picks the same
     # blocked non-talk action every tick accretes identical 3.0 records until
-    # retrieval steers it away (talk misses already settle, #689). Add a
-    # per-(actor, command) cooldown here if that noise shows up in live runs.
+    # retrieval steers it away. Talk misses do settle (#689 for the engine's
+    # `talk`, #793 for Penn's `talk_to`), which bounds their records to one per
+    # settle window rather than one per tick -- ~3 across a 90-step pair
+    # cooldown. Add a per-(actor, command) cooldown here if that noise shows up
+    # in live runs.
     if fail_reason is not None:
         text = render("reflection", failed=True, command=command, reason=fail_reason)
-        agent.memory.add_observation(text, turn=step, importance=3.0)
+        agent.memory.add_observation(text, turn=step, importance=3.0, tags={ACTION_TAG})
         return
 
     # The #300 water arc marks the sicken/recover *transition* with one-shot
@@ -1757,12 +2341,12 @@ def remember_outcome(
         text = render("reflection", verb=verb, command=command)
         importance = 2.0
     elif verb == "talk_to":
-        # #614: nothing at parse time. The intent memory ("I went to talk to
-        # X ...") is written by maybe_converse's phase 1.5 IFF the conversation
-        # actually opens -- a request that phase 1.5 drops (pair on cooldown,
-        # target busy/walking) would otherwise stamp a false dialogue-tier
-        # record, and the un-settled initiator can retry every tick for the
-        # whole cooldown window.
+        # #614: nothing at parse time -- the outcome is not known yet. Phase 1.5
+        # of maybe_converse owns both branches: the intent memory ("I went to
+        # talk to X ...") IFF the conversation actually opens, so a dropped
+        # request never stamps a false dialogue-tier record, and (#793) a call
+        # BACK into this function's failure branch when it cannot open, so the
+        # drop is not invisible either.
         return
     elif verb == "wait":
         # Spacer / one-tick idle (#300 mock spacers, or a brain that omitted
@@ -1779,12 +2363,109 @@ def remember_outcome(
     else:
         text = render("reflection", verb=verb, command=command)
         importance = 1.0
-    record = agent.memory.add_observation(text, turn=step, importance=importance)
+    record = agent.memory.add_observation(
+        text, turn=step, importance=importance, tags={ACTION_TAG}
+    )
     # #583: the sick/recovered drink outcome is event knowledge the model can't
     # derive from text (the #300 water arc's ground-truth 8.0/5.0), so lock it --
     # score_new_memories skips locked records rather than re-guessing them.
     if sick or recovered:
         record.metadata[_IMPORTANCE_LOCKED] = True
+
+
+def remember_decide_timeout(char, step: int) -> None:
+    """Record that ``char``'s decide blew its wall-clock budget (#758).
+
+    The timeout counterpart of :func:`remember_outcome`'s #636 failure branch,
+    deliberately deferred there: a decide that outlives ``decide_timeout``
+    (the parallel-decide -> idle -> late-answer path, #366) chose nothing, so
+    there is no command to remember -- but writing *nothing* leaves repeated
+    timeouts on the same situation invisible to the agent's future reasoning.
+    "I was thinking about what to do at <place> but couldn't decide in time."
+    keys the memory to where the agent stood, so retrieval surfaces it exactly
+    when the agent faces that situation again.
+
+    Same conventions as the #636 failure memory: importance 3.0 (above routine
+    2.0 successes, below the 6-8 causal signals) and NOT locked, so #583's
+    score_new_memories re-scores it at the agent's next completed decide --
+    its unscored-watermark scan picks the record up then; scoring *here* would
+    send another synchronous call to the very brain that just blew its budget,
+    stalling the tick the budget protects.
+    """
+    place = char.location.name if char.location is not None else ""
+    text = render("reflection", timed_out=True, place=place)
+    char.agent.memory.add_observation(
+        text, turn=step, importance=3.0, tags={ACTION_TAG}
+    )
+
+
+def settle_after_dead_talk(st: dict, step: int, steps: int) -> None:
+    """Brief settle after a talk that produced no real conversation (#689).
+
+    A talk is instantaneous (it never sets `performing`), so without this the
+    agent is instantly `due` again every tick until the #86 pair cooldown
+    expires -- a fully paid decide+score retry loop. `credit_stop = False` is
+    load bearing: it makes this settle's expiry (the top-of-tick pre-pass) read
+    `credited = False`, which skips `schedule.advance()` and un-latches without
+    it -- a dead talk never completed a real schedule stop.
+
+    Both dead-talk shapes settle here (#793). The engine's `talk` verb resolves
+    empty or blocked inside :func:`run_simulation.step`, which calls this from
+    the resolve loop; Penn's own `talk_to` (#614) instead defers to
+    :func:`maybe_converse`'s phase 1.5, whose drop paths call this once they
+    know the request cannot open. ``steps`` is
+    ``CognitionConfig.dead_talk_settle_steps`` on the live path -- passed as a
+    plain int, not the config object, so both callers stay flat-kwarg.
+    """
+    st["performing"] = True
+    st["credit_stop"] = False
+    st["perform_until"] = step + steps
+
+
+def settle_after_instant_stop_work(st: dict, step: int, steps: int) -> None:
+    """Settle after an instantaneous verb satisfied the scheduled stop (#896).
+
+    A stop whose activity resolves through an instantaneous verb (#300
+    get/drink, #616 check_out_book -- no ``duration_minutes`` in the schema,
+    so no perform latch) used to leave ``performing`` False forever: the
+    pointer advances only in the pre-pass that consumes an expired latch, so
+    the finished stop pinned and the agent re-decided against it every tick
+    (Maya: 16 ``check_out_book`` calls on one library stop). Same family
+    pattern as :func:`settle_after_dead_talk`, credit flipped -- this settle
+    completed the stop's real work, so its expiry must credit the stop and
+    move the pointer. ``steps`` is the stop's authored ``schedule.steps``,
+    trusted as-is like the perform branch's.
+    """
+    st["performing"] = True
+    st["credit_stop"] = True
+    st["perform_until"] = step + steps
+
+
+def settle_after_opened_talk(st: dict, step: int) -> bool:
+    """Give a successful ``talk_to`` initiator a consumable stop credit (#837).
+
+    Penn's explicit ``talk_to`` is instantaneous at the action seam: when its
+    deferred request opens, the initiator is ``conversing`` but not
+    ``performing`` and has no ``perform_until``.  Merely setting
+    ``credit_stop`` there would therefore do nothing -- the schedule-advance
+    pre-pass only consumes credits from an expired activity latch.
+
+    Once the first real line exists, turn that initiator into a completed
+    one-shot activity.  ``conversing`` keeps the latch pinned through the
+    multi-tick exchange and its viewer playback hold; after release, the next
+    pre-pass consumes it through the same path as ``perform``.  An initiator
+    that was already performing keeps its existing duration, whose expiry is
+    already a valid consumption site.
+
+    Empty opens do not call this helper and remain dead talks, settled by
+    :func:`settle_after_dead_talk` with ``credit_stop = False``.
+    """
+    if st.get("performing"):
+        return False
+    st["performing"] = True
+    st["credit_stop"] = True
+    st["perform_until"] = step
+    return True
 
 
 @dataclass
@@ -1835,18 +2516,144 @@ def _publish_chat(state, frame, a_name: str, b_name: str, convo_obj) -> None:
             frame[nm]["chat"] = lines
 
 
-def _finish_conversation(a, b, convo_obj, step, cooldowns, clock) -> int:
+def _pair_convos(cooldowns, key) -> tuple[int, int]:
+    """``(step this pair last finished talking, how many conversations they held)``.
+
+    Tolerates a bare ``int`` value -- what an entry written before #803 looks like,
+    and what tests still seed (``{frozenset(("Ada", "Bo")): 0}``). It reads as "one
+    conversation, ended at step 0": the plain window, exactly what it meant
+    before."""
+    value = cooldowns.get(key)
+    if value is None:
+        return -(10**9), 0  # never talked -- the sentinel clears any window
+    if isinstance(value, int):
+        return value, 1
+    return value
+
+
+def _on_pair_cooldown(cooldowns, key, step: int, cooldown_steps: int) -> bool:
+    """Whether this pair may not open a conversation yet (issue #803).
+
+    Every conversation a pair holds adds another ``cooldown_steps`` to their next
+    wait -- so their 2nd waits one window, their 3rd two, up to
+    ``CONVERSATION_COOLDOWN_MAX_ESCALATION`` -- and two residents who keep
+    re-meeting drift apart instead of re-opening the same conversation the instant
+    the window lapses. #803 measured four near-identical Omar/Tanaka meetings 95
+    steps apart -- the cooldown plus one open -- each greeting the other cold,
+    because a flat window is not a bound on *repetition*: it only sets its tempo.
+
+    A pair that has talked ONCE waits the plain window, unchanged, so this can
+    never suppress socializing that was already happening.
+
+    The count never decays, and that is what the cap is for. ``cooldowns`` is
+    rebuilt by ``serve_penn._build`` -- boot, ``POST /config``, ``reset()``,
+    resume -- which for an ordinary one-day run means once per day; but
+    ``run_simulation.simulate()`` and an ``--endless`` live run each hold ONE dict
+    for the whole run, so there the count only ever climbs. Capped, a chatty
+    pair's wait tops out; uncapped, they would eventually stop speaking for good.
+    """
+    last, held = _pair_convos(cooldowns, key)
+    windows = min(held, CONVERSATION_COOLDOWN_MAX_ESCALATION)
+    return step - last < windows * cooldown_steps
+
+
+def _finish_conversation(
+    a, b, convo_obj, step, cooldowns, clock
+) -> tuple[int, dict[str, PlanRevisionResult]]:
     """End-of-conversation bookkeeping: record the pair cooldown and run the
-    #582 outcome pass for each participant. Returns 1 if the conversation
-    produced any lines (a real meeting), else 0 -- so a mock/empty conversation
-    sets no cooldown and counts for nothing."""
+    #582 outcome pass for each participant. Returns ``(completed, revisions)``:
+    completed is 1 for a real meeting and 0 for an empty/mock exchange;
+    revisions maps participant names to their committed plan results so the
+    caller that owns runtime state can apply #829 preemption.
+
+    The cooldown entry carries the running conversation count with it, which is
+    what escalates the pair's next window (:func:`_on_pair_cooldown`, #803)."""
     if not convo_obj.happened:
-        return 0
-    cooldowns[frozenset((a.name, b.name))] = step
+        return 0, {}
+    key = frozenset((a.name, b.name))
+    _, held = _pair_convos(cooldowns, key)
+    cooldowns[key] = (step, held + 1)
     transcript = convo_obj.transcript()
-    apply_conversation_outcome(a, b.name, transcript, step, clock=clock)
-    apply_conversation_outcome(b, a.name, transcript, step, clock=clock)
-    return 1
+    revisions = {
+        a.name: apply_conversation_outcome(a, b.name, transcript, step, clock=clock),
+        b.name: apply_conversation_outcome(b, a.name, transcript, step, clock=clock),
+    }
+    return 1, revisions
+
+
+def _credit_stop_for_conversation(char, st) -> bool:
+    """A real conversation held while settled completes the agent's current
+    scheduled stop (issue #778; place requirement dropped by #831).
+
+    ``schedule.advance()`` fires from three places -- ``run_simulation``'s
+    latch-expiry pre-pass (the crediting one this docstring is about), its
+    #826 anchor-hold retry, and ``serve_penn``'s resume fast-forward (#870) --
+    and (before #831) the pre-pass credited only a settle at the scheduled
+    place. A *dropped* ``talk_to`` (no partner, busy, on cooldown) is
+    an instantaneous command that routes through ``settle_after_dead_talk``,
+    which sets ``credit_stop = False`` (#689, correctly: a *dead* talk
+    completed nothing). This sets the pre-pass's own ``credit_stop`` flag
+    rather than inventing a second signal for it to consult. ``credit_stop``
+    is read in exactly one place (that pre-pass) and is re-stamped by every
+    path that sets ``perform_until`` -- ``settle_after_dead_talk``,
+    ``settle_after_opened_talk``, and the decide-time perform branch -- so it
+    is one-shot by construction: a credit written here is consumed by the
+    settle it was earned at and cannot leak forward onto an unrelated stop.
+
+    The only caller is the conversation-end loop in this module
+    (:func:`_advance_conversation`). Phase 2's proximity pairing
+    (:func:`maybe_converse`) requires ``performing`` for both agents before it
+    opens a conversation, so those participants are latched by construction.
+    Since #837, phase 1.5 gives a successful ``talk_to`` initiator its own
+    completed latch through :func:`settle_after_opened_talk` as soon as the
+    first real line exists. The partner is credited only if it was already
+    performing; a conversation started mid-walk by ``maybe_react`` remains
+    uncredited because walking alone establishes no activity latch.
+
+    For an agent latched by a *perform*, ``credit_stop`` is already ``True``
+    (the decide-time branch sets it unconditionally, #831), so this call is a
+    no-op there. The case where #831's dropped place gate changes the outcome
+    is an agent latched by a **dead-talk settle** (``credit_stop`` left
+    ``False``) who then holds a real conversation, wherever it happens.
+
+    ``performing`` is the SOLE guard left, and it is load-bearing -- not
+    because a stop the agent never reached must not count (#831's own rule
+    says the opposite: an unreached stop IS creditable if the activity ran
+    somewhere), but because ``performing`` guarantees a ``perform_until``
+    exists for the pre-pass to consume this credit at. Relaxing this guard to
+    accept ``conversing`` would still be a wasted write for reactive
+    mid-walk conversations, which have no ``perform_until``. The explicit
+    opener instead establishes the missing consumption site narrowly.
+
+    Deliberately does NOT write ``activity``. The scheduled activity is not
+    necessarily what the agent did (under a real brain ``PerformPenn`` sets it
+    from the model's own argument), and it would not clear the frame's
+    ``"spending time"`` placeholder anyway -- ``st["desc"]`` is stamped only at
+    decide time. What clears the placeholder is the advance this credit unlocks:
+    the agent travels, arrives, and performs the next stop, stamping its own
+    activity before the next desc is computed.
+
+    Returns whether the stop was credited (for tests; callers ignore it).
+    """
+    if not st.get("performing"):
+        return False
+    st["credit_stop"] = True
+    return True
+
+
+def _expire_immediate_commitments(state, revisions, step: int) -> set[str]:
+    """Expire settled latches whose valid immediate tails were committed (#829).
+
+    Returns the names changed for focused tests/diagnostics. A reactive
+    mid-walk participant has no activity latch, so it keeps its path and waits
+    for a separately designed interruption policy.
+    """
+    expired = set()
+    for name, revision in revisions.items():
+        if revision.immediate_next and state[name].get("performing"):
+            state[name]["perform_until"] = step
+            expired.add(name)
+    return expired
 
 
 def _advance_conversation(
@@ -1876,17 +2683,43 @@ def _advance_conversation(
     speaker = chars[ac.next_speaker]
     listener = chars[ac.b if ac.next_speaker == ac.a else ac.a]
     _stamp_convo_ctx(speaker, step)
-    cont = convo.exchange(game, ac.convo, speaker, listener, turn=step)
+    cont = convo.exchange(
+        game,
+        ac.convo,
+        speaker,
+        listener,
+        turn=step,
+        # #780: the opt-in. Only the generative-agents path grounds its
+        # dialogue in the world's real geography; Action Castle / hw1_llm keep
+        # the unchanged prompt because they never pass these.
+        places=sorted(game.locations),
+        visited=state[ac.next_speaker].get("visited", ()),
+    )
     _publish_chat(state, frame, ac.a, ac.b, ac.convo)
     if cont and len(ac.convo.lines) < max_exchanges:
         ac.next_speaker = ac.b if ac.next_speaker == ac.a else ac.a
         state[ac.a]["conversing"] = True
         state[ac.b]["conversing"] = True
         return False, 0
-    delta = _finish_conversation(
+    if ac.convo.happened:
+        # #778: credit the scheduled stop this conversation just completed.
+        # #831 dropped the place check from `_credit_stop_for_conversation`, so
+        # this credit no longer reads the schedule at all -- doing it before
+        # the outcome pass below (whose plan revision can rewrite the
+        # schedule) is no longer load-bearing, just kept for its own sake.
+        for nm in (ac.a, ac.b):
+            _credit_stop_for_conversation(chars[nm], state[nm])
+    delta, revisions = _finish_conversation(
         chars[ac.a], chars[ac.b], ac.convo, step, cooldowns, clock
     )
     if ac.convo.happened:
+        # #829: an immediate commitment may end a settled activity early only
+        # after its valid next stop has been committed. Do not advance here:
+        # playback keeps `conversing` true, then the normal latch-expiry
+        # pre-pass consumes this conversation's existing credit exactly once.
+        # A reactive mid-walk conversation has no activity latch and remains
+        # deliberately non-preemptive.
+        _expire_immediate_commitments(state, revisions, step)
         ac.hold_until = step + len(ac.convo.lines) * line_playback_steps
         state[ac.a]["conversing"] = True
         state[ac.b]["conversing"] = True
@@ -1908,6 +2741,7 @@ def maybe_converse(
     cooldown_steps: int = CONVERSATION_COOLDOWN_STEPS,
     max_exchanges: int = CONVERSATION_MAX_EXCHANGES,
     line_playback_steps: int = CONVERSATION_LINE_PLAYBACK_STEPS,
+    dead_talk_settle_steps: int = DEAD_TALK_SETTLE_STEPS,
     clock=None,
     active: dict | None = None,
 ) -> int:
@@ -1918,6 +2752,11 @@ def maybe_converse(
     pair frozenset, persisted across ticks) holds each in-progress
     :class:`ActiveConversation`. Every step this function
 
+    0. **accumulates** each resident's real visit history into
+       ``state[name]["visited"]`` (issue #780) -- a list in first-visit order,
+       grown for every resident in ``order`` whether or not it converses this
+       step, so a later conversation can ground its dialogue in where the
+       speaker has actually been;
     1. **advances** each in-progress conversation by exactly one
        :func:`conversation.exchange` line -- publishing the transcript-so-far on
        both cards. When an end condition fires (empty utterance, wrap-up flag, or
@@ -1945,6 +2784,19 @@ def maybe_converse(
     """
     active = active if active is not None else {}
     completed = 0
+
+    # (0) #780: remember every place each resident has actually stood in, so
+    # the dialogue seam can tell a conversing agent where it has really been.
+    # Nothing in the engine tracks this: Location.has_been_visited is global
+    # AND player-only, and Travel marks nothing. A list in first-visit order,
+    # never a set -- this reaches the LLM request and cassette keys hash it.
+    for nm in order:
+        here = getattr(getattr(chars.get(nm), "location", None), "name", None)
+        if not here:
+            continue
+        been = state[nm].setdefault("visited", [])
+        if here not in been:
+            been.append(here)
 
     # (1) Advance every in-progress conversation by one line, and release any
     # held pair whose playback window has elapsed (#673).
@@ -1993,10 +2845,13 @@ def maybe_converse(
     # tick left a one-shot marker; open that conversation NOW, before the
     # proximity pair scan, so the explicit choice wins the tick and the first
     # line is spoken this same step (mirroring phase 2's start-and-advance).
-    # The marker is consumed unconditionally: a request that cannot start
-    # (target left / busy / mid-walk, pair on cooldown) is dropped and the
-    # initiator -- unpinned, un-settled -- simply re-decides next tick. Mock
-    # brains never emit talk_to, so this loop is inert offline.
+    # The marker is consumed unconditionally, but a request that cannot open
+    # (target left / busy / mid-walk, pair on cooldown) is no longer dropped
+    # silently (#793): TalkTo.apply_effects already returned `ok` and cannot
+    # know the outcome, so THIS is the only code that does -- it owes the
+    # initiator both halves of what every other failed action gets, a memory
+    # naming the reason and a settle bounding the retry. Mock brains never emit
+    # talk_to, so this loop is inert offline.
     for name in order:
         char = chars[name]
         target_name = char.get_property("talk_request")
@@ -2006,29 +2861,71 @@ def maybe_converse(
         topic = char.get_property("talk_topic") or ""
         char.set_property("talk_topic", False)
         target = chars.get(target_name)
-        if (
-            name in busy
-            or target is None
-            or target_name in busy
-            or target.location is not char.location
-            or state[target_name]["path"]
-            or state[target_name].get("conversing")
-            or char.get_property(Property.IS_SLEEPING)
-            or target.get_property(Property.IS_SLEEPING)
-        ):
-            continue
         key = frozenset((name, target_name))
-        if key in active or step - cooldowns.get(key, -(10**9)) < cooldown_steps:
+        # Why this request cannot open: one short first-person clause per gate,
+        # in the same shape as a parser fail message. The reason IS the payload
+        # -- a bare "it didn't work" gives the model nothing to steer around,
+        # which is how #793's 112-decision streak happened. Same gates as
+        # before, same outcome (every branch drops); only attribution is new.
+        # `target is None` must precede the branches that index
+        # state[target_name], exactly as the old or-chain short-circuited.
+        if name in busy or key in active:
+            reason = "I was already in a conversation."
+        elif target is None or not convo.can_converse(game, char, target):
+            # Proximity gate (#835): NOT `target.location is char.location`.
+            # A Penn building interior -- or the whole outdoor hub -- is one
+            # ~2000-tile engine Location, so sharing a Location says nothing
+            # about how far apart two agents stand; the old identity check
+            # paired residents tens of tiles apart (or in different visual
+            # buildings) into a conversation that renders as stretching across
+            # the map. Route through the same `can_converse` (audience_for ->
+            # can_perceive, Chebyshev tile_gap <= vision_r) the auto-pairing
+            # scan below already uses, so this explicit opener and the
+            # automatic path agree on who is close enough to talk to.
+            reason = "they were not close enough to talk to."
+        elif char.get_property(Property.IS_SLEEPING):
+            reason = "I was asleep."
+        elif target.get_property(Property.IS_SLEEPING):
+            reason = "they were asleep."
+        elif target_name in busy or state[target_name].get("conversing"):
+            reason = "they were already talking with someone else."
+        elif state[target_name]["path"]:
+            reason = "they were walking somewhere else."
+        elif _on_pair_cooldown(cooldowns, key, step, cooldown_steps):
+            # Not "we had only just finished talking" any more: with the #803
+            # escalation this can fire long after the last line, and the reason is
+            # the payload the brain steers on -- it shouldn't claim a recency the
+            # agent can see is false.
+            reason = "we have talked recently, and it's too soon to talk again."
+        else:
+            reason = None
+        if reason is not None:
+            # Renders through reflection.prompty's existing #636 `failed`
+            # branch: 'I tried to "talk_to Bo about the exam" but it didn't
+            # work: they were not there.' Importance 3.0 and unlocked, like
+            # every other failure memory, so retrieval surfaces it on the next
+            # decide and #583 re-scores it. The command is rebuilt from the
+            # marker (the canonical target name) rather than the brain's raw
+            # text, in the exact form TalkTo parses.
+            command = f"talk_to {target_name}" + (f" about {topic}" if topic else "")
+            remember_outcome(char, command, step, fail_reason=reason)
+            settle_after_dead_talk(state[name], step, dead_talk_settle_steps)
             continue
         # Record the intent only now that the conversation actually opens (a
         # dropped request must leave no false record -- the un-settled
         # initiator can retry every tick), and BEFORE the first line: the
         # opener's partner-name retrieval surfaces this fresh topic memory.
         # That's the #614 topic-threading seam, dialogue-tier importance.
+        # #826 review: tagged like every other own-action write site (the
+        # #793 failure branch a few lines above already is, via
+        # remember_outcome) -- without this a talk that actually happened
+        # never appeared in the agent's own "Recently, you:" history, while a
+        # dropped one did.
         char.agent.memory.add_observation(
             render("reflection", verb="talk_to", person=target_name, topic=topic),
             turn=step,
             importance=convo.DEFAULT_CHAT_IMPORTANCE,
+            tags={ACTION_TAG},
         )
         ac = ActiveConversation(
             a=name,
@@ -2053,11 +2950,26 @@ def maybe_converse(
             clock,
             line_playback_steps,
         )
+        if ac.convo.happened:
+            # #837: unlike proximity pairing, an explicit talk_to opener was
+            # never performing, so the conversation-end credit had no
+            # perform_until for the pre-pass to consume. The first real line
+            # proves this was not a dead talk; give only its initiator the
+            # completed one-shot latch. `conversing` holds it until release.
+            settle_after_opened_talk(state[name], step)
         completed += delta
         if ended:
             del active[key]
             if not ac.convo.happened:
-                continue  # opened with nothing -> reserve no one
+                # Opened with nothing -> reserve no one. The same free retry as
+                # a dropped request (#793): _finish_conversation records no
+                # cooldown when nothing was said, so without a settle the
+                # initiator is `due` again next tick with an unchanged world.
+                # No failure memory here -- the topic-intent memory above is
+                # already written, and #689's empty-talk case likewise only
+                # settles.
+                settle_after_dead_talk(state[name], step, dead_talk_settle_steps)
+                continue
         busy.update((name, target_name))
 
     settled = [
@@ -2075,7 +2987,7 @@ def maybe_converse(
         if a.name in spoken or b.name in spoken:
             continue
         key = frozenset((a.name, b.name))
-        if step - cooldowns.get(key, -(10**9)) < cooldown_steps:
+        if _on_pair_cooldown(cooldowns, key, step, cooldown_steps):
             continue
         ac = ActiveConversation(
             a=a.name,
@@ -2310,7 +3222,7 @@ def maybe_react(
         busy = {n for ac in active.values() for n in (ac.a, ac.b)}
         if reactor in busy or other in busy:
             continue
-        if step - cooldowns.get(key, -(10**9)) < cooldown_steps:
+        if _on_pair_cooldown(cooldowns, key, step, cooldown_steps):
             continue  # they talked recently; crossing paths again isn't news
         last = last_react.get(reactor)
         if last is not None and step - last < react_cooldown_steps:

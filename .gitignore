@@ -200,6 +200,8 @@ godot-generative-agents/scripts/building_labels.gd.uid
 # Claude Code local git worktrees (per-dev; never commit)
 .claude/worktrees/
 .worktrees/
+# Same for Codex, which keeps its own worktrees under .codex/
+.codex/
 
 notebooks/hw3_solution/fine_tuning_item_specifications.jsonl
 notebooks/hw3_solution/fine_tuning_location_descriptions.jsonl
@@ -256,6 +258,9 @@ godot-generative-agents/web/public/docs/
 godot-generative-agents/web/node_modules/
 godot-generative-agents/web/dist/
 godot-generative-agents/web/*.tsbuildinfo
+# Vercel CLI local state — `vercel link` writes the org/project ids and pulled env
+# here, per dev. The deploy config that IS shared lives in web/vercel.json (#882).
+godot-generative-agents/web/.vercel/
 # (The app's package.json / tsconfig*.json / committed replay are tracked normally
 # now that the blanket *.json ignore is gone; the build dirs above stay excluded.)
 app/dist/

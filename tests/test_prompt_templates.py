@@ -132,6 +132,52 @@ def test_npc_dialogue_bare():
     assert out == f"You are an NPC in a text adventure game.\n{_DIALOGUE}"
 
 
+# ---------------------------------------------------------------------------
+# place_grounding -- the #780 dialogue place-grounding block
+# ---------------------------------------------------------------------------
+
+_OFF_MAP = (
+    "Anywhere else you mention is somewhere from your life outside this world. "
+    "You may talk about it, but do not claim to have just been there, and do "
+    "not invite anyone to meet you there."
+)
+
+
+def test_place_grounding_full():
+    # `visited` excludes wherever the speaker is standing -- that is named on its
+    # own line, and _place_grounding_block filters it out of the been-to list. The
+    # inputs here mirror the template's documented sample for that reason.
+    out = prompt_templates.render(
+        "place_grounding",
+        places="College Hall, Houston Hall, Irvine Auditorium",
+        here="Houston Hall",
+        visited="College Hall",
+    )
+    assert out == (
+        "Places in this world you can walk to: "
+        "College Hall, Houston Hall, Irvine Auditorium.\n"
+        "You are at Houston Hall.\n"
+        "You have been to: College Hall.\n"
+        f"{_OFF_MAP}"
+    )
+
+
+def test_place_grounding_drops_empty_lines():
+    # Early in a run an agent has been nowhere yet, and a game may not know
+    # where the speaker is standing: both sentences vanish rather than
+    # rendering blank.
+    out = prompt_templates.render(
+        "place_grounding",
+        places="College Hall, Houston Hall",
+        here="",
+        visited="",
+    )
+    assert out == (
+        "Places in this world you can walk to: College Hall, Houston Hall.\n"
+        f"{_OFF_MAP}"
+    )
+
+
 # ----------------------------------------------------------------------
 # reflect_system: the periodic-reflection system message (issue #84)
 # ----------------------------------------------------------------------
@@ -139,9 +185,22 @@ def test_npc_dialogue_bare():
 
 def test_reflect_system():
     assert prompt_templates.render("reflect_system") == (
-        "You are reflecting on your own recent experiences to form higher-level "
-        "insights about yourself, the people around you, and your situation. "
-        "Ground every insight only in the memories you are given."
+        "You are reflecting on recent memory records to form higher-level insights "
+        "about yourself, the people around you, your situation, and your intentions.\n"
+        "\n"
+        "Each numbered record has a temporal marker:\n"
+        "- [lived] describes something you experienced or did.\n"
+        "- [conversation] describes a conversation that happened, but its text may "
+        "mention invitations, commitments, or other future events that have not "
+        "happened.\n"
+        "- [inferred] is a prior higher-level conclusion, not a new firsthand event.\n"
+        "- [intended] is a plan or commitment that may not have happened.\n"
+        "- [memory] has unknown temporal status.\n"
+        "\n"
+        "Never treat a future event mentioned in any record as completed unless a "
+        "[lived] record explicitly confirms it. Preserve these distinctions in your "
+        "reasoning, but do not include the bracketed marker tokens in your insight. "
+        "Ground every insight only in the memory records you are given."
     )
 
 

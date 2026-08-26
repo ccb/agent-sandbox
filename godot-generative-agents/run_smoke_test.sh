@@ -38,11 +38,13 @@ fi
 # the success sentinel the test prints — grep -q + pipefail fails either way.
 "$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_replay_markers.gd 2>&1 \
   | tee /dev/stderr | grep -q "all checks passed"
+"$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_replay_codec.gd 2>&1 \
+  | tee /dev/stderr | grep -q "all checks passed"
+"$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_replay_load_error.gd 2>&1 \
+  | tee /dev/stderr | grep -q "all checks passed"
 "$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_action_tally.gd 2>&1 \
   | tee /dev/stderr | grep -q "all checks passed"
 "$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_simulation_setup.gd 2>&1 \
-  | tee /dev/stderr | grep -q "all checks passed"
-"$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_day_plan_model.gd 2>&1 \
   | tee /dev/stderr | grep -q "all checks passed"
 "$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_snapshot_export.gd 2>&1 \
   | tee /dev/stderr | grep -q "all checks passed"
@@ -51,6 +53,10 @@ fi
 "$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_clip_export.gd 2>&1 \
   | tee /dev/stderr | grep -q "all checks passed"
 "$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_thinking_indicator.gd 2>&1 \
+  | tee /dev/stderr | grep -q "all checks passed"
+"$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_bubble_anchor.gd 2>&1 \
+  | tee /dev/stderr | grep -q "all checks passed"
+"$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_dialogue_log.gd 2>&1 \
   | tee /dev/stderr | grep -q "all checks passed"
 "$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_agent_fanout.gd 2>&1 \
   | tee /dev/stderr | grep -q "all checks passed"
@@ -69,6 +75,10 @@ fi
 "$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_replay_save.gd 2>&1 \
   | tee /dev/stderr | grep -q "all checks passed"
 "$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_run_row.gd 2>&1 \
+  | tee /dev/stderr | grep -q "all checks passed"
+"$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_ui_contrast.gd 2>&1 \
+  | tee /dev/stderr | grep -q "all checks passed"
+"$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_emoji_fallback.gd 2>&1 \
   | tee /dev/stderr | grep -q "all checks passed"
 
 # exec so this script's exit code IS the smoke test's quit code (0 pass / 1 fail).

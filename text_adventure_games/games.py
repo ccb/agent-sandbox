@@ -24,6 +24,7 @@ _AFFORDANCE_KEYS = (
     Property.FLAMMABLE,
     Property.WEARABLE,
     Property.WIELDABLE,
+    Property.IS_DEVICE,
 )
 # objectect properties as an enum
 

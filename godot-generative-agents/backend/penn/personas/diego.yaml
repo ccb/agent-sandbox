@@ -39,14 +39,14 @@ schedule:
   # Diego froze at this stop. Keep activities clear of verb substrings
   # ("ate ", "eat ", "get ", "take ", "drink", ...) until the parser gives
   # `perform` precedence.
-  activity: refining the model into the evening
+  activity: refining the model
   emoji: ✏️
   is_work: true
   steps: 60
 # Turns in for the night (#931 follow-up): see sofia.yaml's matching stop --
 # Houston Hall -- Reading Room is the only `sleepable` spot in the world.
 - place: Houston Hall — Reading Room
-  activity: turning in for the night
+  activity: turning in for bed
   emoji: 😴
   commands:
   - sleep

@@ -1,0 +1,2 @@
+{"actor":"Professor Tanaka","turn":131,"location":"Irvine Auditorium","desired":"organizing markers by color","reason":"","trigger":"parse_gap","goals":[],"scope":[],"raw_command":"organizing markers by color","meta":{}}
+{"actor":"Professor Tanaka","turn":131,"location":"Irvine Auditorium","desired":"ensuring writing surface is pristine","reason":"","trigger":"parse_gap","goals":[],"scope":[],"raw_command":"ensuring writing surface is pristine","meta":{}}

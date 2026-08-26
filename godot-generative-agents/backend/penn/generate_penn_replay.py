@@ -35,6 +35,7 @@ import os
 # sibling `penn_world` import works because Python puts this script's own
 # directory on sys.path when it is run as a script.
 from backend.contract import SCHEMA_VERSION
+from backend.replay_codec import slim_frames
 from backend.run_store import DEFAULT_RUNS_DIR, RunStore
 from backend.run_simulation import simulate
 from backend.cognition import DEFAULT_VISION_R
@@ -378,6 +379,12 @@ def main() -> int:
             # server). The viewer's social-graph pop-up (#252) contrasts it with
             # the conversations that actually happen over the run.
             "relationships": pw.relationships,
+            # #780: the world's real place names, so the offline believability
+            # audit can tell an invented place from a real one without needing
+            # the world YAML. Additive + sorted: contract.py's policy is that
+            # additive optional meta fields do not bump SCHEMA_VERSION, and a
+            # sorted list keeps the bake byte-identical across hash seeds.
+            "locations": sorted(loc["name"] for loc in pw.locations),
         },
         "frames": [
             {name: replay_frame_entry(f[name]) for name in order} for f in frames
@@ -402,16 +409,27 @@ def main() -> int:
     # has no `meetings` block.
     _inject_scripted_conversations(replay, pw.meetings, DEFAULT_VISION_R)
 
+    # The written FILE is slim (#941): carry-forward fields are omitted when
+    # unchanged from the previous frame, or the showcase-scale bake is tens of
+    # MB of repetition the WASM viewer cannot parse. Readers fatten on load
+    # (viewer.gd / useReplay.ts / believability.load_replay). `replay` itself
+    # keeps the fat frames — the store persist below and in-process consumers
+    # rely on the full rows.
+    slim_file = dict(replay)
+    slim_file["frames"] = slim_frames(replay["frames"])
+
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     with open(out_path, "w") as fh:
-        json.dump(replay, fh, ensure_ascii=False)
+        json.dump(slim_file, fh, ensure_ascii=False)
     print(
         f"Wrote {os.path.relpath(out_path, _REPO)} "
         f"({len(frames)} steps, {len(order)} personas)."
     )
 
     # Optionally mirror the bake into the durable store (#304) -- AFTER the
-    # meeting injection above, so the persisted frames byte-match the file's.
+    # meeting injection above. The store keeps the FAT frames (#941): its
+    # readers (analyze_run, the resume path) index rows in isolation, and
+    # export re-slims deterministically, so fatten(file) == store holds.
     # The mock bake runs without a ledger, so cost is simply 0.
     if args.persist:
         store = RunStore(args.runs_dir)

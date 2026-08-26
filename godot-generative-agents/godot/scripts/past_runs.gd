@@ -20,8 +20,11 @@ const SETUP_SCENE := "res://scenes/simulation_setup.tscn"
 const RunRow := preload("res://scripts/run_row.gd")
 const ReplaySave := preload("res://scripts/replay_save.gd")
 
-const HINT_COLOR := Color(0.42, 0.32, 0.24)
-const ERROR_COLOR := Color(0.82, 0.20, 0.15)
+# Muted brown for the small print, legible on the parchment panel — see
+# agent_panel.gd's STATUS_COLOR for the 6.7:1 contrast rationale.
+const HINT_COLOR := Color(0.32, 0.24, 0.17)
+# Alarm red, darkened to clear AA on the parchment (5.0:1) — see main_menu.gd.
+const ERROR_COLOR := Color(0.62, 0.15, 0.11)
 
 var _url := ""
 var _token := ""
@@ -41,7 +44,14 @@ func _ready() -> void:
 	_token = LaunchConfig.live_token
 	_build_ui()
 	_http = HTTPRequest.new()
-	_http.timeout = 10.0
+	# "open"/"export" download a whole replay — tens of MB for a full 5-agent
+	# day. Without use_threads the body drains on the main thread one chunk per
+	# frame (~4 MB/s at 64 KiB × 60 fps), so a big replay blew the old 10 s
+	# timeout as "Couldn't reach the backend". Threaded + 1 MiB chunks, the same
+	# body arrives in about a second; 30 s still catches a genuinely hung server.
+	_http.use_threads = true
+	_http.download_chunk_size = 1 << 20
+	_http.timeout = 30.0
 	_http.request_completed.connect(_on_http_completed)
 	add_child(_http)
 	_fetch_runs()
@@ -172,7 +182,11 @@ func _build_row(entry: Dictionary) -> Control:
 	var summary := Label.new()
 	summary.text = RunRow.config_summary(entry)
 	summary.add_theme_color_override("font_color", HINT_COLOR)
-	summary.add_theme_font_size_override("font_size", 12)
+	summary.add_theme_font_size_override("font_size", 14)
+	# Wrap like the config detail below it: a Label with no autowrap reports its
+	# whole text as its minimum width, so a long summary would widen the row past
+	# the 640px panel instead of running onto a second line.
+	summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(summary)
 
 	var actions := HBoxContainer.new()
@@ -205,7 +219,7 @@ func _build_row(entry: Dictionary) -> Control:
 		# Pretty-printed lazily on first reveal (#734 review follow-up): most rows
 		# in a long history are never expanded, so don't stringify JSON up front.
 		detail.add_theme_color_override("font_color", HINT_COLOR)
-		detail.add_theme_font_size_override("font_size", 12)
+		detail.add_theme_font_size_override("font_size", 14)
 		detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		detail.visible = false
 		var toggle := Button.new()

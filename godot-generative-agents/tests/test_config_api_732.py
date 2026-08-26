@@ -284,6 +284,130 @@ def test_switching_to_a_free_brain_clears_a_tripped_ceiling():
     assert stepper.tick() is not None
 
 
+def test_plan_follows_the_configured_brain_and_is_overridable():
+    # #787: the setup screen picks a brain, and the planner follows it -- the
+    # config session is the run's setup authority, so a server launched on the
+    # default "auto" must re-resolve against the brain THIS apply lands on
+    # rather than being frozen at boot.
+    stepper = _mock_stepper()
+    assert stepper.plan_mode == "schedule"  # free brain: the authored day
+    assert stepper.apply_config(brain="scripted")["plan"] == "schedule"
+    # A brain-only apply carries no `plan`, so the request flag itself must
+    # stay untouched (still "auto") -- only the resolved value re-follows the
+    # new brain.
+    assert stepper._plan_mode_flag == "auto"
+    # An explicit planner on a brain with no client to plan with is refused
+    # (a 400 upstream), the same rule --plan llm applies at launch.
+    with pytest.raises(ValueError, match="needs the llm brain"):
+        stepper.apply_config(plan="llm")
+    # ...and an explicit "schedule" sticks: it survives later applies, so a
+    # deliberate opt-out isn't silently undone by the auto rule.
+    stepper.apply_config(plan="schedule")
+    assert stepper._plan_mode_flag == "schedule"
+    with pytest.raises(ValueError, match="unknown plan"):
+        stepper.apply_config(plan="nonsense")
+
+
+def test_post_config_accepts_the_plan_knob():
+    client, stepper = _client()
+    body = client.get("/config").json()
+    assert body["plans"] == ["auto", "schedule", "llm"]
+    assert body["run"]["plan"] == "schedule"
+    resp = client.post("/config", json={"plan": "schedule", "brain": "scripted"})
+    assert resp.status_code == 200
+    assert resp.json()["applied"]["plan"] == "schedule"
+    # A model planner with no model to plan with is a 400, not a 500.
+    assert client.post("/config", json={"plan": "llm"}).status_code == 400
+
+
+def test_config_serves_the_asked_for_plan():
+    # #791: run.plan is the RESOLVED planner (never "auto"), which is the wrong
+    # default for a setup-screen dropdown -- an untouched dropdown must mean
+    # "keep the session's request" under the only-send-changed contract. So
+    # both GET /config and the applied echo also carry the raw request.
+    client, stepper = _client()
+    body = client.get("/config").json()
+    assert body["run"]["plan"] == "schedule"  # resolved: free brain
+    assert body["run"]["plan_request"] == "auto"  # what was actually asked
+    resp = client.post("/config", json={"plan": "schedule", "brain": "scripted"})
+    assert resp.status_code == 200
+    applied = resp.json()["applied"]
+    assert applied["plan"] == "schedule"
+    assert applied["plan_request"] == "schedule"
+    # The next GET reflects the new request, so a reloaded setup screen
+    # defaults to the explicit opt-out rather than silently reverting to auto.
+    assert client.get("/config").json()["run"]["plan_request"] == "schedule"
+
+
+def test_effort_is_advertised_and_paid_brain_only():
+    # #845: thinking depth joins the config surface as a vocabulary + a current
+    # value, so a client hard-codes no level list and an untouched dropdown means
+    # "keep the session's depth". It is a paid-brain setting: a free brain reports
+    # "default" and refuses a level rather than accepting an inert one.
+    stepper = _mock_stepper()
+    cfg = stepper.describe_config()
+    assert cfg["efforts"] == ["default", "low", "medium", "high", "xhigh", "max"]
+    assert cfg["run"]["effort"] == "default"
+    with pytest.raises(ValueError, match="needs the llm brain"):
+        stepper.apply_config(effort="high")
+    with pytest.raises(ValueError, match="unknown effort"):
+        stepper.apply_config(effort="nonsense")
+    # guard-before-teardown: both rejections left the stepper serving
+    assert stepper.tick() is not None
+    # "default" on a free brain is a no-op, not an error -- it asks for exactly
+    # what a free brain already has, so a re-run seed can send it unconditionally.
+    assert stepper.apply_config(effort="default")["effort"] == "default"
+
+
+def test_post_config_accepts_the_effort_knob():
+    client, stepper = _client()
+    body = client.get("/config").json()
+    assert "medium" in body["efforts"]
+    assert body["run"]["effort"] == "default"
+    # A depth with no paid brain to think with is a 400, not a 500 (the plan
+    # knob's rule) -- this also pins that req.effort reaches apply_config at all.
+    resp = client.post("/config", json={"effort": "high"})
+    assert resp.status_code == 400
+    assert "llm brain" in resp.json()["detail"]
+    assert client.post("/config", json={"effort": "nonsense"}).status_code == 400
+
+
+def test_model_is_advertised_and_paid_brain_only():
+    # #887: the model joins the config surface, so a saved run's model can be
+    # asked for again on a fresh server instead of silently resolving the world
+    # YAML's. The vocabulary is the PRICED Anthropic models -- an unpriced model
+    # costs $0 in usage.price, so a run driven by one reports no spend at all.
+    stepper = _mock_stepper()
+    cfg = stepper.describe_config()
+    assert "claude-sonnet-5" in cfg["models"]
+    assert "claude-haiku-4-5" in cfg["models"]
+    assert not [m for m in cfg["models"] if not m.startswith("claude-")]
+    # Concrete even on a free brain: the model a switch to llm would use, which
+    # is what makes leaving the dropdown untouched safe.
+    assert cfg["run"]["model"] == "claude-haiku-4-5"
+    with pytest.raises(ValueError, match="needs the llm brain"):
+        stepper.apply_config(model="claude-sonnet-5")
+    with pytest.raises(ValueError, match="unknown model"):
+        stepper.apply_config(model="claude-sonnet-9")
+    # An OpenAI model is priced but not offered: resolve_llm is Anthropic-only.
+    with pytest.raises(ValueError, match="unknown model"):
+        stepper.apply_config(model="gpt-4o")
+    assert stepper.tick() is not None  # guard-before-teardown
+
+
+def test_post_config_accepts_the_model_knob():
+    client, stepper = _client()
+    body = client.get("/config").json()
+    assert "claude-sonnet-5" in body["models"]
+    assert body["run"]["model"] == "claude-haiku-4-5"
+    # Pins that req.model reaches apply_config, and that both rejections are
+    # 400s rather than 500s.
+    resp = client.post("/config", json={"model": "claude-sonnet-5"})
+    assert resp.status_code == 400
+    assert "llm brain" in resp.json()["detail"]
+    assert client.post("/config", json={"model": "nope"}).status_code == 400
+
+
 def test_create_run_drops_a_prior_applied_config(tmp_path):
     stepper = _mock_stepper(run_store=RunStore(tmp_path / "runs"))
     stepper.apply_config(cast=["diego"])

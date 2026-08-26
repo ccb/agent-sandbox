@@ -702,8 +702,14 @@ advancing **on its own** while frontends follow along:
 
   `frame` is one sim step in the **replay frame schema** — the same per-agent
   dict a baked `penn_replay.json` carries, so live and baked viewers share one
-  contract. `status` marks run-state changes
-  (`started|paused|resumed|reset|finished|stopped`). `engine` wraps a
+  contract. A `frame` also carries `tick_ms` (the tick's wall time) and, when
+  the stepper reports it, `run_usage` — the run-scoped call/cost counters and
+  the #795 social block (`serve_penn.PennStepper.run_usage()`), so a dashboard's
+  run totals and social card ride this feed instead of a separate `/usage` poll
+  (#819). `status` marks run-state changes
+  (`started|paused|resumed|reset|finished|stopped`); the `reset` record carries
+  a freshly-zeroed `run_usage` too, so those counters drop the instant a rebuild
+  lands. `engine` wraps a
   [change-feed record](#the-events-change-feed) the stepper drained from the
   engine during that tick (steppers opt in by implementing `drain_events()`).
   `intervention` records a human write ([`POST /agents/{name}/say`](#post-agentsnamesay)
@@ -745,6 +751,24 @@ advancing **on its own** while frontends follow along:
   `turn` / `actor` / `latency_ms` may be `null` (viewers show `-`); `actor` is
   the per-agent filter key. This stream is the per-request *detail* — the
   aggregate [`GET /usage`](#get-usage) summary the HUD polls is unchanged.
+
+  A second `engine` sub-contract, **`event.kind: "llm_error"`** (#745): one
+  row per FAILED model call — an API error (auth revoked, quota, network) the
+  adapter degraded to an idle tick. Emitted by the stepper's own ledger scan,
+  so it rides the feed even under `--no-monitor`:
+
+  ```json
+  { "cursor": 16, "kind": "engine", "step": 12, "event": {
+      "kind": "llm_error", "agent": "Diego Torres", "role": "decide",
+      "error": "AuthenticationError: 401 key revoked", "streak": 2 } }
+  ```
+
+  `streak` is the run's consecutive-failure count at that row; once it reaches
+  the outage threshold (`serve_penn.BRAIN_OUTAGE_PAUSE_STREAK`), the next tick
+  raises and the loop's #637 handler pauses the run with a visible
+  `status(reason="error")` record — `POST /resume` retries with a fresh
+  window. Failed calls are also countable in [`GET /usage`](#get-usage)
+  (`failed_calls` lifetime, `run_failed_calls` per run).
 
 ### `GET /live`
 
@@ -881,19 +905,38 @@ persona library adjacent to the world YAML (`personas`, with `in_default_cast`
 and the currently active `cast` ids), the #564 `SimulationConfig` knobs
 (`knobs.defaults` / `knobs.current`, key-carrying sections stripped), the
 advertised `brains` (`llm` appears only when the server env holds
-`ANTHROPIC_API_KEY` — keys never travel over HTTP), and the `run` controls
-(`brain`, `steps`, derived `stop_time`, `max_cost`, `tick_seconds`).
+`ANTHROPIC_API_KEY` — keys never travel over HTTP), the advertised day-`plans`
+vocabulary (`auto`/`schedule`/`llm`, #787), the advertised thinking-depth
+`efforts` vocabulary (`default` plus the `--effort` levels, #845), the advertised
+`models` — every **priced** Anthropic model (`usage.PRICES`) plus the server's own
+current one, #887 — and the `run` controls (`brain`, `steps`, derived `stop_time`,
+`max_cost`, `tick_seconds`, the resolved `plan` the current brain would run,
+`plan_request` — the RAW planner request, e.g. `auto`, that the setup dropdown
+defaults to so an untouched form keeps the session's request, #791 — `effort`, the
+depth in force, `"default"` when none is requested, and `model`, which stays
+concrete even on a free brain: the model a switch to `llm` would use, so an
+untouched dropdown truthfully means "keep the session's model").
 
-`POST /config` (any subset of `{cast, brain, sim_config, steps, tick_seconds,
-max_cost}`) applies the setup by rebuilding through the stepper's reset path
+`POST /config` (any subset of `{cast, brain, plan, effort, model, sim_config,
+steps, tick_seconds, max_cost}` — `plan` is the day-planner request, #791;
+`effort` is the adaptive thinking depth, llm-brain only, where `"default"` means
+"send no thinking config" and is the only way to clear a launch `--effort`, #845;
+`model` is llm-brain only and restricted to the advertised `models`, because an
+unpriced model costs `$0` in `usage.price` and would make a paid run report no
+spend at all — the CLI's `--model` keeps its any-id escape hatch, #887) applies
+the setup by rebuilding through the stepper's reset path
 and echoes it back (`applied`), alongside the standard rebuild signal
 (`status` record, `reason: "reset"`, additive `run_id`). After the first
 `POST /resume` the gate closes: `status` reads `"locked"` and `POST /config`
 answers `409` (on a paused loop — e.g. after the day finishes — `POST /reset`
 returns it to tick 0 and re-opens it). Bad
-input — empty cast, unknown persona id, unknown or key-less brain, a bad
-`sim_config` mapping — is a `400`. The applied config also lands in the run
-manifest as its `config` block, so every saved run records its setup.
+input — empty cast, unknown persona id, unknown or key-less brain, an unknown
+effort level or model, a depth or a model on a free brain, a bad `sim_config`
+mapping — is a `400`. The applied config also lands in the run manifest as its
+`config` block, so every saved run records its setup — including the `effort`
+(#845) and the `model` (#887), so the Past-runs "Re-run with this setup"
+reproduces the brain a run actually had instead of resolving the fresh server's
+world-YAML default.
 
 Servers without the surface (no live loop, or a stepper that doesn't offer
 `describe_config`/`apply_config`) answer `404` on both.
@@ -1338,10 +1381,10 @@ endpoints (`/runs`, above) serve the same history over HTTP.
 
 An **offline** eval over a finished run's exported artifacts — no live
 coupling, no new export fields. It reads a baked replay JSON *or* a RunStore
-run directory and writes a per-agent day-coherence report: four rubric
-dimensions (plan coherence, temporal sanity, social grounding, memory use),
-each scored 1–10 with cited step examples, plus a run-level summary — so
-cognition changes (#579) can be compared run-over-run.
+run directory and writes a per-agent day-coherence report: five rubric
+dimensions (plan coherence, temporal sanity, social grounding, world
+grounding, memory use), each scored 1–10 with cited step examples, plus a
+run-level summary — so cognition changes (#579) can be compared run-over-run.
 
 ```bash
 # a baked replay (regenerate it first — it's git-ignored):
@@ -1366,6 +1409,12 @@ any declined/malformed reply — including the free `LLM_PROVIDER=mock`
 provider, which declines every tool call — falls back to the heuristic, so a
 report always completes. `--format json` emits the raw report dict instead of
 markdown.
+
+The run summary also carries `weakest` (the lowest-scoring agent, name and
+score) and `loops` (participant pairs that kept re-running one conversation:
+their conversation count and mean novelty). Both render in the markdown report.
+A run mean over agents hides a broken pair behind a healthy majority, so read
+the floor and the flags, not just the mean (#781).
 
 ## Penn world matrix artifacts
 

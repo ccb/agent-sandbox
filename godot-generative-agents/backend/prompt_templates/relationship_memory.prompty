@@ -1,0 +1,40 @@
+---
+name: relationship_memory
+description: >
+  One seeded relationship, as a t=0 observation memory in an agent's stream
+  (backend/seed.py, relationship_statements -> seed_relationships; issue #779).
+  Built from a world YAML's validated `relationships` edge -- authored once under
+  its first-named persona, seeded into BOTH ends' memory, each from its own side.
+  The other person is named in full deliberately: the conversation path retrieves
+  with `query=listener.name` (text_adventure_games/conversation.py), so naming
+  them is what makes the prior surface in the dialogue that needs it. Memory
+  text, not a live model prompt.
+inputs:
+  other:
+    type: string
+    description: The person on the other end of the edge, e.g. "Bethany Cole".
+  kind:
+    type: string
+    description: >
+      The relationship label, verbatim from the edge, e.g. "rivals" /
+      "reporter & source" / "TA & student". Optional -- omitted when the edge
+      left it blank, leaving just "I know <other>."
+  closeness_note:
+    type: string
+    description: >
+      The edge's 1..5 closeness as a sentence (see seed.CLOSENESS_PHRASE), e.g.
+      "We know each other a little." Optional; empty contributes nothing.
+  description:
+    type: string
+    description: >
+      The edge's authored natural-language description, appended verbatim -- it
+      is the author's own framing of the relationship, so it is never rewritten.
+      Optional.
+sample:
+  other: Bethany Cole
+  kind: rivals
+  closeness_note: We know each other a little.
+  description: Omar and Bethany are the two front-runners for student body
+    president -- civil in public, fiercely competitive about every endorsement.
+---
+I know {{ other }}{% if kind %}: {{ kind }}{% endif %}.{% if closeness_note %} {{ closeness_note }}{% endif %}{% if description %} {{ description }}{% endif %}

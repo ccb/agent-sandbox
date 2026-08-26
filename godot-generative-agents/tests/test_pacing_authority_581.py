@@ -7,8 +7,9 @@ agent's duration, emoji, and stop-advance. Pins:
   reach the agent without leaking into the routed command string;
 * the step loop honors a model duration (clamped) and emoji, falling back to
   the schedule when absent -- so the mock bake stays byte-identical;
-* ``advance()`` fires only when the activity completed at the scheduled place;
-  a place deviation keeps the pointer and fires one cooldown-guarded revision;
+* ``advance()`` fires whenever a settled activity completed, wherever it ran
+  (#831); a place deviation credits the stop and fires one cooldown-guarded
+  revision, and only a dead-talk idle credits nothing;
 * new duration-bearing verbs settle like ``perform`` while the #300
   instantaneous verbs keep falling through.
 
@@ -30,7 +31,11 @@ _SIM_DIR = (
 sys.path.insert(0, str(_SIM_DIR))
 
 from backend.build_world import build_world  # noqa: E402
-from backend.cognition import attach_agents, observe_and_decide  # noqa: E402
+from backend.cognition import (  # noqa: E402
+    at_scheduled_stop,
+    attach_agents,
+    observe_and_decide,
+)
 from backend.run_simulation import step  # noqa: E402
 from backend.sim_clock import SimClock  # noqa: E402
 from backend.sim_config import CognitionConfig  # noqa: E402
@@ -377,7 +382,7 @@ def test_reactive_sleep_overrides_the_schedule_off_plan_when_opted_in():
     assert ada.get_property(Property.IS_SLEEPING) is True
     assert state["Ada"]["performing"] is True
     assert state["Ada"]["perform_until"] is None  # not capped like a deviation
-    assert state["Ada"]["on_plan"] is False  # Dorm != her scheduled "The Green"
+    assert at_scheduled_stop(ada) is False  # Dorm != her scheduled "The Green"
 
 
 def test_reactive_sleep_wakes_and_resumes_the_original_schedule():
@@ -617,7 +622,9 @@ def test_model_emoji_wins_and_deviation_falls_to_persona_default():
         clock=_clock(),
         cog=CognitionConfig(),
     )
-    assert state["Ada"]["on_plan"] is False
+    # The two meanings have separated (#831): the stop is credited because the
+    # activity ran, while the emoji still knows this was not the planned place.
+    assert state["Ada"]["credit_stop"] is True
     assert state["Ada"]["pron"] == "\U0001f9d1"  # persona default, not the book
 
 
@@ -634,7 +641,7 @@ def test_model_supplied_emoji_overrides_stop_and_persona():
     game, ada = _world(llm_client=brain, place="The Green")
     state = _state()
     _run_step(game, {"Ada": ada}, state, 0, _clock())
-    assert state["Ada"]["on_plan"] is True
+    assert state["Ada"]["credit_stop"] is True
     assert state["Ada"]["pron"] == "\U0001f9ea"
 
 
@@ -678,13 +685,21 @@ class RecordingPlanner:
         return plan
 
 
-def test_deviation_keeps_the_pointer_and_fires_one_revision():
-    # Ada scheduled Cafe (steps=2), but the brain performs at The Green (start)
-    # every tick => place deviation. The stop pointer must NOT advance, and
-    # exactly one DEVIATED revision fires within the cooldown window.
+def test_a_deviation_credits_the_stop_and_fires_one_revision():
+    # #831: Ada is scheduled Cafe (steps=2) then Library, but the brain performs
+    # at The Green (where she starts) every tick => a place deviation. The
+    # activity still ran, so the stop is credited and the pointer moves. Before
+    # #831 it did not, and the written plan kept naming an errand she had
+    # finished -- `maybe_revise_plan` could not clear it either, because its
+    # re-anchor guard keeps every stop up to and including `stop_index`, so the
+    # stale stop sat inside the protected prefix. Exactly one DEVIATED revision
+    # still fires (the cooldown suppresses the rest).
     from backend.run_simulation import DEVIATED
 
     persona = _persona(place="Cafe", activity="reading", steps=2)
+    persona["schedule"].append(
+        {"place": "Library", "activity": "studying", "emoji": "\U0001f4d6", "steps": 2}
+    )
     game, chars = build_world(None, [persona], LOCATIONS)
     brain = SequenceBrain([("perform", {"activity": "wandering"})] * 6)
     attach_agents(chars, [persona], llm_client=brain)
@@ -692,7 +707,7 @@ def test_deviation_keeps_the_pointer_and_fires_one_revision():
     ada.agent.planner = RecordingPlanner()  # swap in a recorder
     state = _state()
     clock = _clock()
-    for idx in range(5):  # perform(0), settle, complete@2, re-decide, ...
+    for idx in range(5):  # perform(0), settle, credit+advance@2, re-decide, ...
         step(
             game,
             chars,
@@ -704,8 +719,8 @@ def test_deviation_keeps_the_pointer_and_fires_one_revision():
             clock=clock,
             cog=CognitionConfig(),
         )
-    # Pointer never advanced past the un-executed scheduled stop.
-    assert ada.agent.schedule.stop_index == 0
+    # The activity ran, so its stop was credited -- pointer on the second stop.
+    assert ada.agent.schedule.stop_index == 1
     # Exactly one revision, tagged DEVIATED (cooldown suppressed the rest).
     assert ada.agent.planner.reasons == [DEVIATED]
     assert RevisionTrigger(DEVIATED, 0).reason == "deviated"
@@ -713,8 +728,8 @@ def test_deviation_keeps_the_pointer_and_fires_one_revision():
 
 def test_on_plan_perform_still_advances_the_pointer():
     # A two-stop schedule driven by the default mock: travel->perform stop 0,
-    # then the pointer advances to stop 1. This is the byte-identical baseline
-    # advance-by-match must preserve.
+    # then the pointer advances to stop 1. This is the byte-identical mock
+    # baseline the #831 credit rule must still preserve.
     persona = _persona(place="Cafe", activity="reading", steps=1)
     persona["schedule"].append(
         {"place": "Library", "activity": "studying", "emoji": "\U0001f4d6", "steps": 1}
@@ -751,9 +766,62 @@ def test_off_plan_perform_without_duration_is_bounded_not_frozen():
     game, ada = _world(llm_client=brain, place="Cafe", steps=None)
     state = _state()
     _run_step(game, {"Ada": ada}, state, 0, _clock())
-    assert state["Ada"]["on_plan"] is False
+    # #831: credit_stop now means "credited", not "matched place" -- this
+    # settle is still off-plan (Cafe scheduled, performed at The Green), it's
+    # just credited like any other completed activity. The subject here is
+    # the duration ceiling below, not credit_stop.
+    assert state["Ada"]["credit_stop"] is True
     # 90-minute ceiling at 10s/step = 540 steps, not None (frozen).
     assert state["Ada"]["perform_until"] == 0 + 540
+
+
+def test_on_plan_perform_without_duration_is_bounded_when_a_stop_follows():
+    """#865: the "settle for the rest of the run" branch is only correct at the
+    LAST stop, and nothing checked that.
+
+    `perform_until = None` means the settle-completion check never fires again,
+    so the agent never re-decides for the rest of the run. That is right for an
+    end-of-day stop and wrong anywhere else. Every authored persona happens to
+    put its one duration-less stop last (35 of 35 in `personas/*.yaml`), which is
+    why authored data never reached the gap -- but the LLM planner is under no
+    such rule, and a duration-less stop mid-schedule froze the agent.
+
+    It also quietly corrupts every behavioral metric: a frozen agent cannot
+    thrash, cannot retarget and cannot converse, so #826's own criterion reads as
+    an improvement. #760 batch 6 had four of five agents end frozen.
+
+    Mutation check: restore `elif matched or clock is None:` and this goes RED
+    with perform_until None.
+    """
+    brain = PerActionBrain("perform", {"activity": "reading a novel"})
+    persona = _persona(place="The Green", activity="reading a novel", steps=None)
+    # A second stop, so the duration-less one above is NOT the last.
+    persona["schedule"].append(
+        {"place": "Cafe", "activity": "studying", "emoji": "\U0001f4d6", "steps": 1}
+    )
+    game, chars = build_world(None, [persona], LOCATIONS)
+    attach_agents(chars, [persona], llm_client=brain)
+    state = _state()
+    _run_step(game, chars, state, 0, _clock())
+
+    # On-plan (scheduled at The Green, performing at The Green, where she starts).
+    assert state["Ada"]["credit_stop"] is True
+    # Bounded by the 90-minute ceiling (540 steps at 10s/step), not frozen.
+    assert state["Ada"]["perform_until"] == 540
+
+
+def test_on_plan_perform_without_duration_still_settles_at_the_last_stop():
+    """The control for the test above, and the invariant the mock bake rests on:
+    at the LAST stop a duration-less on-plan perform still settles for the rest
+    of the run. This is what every authored persona's final stop does, so if this
+    changes the committed replay changes with it. #865."""
+    brain = PerActionBrain("perform", {"activity": "reading a novel"})
+    game, ada = _world(llm_client=brain, place="The Green", activity="reading a novel")
+    assert ada.agent.schedule.has_next is False  # single-stop schedule
+    state = _state()
+    _run_step(game, {"Ada": ada}, state, 0, _clock())
+
+    assert state["Ada"]["perform_until"] is None
 
 
 def test_stray_duration_on_a_non_pacing_verb_is_ignored():
@@ -765,3 +833,46 @@ def test_stray_duration_on_a_non_pacing_verb_is_ignored():
     command = observe_and_decide(game, ada, 0)
     assert command == "travel to Cafe"  # clean -- no "30" spliced in
     assert ada.agent.last_duration_minutes is None
+
+
+def test_a_deviation_at_the_last_stop_unlatches_instead_of_freezing():
+    # #831 corollary. Crediting an off-plan activity routes it through the same
+    # advance() that returns False at the final stop, and what follows is the
+    # deliberate "settle here for the rest of the run" rule the mock bake rests
+    # on. That rule belongs to an agent who genuinely reached its last stop; an
+    # agent that wandered off must re-decide, or one late deviation freezes it
+    # for the whole run. Ada has a single stop (Cafe) and performs at The Green.
+    from text_adventure_games.enums import Property
+    from text_adventure_games.things.characters import MAX_ENERGY
+
+    persona = _persona(place="Cafe", activity="reading", steps=2)
+    game, chars = build_world(None, [persona], LOCATIONS)
+    brain = SequenceBrain([("perform", {"activity": "wandering"})] * 6)
+    attach_agents(chars, [persona], llm_client=brain)
+    ada = chars["Ada"]
+    # Furnish starting energy/restedness (normally Penn's build_world_fn does
+    # this, #931): a real brain is attached here (SequenceBrain, unrelated to
+    # this test's own #831 concern), which opens the needs-interrupt gate --
+    # without a starting value, accrue_energy/accrue_tiredness decay from an
+    # effective 0 and Ada reads as needy from tick one, triggering a spurious
+    # extra re-decide this test never intended to exercise.
+    ada.set_property(Property.ENERGY, MAX_ENERGY)
+    ada.set_property("restedness", 100)
+    state = _state()
+    clock = _clock()
+    for idx in range(4):  # perform(0), settle, expire@2 -> re-decide, settle
+        step(
+            game,
+            chars,
+            state,
+            idx,
+            order=["Ada"],
+            world_map=_StubMap(),
+            emoji={"Ada": "\U0001f4d6"},
+            clock=clock,
+            cog=CognitionConfig(),
+        )
+    assert ada.agent.schedule.stop_index == 0  # nothing to advance to
+    # The latch released at step 2 and the brain decided again: a fresh perform
+    # bounded at 2 + schedule.steps. A freeze leaves perform_until at None.
+    assert state["Ada"]["perform_until"] == 4

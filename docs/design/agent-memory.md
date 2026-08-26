@@ -369,15 +369,31 @@ if should_reflect(agent.memory, threshold):   # threshold = AgentConfig.reflecti
 
 Reflection flow (`reflection.reflect`), the paper's loop:
 
-1. Take the `recent_window` (default 50) most recent memory records.
+1. Take the `recent_window` (default 50) most recent memory records. Each LLM
+   input is marked by temporal role: `[lived]` observation, `[conversation]`
+   chat/note, `[inferred]` reflection, or `[intended]` plan (`[memory]` is the
+   neutral fallback for an unknown future kind).
 2. Ask the `Reflector` for the salient questions they raise (capped at 3).
 3. For each question, *retrieve* supporting memories — read-only (`touch=False`),
-   so reflecting never disturbs decision-time recency.
+   so reflecting never disturbs decision-time recency. All record kinds remain
+   eligible, including plans as explicitly tagged intentions.
 4. Ask the `Reflector` for one short inference grounded in those memories.
 5. Store each inference as `MemoryKind.REFLECTION` via `add_reflection`, with the
    supporting record ids as `source_event_ids`.
 6. Reset `importance_since_reflection` (after adding, so the reflections' own
    importance doesn't immediately re-trigger).
+
+The prompt defines the markers and forbids treating an invitation, commitment,
+or plan as completed unless a `[lived]` record confirms it. This covers both
+`PLAN` records and future statements embedded in `CHAT` relationship notes
+(#815), while still allowing useful forward-looking reflection. Prompt-only
+marker tokens are stripped if a model echoes them, so stored reflection text
+stays clean.
+
+The trigger matches what the pass can see: every record, including `PLAN`,
+accrues into `importance_since_reflection`. A conversation that writes both an
+8.0 relationship note and an 8.0 commitment therefore contributes 16.0 toward
+the default 30.0 threshold.
 
 The cognition sits behind a `Reflector` protocol (mirroring `planning.py`'s
 `Planner`): a deterministic `MockReflector` for offline/CI runs and an

@@ -20,7 +20,6 @@ from text_adventure_games.things.characters import Character
 from text_adventure_games.things.locations import Location
 
 from .actions import Act, Travel
-from .parser import PennParser
 from .tiled_game import TiledGame
 
 # The cast and locations come from a world YAML (e.g. ``penn/world_data_upenn.yaml``).
@@ -77,6 +76,7 @@ def load_world_yaml(path, cast: list[str] | None = None) -> dict:
         data = yaml.safe_load(f) or {}
     ids = cast if cast is not None else data.get("cast")
     if ids is None:
+        data.setdefault("events", [])
         return data
     if not ids:
         raise ValueError(f"cast: empty cast for {path}")
@@ -154,6 +154,36 @@ def load_world_yaml(path, cast: list[str] | None = None) -> dict:
                 meetings.append(meeting)
     data["relationships"] = relationships
     data["meetings"] = meetings
+
+    # Public events (#795): world-level, not per-persona, so they need no
+    # composition -- a top-level `events:` already survived into `data`. What
+    # they need is the same fail-loud validation `meetings:` gets, because an
+    # event that names a place nobody has is an authoring bug that would
+    # otherwise reach every agent's memory as a plausible-sounding lie.
+    places = {loc.get("name") for loc in data.get("locations") or []}
+    events = []
+    for event in data.get("events") or []:
+        for field in ("label", "at", "when"):
+            if not event.get(field):
+                raise ValueError(
+                    f"{path}: event {event.get('label') or event!r} is "
+                    f"missing required field {field!r}"
+                )
+        if event["at"] not in places:
+            raise ValueError(
+                f"{path}: event {event['label']!r} names unknown place "
+                f"{event['at']!r}"
+            )
+        host = event.get("host")
+        if host is not None:
+            if host not in known:
+                raise ValueError(
+                    f"{path}: event {event['label']!r} names unknown host " f"{host!r}"
+                )
+            if host not in names:
+                continue  # host is parked outside this cast -> no event
+        events.append(event)
+    data["events"] = events
     return data
 
 
@@ -384,10 +414,9 @@ def build_world(
         world_map=world_map,
     )
 
-    # Wire up the custom parser that fixes the "ate " substring collision with
-    # "activate"/"deactivate" (see parser.py); delegates everything else to
-    # the engine parser unchanged.
-    game.set_parser(PennParser(game))
+    # No custom parser: the engine parser routes "activate stove" correctly
+    # since #536's word-boundary matching (plus its command-initial verb rule),
+    # which is what the retired PennParser existed to work around (#464).
 
     # Place each persona in their home location (Game only auto-places the player)
     # and stamp its spawn tile: characters carry their live map position so

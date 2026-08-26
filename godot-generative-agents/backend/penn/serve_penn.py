@@ -61,6 +61,7 @@ from backend.run_store import DEFAULT_RUNS_DIR, RunStore
 from backend.sim_clock import SimClock
 from backend.sim_config import CognitionConfig, SimulationConfig
 from backend.cognition import attach_agents
+from backend.planner import median_travel_minutes
 from scripted_brain import build_scripted_brains
 from penn_world import (
     DIALOGUE_FADE_STEPS,
@@ -85,7 +86,7 @@ from text_adventure_games.recording import (
     seed_world,
 )
 from text_adventure_games.transcript import RunRecord, file_sha256, git_sha
-from text_adventure_games.usage import UsageLedger
+from text_adventure_games.usage import PRICES, UsageLedger
 
 # The bake's full campus day (generate_penn_replay.DEFAULT_STEPS): long enough
 # for every authored meeting to convene and the whole cast to finish its rounds.
@@ -107,6 +108,40 @@ DEFAULT_LLM_MODEL = "claude-haiku-4-5"
 TIER_ROLES = frozenset(
     {"decide", "plan", "reflect", "converse", "outcome", "score", "react"}
 )
+
+# Thinking-depth levels for models that support it (--effort / llm.effort).
+# Ordered cheapest-first; unset means "send no thinking config at all", which
+# keeps every existing run's request payload exactly as it was.
+# `xhigh` sits between high and max and arrived with Opus 4.7; it is valid on
+# every model this repo can drive at effort (Sonnet 5, Opus 4.7+, Fable 5).
+# Leaving it out didn't just miss a level -- this tuple feeds BOTH the argparse
+# choices below and resolve_llm's SystemExit, so `--effort xhigh` died at
+# startup from the CLI, the world YAML, and POST /config alike.
+EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
+
+# The WIRE vocabulary the config surface advertises (#845): the levels above plus
+# an explicit "default" for unset. POST /config's contract is "omit = keep
+# current", so without a sentinel there is no way to ask for no thinking config at
+# all -- and a re-run of a run that requested none has to be able to say so.
+# "default" is this file's existing word for None (see _fmt_or_default).
+EFFORT_CHOICES = ("default", *EFFORT_LEVELS)
+
+# Mid-run brain-outage threshold (#745): after this many CONSECUTIVE failed
+# real-brain calls (error rows in the ledger with no genuine answer between
+# them), the next tick() raises BrainOutage instead of burning more paid,
+# failing round-trips. backend.live's #637 tick-error handler turns the raise
+# into a visible pause + status(reason="error") record; POST /resume retries
+# with a fresh window. Low enough that a dead key (every agent fails its first
+# decide) trips within a tick or two; high enough that a single transient
+# failure -- already retried by the client's own #260 budget -- rides through.
+BRAIN_OUTAGE_PAUSE_STREAK = 3
+
+
+class BrainOutage(RuntimeError):
+    """The live brain is erroring on every call (#745): raised by
+    ``PennStepper.tick()`` once ``BRAIN_OUTAGE_PAUSE_STREAK`` consecutive
+    real-brain calls have failed, so the #637 error path pauses the run
+    visibly instead of the cast freezing silently at $0."""
 
 
 def _parse_model_for(pairs):
@@ -178,6 +213,40 @@ def _is_paid(llm) -> bool:
     return isinstance(llm, dict)
 
 
+def _model_choices(current=None) -> list[str]:
+    """The models the config surface offers (#887): every PRICED Anthropic model,
+    plus *current* when it isn't one of them.
+
+    Priced, because an unpriced model costs ``$0`` with a one-time warning
+    (``usage.price``) -- a run driven by one reports no spend at all, which is a
+    silent lie in a manifest and useless as a budget ceiling. The CLI keeps its
+    escape hatch (``--model`` accepts anything, for a model too new to be priced);
+    this narrower surface is what the GUI and HTTP clients pick from.
+
+    *current* rides along so the dropdown can always represent the value it is
+    showing: a server launched on an unpriced ``--model`` must be able to display
+    that model rather than silently snapping the form to a different one.
+    """
+    choices = {m for m in PRICES if m.startswith("claude-")}
+    if current:
+        choices.add(current)
+    return sorted(choices)
+
+
+def _effort_of(llm) -> str:
+    """The thinking depth *llm* requests, as a wire value (#845): a member of
+    ``EFFORT_LEVELS``, or ``"default"`` for none -- which is every free brain,
+    since effort is a paid-brain setting."""
+    return (llm.get("effort") or "default") if _is_paid(llm) else "default"
+
+
+def _model_of(llm) -> str | None:
+    """The model *llm* drives (#887), or ``None`` for a free brain -- which drives
+    no model at all. Not to be confused with ``PennStepper._effective_model``,
+    which answers "what WOULD this run drive" for the config surface."""
+    return llm.get("model") if _is_paid(llm) else None
+
+
 def _resolve_cognition_tools(flag: bool, sim_config, llm) -> bool:
     """OR-resolution for cognition tools (#358/#512/#564): a CLI flag, either
     config surface -- the sim-level ``cognition.cognition_tools`` or the
@@ -201,7 +270,33 @@ def _resolve_react(flag: bool, sim_config) -> bool:
     return bool(flag or (sim_config is not None and sim_config.cognition.react_enabled))
 
 
-def resolve_llm(world_llm, brain, model=None, max_cost=None, model_for=None):
+def _resolve_plan_mode(flag: str, llm) -> str:
+    """Resolve ``--plan``'s ``"auto"`` default (#787): the model plans its own
+    day whenever the model is the one living it.
+
+    ``auto`` -> ``"llm"`` under a paying brain, ``"schedule"`` otherwise. The
+    point of a live run is model cognition, and the day -- what an agent does
+    with its hours -- is the most consequential thing there is to decide; with
+    ``schedule`` the day stays hand-authored and *unrevisable* (``MockPlanner``
+    has a no-op ``revise``, so the whole ``deviation -> revise`` path, #778, is
+    dead on the default live path). ``schedule`` stays an explicit opt-out: the
+    YAML days have hand-tuned overlaps so agents converge for the scripted
+    rendezvous, which a free-play generated day does not guarantee.
+
+    Free brains resolve to ``schedule`` and are untouched -- the mock (None) and
+    the scripted sentinel have no client to plan with, so the bake and every
+    offline replay stay byte-identical. Explicit values pass straight through,
+    which is what keeps the ``--plan llm`` + free-brain combination an error
+    (the caller's own guard) rather than a silent downgrade.
+    """
+    if flag != "auto":
+        return flag
+    return "llm" if _is_paid(llm) else "schedule"
+
+
+def resolve_llm(
+    world_llm, brain, model=None, max_cost=None, model_for=None, effort=None
+):
     """Resolve one run's LLM settings: ``None`` for the mock brain, else a dict.
 
     ``--brain mock`` (the default) returns ``None`` -- no client is ever built,
@@ -216,12 +311,14 @@ def resolve_llm(world_llm, brain, model=None, max_cost=None, model_for=None):
     (wrong provider, missing key) exit with a one-line fix rather than serving
     an all-day sim whose every model call silently returns ``None``.
 
-    The daily planner is a *separate* switch (``--plan``, #397), not part of
-    this resolution: ``--plan schedule`` (the default) keeps the authored YAML
-    day and its hand-tuned meeting overlaps; ``--plan llm`` lets the model
-    author the day, which is free-play (the scripted rendezvous may not
-    converge). ``--brain llm`` here only decides whether decide/converse/reflect
-    are the model's.
+    The daily planner is a *separate* switch (``--plan``, #397) that this
+    resolution only *feeds*: its ``auto`` default reads the brain resolved here
+    and picks the model planner for a paying run (#787, see
+    ``_resolve_plan_mode``). ``--plan schedule`` keeps the authored YAML day and
+    its hand-tuned meeting overlaps; ``--plan llm`` lets the model author the
+    day, which is free-play (the scripted rendezvous may not converge).
+    ``--brain llm`` here still only decides whether decide/converse/reflect are
+    the model's.
     """
     if brain == "scripted":
         return SCRIPTED
@@ -232,6 +329,13 @@ def resolve_llm(world_llm, brain, model=None, max_cost=None, model_for=None):
         llm["model"] = model
     if max_cost is not None:
         llm["max_cost_usd"] = max_cost
+    if effort is not None:
+        llm["effort"] = effort
+    if llm.get("effort") not in (None, *EFFORT_LEVELS):
+        raise SystemExit(
+            f"unknown effort {llm['effort']!r}: valid levels are "
+            f"{', '.join(EFFORT_LEVELS)}"
+        )
     # Per-role model tiering (#368): the YAML llm.models map, with --model-for
     # entries layered on top. Validated here so a typo'd role dies at startup
     # (for both config surfaces), not silently pays the default model.
@@ -429,21 +533,24 @@ class LiveMeetingInjector:
             m["state"], m["start"] = self.ARMED, -1
 
 
-def _fast_forward_schedule(schedule, step_idx: int) -> None:
+def _fast_forward_schedule(schedule, step_idx: int, current_hour=None) -> None:
     """Point *schedule* (a ``ScheduleMockClient``) at the stop a resumed day
     should be working on at *step_idx* (#543).
 
     Only authored dwell times are budgeted -- the steps an agent spent walking
     between stops aren't stored anywhere -- so this is a deliberate
-    approximation that can land a stop early relative to the original day. A
-    ``steps: None`` stop ("stay here for the rest of the day") always holds,
-    and a schedule that runs out settles on its last stop, exactly like the
-    live loop's own ``advance()`` handling.
+    approximation whose drift is bounded by *current_hour*: passing the resume
+    clock lets ``advance()``'s #838 hour gate refuse the first stop whose
+    ``start_hour`` is still in the future, so the pointer can drift only
+    within the unanchored stretch it is resumed into, never past an anchor
+    (#870). A ``steps: None`` stop ("stay here for the rest of the day")
+    always holds, and a schedule that runs out settles on its last stop,
+    exactly like the live loop's own ``advance()`` handling.
     """
     elapsed = 0
     while schedule.steps is not None and elapsed + schedule.steps <= step_idx:
         elapsed += schedule.steps
-        if not schedule.advance():
+        if not schedule.advance(current_hour):
             break
 
 
@@ -517,13 +624,14 @@ class PennStepper:
         decide_timeout=30.0,
         mock_latency=0.0,
         stall_seconds=0.0,
-        plan_mode="schedule",
+        plan_mode="auto",
         resume_run_id=None,
         seed=0,
         replay_cassette=None,
         sim_config=None,
         world_builder=None,
         vision_r=None,
+        scenario="penn",
     ):
         # What a rebuild without an explicit world (reset()) constructs from:
         # the launch scenario's builder (#728), defaulting to the full campus --
@@ -532,6 +640,11 @@ class PennStepper:
         self._world_builder = (
             world_builder if world_builder is not None else build_penn_world
         )
+        # The scenario NAME behind that builder (#747), recorded into the run
+        # manifest so --re-run rebuilds the same world instead of the default
+        # campus. (If #730/#732's config-in-manifest work settles a fuller
+        # config block, this field's long-term home is there.)
+        self.scenario = scenario
         # The configured cast (#732): persona ids applied by apply_config, or
         # None for the world YAML's own cast. Held here so reset()'s default
         # rebuild keeps the configured cast instead of silently reverting.
@@ -652,17 +765,33 @@ class PennStepper:
         # at all (step() gates it on conversation_enabled), so it is safe to
         # leave on for mechanics demos.
         self.react = _resolve_react(react, sim_config)
-        # Daily planning source (#397): "schedule" (default) keeps the authored
-        # YAML day -- byte-identical, meeting overlaps intact. "llm" lets the
-        # model author each day (LLMPlanner); free-play, so the hand-tuned
-        # rendezvous windows are no longer guaranteed. The planner shares the
-        # run's paid Anthropic client, so llm planning needs --brain llm -- the
-        # free mock (None) and scripted (SCRIPTED) brains have no such client,
-        # so _is_paid gates both out (the scripted sentinel is truthy, so a
-        # plain `llm is None` check would let --brain scripted through and then
-        # crash on the unset _llm_config below).
-        self.plan_mode = plan_mode
-        if plan_mode == "llm" and not _is_paid(llm):
+        # Daily planning source (#397): "schedule" keeps the authored YAML day
+        # -- byte-identical, meeting overlaps intact. "llm" lets the model
+        # author each day (LLMPlanner); free-play, so the hand-tuned rendezvous
+        # windows are no longer guaranteed. "auto" (the default since #787)
+        # picks llm under a paying brain and schedule otherwise -- see
+        # _resolve_plan_mode. Kept raw alongside the resolved value, like the
+        # cognition/react flags above, so apply_config can re-resolve it
+        # against a brain the config session swaps in.
+        self._plan_mode_flag = plan_mode
+        self.plan_mode = _resolve_plan_mode(plan_mode, llm)
+        # Filled by every _build() from attach_agents; empty until the first
+        # one, which is when the boot run's manifest is first written.
+        self._planner_sources: dict = {}
+        # The planner shares the run's paid Anthropic client, so llm planning
+        # needs --brain llm -- the free mock (None) and scripted (SCRIPTED)
+        # brains have no such client, so _is_paid gates both out (the scripted
+        # sentinel is truthy, so a plain `llm is None` check would let --brain
+        # scripted through and then crash on the unset _llm_config below).
+        # Only an EXPLICIT --plan llm can trip this: auto never resolves to llm
+        # on a free brain. A re-run is the third exception -- its brain is the
+        # cassette (llm is None, so never "paid"), and the recorded plan calls
+        # replay from it like every other call (#787).
+        if (
+            self.plan_mode == "llm"
+            and not _is_paid(llm)
+            and self._replay_cassette is None
+        ):
             raise SystemExit(
                 "--plan llm needs --brain llm (the planner shares its client)."
             )
@@ -679,9 +808,28 @@ class PennStepper:
         # Like the ledger it lives here, not in _build(), so its call counter
         # survives resets.
         self.monitor = monitor
+        # Mid-run brain health (#745). _llm_failures_seen is a cursor into
+        # ledger.records (the _events_seen idiom) -- it lives here because the
+        # ledger it indexes survives resets. The streak counts consecutive
+        # failed real-brain calls (a genuine answer resets it; _build resets
+        # it too -- a new day gets a fresh window); tick() raises BrainOutage
+        # at BRAIN_OUTAGE_PAUSE_STREAK. _llm_error_buf holds the per-failure
+        # feed rows drain_events publishes (kind "llm_error").
+        self._llm_failures_seen = 0
+        self._brain_error_streak = 0
+        self._last_brain_error = None
+        self._llm_error_buf: list = []
         # What POST /config applied, or None for an unconfigured server; when
         # set, _store_manifest records it as the manifest's `config` block (#732).
         self._applied_config = None
+        # The last PAID resolution this session made (#845), or None on a server
+        # that has never run a paid brain. apply_config re-resolves a brain change
+        # from this rather than from the world YAML, so the launch --model /
+        # --effort / --model-for overrides survive a free-brain detour instead of
+        # silently reverting to the YAML's pinned model at no thinking depth.
+        # Never cleared -- that is the point (mirrors _launch_num_steps: a value
+        # the run was launched with that must not leak away).
+        self._paid_llm_base = None
         self._init_brain(llm)
         self._build(world, resume_run_id=resume_run_id)
 
@@ -694,6 +842,10 @@ class PennStepper:
         new brain's clients must not reuse the old model's.
         """
         self.llm = llm
+        if _is_paid(llm):
+            # Remember what a paid brain resolved to (#845), so a later
+            # apply_config can re-resolve from it (see __init__).
+            self._paid_llm_base = dict(llm)
         # The real-brain clients (issue #261): one shared by decide + converse,
         # one for reflection -- separate instances so the request monitor can
         # tag each role exactly, all recording into self.ledger. Built once
@@ -718,6 +870,17 @@ class PennStepper:
             replay = ReplayClient(self._replay_cassette, strict=True)
             self.llm_client = replay
             self.reflector_client = replay
+            if self.plan_mode == "llm":
+                # ...and the planner too (#787). The recording seam already
+                # wraps the planner client in the run's OWN RecordingClient
+                # (see _build), so a model-authored day is in the cassette
+                # like every other call; without replaying it here the re-run
+                # would fall back to MockPlanner and diverge on step 1. The
+                # planner's prompts are built from persona + t=0 memory + the
+                # clock window, all reproduced by the seed, so the request
+                # keys line up. This is the whole reason --plan llm can be
+                # the live default (#787) without undoing #715.
+                self.planner_client = replay
         elif llm == SCRIPTED:
             # Free, key-free full-feature brain (#563): distinct client objects,
             # so the llm_client-gated paths open. Record each role through the
@@ -739,6 +902,7 @@ class PennStepper:
                 provider="anthropic",
                 model=llm.get("model"),
                 models_by_role=llm.get("models"),
+                effort=llm.get("effort"),
             )
             self.llm_client = self._decide_client()
             self.reflector_client = self._role_client("reflect")
@@ -776,10 +940,10 @@ class PennStepper:
         return client
 
     def _role_client(self, role):
-        """A dedicated client for one fixed call site (reflect/plan). Unlike
-        the decide-family sites, these call sites never stamp context
-        themselves, so stamp the role once here: the one key both labels the
-        ledger records (by_role, #368) and routes the call to the tiering
+        """A dedicated client for one fixed call site (reflect/plan). The
+        planner/reflector stamp ``actor`` per call (#847), but ``role`` is
+        construction-time only, so stamp it once here: the one key both labels
+        the ledger records (by_role, #368) and routes the call to the tiering
         map's model for that role."""
         client = create_llm_client(
             self._llm_config, ledger=self._recording_ledger(role)
@@ -888,6 +1052,27 @@ class PennStepper:
             datetime.datetime.fromisoformat(SIM_START), sec_per_step=SEC_PER_STEP
         )
         self.game, self.chars = self.world.build_world_fn(self.world.world_map)
+        # Per-run ledger baseline (#526): the ledger itself survives resets
+        # on purpose (the cost ceiling is lifetime -- money spent stays
+        # spent), so the per-run view SUBTRACTS this snapshot instead of
+        # rebasing anything. Same boundary as the store's run id below.
+        #
+        # Taken HERE, ahead of both create_run and attach_agents, and not at
+        # the end of _build (#782): under --plan llm the LLMPlanner authors
+        # every agent's day inside attach_agents, so ~3 calls/agent are spent
+        # before the first tick. Snapshotting after that attach folded the
+        # planning spend into the BASELINE, and _run_cost_usd() -- the sum
+        # both the run's row and GET /usage serve -- subtracted it straight
+        # back out: a model-planned run under-reported by 29% in the #760
+        # live batch, while its schedule-planned siblings matched to the
+        # cent. Those calls are the run's in every other sense (the planner
+        # client is wrapped in THIS run's RecordingClient just below, so they
+        # land in its cassette), so the call-count base moves with the cost
+        # base and the run's log counts them too. Nothing between here and
+        # the old position spends: the seam below only opens files, and the
+        # per-agent client loop only constructs clients.
+        self._run_ledger_calls_base = len(self.ledger.records)
+        self._run_ledger_cost_base = self.ledger.total_cost_usd()
         # Recording seam (#715): open this run and wrap every real client in a
         # RecordingClient BEFORE attach_agents wires them onto agents, so the
         # agents' decide/converse (agent.llm_client) and reflection
@@ -996,15 +1181,48 @@ class PennStepper:
             # stops against the world's full location set and bounds the day to
             # the run's clock window; both are inert for the mock planner.
             # Note: these ~3 planning calls/agent fire here at attach time,
-            # before the first tick()'s over_budget() gate -- a one-time 3N
-            # spend that can precede (not skip) the budget ceiling; the next
-            # tick catches it.
+            # before the first tick()'s over_budget() gate -- a one-time spend of
+            # up to 4N (#821 adds one corrective re-ask for an agent whose plan
+            # can't reach a stop it pinned to a clock hour) that can precede (not
+            # skip) the budget ceiling; the next tick catches it.
             planner_client=self.planner_client,
-            location_names=frozenset(loc["name"] for loc in self.world.locations),
+            # Only walkable places are plannable (#906): the addressless campus
+            # hub ("Penn campus") is a real Location, so it passed
+            # validate_stops and was advertised in "Known places:" -- but a
+            # travel there grounds to no tile, and the agent stands motionless
+            # narrating the trip ("walking home @ None", 303 min in batch 10).
+            location_names=frozenset(
+                loc["name"] for loc in self.world.locations if loc.get("address")
+            ),
             clock=self.clock,
+            # #795: what a walk actually costs, so the planner can budget for it
+            # instead of guessing. Computed from this world's map, so a different
+            # campus gets a different number; None -> the clause is omitted.
+            travel_minutes=median_travel_minutes(
+                self.world.world_map,
+                [loc.get("address") for loc in self.world.locations],
+                self.clock,
+            ),
+            # #795: the world's announced happenings, seeded to every agent
+            # but the host -- only reaches memory under a real planner (see
+            # cognition.attach_agents), so this is inert under the mock brain.
+            events=self.world.events,
             out_planner_sources=planner_sources,
             extra_action_names=PENN_ACTION_VERBS,
         )
+        # Where each agent's day actually came from (#787): "llm" only if the
+        # model produced usable stops -- a hallucinated place fails
+        # validate_stops and the agent silently falls back to "static", the
+        # authored YAML. Persisted on the manifest so a saved run records
+        # whether it really got model-authored days, rather than only the
+        # plan_mode that was ASKED for.
+        self._planner_sources = planner_sources
+        if self.run_store is not None and self._run_id is not None:
+            # The row was opened above (create_run) so the cassette writer
+            # existed before attach; re-stamp its manifest now that the answer
+            # is known. Cheap and unconditional: schedule-planned runs record
+            # an all-"static" map, which is exactly as informative.
+            self.run_store.update_run(self._run_id, manifest=self._store_manifest())
         if self.planner_client is not None:
             authored = sum(1 for s in planner_sources.values() if s == "llm")
             print(
@@ -1017,6 +1235,15 @@ class PennStepper:
         self._decide_pending = {}
         self._deciding_buf = []
         self._deciding_started = {}
+        # A rebuild gets a fresh brain-outage window (#745): a reset/config
+        # apply must never inherit a tripped streak (a brain swapped to the
+        # free mock would otherwise raise on its first tick). The ledger
+        # cursor is deliberately NOT reset -- it indexes the surviving ledger,
+        # and any error rows stragglers land across the boundary are scanned
+        # (and counted against the new window) on the next tick.
+        self._brain_error_streak = 0
+        self._last_brain_error = None
+        self._llm_error_buf = []
         if self.mock_latency > 0:
             for char in self.chars.values():
                 char.agent.schedule.latency_s = self.mock_latency
@@ -1057,6 +1284,17 @@ class PennStepper:
         # react pass's edge detector. Fresh per day/reset, like the two
         # conversation dicts above.
         self._react_state = {}
+        # #795: this run's social opportunity. Reset per day/reset, like the
+        # react and conversation state above. _adopt_run flips _resumed True
+        # below when this build is a resume, not a fresh day -- a resumed
+        # run's accumulators restart at 0 with this process (unlike cost,
+        # #543's _cost_base is NOT reconstructed for co-settlement here on
+        # purpose, see _adopt_run), so they cannot be trusted as "this day had
+        # no social opportunity" and the #795 finish warning must stay quiet.
+        self._co_settled_total = 0
+        self._co_settled_by_pair: dict[tuple[str, str], int] = {}
+        self._conversations_total = 0
+        self._resumed = False
         self.emoji = {p["name"]: p["emoji"] for p in self.world.personas}
         self.order = [p["name"] for p in self.world.personas]
         self.state = {}
@@ -1073,6 +1311,11 @@ class PennStepper:
                 "memories": [],
                 "chat": None,
                 "stop_since": 0,
+                # Set when a finished stop's pointer is held by the next stop's
+                # start_hour (#826/#838); the decide prompt reads it to say the
+                # stop is done instead of showing it as overdue. This is the path
+                # a real-LLM run takes, so it is the one that actually sets it.
+                "waiting_for_anchor": False,
                 # Pinned during a multi-tick conversation (issue #371); step()
                 # skips schedule-advance/decision/movement while set. Stays set
                 # through the post-conversation playback hold (#673).
@@ -1089,12 +1332,6 @@ class PennStepper:
             locations=self.world.locations,
         )
         self._step_idx = 0
-        # Per-run ledger baseline (#526): the ledger itself survives resets
-        # on purpose (the cost ceiling is lifetime -- money spent stays
-        # spent), so the per-run view SUBTRACTS this snapshot instead of
-        # rebasing anything. Same boundary as the store's run id above.
-        self._run_ledger_calls_base = len(self.ledger.records)
-        self._run_ledger_cost_base = self.ledger.total_cost_usd()
         # Open this day's run in the store (#304). The manifest is the same
         # meta() blob the live handshake serves; each _build() gets its own id
         # -- unless we are resuming a persisted run (#543), which adopts the
@@ -1126,8 +1363,11 @@ class PennStepper:
         # ...and on this campus map: regenerating the tmj is routine
         # (tools/geo), and tiles seeded from the last frame of a
         # differently-sized map would land agents out of bounds or in walls.
+        # schema_version is deliberately NOT checked: it versions the written
+        # replay FILE encoding (#941), not the store rows this resume reads --
+        # every pre-1.1 run's manifest still says "1.0" and resumes fine.
         current = self.meta()
-        for key in ("schema_version", "width", "height"):
+        for key in ("width", "height"):
             if row["manifest"].get(key) != current[key]:
                 raise ValueError(
                     f"run {run_id} was recorded on a different map "
@@ -1162,7 +1402,12 @@ class PennStepper:
         the ``_events_seen``/``_persist_events_seen`` cursors and the wish
         buffers (correct -- the new ``game.events``/``game.wishes`` start
         empty; the stored ``events.jsonl``/``wishes.jsonl`` are append-only
-        history).
+        history). The #795 co-settled accumulators are the same: this
+        process's ``_co_settled_total`` restarts at 0, not reconstructed from
+        the persisted frames (a bigger change than the counter warrants) --
+        ``_resumed`` records that this day is not fully observed by this
+        process, so ``_finish_run`` knows a zero total here would be a false
+        alarm, not evidence.
         """
         if row is None:
             row = self._resumable_row(run_id)
@@ -1170,6 +1415,7 @@ class PennStepper:
             frames = self.run_store.read_frames(run_id)
         self._run_id = run_id
         self._step_idx = len(frames)
+        self._resumed = True
         if frames:
             last = frames[-1]
             for name in self.order:
@@ -1190,7 +1436,12 @@ class PennStepper:
             # Elapsed-on-stop (#580) restarts at the resume point: the
             # fast-forwarded schedule below IS the stop the agent is on now.
             self.state[name]["stop_since"] = self._step_idx
-            _fast_forward_schedule(agent.schedule, self._step_idx)
+            # The resume hour rides along so the fast-forward respects the
+            # same #838 anchor gate as the live loop -- without it this was
+            # the one advance() call site that ignored start_hour (#870).
+            _fast_forward_schedule(
+                agent.schedule, self._step_idx, self.clock.hour_at(self._step_idx)
+            )
             records = self.run_store.hydrated_records(run_id, name)
             if records:
                 # Replace the fresh seeds wholesale: the stored stream already
@@ -1242,6 +1493,17 @@ class PennStepper:
             6,
         )
 
+    def _by_pair_json(self) -> dict:
+        # THE `by_pair` shape, defined once (#795, mirrors _run_cost_usd
+        # above): JSON-safe "A + B" keys, busiest pair first. run_usage() and
+        # _write_run_record() both serve this -- one order, not two.
+        return {
+            f"{a} + {b}": n
+            for (a, b), n in sorted(
+                self._co_settled_by_pair.items(), key=lambda kv: -kv[1]
+            )
+        }
+
     def run_usage(self) -> dict:
         """This run's slice of the lifetime ledger (#526).
 
@@ -1264,20 +1526,55 @@ class PennStepper:
         headline ``run_cost_usd`` beside per-agent spend that reconciles with it
         (``sum(run_by_actor.values()) == run_cost_usd`` for a fresh, non-resumed
         run), instead of mixing a run-scoped total with lifetime per-agent rows.
+
+        ``run_failed_calls`` (#745) counts this run's FAILED real calls (error
+        rows) -- 0 on a healthy day; climbing while ``run_cost_usd`` stands
+        still is the mid-run-outage fingerprint, now visible in ``GET /usage``.
         """
         run_records = self.ledger.records[self._run_ledger_calls_base :]
         run_calls = 0
+        run_failed_calls = 0
         run_by_actor: dict[str, float] = {}
         for rec in run_records:
             if rec.usage.provider == "mock":
                 continue
             run_calls += 1
+            if rec.error:
+                # Failed real calls (#745): counted beside run_calls so the
+                # dashboard can tell "brain erroring" from "not being asked".
+                run_failed_calls += 1
             key = rec.actor or "(unattributed)"
             run_by_actor[key] = run_by_actor.get(key, 0.0) + rec.cost_usd
         return {
             "run_calls": run_calls,
+            "run_failed_calls": run_failed_calls,
             "run_cost_usd": self._run_cost_usd(),
             "run_by_actor": {a: round(c, 6) for a, c in run_by_actor.items()},
+            # #795: whether this run had any chance of being social. Zero here
+            # with a nonzero step count is the "structurally impossible"
+            # signature the issue reported -- surfaced rather than silent.
+            # ``conversations`` counts *completed* ones (what ``maybe_converse``
+            # returns as it ends them), so a conversation still mid-exchange at
+            # the run's last tick isn't here -- don't diff it against the
+            # viewer's live conversation feed and read an off-by-one.
+            "social": {
+                "co_settled_pair_steps": self._co_settled_total,
+                "by_pair": self._by_pair_json(),
+                "conversations": self._conversations_total,
+                # #819/#825: whether a zero here means anything. Co-settling
+                # is pure geometry, so since #825 step() counts it under EVERY
+                # brain -- `counted` is now always True; the field stays on the
+                # wire so dashboards can still feature-detect older backends
+                # that never counted under the mock. `resumed` is True when
+                # this process adopted a mid-day run, restarting the
+                # accumulators at 0 -- a zero then is "not fully observed", not
+                # "never happened". It mirrors the finish-warning gate below
+                # (which also stays silent for the mock: a run that CANNOT
+                # converse failing to converse is not a warning), so the
+                # dashboard can tell a real #795 drought from a non-signal.
+                "counted": True,
+                "resumed": self._resumed,
+            },
         }
 
     def meta(self) -> dict:
@@ -1298,16 +1595,35 @@ class PennStepper:
             # Same projection the bake uses (penn_world.persona_meta_entry): name/
             # emoji for the sprite + sidebar, persona/home/schedule for the State
             # Details inspector (issue #408), so live and baked meta stay identical.
+            # `schedule` here is the AUTHORED persona YAML the world was seeded
+            # from -- not the day the run executed (#824). Under the default
+            # --plan llm the planner's day replaces it and the two differ; the
+            # executed plan is the manifest's `daily_plans` (_store_manifest).
             "personas": [persona_meta_entry(p) for p in self.world.personas],
             # The t=0 seed social graph, already validated/normalized by
             # penn_world.relationships_meta at build time -- the same list the
             # bake writes, so the social-graph pop-up (#252) sees identical
             # seed edges live and baked.
             "relationships": self.world.relationships,
+            # #780: same sorted place list the bake writes, so baked and live
+            # meta cannot drift. Reads PennWorld.locations, as the planner's
+            # known_places already does.
+            "locations": sorted(loc["name"] for loc in self.world.locations),
             # What is driving the cast: None under the mock brain, else the
             # provider/model, so the viewer can say which model it is watching.
             "llm": (
-                {"provider": self.llm["provider"], "model": self.llm["model"]}
+                {
+                    "provider": self.llm["provider"],
+                    "model": self.llm["model"],
+                    # Thinking depth is part of "which brain was this?" -- two
+                    # runs on the same model at different effort are different
+                    # experiments, so the manifest has to tell them apart.
+                    "effort": self.llm.get("effort"),
+                    # The #368 per-role tiering map (already merged with
+                    # --model-for): without it a tiered run's manifest would
+                    # claim every role ran on "model". None when untiered.
+                    "models": self.llm.get("models"),
+                }
                 if _is_paid(self.llm)
                 else None
             ),
@@ -1326,6 +1642,36 @@ class PennStepper:
         data.pop("embedding", None)
         return data
 
+    def _plans_for_manifest(self) -> dict:
+        """Each agent's ``DailyPlan``, as of this manifest write (#824).
+
+        ``planner_sources`` says *where* each day came from; this says *what it
+        is* -- the stops the step loop walks, serialized through the plan's own
+        ``to_primitive()`` (the #298 rule: one formatter, so the manifest, the
+        baked ``daily_plan.json`` and ``GET /agents/{name}/plan`` can't drift).
+
+        This is NOT ``personas[].schedule`` in the meta block above, which is
+        the authored persona YAML the world was seeded from. Under the default
+        ``--plan llm`` the planner writes a fresh day that never lands back in
+        ``world.personas``, so before this the run record showed the seed
+        schedule beside ``planner_sources: llm`` and read as if it were the
+        plan -- which cost #821 two wrong revisions.
+
+        **Which plan you get.** ``_store_manifest`` is stamped after
+        ``attach_agents`` (the t=0 generated day) and again at ``_finish_run``,
+        so a run that finished records the day the agent ENDED with. Read
+        ``revision`` to tell the two apart: 0 means the planner's day was never
+        touched, >0 means ``maybe_revise_plan`` rewrote the unstarted tail that
+        many times and this is no longer what the planner first produced. A run
+        killed before finish keeps the t=0 stamp (its row stays "running").
+        """
+        plans = {}
+        for name, char in self.chars.items():
+            plan = getattr(char.agent, "plan", None) if char.agent else None
+            if plan is not None:
+                plans[name] = plan.to_primitive()
+        return plans
+
     def _store_manifest(self) -> dict:
         """The manifest persisted to the store: the handshake meta() plus the
         provenance a re-run needs (#715). Kept OFF meta() itself so the live
@@ -1342,9 +1688,30 @@ class PennStepper:
             **self.meta(),
             "seed": self.seed,
             "engine_sha": self._engine_sha,
+            # Which SCENARIOS entry built this run's world (#747), so a re-run
+            # rebuilds the same world instead of the default campus. Pre-#747
+            # manifests lack the key and read back as the default scenario.
+            "scenario": self.scenario,
             "cognition_tools": self.cognition_tools,
             "react": self.react,
             "plan_mode": self.plan_mode,
+            # Per-persona plan provenance (#787): {name: "llm"|"static"}. The
+            # plan_mode above is the request; this is what each agent got.
+            "planner_sources": self._planner_sources,
+            # What each agent actually planned (#824): {name:
+            # DailyPlan.to_primitive()}, carrying `revision` so a reader can
+            # tell a never-revised day from a replanned one. See
+            # _plans_for_manifest -- and note this, NOT `personas[].schedule`
+            # above, is the run's plan.
+            "daily_plans": self._plans_for_manifest(),
+            # The step BUDGET this run was launched with -- not how many steps
+            # it actually took (that is the row's `steps`). meta() deliberately
+            # omits it, but a re-run needs it (#787): LLMPlanner bounds the day
+            # to the clock window the budget covers and puts that window in its
+            # prompt, so a run stopped early -- at the cost ceiling, or by a
+            # human -- would otherwise re-plan against a shorter window, change
+            # the request key, and miss the cassette.
+            "num_steps": self.num_steps,
             # The #564 --config, so a re-run rebuilds the same retrieval/
             # temperature/cognition and the cassette's request keys line up.
             # A default run stores None; pre-#564 manifests simply lack the key.
@@ -1373,6 +1740,31 @@ class PennStepper:
         start = datetime.datetime.fromisoformat(SIM_START)
         return str(start + datetime.timedelta(seconds=self.num_steps * SEC_PER_STEP))
 
+    def _llm_resolve_base(self):
+        """The llm settings a brain change re-resolves from (#845).
+
+        NOT the raw world YAML: the YAML pins one model at no thinking depth, so
+        resolving from it discarded the launch ``--model`` / ``--effort`` /
+        ``--model-for`` overrides on every brain change -- a "re-run this setup"
+        that quietly moved a Sonnet-at-medium run onto the YAML's Haiku.
+        ``resolve_llm`` starts from ``dict(world_llm or {})``, so a resolved dict
+        feeds it unchanged. The YAML is still the base on a server that has never
+        run a paid brain -- it is where provider/model come from at all.
+
+        Read by ``describe_config`` too (#887), so the model GET /config reports
+        and the model a POST would resolve to cannot drift.
+        """
+        if _is_paid(self.llm):
+            return self.llm
+        return self._paid_llm_base or self.world.llm
+
+    def _effective_model(self) -> str:
+        """The model this run would drive (#887): whatever ``_llm_resolve_base``
+        names, or the fallback ``resolve_llm`` itself would apply. Concrete even
+        on a free brain, where it means "the model a switch to llm would use" --
+        which is what makes an untouched dropdown safe to leave unsent."""
+        return (self._llm_resolve_base() or {}).get("model") or DEFAULT_LLM_MODEL
+
     def describe_config(self) -> dict:
         """The pre-run config surface GET /config serves (#732); read-only.
 
@@ -1399,8 +1791,39 @@ class PennStepper:
             "cast": [e["id"] for e in personas if e["name"] in active],
             "knobs": {"defaults": defaults, "current": current},
             "brains": brains,
+            # The planner knob (#787). `plans` is the accepted vocabulary and
+            # `run.plan` the RESOLVED value the current brain would run. The
+            # setup screen now re-derives the auto rule client-side anyway
+            # (config_body.effective_plan) -- it has to, because the brain
+            # dropdown moves the resolved planner without a round-trip -- so
+            # `run.plan` here is just the initial resolved value, not the reason
+            # the client can avoid re-deriving.
+            "plans": ["auto", "schedule", "llm"],
+            # The thinking-depth vocabulary (#845), including the explicit
+            # "default" (= send no thinking config). Advertised like `brains` and
+            # `plans` so a client hard-codes no level list.
+            "efforts": list(EFFORT_CHOICES),
+            # The model vocabulary (#887): priced Anthropic models, so a saved
+            # run's model can be asked for again on a fresh server instead of
+            # silently resolving the world YAML's. See _model_choices for why it
+            # is the priced set and not free text.
+            "models": _model_choices(self._effective_model()),
             "run": {
                 "brain": self._brain_name(),
+                "plan": self.plan_mode,
+                # The RAW request (#791): "auto" until someone opts out. The
+                # setup screen defaults its dropdown to this, so an untouched
+                # dropdown truthfully means "keep the session's request".
+                "plan_request": self._plan_mode_flag,
+                # The thinking depth in force (#845), as a member of `efforts`:
+                # "default" when none is requested (or on a free brain, where it
+                # is inert), so an untouched dropdown truthfully means "keep the
+                # session's depth" under the only-send-changed contract.
+                "effort": _effort_of(self.llm),
+                # The model in force (#887) -- concrete even on a free brain (the
+                # one a switch to llm would use), so an untouched dropdown
+                # truthfully means "keep the session's model".
+                "model": self._effective_model(),
                 "steps": self.num_steps,
                 "stop_time": self._stop_time(),
                 "max_cost": self.ledger.max_cost_usd,
@@ -1412,6 +1835,9 @@ class PennStepper:
         *,
         cast: list[str] | None = None,
         brain: str | None = None,
+        plan: str | None = None,
+        effort: str | None = None,
+        model: str | None = None,
         sim_config: dict | None = None,
         steps: int | None = None,
         max_cost: float | None = None,
@@ -1456,15 +1882,12 @@ class PennStepper:
                 raise ValueError(
                     f"unknown brain: {brain!r} (valid: mock, scripted, llm)"
                 )
-            if self.plan_mode == "llm" and brain != "llm":
-                raise ValueError(
-                    "this server launched with --plan llm, which needs the "
-                    "llm brain (the planner shares its client)"
-                )
             if max_cost is not None and brain != "llm":
                 raise ValueError("max_cost needs the llm brain")
             try:
-                new_llm = resolve_llm(self.world.llm, brain, max_cost=max_cost)
+                new_llm = resolve_llm(
+                    self._llm_resolve_base(), brain, max_cost=max_cost
+                )
                 if _is_paid(new_llm):
                     # create_llm_client imports anthropic lazily -- _init_brain
                     # is the first place that actually happens, which is AFTER
@@ -1489,6 +1912,57 @@ class PennStepper:
             if not _is_paid(new_llm):
                 raise ValueError("max_cost needs the llm brain")
             new_llm = dict(new_llm, max_cost_usd=max_cost)
+        # Thinking depth (#845), applied against the brain THIS apply lands on --
+        # so it works whether or not `brain` rode along, and so the llm-brain rule
+        # is checked once (the same shape as max_cost above). "default" is the
+        # explicit "no thinking config", the only way to clear a launch --effort.
+        if effort is not None:
+            if effort not in EFFORT_CHOICES:
+                raise ValueError(
+                    f"unknown effort {effort!r}: valid levels are "
+                    f"{', '.join(EFFORT_CHOICES)}"
+                )
+            if effort != "default":
+                if not _is_paid(new_llm):
+                    raise ValueError("effort needs the llm brain")
+                new_llm = dict(new_llm, effort=effort)
+            elif _is_paid(new_llm):
+                # "default" asks for no thinking config, which a free brain
+                # already has -- so unlike a level it is never an error, and a
+                # client that switches to mock can send it along with the brain.
+                new_llm = {k: v for k, v in new_llm.items() if k != "effort"}
+        # The model (#887), same shape and same llm-brain rule as the depth above.
+        # Restricted to the advertised choices -- a typo here would otherwise run
+        # a whole paid day against a model that prices at $0, so the manifest
+        # would report a Sonnet showcase run as free. There is no "default"
+        # sentinel: a model always has a concrete value (`run.model`), so
+        # "unchanged" is what an untouched form sends -- nothing.
+        if model is not None:
+            choices = _model_choices(self._effective_model())
+            if model not in choices:
+                raise ValueError(
+                    f"unknown model {model!r}: this surface offers "
+                    f"{', '.join(choices)} (the CLI's --model takes any id)"
+                )
+            if not _is_paid(new_llm):
+                raise ValueError("model needs the llm brain")
+            new_llm = dict(new_llm, model=model)
+        # The planner (#787). Resolved against the brain THIS apply lands on,
+        # not the one the server launched with: the config session is the run's
+        # setup authority, so switching to mock must drop an auto-resolved llm
+        # planner back to the schedule rather than fail. Only an explicit
+        # `plan: "llm"` on a free brain is an error -- the same rule (and the
+        # same message, re-voiced as a 400) __init__ applies to --plan llm.
+        new_plan_flag = plan if plan is not None else self._plan_mode_flag
+        if new_plan_flag not in ("auto", "schedule", "llm"):
+            raise ValueError(
+                f"unknown plan: {new_plan_flag!r} (valid: auto, schedule, llm)"
+            )
+        new_plan_mode = _resolve_plan_mode(new_plan_flag, new_llm)
+        if new_plan_mode == "llm" and not _is_paid(new_llm):
+            raise ValueError(
+                "plan 'llm' needs the llm brain (the planner shares its client)"
+            )
         effective_cast = cast if cast is not None else self._cast
         world = (
             self._world_builder(cast=effective_cast)
@@ -1502,7 +1976,24 @@ class PennStepper:
         self.retrieval = (
             new_sim_config.retrieval if new_sim_config is not None else None
         )
-        if brain is not None:
+        # Set BEFORE _init_brain -- that is what reads plan_mode to decide
+        # whether to build the dedicated planner client (#787).
+        plan_changed = new_plan_mode != self.plan_mode
+        self._plan_mode_flag = new_plan_flag
+        self.plan_mode = new_plan_mode
+        # An effort change alone needs the brain rebuilt too (#845): the clients
+        # read the depth once, at construction (LlmConfig.effort ->
+        # AnthropicClient._effort), so without this the new depth would show up in
+        # meta()/the manifest and nowhere on the wire.
+        effort_changed = _effort_of(self.llm) != _effort_of(new_llm)
+        # ...and a model change, for the same reason (#887): AnthropicClient reads
+        # `config.model` once, in __init__.
+        model_changed = _model_of(self.llm) != _model_of(new_llm)
+        if brain is not None or plan_changed or effort_changed or model_changed:
+            # A plan change alone still needs the brain rebuilt: the planner
+            # client is constructed there, so turning the planner on (or off)
+            # without this would leave plan_mode saying "llm" and every agent
+            # still on the MockPlanner.
             self._init_brain(new_llm)
         else:
             self.llm = new_llm  # a max_cost-only change still lands in meta()
@@ -1534,6 +2025,23 @@ class PennStepper:
             # None = the world YAML's own default cast (never overridden).
             "cast": effective_cast,
             "brain": self._brain_name(),
+            # The RESOLVED planner (#787), matching `brain` above -- what the
+            # run will actually do, not the "auto" that was asked for.
+            "plan": self.plan_mode,
+            # ...and the "auto" (or explicit value) that WAS asked for (#791),
+            # so a saved run's re-run seed reproduces the request rather than
+            # freezing the resolution.
+            "plan_request": self._plan_mode_flag,
+            # The thinking depth this run will think at (#845) -- a brain
+            # property, like `brain` itself, not a run control. "default" means
+            # no thinking config, so a re-run seed can reproduce THAT too
+            # instead of inheriting whatever depth the next server launched with.
+            "effort": _effort_of(self.llm),
+            # The model this run drives (#887), or None on a free brain. THE piece
+            # that made a cross-process re-run impossible: the block recorded
+            # `brain: "llm"` and nothing else, so a fresh server resolved its own
+            # world YAML and a saved Sonnet run came back on Haiku.
+            "model": _model_of(self.llm),
             "sim_config": self._sim_config_for_manifest(),
             "run": {
                 "steps": self.num_steps,
@@ -1566,6 +2074,22 @@ class PennStepper:
         if not self.endless and self._step_idx >= self.num_steps:
             self._finish_run()
             return None
+        # Mid-run brain outage (#745): the brain is failing every call (auth
+        # revoked, quota, network down). Raising here -- BEFORE spending more
+        # failing round-trips -- hands the run to backend.live's #637 tick-error
+        # handler, which pauses visibly and publishes status(reason="error")
+        # with this message, instead of the silent frozen-cast freeze. The
+        # streak resets so a POST /resume retries with a fresh window.
+        if (
+            self.llm_client is not None
+            and self._brain_error_streak >= BRAIN_OUTAGE_PAUSE_STREAK
+        ):
+            streak, last = self._brain_error_streak, self._last_brain_error
+            self._brain_error_streak = 0
+            raise BrainOutage(
+                f"{streak} consecutive LLM call failures (last: {last}) -- "
+                "pausing the run; fix the key/network, then resume to retry"
+            )
         # DEBUG (#372): fake a decision stall so the head stops growing long
         # enough for the viewer's "thinking…" indicator to fire. Holding the app
         # lock here is the point -- pollers wait, exactly like a real brain mid-
@@ -1577,7 +2101,8 @@ class PennStepper:
         ):
             time.sleep(self.stall_seconds)
         decide_info = {}
-        raw, _chats = step(
+        social_info: dict = {}
+        raw, chats = step(
             self.game,
             self.chars,
             self.state,
@@ -1590,6 +2115,9 @@ class PennStepper:
             # defaults. step() has threaded this into every decide since #296.
             retrieval=self.retrieval,
             clock=self.clock,
+            # The day's length, for the decide context's end-of-day clause
+            # (#891) -- an agent otherwise starts walks the run cannot fit.
+            num_steps=self.num_steps,
             # Real conversations only when a real brain drives -- the same gate
             # simulate() applies (conversation_enabled = llm_client is not None).
             conversation_enabled=self.llm_client is not None,
@@ -1607,7 +2135,12 @@ class PennStepper:
             deciding_sink=(
                 self._deciding_sink if self.llm_client is not None else None
             ),
+            social_info=social_info,
         )
+        self._conversations_total += chats
+        for pair in social_info.get("pairs", ()):
+            self._co_settled_by_pair[pair] = self._co_settled_by_pair.get(pair, 0) + 1
+        self._co_settled_total += social_info.get("co_settled", 0)
         self.last_deciders = decide_info.get("deciders", 0)
         for name in decide_info.get("timeouts", ()):
             # Mirror the injector's FIRE print: the skipped decision must be
@@ -1616,6 +2149,13 @@ class PennStepper:
                 f"  - DECIDE TIMEOUT {name} @ step {self._step_idx} -- "
                 "idling this tick; its answer will apply when the call resolves"
             )
+        # Brain health (#745): pick up any error rows the tick's calls (or a
+        # parked #366 straggler) landed in the ledger -- each becomes a feed
+        # row and counts against the consecutive-failure streak checked above.
+        # Real/scripted brains only: the mock never errors and must never pay
+        # the scan.
+        if self.llm_client is not None:
+            self._scan_llm_failures()
         frame = {name: replay_frame_entry(raw[name]) for name in self.order}
         # Paint authored dialogue post-step, exactly where the bake's injector
         # runs (on the converted frames, never the engine state) -- so a future
@@ -1690,20 +2230,50 @@ class PennStepper:
         self._persist_events_seen = len(self.game.events)
 
     def _finish_run(self) -> None:
-        # Idempotent: the live loop keeps ticking a finished day (every tick
-        # returns None) and only the first one flips the status. The tail
-        # flush catches events (and wishes, #622) logged after the final tick
-        # (#307).
+        # The tail flush catches events (and wishes, #622) logged after the
+        # final tick (#307) -- these stay outside the idempotence guard below
+        # since a straggler can land between two calls here (e.g. two
+        # already-finished ticks with a POST /world/event between them) and
+        # each is a cheap no-op without a store or new pending item anyway.
         self._persist_pending_events()
         self._persist_pending_wishes()
+        # Idempotent from here down: the live loop keeps ticking a finished
+        # day (every tick returns None) and repeated POST /resume calls on an
+        # already-finished run reach here too -- only the FIRST call may warn
+        # or touch the store, or a long-lived live loop would re-print the
+        # #795 warning below forever.
+        if self._run_finished:
+            return
+        # #795: a run that never gave two agents a moment together produced no
+        # conversation and could not have. Say so -- that silence is the whole
+        # complaint the issue opened with. A resumed run is excluded: its
+        # accumulators restart at 0 with this process (unlike cost, which
+        # #543's _cost_base carries across resume) rather than being
+        # reconstructed from persisted frames, so a zero here means "this
+        # process didn't see it", not "it never happened" -- printing would be
+        # a false alarm, and silence beats that.
         if (
-            self.run_store is not None
-            and self._run_id is not None
-            and not self._run_finished
+            self.llm_client is not None
+            and self._step_idx
+            and not self._co_settled_total
+            and not self._resumed
         ):
-            self.run_store.update_run(self._run_id, status="finished")
+            print(
+                f"  - WARNING no two agents were ever settled together in "
+                f"{self._step_idx} steps -- conversation was impossible this "
+                f"run (#795). Check the day plans: try --plan schedule to "
+                f"compare."
+            )
+        if self.run_store is not None and self._run_id is not None:
+            # Re-stamp the manifest as well as the status: `daily_plans` (#824)
+            # is only final once the day is over, since maybe_revise_plan can
+            # rewrite an agent's unstarted tail at any tick. Everything else in
+            # the blob is build-time constant, so this changes nothing else.
+            self.run_store.update_run(
+                self._run_id, status="finished", manifest=self._store_manifest()
+            )
             self._write_run_record()
-            self._run_finished = True
+        self._run_finished = True
 
     def _write_run_record(self) -> None:
         """Save the run's reproducibility recipe next to its frames (#715).
@@ -1722,7 +2292,13 @@ class PennStepper:
                 "sha256": file_sha256(self._cassette_path),
             },
             engine_version=self._engine_sha,
-            result={"steps": self._step_idx, "cost_usd": self._run_cost_usd()},
+            result={
+                "steps": self._step_idx,
+                "cost_usd": self._run_cost_usd(),
+                "co_settled_pair_steps": self._co_settled_total,
+                "by_pair": self._by_pair_json(),
+                "conversations": self._conversations_total,
+            },
         )
         record.save(str(self.run_store.root / self._run_id / "run.yaml"))
 
@@ -1795,12 +2371,54 @@ class PennStepper:
             self._deciding_buf = []
         return rows
 
+    def _scan_llm_failures(self) -> None:
+        """Scan ledger rows appended since the last scan for failed calls (#745).
+
+        Each failure -- an API error the adapter degraded to ``None``, recorded
+        as a zero-cost error row -- is buffered as an ``llm_error`` feed row
+        (published by :meth:`drain_events`) and counts against the
+        consecutive-failure streak ``tick()`` checks. A genuinely answered call
+        (non-mock, with real token usage) clears the streak; the zero-usage
+        retry-attempt rows (#260) and the mock pacing records are neutral, so
+        interleaved retries can never mask a dead key. Runs on the tick thread;
+        a parked #366 straggler may append concurrently, which is safe (list
+        append/slice are GIL-atomic) -- a row this scan misses is simply picked
+        up next tick.
+        """
+        fresh = self.ledger.records[self._llm_failures_seen :]
+        self._llm_failures_seen += len(fresh)
+        for rec in fresh:
+            usage = rec.usage
+            if usage.provider == "mock":
+                continue
+            if rec.error:
+                self._brain_error_streak += 1
+                self._last_brain_error = rec.error
+                self._llm_error_buf.append(
+                    {
+                        "kind": "llm_error",
+                        "agent": rec.actor,
+                        "role": rec.role,
+                        "error": rec.error,
+                        "streak": self._brain_error_streak,
+                    }
+                )
+                # Mirror the DECIDE TIMEOUT print: a failed model call must be
+                # visible in the run log even with --no-monitor.
+                print(
+                    f"  - LLM ERROR {rec.actor or '(unattributed)'} @ step "
+                    f"{self._step_idx}: {rec.error} "
+                    f"({self._brain_error_streak} consecutive)"
+                )
+            elif usage.total_input_tokens or usage.output_tokens:
+                self._brain_error_streak = 0
+
     def drain_events(self) -> list:
         """New change-feed rows formed during the last ``tick()`` (#398, #467).
 
         ``backend.live`` probes this optional method after every tick and
         publishes each returned dict as a ``kind: "engine"`` change-feed
-        record. Two row types ride it, told apart by their inner ``kind``:
+        record. Three row types ride it, told apart by their inner ``kind``:
 
         * ``"llm_call"`` -- the request monitor's kept records (a flattened
           :class:`~text_adventure_games.usage.CallRecord` plus ``role``/
@@ -1810,6 +2428,11 @@ class PennStepper:
           drain (#467), ``to_primitive()`` dicts (the #305 EventState shape,
           identical to what the replay bake persists), e.g. the boil-water
           ``sickness`` events (#465).
+        * ``"llm_error"`` -- one row per FAILED model call (#745):
+          ``{agent, role, error, streak}``, buffered by
+          :meth:`_scan_llm_failures` regardless of whether a monitor is wired,
+          so a mid-run API outage names the erroring agent in the feed instead
+          of freezing the cast silently.
 
         A finishing tick (``tick()`` -> ``None``) can still drain rows -- a
         ``POST /world/event`` landing between the last real tick and the
@@ -1820,6 +2443,10 @@ class PennStepper:
         rows = []
         if self.monitor is not None:
             rows.extend(dict(rec, kind="llm_call") for rec in self.monitor.drain())
+        # Failed-call rows (#745), right after the llm_call log lines they
+        # annotate; buffered by _scan_llm_failures, monitor or not.
+        rows.extend(self._llm_error_buf)
+        self._llm_error_buf = []
         new_events = self.game.events[self._events_seen :]
         self._events_seen = len(self.game.events)
         rows.extend(
@@ -1903,7 +2530,18 @@ class PennStepper:
             and self._run_id is not None
             and not self._run_finished
         ):
-            self.run_store.update_run(self._run_id, status="reset")
+            # ...and bank what it spent (#782). _persist_tick writes cost per
+            # tick, so a day that ran keeps the sum it already had; a run
+            # closed BEFORE its first tick has never persisted one and would
+            # otherwise keep cost=0.0 no matter what it spent. That is not
+            # hypothetical under --plan llm: the boot run of a config session
+            # (#732) pays for a model-authored day at attach time and is then
+            # discarded by apply_config, so without this its planning spend
+            # is charged to no run at all -- the same hole as the baseline
+            # above, one build later. steps stays _persist_tick's to write.
+            self.run_store.update_run(
+                self._run_id, status="reset", cost=self._run_cost_usd()
+            )
         self._run_id = None
 
     def reset(self) -> None:
@@ -2065,43 +2703,59 @@ def _sim_config_from_manifest(manifest: dict) -> SimulationConfig | None:
     return SimulationConfig.from_dict(data) if data else None
 
 
-def reproduce_run(store: RunStore, run_id: str, world=None) -> ReproResult:
+def reproduce_run(store: RunStore, run_id: str) -> ReproResult:
     """Re-run a persisted run offline from its cassette + seed and check the
     frames come out byte-identical to what the store holds (#715).
 
     Zero network: the world is driven by a ReplayClient over
     runs/<id>/cassette.jsonl -- no provider, no key, no spend. The re-run
-    reconstructs the recorded cognition config (seed, cognition_tools, react,
-    plan_mode, sim_config) from the manifest and always forces decide_workers=0, so
-    byte-identity holds for runs that were recorded under sequential decide
-    (the default for --brain scripted; opt-in via --decide-workers 0 for
-    --brain llm). A run recorded under parallel decide (--decide-workers > 0,
-    the paid default) may have resolved its agents' decisions in a different
-    order than a serial re-run would, so it is outside this guarantee.
+    reconstructs the recorded scenario world (#747) and cognition config
+    (seed, cognition_tools, react, plan_mode, sim_config) from the manifest
+    and always forces decide_workers=0, so byte-identity holds for runs that
+    were recorded under sequential decide (the default for --brain scripted;
+    opt-in via --decide-workers 0 for --brain llm). A run recorded under
+    parallel decide (--decide-workers > 0, the paid default) may have
+    resolved its agents' decisions in a different order than a serial re-run
+    would, so it is outside this guarantee.
+
+    Model-planned runs re-run too (#787). ``--plan llm`` used to be refused
+    here -- the planner's day was model-authored but the re-run's planner was
+    the mock, so it could only diverge. It now replays out of the same cassette
+    as every other call (see the replay branch in ``_init_brain``), which is
+    what lets ``--plan llm`` be the live default without giving up #715.
+
+    The manifest's ``model`` and ``effort`` (#845) are deliberately NOT
+    reconstructed: ``recording.request_key`` hashes only the method, messages and
+    sampling params, and thinking depth is applied further down, inside
+    ``AnthropicClient._sampling_kwargs``. So neither reaches a cassette key and
+    byte-identity here is indifferent to both. Reproducing a run's thinking depth
+    is the *config* re-run's job (``apply_config``'s ``effort``), not this one's.
     """
     row = store.get_run(run_id)
     if row is None:
         raise KeyError(f"unknown run id: {run_id}")
     manifest = row["manifest"]
     seed = int(manifest.get("seed", 0))
+    # The recorded scenario (#747): rebuild through the SAME SCENARIOS dispatch
+    # serve_penn uses at boot, or a --scenario boil run would be replayed on a
+    # default-campus world and report DIVERGED despite reproducing perfectly.
+    # Pre-#747 manifests lack the key and mean the default scenario (the only
+    # world they could have been recorded on). An unknown name fails loudly --
+    # ValueError, the vocabulary the CLI and the HTTP route (409) both map --
+    # rather than silently building the wrong world.
+    scenario_name = manifest.get("scenario", "penn")
+    scenario = SCENARIOS.get(scenario_name)
+    if scenario is None:
+        raise ValueError(
+            f"run {run_id} was recorded with unknown scenario "
+            f"{scenario_name!r} (this build knows: {', '.join(sorted(SCENARIOS))}); "
+            "refusing to rebuild the default campus and report a bogus verdict"
+        )
     cassette_path = str(store.root / run_id / "cassette.jsonl")
     if not os.path.exists(cassette_path):
         raise ValueError(
             f"run {run_id} has no cassette -- only runs recorded with a real "
             "client (--brain scripted|llm) can be re-run"
-        )
-    if manifest.get("plan_mode") == "llm":
-        # #715 review, Addition A: PennStepper.__init__ raises SystemExit for
-        # plan_mode="llm" unless the brain is paid (the re-run brain is
-        # always llm=None, i.e. unpaid) -- and that guard runs BEFORE the
-        # replay branch below, so a --plan llm run would otherwise escape as
-        # SystemExit. Inside the HTTP route's run_in_executor worker thread a
-        # BaseException like SystemExit is swallowed by threading's bootstrap
-        # and hangs the request instead of failing cleanly, so refuse it here
-        # first with the established ValueError vocabulary (404/409 upstream).
-        raise ValueError(
-            f"run {run_id} used --plan llm (a model-authored day); re-run of "
-            "model-planned runs is not supported yet"
         )
     stored = store.read_frames(run_id)
     n = len(stored)
@@ -2111,10 +2765,18 @@ def reproduce_run(store: RunStore, run_id: str, world=None) -> ReproResult:
     # tick, so snapshot and restore global random state to isolate the re-run's
     # determinism from the rest of the process.
     _rng_state = random.getstate()
+    rerun = []
+    miss_at = None
     try:
         stepper = PennStepper(
-            num_steps=n,
-            world=world if world is not None else build_penn_world(),
+            # The recorded BUDGET, not the frame count: it shapes the planner's
+            # prompt (#787), and a run stopped early has fewer frames than
+            # steps. We tick exactly n times below regardless, so a larger
+            # budget only means the re-run doesn't call itself finished.
+            # Pre-#787 manifests lack the key; those runs are schedule-planned,
+            # where num_steps reaches no prompt, so n is as good as anything.
+            num_steps=int(manifest.get("num_steps", n)),
+            world=scenario["world"](),
             monitor=None,
             llm=None,  # the replay branch below supplies the brain; llm is unused
             run_store=None,  # ephemeral: never persist over the original
@@ -2125,9 +2787,11 @@ def reproduce_run(store: RunStore, run_id: str, world=None) -> ReproResult:
             react=manifest.get("react", False),
             plan_mode=manifest.get("plan_mode", "schedule"),
             sim_config=_sim_config_from_manifest(manifest),
+            # The scenario's pinned perception radius (#728) shaped the
+            # recorded observations (and so the cassette's request keys);
+            # None for penn/boil leaves the config/default value, unchanged.
+            vision_r=scenario["vision_r"],
         )
-        rerun = []
-        miss_at = None
         for _ in range(n):
             try:
                 frame = stepper.tick()
@@ -2145,6 +2809,11 @@ def reproduce_run(store: RunStore, run_id: str, world=None) -> ReproResult:
             if frame is None:
                 break
             rerun.append(frame)
+    except CassetteMiss:
+        # The same divergence, one build earlier (#787): under --plan llm the
+        # planner runs inside _build(), so a re-run whose PLANNING diverges
+        # misses the cassette before there is a stepper to tick. Frame 0.
+        miss_at = 0
     finally:
         random.setstate(_rng_state)
 
@@ -2252,17 +2921,27 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     ap.add_argument(
         "--plan",
-        choices=("schedule", "llm"),
-        default="schedule",
-        help="schedule (default): agents follow the authored YAML day, so the "
-        "hand-tuned meeting overlaps hold. llm: the model authors each agent's "
-        "day (LLMPlanner, #397) -- free-play, so scripted rendezvous meetings "
-        "may not converge. Requires --brain llm",
+        choices=("auto", "schedule", "llm"),
+        default="auto",
+        help="auto (default): llm under --brain llm, schedule otherwise (#787) "
+        "-- a run paying for model cognition gets a model-authored day. "
+        "schedule: agents follow the authored YAML day, so the hand-tuned "
+        "meeting overlaps hold. llm: the model authors each agent's day "
+        "(LLMPlanner, #397) -- free-play, so scripted rendezvous meetings may "
+        "not converge; requires --brain llm",
     )
     ap.add_argument(
         "--model",
         default=None,
         help="override the llm: block's model for this run (--brain llm only)",
+    )
+    ap.add_argument(
+        "--effort",
+        choices=EFFORT_LEVELS,
+        default=None,
+        help="thinking depth for models that support it (--brain llm only). "
+        "Unset sends no thinking config, exactly as before. Note current "
+        "models charge thinking as output tokens, so raising this raises cost",
     )
     ap.add_argument(
         "--max-cost",
@@ -2440,6 +3119,7 @@ def main() -> int:
         model=args.model,
         max_cost=args.max_cost,
         model_for=_parse_model_for(args.model_for),
+        effort=args.effort,
     )
     if _is_paid(llm):
         # The key exists (resolve_llm gates that); now prove the API accepts
@@ -2513,6 +3193,7 @@ def main() -> int:
             sim_config=sim_config,
             world_builder=scenario["world"],
             vision_r=scenario["vision_r"],
+            scenario=args.scenario,
         )
     except ImportError as e:
         raise SystemExit(f"{e}\n(--brain llm needs the LLM extra: uv sync --extra llm)")

@@ -17,6 +17,151 @@ from text_adventure_games.things.characters import MAX_ENERGY
 from .drives import clear_low_energy_if_recovered
 
 
+def _tile_address_parent(location):
+    """The ``world:sector`` portion of a location's tile address, or ``None``.
+
+    Penn's named rooms use arena-level addresses below a shared building
+    sector.  The addressless campus hub intentionally has no parent: callers
+    treat it as matching every place, mirroring the run analyzer's
+    ``same_place_total`` classification.
+    """
+    address = getattr(location, "tile_address", None)
+    if not address:
+        return None
+    return ":".join(str(address).split(":")[:2])
+
+
+def travel_destination_allowed(game, character, destination) -> bool:
+    """Whether ``character`` may travel to ``destination`` right now.
+
+    A scheduled character may deviate to a genuinely different building, but
+    cannot bounce among the lobby, rooms, and addressless campus hub that all
+    represent its current place.  Within that same-place group, the plan's own
+    stops -- the current scheduled stop and the *next* one -- are the only
+    legal destinations, each until arrival.  Characters without an attached
+    schedule retain the engine's unrestricted travel behavior.
+
+    The next stop earns its place from #885: an agent whose finished stop is
+    anchor-held (#838) has a prompt saying "your next stop is <room>" while a
+    current-stop-only menu offers no same-building destination at all -- in
+    #760 batch 7 the model then picked the nearest *name* on the menu, a
+    lookalike room in a building 53 minutes away, and walked 55 minutes on it.
+    The menu must offer the place the prompt promises.
+
+    This is the single authority used both to curate cognition's travel choices
+    and by :class:`Travel`'s parser gate, so free-text and oversized-enum
+    fallbacks cannot bypass the model-facing menu.
+    """
+    schedule = getattr(getattr(character, "agent", None), "schedule", None)
+    scheduled_name = getattr(schedule, "destination", None)
+    current = getattr(character, "location", None)
+    if schedule is None or not scheduled_name or current is None:
+        return True
+
+    scheduled = game.locations.get(scheduled_name)
+    if scheduled is None:
+        # Schedules are normally grounded during world construction.  If a
+        # hand-built character carries an invalid stop, do not silently disable
+        # all ordinary travel; the existing destination matching remains the
+        # authoritative validation for that malformed setup.
+        return True
+
+    current_parent = _tile_address_parent(current)
+    destination_parent = _tile_address_parent(destination)
+    same_place = (
+        current_parent is None
+        or destination_parent is None
+        or current_parent == destination_parent
+    )
+    if not same_place:
+        return True
+    if destination is scheduled:
+        return current is not scheduled
+    next_place = (getattr(schedule, "next_stop", None) or {}).get("place")
+    next_loc = game.locations.get(next_place) if next_place else None
+    if next_loc is not None and destination is next_loc:
+        return current is not next_loc
+    # Reactive sleep (#931 follow-up): ScheduleMockClient._choose overrides the
+    # schedule entirely once the character is tired, heading for sleep_spot
+    # instead of whatever the authored stop says -- this gate must recognize
+    # that destination as legal too, or a character reactively redirected away
+    # from an addressless hub (same_place is unconditionally True there) gets
+    # refused with "stay at your scheduled stop" and never reaches bed.
+    sleep_spot = getattr(schedule, "sleep_spot", None)
+    if (
+        sleep_spot
+        and character.get_property(Property.IS_SLEEPY)
+        and destination is game.locations.get(sleep_spot)
+    ):
+        return current is not destination
+    return False
+
+
+def anchor_travel_refusal(game, character, destination):
+    """Reason to refuse a leg that cannot beat the next pinned stop, or ``None``.
+
+    The hard travel gate `docs/design/anchor-hold-context-826.md` held in
+    reserve, armed by #885: in #760 batch 7 an agent whose context truthfully
+    said "your next stop starts in 15 min" and "Houston Hall 53 min" still
+    picked the 53-minute leg (a confusable-name slip its own reasoning
+    contradicted) and walked 55 minutes on it. More context cannot fix an
+    intent-vs-pick mismatch; a refusal that names the numbers can -- it becomes
+    a #636 failure memory, and the model picks again next tick.
+
+    Inert unless the loop stamped a clock (live runs only -- the bake threads
+    none), the world has a map, and the schedule has an upcoming stop pinned to
+    a still-future ``start_hour``. Walking to that anchored stop's own building
+    or to the current scheduled stop is always legal, however late -- refusing
+    the plan itself would strand the agent.
+    """
+    clock = getattr(game, "sim_clock", None)
+    step_idx = getattr(game, "sim_clock_step", None)
+    world_map = getattr(game, "world_map", None)
+    schedule = getattr(getattr(character, "agent", None), "schedule", None)
+    tile = getattr(character, "tile", None)
+    address = getattr(destination, "tile_address", None)
+    if clock is None or step_idx is None or world_map is None or not address:
+        return None
+    if schedule is None or tile is None:
+        return None
+    entries = getattr(schedule, "schedule", None) or []
+    index = getattr(schedule, "stop_index", 0)
+    gap_from = getattr(
+        world_map, "walk_steps_from", getattr(world_map, "tile_gap_from", None)
+    )
+    if gap_from is None:
+        return None
+    if destination.name == getattr(schedule, "destination", None):
+        return None
+    now = clock.time_at(step_idx)
+    minutes_now = now.hour * 60 + now.minute
+    for entry in entries[index:]:
+        hour = entry.get("start_hour")
+        # Same validity rule as the renderer (#862): a raw out-of-range anchor
+        # must not bind. Same no-day-roll convention as advance() (#863).
+        if hour is None or hour not in range(24):
+            continue
+        until = hour * 60 - minutes_now
+        if until <= 0:
+            continue
+        anchored = game.locations.get(entry.get("place"))
+        if destination is anchored:
+            return None
+        parent = _tile_address_parent(destination)
+        if parent is not None and parent == _tile_address_parent(anchored):
+            return None
+        walk = clock.minutes_for_steps(gap_from(tuple(tile), address))
+        if walk <= until:
+            return None
+        return (
+            f"Walking to {destination.name} takes about {walk} min, but your "
+            f"next pinned stop -- {entry.get('activity')} at "
+            f"{entry.get('place')} -- starts in {until} min. Go somewhere "
+            f"nearer, or head to {entry.get('place')}."
+        )
+    return None
+
+
 class Travel(base.Action):
     """Move the acting character to a named location (matched from the command).
 
@@ -26,6 +171,11 @@ class Travel(base.Action):
 
     ACTION_NAME = "travel"
     ACTION_DESCRIPTION = "Travel to a named location in town"
+    # The hub's engine connections are named ``to <location>``.  Register the
+    # complete routed phrase as a multi-word alias so the parser selects Travel
+    # before its generic direction detector sees that exit text and routes the
+    # command through Go, bypassing this class's precondition gate.
+    ACTION_ALIASES = ["travel to"]
     # Typed tool slot (issues #356/#485): a tool-calling brain fills a
     # ``destination`` field instead of writing free text, and the ``connector``
     # reassembles its pick as ``"travel to <destination>"`` -- the same phrasing
@@ -50,13 +200,38 @@ class Travel(base.Action):
         self.destination = self._match_destination(command)
 
     def _match_destination(self, command: str):
-        """Longest location name appearing in the command (case-insensitive)."""
+        """Longest location name appearing in the command (case-insensitive).
+
+        A building's rooms are named ``<short building> — <room>`` ("Van Pelt
+        — Study Booths"), so a model rephrasing a room with the building's
+        full name spliced in ("Van Pelt Library — Study Booths") contains the
+        *building's* name but not the room's, and the longest-substring scan
+        walks the agent to the building anchor — the lobby, 80 tiles from the
+        room (#904). When the command also names a room's distinctive suffix
+        (the part after the dash) inside the matched building, the room is
+        what was meant.
+        """
         cmd = command.lower()
         best = None
         for name, loc in self.game.locations.items():
             if name.lower() in cmd and (best is None or len(name) > len(best.name)):
                 best = loc
-        return best
+        if best is None:
+            return None
+        best_parent = _tile_address_parent(best)
+        room, room_suffix = None, ""
+        for name, loc in self.game.locations.items():
+            if loc is best or "—" not in name:
+                continue
+            suffix = name.split("—")[-1].strip().lower()
+            if (
+                suffix
+                and suffix in cmd
+                and len(suffix) > len(room_suffix)
+                and _tile_address_parent(loc) == best_parent
+            ):
+                room, room_suffix = loc, suffix
+        return room or best
 
     def check_preconditions(self) -> bool:
         if not self.was_matched(self.character, "No one is traveling."):
@@ -67,6 +242,34 @@ class Travel(base.Action):
         if not self.was_matched(
             self.destination, "I don't know how to get to that place."
         ):
+            return False
+        if not travel_destination_allowed(self.game, self.character, self.destination):
+            scheduled = self.character.agent.schedule.destination
+            if self.character.location is self.game.locations.get(scheduled):
+                if _tile_address_parent(self.character.location) is None:
+                    message = (
+                        f"You are already at your scheduled stop, {scheduled}. "
+                        "Stay here to perform, wait, or talk; this campus-wide "
+                        "stop has no separate travel destination."
+                    )
+                else:
+                    message = (
+                        f"You are already at your scheduled stop, {scheduled}. "
+                        "Stay here to perform, wait, or talk; only travel when "
+                        "leaving for a genuinely different building."
+                    )
+            else:
+                message = (
+                    f"Keep heading to your scheduled stop, {scheduled}. "
+                    f"Do not detour to {self.destination.name} within the same "
+                    "place; travel to the scheduled stop or to a genuinely "
+                    "different building."
+                )
+            self.parser.fail(message)
+            return False
+        refusal = anchor_travel_refusal(self.game, self.character, self.destination)
+        if refusal:
+            self.parser.fail(refusal)
             return False
         return True
 
@@ -200,24 +403,32 @@ class WaitPenn(base.Wait):
 
 
 class DrinkPenn(consume.Drink):
-    """The engine's Drink, plus two Penn twists: the energy payoff (#931,
-    mirroring ``EatPenn``) that restores ``Property.ENERGY`` from the drunk
-    item's ``energy_value`` capped at ``MAX_ENERGY``, and the boil-water
-    twist (#300): drinking a liquid that ``requires_boiling`` and is not
-    ``is_boiled`` sets ``is_sick`` on the drinker and logs a ``sickness``
-    GameEvent -- the measurable motivation signal the self-coding experiment
-    (#299) needs. The pair is
-    deliberate: properties default to False, so gating on ``is_boiled`` alone
-    would sicken every future drinkable; ``requires_boiling`` scopes the rule
-    to raw water, and a (self-coded, #301) boil action clears it by setting
-    ``is_boiled``. Registered with the same "drink" action name, so it
-    overrides the built-in for this game only. Drinking specifically *boiled*
-    water (``is_boiled``) while ``is_sick`` clears the sickness and logs a
-    ``recovery`` event, so a full drink -> sicken -> boil -> drink -> recover arc
-    is watchable. The cure is gated on ``is_boiled`` (not "any safe drink") on
-    purpose: the #301 comparison asks whether an agent *learned to boil*, which
-    a cure that any beverage could trigger would erase (upstreaming the generic
-    slice is #464)."""
+    """The engine's Drink with Penn's boil-experiment specifics kept local,
+    plus one Penn twist of its own: the energy payoff (#931, mirroring
+    ``EatPenn``) that restores ``Property.ENERGY`` from the drunk item's
+    ``energy_value`` capped at ``MAX_ENERGY``.
+
+    The generic sickness arc -- a sickening drink sets ``is_sick`` (+ a
+    ``sickness`` GameEvent), boiled water cures it (+ ``recovery``) -- was
+    upstreamed into the engine's Drink by #464; this subclass overrides only
+    the ``_sickens`` gate and the effect hooks to pin what stays Penn's (#300):
+
+    * the sicken gate: raw water (``requires_boiling`` and not ``is_boiled``)
+      sickens -- the pair is deliberate: properties default to False, so
+      gating on ``is_boiled`` alone would sicken every future drinkable. The
+      cure is no longer overridden here: the engine's Drink already cures on
+      *boiled* water only (aking526's #464 review moved that narrow rule
+      upstream), which is what the #301 "did it learn to boil?" comparison
+      needs;
+    * the authoritative outcome counters (#595): ``drank_unboiled`` /
+      ``drank_safe``, read directly by the experiment harness instead of
+      parsing the event log;
+    * the one-shot transition markers ``just_sickened`` / ``just_recovered``
+      consumed by ``cognition.remember_outcome``, and the vivid
+      ``sick_self_description`` wording the engine's #634 self-line emits.
+
+    Registered with the same "drink" action name, so it overrides the
+    built-in for this game only."""
 
     def check_preconditions(self) -> bool:
         if self.character.get_property(Property.IS_SLEEPING):
@@ -225,13 +436,20 @@ class DrinkPenn(consume.Drink):
             return False
         return super().check_preconditions()
 
-    def apply_effects(self):
-        super().apply_effects()
-        # If the drink just killed the drinker (the engine's Drink sets is_dead
-        # on a poisonous item), the #300 health twist is moot: don't sicken or
-        # "recover" a corpse -- a recovery on a dead agent would log the event
-        # and a feel-better memory for someone who just died.
+    def _sickens(self) -> bool:
+        # Penn's rule: this drink is raw water the agent did NOT boil first.
+        return self.item.get_property(
+            "requires_boiling"
+        ) and not self.item.get_property("is_boiled")
+
+    # No _cures override: the engine's Drink already cures on boiled water only
+    # (aking526's #464 review moved the narrow rule upstream -- one rule, no
+    # engine<->Penn divergence to decode later).
+
+    def _apply_health_effects(self):
         if self.character.get_property("is_dead"):
+            # The engine skips the arc on a corpse too; checked here as well
+            # so the #595 counters below never stamp a drink that just killed.
             return
         # Energy restore (#931), unconditional like EatPenn's: hydration is a
         # fact about the drink, separate from whether it also sickens you.
@@ -242,81 +460,40 @@ class DrinkPenn(consume.Drink):
                 Property.ENERGY, min(MAX_ENERGY, current_energy + energy_value)
             )
             clear_low_energy_if_recovered(self.character)
-        if self.item.get_property("requires_boiling") and not self.item.get_property(
-            "is_boiled"
-        ):
-            # Authoritative outcome (#595): this drink was raw water -- the
-            # agent did NOT boil first. The harness reads this counter
-            # directly instead of parsing the event log.
+        # Authoritative outcome (#595): stamp which kind of drink this was.
+        # "safe", not "boiled", for the else-branch: it also counts outside
+        # the boil world, where safe drinks needn't involve a stove.
+        if self._sickens():
             self.character.set_property(
                 "drank_unboiled",
                 (self.character.get_property("drank_unboiled") or 0) + 1,
             )
-            self.character.set_property("is_sick", True)
-            # Wording for the engine's is_sick self-line (#634): describe_for
-            # emits this while sick, replacing the Penn-local append cognition
-            # used to add (#594) -- one line, Penn's vivid phrasing.
-            self.character.set_property(
-                "sick_self_description",
-                "You feel violently ill -- your stomach is cramping.",
-            )
-            # One-shot marker: this drink is what just sickened the character,
-            # as opposed to an already-sick character drinking something clean.
-            # Consumed (and cleared) by cognition.remember_outcome so
-            # the high-importance memory attaches to the actual transition.
-            self.character.set_property("just_sickened", True)
-            self.parser.ok(
-                f"{self.character.name} clutches their stomach -- "
-                "that water was foul."
-            )
-            self.game.log_event(
-                self.character.name,
-                "sickness",
-                summary=(f"{self.character.name} got sick drinking {self.item.name}"),
-                payload={
-                    "item": self.item.name,
-                    "location": getattr(self.character.location, "name", None),
-                },
-            )
         else:
-            # Authoritative outcome (#595): any other successful, non-fatal
-            # drink is safe -- boiled water, or water that never required
-            # boiling -- hence "safe", not "boiled": this counter also stamps
-            # outside the boil world, where safe drinks needn't involve a
-            # stove. The harness reads it directly instead of parsing the
-            # event log.
             self.character.set_property(
                 "drank_safe",
                 (self.character.get_property("drank_safe") or 0) + 1,
             )
-            if self.character.get_property("is_sick") and self.item.get_property(
-                "is_boiled"
-            ):
-                # The recovery half of the arc: drinking the *boiled* water
-                # cures a sick drinker. Gated on is_boiled (not merely "not
-                # raw") so an unrelated safe beverage can't stand in for
-                # boiling -- that's the behavior the #301 "did it learn to
-                # boil?" comparison rests on. Only fires on the sick->well
-                # transition, so a healthy drinker logs nothing.
-                self.character.set_property("is_sick", False)
-                # One-shot marker mirroring just_sickened: cognition.remember_outcome
-                # keys off it to write the "feel better" memory to the agent's card.
-                self.character.set_property("just_recovered", True)
-                self.parser.ok(
-                    f"{self.character.name} drinks deep -- the clean "
-                    "water settles their stomach, and the sickness passes."
-                )
-                self.game.log_event(
-                    self.character.name,
-                    "recovery",
-                    summary=(
-                        f"{self.character.name} recovered after drinking {self.item.name}"
-                    ),
-                    payload={
-                        "item": self.item.name,
-                        "location": getattr(self.character.location, "name", None),
-                    },
-                )
+        super()._apply_health_effects()
+
+    def _sicken(self):
+        super()._sicken()
+        # Wording for the engine's is_sick self-line (#634): describe_for
+        # emits this while sick -- one line, Penn's vivid phrasing.
+        self.character.set_property(
+            "sick_self_description",
+            "You feel violently ill -- your stomach is cramping.",
+        )
+        # One-shot marker: this drink is what just sickened the character,
+        # as opposed to an already-sick character drinking something clean.
+        # Consumed (and cleared) by cognition.remember_outcome so the
+        # high-importance memory attaches to the actual transition.
+        self.character.set_property("just_sickened", True)
+
+    def _recover(self):
+        super()._recover()
+        # One-shot marker mirroring just_sickened: cognition.remember_outcome
+        # keys off it to write the "feel better" memory to the agent's card.
+        self.character.set_property("just_recovered", True)
 
 
 class EatPenn(consume.Eat):
@@ -595,78 +772,8 @@ class Buy(base.Action):
         )
 
 
-class Activate(base.Action):
-    """Switch on a fixed device -- a stove, a sink (#300). Devices are room
-    fixtures (in scope, not necessarily held), marked with ``is_device``; the
-    only effect is the ``is_on`` flag. Deliberately no downstream process: the
-    stove heats nothing until the self-coding experiment (#299) writes one.
-    Distinct verb from the engine's Light ("turn on" alias) -- no flame here."""
-
-    ACTION_NAME = "activate"
-    ACTION_DESCRIPTION = "Switch on a device (a stove, a sink)"
-
-    def __init__(self, game, command: str, actor=None):
-        super().__init__(game, actor=actor)
-        self.character = self.acting_character(command, hint="operator")
-        self.item = self.parser.match_item(
-            command, self.parser.get_items_in_scope(self.character), hint="device"
-        )
-
-    def check_preconditions(self) -> bool:
-        if self.character.get_property(Property.IS_SLEEPING):
-            self.parser.fail(f"{self.character.name.capitalize()} is asleep.")
-            return False
-        if not self.was_matched(
-            self.item, error_message="I don't know what you want to switch on."
-        ):
-            return False
-        if not self.item.get_property("is_device"):
-            self.parser.fail(f"The {self.item.name} isn't something you can switch on.")
-            return False
-        if self.item.get_property("is_on"):
-            self.parser.fail(f"The {self.item.name} is already on.")
-            return False
-        return True
-
-    def apply_effects(self):
-        self.item.set_property("is_on", True)
-        return self.parser.ok(f"The {self.item.name} hums to life.")
-
-
-class Deactivate(base.Action):
-    """Switch off a device -- the inverse of :class:`Activate`."""
-
-    ACTION_NAME = "deactivate"
-    ACTION_DESCRIPTION = "Switch off a device (a stove, a sink)"
-
-    def __init__(self, game, command: str, actor=None):
-        super().__init__(game, actor=actor)
-        self.character = self.acting_character(command, hint="operator")
-        self.item = self.parser.match_item(
-            command, self.parser.get_items_in_scope(self.character), hint="device"
-        )
-
-    def check_preconditions(self) -> bool:
-        if self.character.get_property(Property.IS_SLEEPING):
-            self.parser.fail(f"{self.character.name.capitalize()} is asleep.")
-            return False
-        if not self.was_matched(
-            self.item, error_message="I don't know what you want to switch off."
-        ):
-            return False
-        if not self.item.get_property("is_device"):
-            self.parser.fail(
-                f"The {self.item.name} isn't something you can switch off."
-            )
-            return False
-        if not self.item.get_property("is_on"):
-            self.parser.fail(f"The {self.item.name} is already off.")
-            return False
-        return True
-
-    def apply_effects(self):
-        self.item.set_property("is_on", False)
-        return self.parser.ok(f"The {self.item.name} winds down and goes quiet.")
+# Activate/Deactivate used to live here (#300); upstreamed into the engine
+# by #464 (registered by default), so Penn no longer needs a local copy.
 
 
 class TalkTo(base.Action):

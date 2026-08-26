@@ -39,9 +39,10 @@ signal heatmap_requested
 # The "Social graph" button was pressed (open/close the who-talked-to-whom pop-up,
 # issue #252). Same contract as heatmap_requested: a toggle request (G does the same).
 signal social_graph_requested
-# The "Day plans" button was pressed (open/close the planned-vs-actual pop-up,
-# issue #251). Same contract as heatmap_requested: a toggle request (T does the same).
-signal day_plans_requested
+# The "Dialogue log" button was pressed (open/close the right-docked history of
+# every line spoken, issue #963). Same contract as heatmap_requested: a toggle
+# request (L does the same).
+signal dialogue_log_requested
 # The "Snapshot" (camera) button was pressed: capture the current campus view (issue
 # #253). The viewer does the capture; C does the same.
 signal snapshot_requested
@@ -69,7 +70,12 @@ const ACTIVE_TINT := Color(1.0, 0.95, 0.6)
 const ROW_DIM_ALPHA := 0.55
 # Muted status line under each character's name — a soft brown that stays legible
 # on the Cute Fantasy theme's light parchment panel (plain grey would wash out).
-const STATUS_COLOR := Color(0.42, 0.32, 0.24)
+# The panel interior is a flat #f6ca9f, so this is measurable: 6.7:1 contrast.
+# It used to be Color(0.42, 0.32, 0.24) = 4.78:1, which only just cleared WCAG AA
+# (4.5:1) — too thin a margin for the 12–14px small print this colour is for.
+# live_hud.gd, actions_hud.gd, main_menu.gd, past_runs.gd and simulation_setup.gd
+# each keep their own copy of this value; keep them in step.
+const STATUS_COLOR := Color(0.32, 0.24, 0.17)
 # Playback speeds offered in the Speed dropdown.
 const SPEEDS := [0.5, 1.0, 2.0, 4.0]
 
@@ -198,31 +204,30 @@ const GALLERY_ROWS: PackedStringArray = [
 	"................",
 ]
 
-# No calendar glyph in the pack either (issue #251): a little page-a-day
-# calendar — two binding pegs, an amber header band, a dotted grid of days —
-# in the pack's dark outline.
-const CALENDAR_PALETTE := {
-	"#": Color("181425"),  # outline + pegs
-	"a": Color("feae34"),  # header band (pack amber)
-	"w": Color("fff4b8"),  # page
-	"d": Color("8b9bb4"),  # day dots
+# No speech-bubble glyph in the pack either (issue #963): a white bubble with a
+# tail and three pack-blue "someone is talking" dots, in the pack's dark outline
+# — the sidebar cousin of the viewer's white, blue-outlined dialogue bubbles.
+const SPEECH_PALETTE := {
+	"#": Color("181425"),  # outline
+	"w": Color("ffffff"),  # bubble fill
+	"b": Color("0099db"),  # pack blue dots
 }
-const CALENDAR_ROWS: PackedStringArray = [
+const SPEECH_ROWS: PackedStringArray = [
 	"................",
-	"...##......##...",
-	"...##......##...",
-	".##############.",
-	".#aaaaaaaaaaaa#.",
-	".#aaaaaaaaaaaa#.",
-	".##############.",
-	".#wwwwwwwwwwww#.",
-	".#wddwddwddwdw#.",
-	".#wwwwwwwwwwww#.",
-	".#wddwddwddwdw#.",
-	".#wwwwwwwwwwww#.",
-	".#wddwwddwwddw#.",
-	".#wwwwwwwwwwww#.",
-	".##############.",
+	"..##########....",
+	".#wwwwwwwwww#...",
+	"#wwwwwwwwwwww#..",
+	"#wwwwwwwwwwww#..",
+	"#wwbwwbwwbwww#..",
+	"#wwwwwwwwwwww#..",
+	"#wwwwwwwwwwww#..",
+	".#wwwwwwwwww#...",
+	"..###ww#####....",
+	"....#ww#........",
+	"....#w#.........",
+	"....##..........",
+	"................",
+	"................",
 	"................",
 ]
 
@@ -251,6 +256,16 @@ var _live_clip_row: HBoxContainer   # the whole live clip row (toggled by set_li
 var _clip_n_spin: SpinBox           # how many recent steps to grab (default 60)
 var _live_clip_gif_btn: Button      # export the last N steps as a GIF
 var _live_clip_frames_btn: Button   # export the last N steps as MP4+GIF (desktop)
+# The capture tools (snapshot + gallery, #253; clip export, #488/#548) are switched OFF
+# for the release: unpolished, and not on the near-term list. Rather than commenting out
+# their construction -- the setters below (set_live, set_clip_span, set_clip_status,
+# set_live_clip_ready) dereference the vars above unconditionally, and viewer.gd calls
+# three of them on every mode switch -- every row is parented into this one container and
+# the container is hidden. Godot visibility is hierarchical, so a setter flipping a child
+# `visible = true` still renders nothing. To restore the feature: delete the
+# `_capture_tools.visible = false` line in _ready() and uncomment the C / [ / ] shortcuts
+# in viewer.gd's _unhandled_input.
+var _capture_tools: VBoxContainer   # hidden parent of every capture row (see above)
 var _list: VBoxContainer            # holds one row per character
 var _rows := {}                     # name -> {row, button, status: Label}
 var _active := ""                   # name of the tracked character, or "" when free
@@ -335,16 +350,24 @@ func _ready() -> void:
 	view_row.add_child(_icon_button(
 		_graph_icon(), "Social graph — who has talked to whom, up to now (G)",
 		func() -> void: social_graph_requested.emit()))
-	# Day plans: the hand-drawn calendar glyph (see CALENDAR_ROWS).
+	# Dialogue log: the hand-drawn speech-bubble glyph (see SPEECH_ROWS).
 	view_row.add_child(_icon_button(
-		_calendar_icon(), "Day plans — planned vs. actual, up to now (T)",
-		func() -> void: day_plans_requested.emit()))
+		_speech_icon(), "Dialogue log — every line spoken, up to now (L)",
+		func() -> void: dialogue_log_requested.emit()))
+
+	# The capture tools live in one container so hiding it hides all of them (see
+	# _capture_tools above). It sits where the snapshot row used to, so un-hiding it
+	# restores the original sidebar order for the snapshot buttons.
+	_capture_tools = VBoxContainer.new()
+	_capture_tools.add_theme_constant_override("separation", 6)
+	col.add_child(_capture_tools)
+	_capture_tools.visible = false  # DELETE THIS LINE to re-enable the capture tools
 
 	# A second row for the capture tools (snapshot + its gallery, issue #253), kept off
 	# the controls row above so the icons stay finger-sized in the 300px sidebar.
 	var capture_row := HBoxContainer.new()
 	capture_row.add_theme_constant_override("separation", 6)
-	col.add_child(capture_row)
+	_capture_tools.add_child(capture_row)
 
 	# Snapshot: the hand-drawn camera glyph (CAMERA_ROWS). viewer.gd does the capture.
 	capture_row.add_child(_icon_button(
@@ -391,7 +414,7 @@ func _ready() -> void:
 	# the keys), then export the span. Frames+ffmpeg is desktop-only.
 	var clip_row := HBoxContainer.new()
 	clip_row.add_theme_constant_override("separation", 6)
-	col.add_child(clip_row)
+	_capture_tools.add_child(clip_row)
 	_clip_row = clip_row
 
 	_clip_gif_btn = Button.new()
@@ -423,7 +446,7 @@ func _ready() -> void:
 	_live_clip_row = HBoxContainer.new()
 	_live_clip_row.add_theme_constant_override("separation", 6)
 	_live_clip_row.visible = false
-	col.add_child(_live_clip_row)
+	_capture_tools.add_child(_live_clip_row)
 
 	_clip_n_spin = SpinBox.new()
 	_clip_n_spin.min_value = 2
@@ -451,10 +474,10 @@ func _ready() -> void:
 	_live_clip_row.add_child(_live_clip_frames_btn)
 
 	_clip_status = Label.new()
-	_clip_status.add_theme_font_size_override("font_size", 12)
+	_clip_status.add_theme_font_size_override("font_size", 14)
 	_clip_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_clip_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	col.add_child(_clip_status)
+	_capture_tools.add_child(_clip_status)
 
 	_speed_row = HBoxContainer.new()
 	_speed_row.add_theme_constant_override("separation", 6)
@@ -542,8 +565,8 @@ static func _gallery_icon() -> Texture2D:
 	return _bitmap_icon(GALLERY_ROWS, GALLERY_PALETTE)
 
 
-static func _calendar_icon() -> Texture2D:
-	return _bitmap_icon(CALENDAR_ROWS, CALENDAR_PALETTE)
+static func _speech_icon() -> Texture2D:
+	return _bitmap_icon(SPEECH_ROWS, SPEECH_PALETTE)
 
 
 static func _bitmap_icon(rows: PackedStringArray, palette: Dictionary) -> Texture2D:

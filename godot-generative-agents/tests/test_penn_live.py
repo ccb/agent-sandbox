@@ -184,6 +184,7 @@ def test_stepper_meta_shape():
         "personas",
         "relationships",
         "llm",
+        "locations",
     }
     assert meta["vision_r"] == VISION_R
     assert len(meta["personas"]) == 3
@@ -344,25 +345,44 @@ def test_run_usage_rebaselines_on_reset_and_run_rows_carry_run_cost(tmp_path):
     # test pins run_calls across ticks, not just at tick-free points.
     store = RunStore(tmp_path / "runs")
     stepper = PennStepper(num_steps=3, world=build_penn_world(), run_store=store)
+    # #795: no ticks yet, so no chance of a co-settled pair either. counted is
+    # True even under the mock brain — co-settling is pure geometry and #825
+    # made every brain count it — and resumed False (a fresh,
+    # reset-not-adopted stepper), #819.
+    no_social = {
+        "co_settled_pair_steps": 0,
+        "by_pair": {},
+        "conversations": 0,
+        "counted": True,
+        "resumed": False,
+    }
     assert stepper.run_usage() == {
         "run_calls": 0,
+        "run_failed_calls": 0,
         "run_cost_usd": 0.0,
         "run_by_actor": {},
+        "social": no_social,
     }
     _spend(stepper.ledger, 0.25)
     _spend(stepper.ledger, 0.05)
     assert stepper.run_usage() == {
         "run_calls": 2,
+        "run_failed_calls": 0,
         "run_cost_usd": 0.3,
         "run_by_actor": {"Diego Torres": 0.3},
+        "social": no_social,
     }
     stepper.tick()
     first = stepper.run_id
     # A mock tick appended $0 records, but run_calls/run_by_actor ignore them.
+    # The scripted world's first tick doesn't settle the cast together either
+    # (they're still walking to their first schedule stop).
     assert stepper.run_usage() == {
         "run_calls": 2,
+        "run_failed_calls": 0,
         "run_cost_usd": pytest.approx(0.3),
         "run_by_actor": {"Diego Torres": pytest.approx(0.3)},
+        "social": no_social,
     }
     assert store.get_run(first)["cost"] == pytest.approx(0.3)
     lifetime_calls = stepper.ledger.summary()["calls"]  # spends + mock records
@@ -370,8 +390,10 @@ def test_run_usage_rebaselines_on_reset_and_run_rows_carry_run_cost(tmp_path):
     # The new run starts from zero...
     assert stepper.run_usage() == {
         "run_calls": 0,
+        "run_failed_calls": 0,
         "run_cost_usd": 0.0,
         "run_by_actor": {},
+        "social": no_social,
     }
     # ...while the lifetime ledger keeps everything, so a tripped cost
     # ceiling stays tripped across the reset.
@@ -386,8 +408,10 @@ def test_run_usage_rebaselines_on_reset_and_run_rows_carry_run_cost(tmp_path):
     _spend(stepper.ledger, 0.05, actor="Sofia Ramirez")
     assert stepper.run_usage() == {
         "run_calls": 2,
+        "run_failed_calls": 0,
         "run_cost_usd": 0.15,
         "run_by_actor": {"Diego Torres": 0.1, "Sofia Ramirez": 0.05},
+        "social": no_social,
     }
     stepper.tick()
     second = stepper.run_id
@@ -396,8 +420,10 @@ def test_run_usage_rebaselines_on_reset_and_run_rows_carry_run_cost(tmp_path):
     # No store required: a bare stepper offers the same view.
     assert PennStepper(num_steps=1, world=build_penn_world()).run_usage() == {
         "run_calls": 0,
+        "run_failed_calls": 0,
         "run_cost_usd": 0.0,
         "run_by_actor": {},
+        "social": no_social,
     }
 
 
@@ -560,6 +586,26 @@ def test_fast_forward_schedule_cursor():
     assert sched.stop_index == 1
 
 
+def test_fast_forward_respects_a_future_anchor():
+    # #870: this was the one advance() call site that ignored start_hour, so
+    # a resume could park the pointer on a stop hours before its pinned time.
+    # With the resume hour threaded through, the #838 gate holds at the first
+    # future anchor...
+    stops = _authored(10, 20, None)
+    stops[1]["start_hour"] = 13
+    sched = ScheduleMockClient(stops)
+    _fast_forward_schedule(sched, 30, current_hour=11)
+    assert sched.stop_index == 0
+    # ...crosses it once the resume clock has reached it...
+    sched = ScheduleMockClient([dict(s) for s in stops])
+    _fast_forward_schedule(sched, 30, current_hour=13)
+    assert sched.stop_index == 2
+    # ...and the no-hour default keeps the old dwell-only behavior.
+    sched = ScheduleMockClient([dict(s) for s in stops])
+    _fast_forward_schedule(sched, 30)
+    assert sched.stop_index == 2
+
+
 def test_stepper_resumes_a_persisted_run(tmp_path):
     # The #543 story: a run's process dies (the row is orphaned at "running"),
     # a new process adopts it and the day carries on where the store left off.
@@ -582,6 +628,9 @@ def test_stepper_resumes_a_persisted_run(tmp_path):
     )
     assert resumed.run_id == run_id
     assert resumed.step == 3
+    # #795: a resumed process didn't watch the pre-resume steps, so it must
+    # not claim a zero co-settled total means the day was ever social-dead.
+    assert resumed._resumed is True
     # Positions come back from the last stored frame...
     last = first3[-1]
     for name in resumed.order:
@@ -646,6 +695,16 @@ def test_stepper_resume_guards(tmp_path):
             run_store=store,
             resume_run_id="run-oldmap",
         )
+    # ...but an older replay-FILE encoding version is NOT a different map:
+    # schema_version tracks the written file format (#941), the store rows a
+    # resume reads are unchanged -- every pre-1.1 run must still resume.
+    store.create_run(dict(done.meta(), schema_version="1.0"), run_id="run-oldschema")
+    PennStepper(
+        num_steps=2,
+        world=build_penn_world(),
+        run_store=store,
+        resume_run_id="run-oldschema",
+    )
     for _ in range(2):
         done.tick()
     assert done.tick() is None
