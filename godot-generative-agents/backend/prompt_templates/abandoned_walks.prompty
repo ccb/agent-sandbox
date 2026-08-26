@@ -1,0 +1,35 @@
+---
+name: abandoned_walks
+description: >
+  The dither damper (issue #933), appended to a live decide observation.
+  Rendered by cognition.abandoned_walks_block() and folded into
+  observe_and_decide's observation when the step loop threads a SimClock and
+  the agent abandoned a cross-building walk within the last
+  ABANDONED_LEG_WINDOW_MIN sim-minutes with nothing new involving that
+  building since. #916 fixed the mechanical mid-walk retarget; #878
+  candidate 1 then showed the behavioral layer can still alternate
+  "legitimate" decides -- 12 cross-building retargets and 238 abandoned-leg
+  minutes in one afternoon, a clean 5-cycle Houston <-> Irvine ping-pong
+  among them, with no plan memory or conversation justifying any leg. This
+  is a discouragement, not a hard block: the model may still travel back,
+  but it is asked to state the new reason -- the same override shape the
+  precondition-failure feedback gives a blocked action. Which legs qualify
+  (the decay window, the new-memory justification, the current scheduled
+  stop's exemption) is computed in Python -- it is data; only the wording
+  lives here. The deterministic mock reads only the observation's first
+  line, so this can never change a mock decision.
+inputs:
+  legs:
+    type: string
+    description: >
+      Pre-joined "<building> (<N> min ago)" fragments, most recently
+      abandoned first ("just now" under a minute), e.g. "Houston Hall
+      (12 min ago) and Irvine Auditorium (30 min ago)".
+  plural:
+    type: boolean
+    description: True when more than one abandoned leg is listed.
+sample:
+  legs: "Houston Hall (12 min ago)"
+  plural: false
+---
+You recently abandoned {% if plural %}walks{% else %}a walk{% endif %} to {{ legs }} without doing anything there, and nothing new has come up about {% if plural %}those places{% else %}that place{% endif %} since. Do not travel back there without a new reason you can state -- walking back and forth wastes the day.

@@ -243,6 +243,16 @@ SAME_ACT_CONTEXT_MIN = 90
 # world data of arbitrary length that could carry a newline -- straight into the
 # memory. Latent today (no Penn location authors `read_text`), cheap to cap.
 RECENT_ACTION_TEXT_MAX = 200
+# #933: how long an abandoned cross-building leg keeps discouraging a
+# re-target, in sim-minutes. ponytail: 45 min is a calibration knob sized
+# against the observed failure -- #878 candidate 1's dither cycled fast
+# (worst abandoned leg 25 min; the 5-cycle Houston <-> Irvine ping-pong,
+# 16:13 -> 18:26, turned around roughly every 25-27 minutes), so a 25-30 min
+# window could expire right as the agent finishes the return leg it exists to
+# warn about. 45 covers the observed cycle with margin while staying well
+# under the hours-scale gap of a genuine later return to the same building
+# (and the plan's own current stop is exempt regardless).
+ABANDONED_LEG_WINDOW_MIN = 45
 
 # Bounds on the scorer's retry loop (issue #759). The rescan deliberately has no
 # cursor, so a malformed reply is retried next tick -- but unbounded, a brain
@@ -1509,6 +1519,112 @@ def walk_minutes_line(game, char, clock) -> str:
     )
 
 
+def building_of(address) -> str:
+    """The building segment of a ``world:building:place`` tile address, or ``""``.
+
+    The same reduction ``tools/analyze_run.py``'s ``_walk_target`` applies when
+    it classifies a turn-around (#850): display names cannot be compared --
+    a sub-place drops its building's qualifier (``Moelis Family Grand Reading
+    Room`` shares no word with ``Van Pelt Library``) -- so the address is the
+    only reliable source for the building. The addressless campus hub (and any
+    flat address) reduces to ``""``: it is nowhere in particular, so it never
+    matches or records as a building.
+    """
+    parts = (address or "").split(":")
+    return parts[1] if len(parts) >= 3 else ""
+
+
+def _fresh_reason_since(agent, names, since_step: int) -> bool:
+    """Did any NEW non-action memory mention one of ``names`` after ``since_step``?
+
+    The #933 justification test: a conversation line, a commitment, a
+    perceived event -- anything that arrived since the abandonment and involves
+    the abandoned building lifts the damper for it. The agent's own action
+    records (:data:`ACTION_TAG`) are excluded: they are what the agent did,
+    not new information -- least of all the #636 failure memory a blocked
+    ``travel <building>`` writes every tick, which names exactly the building
+    it failed to reach. A simple case-insensitive word match, like
+    :func:`_absent_person`: a miss just means the clause renders, and the
+    damper is a discouragement the model can still override, never a block.
+    """
+    lowered = [name.lower() for name in names if name]
+    # The memory stream is append-only and stamped with the current step, so
+    # created_turn never decreases: stop scanning at the abandonment.
+    for record in reversed(getattr(agent.memory, "records", [])):
+        if record.created_turn <= since_step:
+            break
+        if ACTION_TAG in record.tags:
+            continue
+        text = record.text.lower()
+        if any(name in text for name in lowered):
+            return True
+    return False
+
+
+def abandoned_walks_block(game, char, abandons, step: int, clock) -> str:
+    """Render the dither damper (issue #933), or ``""``.
+
+    ``abandons`` is the step loop's per-agent record of cross-building legs
+    given up without a settle (``{building: step abandoned}``, written by
+    ``run_simulation.step``'s travel branch). #916's fix was confirmed to hold
+    mechanically, yet #878 candidate 1 still dithered for 2.5 sim-hours --
+    every retarget was a "legitimate" decide, they just alternated: 12
+    cross-building retargets, 238 abandoned-leg minutes, a clean 5-cycle
+    Houston <-> Irvine ping-pong. Each decide looked locally plausible because
+    nothing in the prompt said the agent had *just given up* on that exact
+    destination.
+
+    A leg renders only while all three hold:
+
+    * **fresh** -- abandoned within :data:`ABANDONED_LEG_WINDOW_MIN`
+      sim-minutes (the damper decays; see the constant for the sizing);
+    * **unjustified** -- no new non-action memory since the abandonment
+      mentions the building or any of its rooms
+      (:func:`_fresh_reason_since`); a conversation that names the place is
+      exactly the "new reason" the issue exempts;
+    * **off-plan** -- the building is not the current scheduled stop's own:
+      the #580 context block says "your plan's current stop: ... at X" in the
+      same prompt, and a clause discouraging X would contradict it head-on.
+      The plan is a standing justification.
+
+    Discourage, not block: the sentence asks the model to state a new reason
+    if it goes back anyway -- the same override shape a precondition-failure
+    feedback line gives a blocked action. Needs a clock (the bake and the
+    offline tests thread none, so their prompts are unchanged).
+    """
+    if clock is None or not abandons:
+        return ""
+    scheduled = getattr(getattr(char.agent, "schedule", None), "destination", None)
+    scheduled_loc = game.locations.get(scheduled) if scheduled else None
+    scheduled_building = building_of(getattr(scheduled_loc, "tile_address", None))
+    legs = []
+    for building, abandoned_step in abandons.items():
+        minutes = clock.minutes_for_steps(max(0, step - abandoned_step))
+        if minutes > ABANDONED_LEG_WINDOW_MIN:
+            continue
+        if scheduled_building and building == scheduled_building:
+            continue
+        # Every name the building answers to: itself plus its rooms' display
+        # names, which drop the building qualifier (see building_of) -- a new
+        # memory naming any room justifies returning to the whole building.
+        names = [building] + [
+            name
+            for name, location in game.locations.items()
+            if building_of(getattr(location, "tile_address", None)) == building
+        ]
+        if _fresh_reason_since(char.agent, names, abandoned_step):
+            continue
+        legs.append((minutes, building))
+    if not legs:
+        return ""
+    legs.sort()  # most recently abandoned first; name breaks ties
+    frags = [
+        f"{building} ({minutes} min ago)" if minutes else f"{building} (just now)"
+        for minutes, building in legs
+    ]
+    return render("abandoned_walks", legs=" and ".join(frags), plural=len(frags) > 1)
+
+
 def observe_and_decide(
     game,
     char,
@@ -1520,6 +1636,7 @@ def observe_and_decide(
     waiting=False,
     act_since=None,
     walking=None,
+    abandons=None,
 ):
     """Build ``char``'s observation, fold in memory, and ask its agent to decide.
 
@@ -1556,6 +1673,12 @@ def observe_and_decide(
        retrieve above, like the #580 block, and gated on ``clock`` rather than
        ``_use_action_tools`` (unlike #613's line, these are plain context the
        mock's first-line read ignores either way), so the bake stays
+       byte-identical.
+    7. **Dither damper** (#933): when the loop threads ``abandons`` (the
+       per-agent record of cross-building legs given up without a settle),
+       append :func:`abandoned_walks_block` -- a discouragement against
+       re-targeting a freshly abandoned building without a new reason. Same
+       placement and clock gate as the #826 blocks, so the bake stays
        byte-identical.
 
     Pass a ``retrieval`` (:class:`sim_config.RetrievalConfig`) to tune the
@@ -1660,6 +1783,12 @@ def observe_and_decide(
     recent = recent_actions_block(agent, step, clock)
     if recent:
         base = f"{base}\n\n{recent}"
+    # #933: the dither damper. Appended after the retrieve like every context
+    # block above (frames embed the retrieved list, so nothing here may shift
+    # it), and clock-gated, so the bake's prompts are unchanged.
+    dither = abandoned_walks_block(game, char, abandons, step, clock)
+    if dither:
+        base = f"{base}\n\n{dither}"
     observation = format_observation_with_memories(base, relevant)
     agent.last_observation = observation
     # Per-action tools (issue #485): a real supplied brain picks between typed
