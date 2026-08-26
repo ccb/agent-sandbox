@@ -43,6 +43,11 @@ export interface RelationshipEdge {
 export interface LlmInfo {
   provider: string;
   model: string;
+  /** Thinking depth the run drove at (#960) — part of "which brain was
+   * this?"; null/absent when the provider default applied. */
+  effort?: string | null;
+  /** The #368 per-role model-tiering map; null/absent when untiered. */
+  models?: Record<string, string> | null;
 }
 
 export interface ReplayMeta {
@@ -69,6 +74,31 @@ export interface ReplayMeta {
   llm?: LlmInfo | null;
   /** The world's real place names, sorted. Absent in replays baked before #780. */
   locations?: string[];
+
+  // A live run's manifest is a superset of the bake's meta (#960): the #715
+  // re-run provenance below rides along into an exported replay. All absent
+  // in a baked file.
+  /** The run's RNG seed. */
+  seed?: number | null;
+  /** Git SHA the server ran at; null outside a repo. */
+  engine_sha?: string | null;
+  /** Which SCENARIOS entry built the world (#747). */
+  scenario?: string | null;
+  /** Resolved cognition-tools value (post-coupling), not the CLI flag. */
+  cognition_tools?: boolean | null;
+  react?: boolean | null;
+  /** The requested plan mode; planner_sources is the per-agent outcome. */
+  plan_mode?: string | null;
+  /** Per-persona plan provenance: {name: "llm" | "static" | "mock"} (#787). */
+  planner_sources?: Record<string, string> | null;
+  /** What each agent actually planned: {name: DailyPlan.to_primitive()} (#824). */
+  daily_plans?: Record<string, Record<string, unknown>> | null;
+  /** The launched step BUDGET — `steps` above is how many it actually took. */
+  num_steps?: number | null;
+  /** The #564 --config dump, key-carrying sections stripped. */
+  sim_config?: Record<string, unknown> | null;
+  /** The applied pre-run POST /config block (#732); only on configured runs. */
+  config?: Record<string, unknown> | null;
 }
 
 /** One persona's state at a single step. Key order is pinned by

@@ -296,6 +296,76 @@ def test_bake_is_byte_identical(tmp_path, scenario):
     ), f"{scenario} bake is not byte-identical across PYTHONHASHSEED 0/1/2"
 
 
+def test_live_exported_replay_validates_against_contract(tmp_path):
+    """#960: a live run's manifest is a SUPERSET of the bake's meta -- the
+    #715 re-run provenance (seed, engine_sha, scenario, resolved cognition
+    flags, planner sources, the executed daily plans, the step budget, the
+    #564 sim_config) rides along, and ``build_replay`` passes the manifest
+    straight through as ``meta``. Validate the real exporter's output, not
+    just the bake's, so the two emitters can't drift again."""
+    from backend.penn.export_replay import build_replay
+    from backend.run_store import RunStore
+
+    store = RunStore(tmp_path / "runs")
+    stepper = PennStepper(num_steps=2, world=build_penn_world(), run_store=store)
+    while stepper.tick() is not None:
+        pass  # run the whole (2-step) day so _finish_run stamps the manifest
+    (row,) = store.list_runs()
+    replay = Replay.model_validate(build_replay(store, row["id"]))
+    meta = replay.meta
+    # The provenance is pinned, not just tolerated: a manifest that stopped
+    # carrying it would break --re-run (#715) without failing any replay test.
+    assert meta.scenario == "penn"
+    assert meta.num_steps == 2
+    assert meta.engine_sha is not None
+    assert meta.plan_mode is not None
+    assert set(meta.planner_sources) == set(meta.daily_plans)
+
+
+class _InertBrain:
+    """A ``create_llm_client`` stand-in that never answers: plan authorship
+    degrades to the static fallback and nothing touches the network."""
+
+    def __init__(self, ledger=None):
+        self.ledger = ledger
+        self.context: dict = {}
+
+    def chat(self, messages, max_tokens=256, temperature=0.0):
+        return None
+
+    def call_tool(self, messages, tool, max_tokens=256, temperature=0.0):
+        return None
+
+    def count_tokens(self, text):
+        return len(text) // 4
+
+
+def test_live_meta_paid_llm_block_validates(monkeypatch):
+    """#960: a paid run's ``meta.llm`` carries ``effort`` (thinking depth) and
+    ``models`` (the #368 per-role tiering map) alongside provider/model --
+    two runs on the same model at different effort are different experiments,
+    so the contract has to accept what the real emitter records."""
+    import serve_penn
+
+    monkeypatch.setattr(
+        serve_penn, "create_llm_client", lambda config, ledger=None: _InertBrain(ledger)
+    )
+    stepper = PennStepper(
+        num_steps=2,
+        world=build_penn_world(),
+        llm={
+            "provider": "anthropic",
+            "model": "claude-haiku-4-5",
+            "max_cost_usd": 1.0,
+            "effort": "medium",
+            "models": {"decide": "claude-haiku-4-5"},
+        },
+    )
+    validated = Meta.model_validate(stepper.meta())
+    assert validated.llm.effort == "medium"
+    assert validated.llm.models == {"decide": "claude-haiku-4-5"}
+
+
 def test_live_meta_validates_against_contract():
     meta = PennStepper(num_steps=2, world=build_penn_world()).meta()
     # Raw-dict check: the model's schema_version default would mask a dropped
