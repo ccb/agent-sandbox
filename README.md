@@ -48,7 +48,7 @@ text_adventure_games/      The engine (the shared framework)
   blocks/                  Obstacles that gate movement until a condition is met
   parsing.py               Keyword command parser
   games.py                 Game loop, world state, turn-based NPC rounds
-  npc.py                   ReAct NPC behavior (SKELETON — see Roadmap)
+  npc.py                   ReAct NPC agents (Observe→Decide→Act→Reflect, tool-calling)
   llm_client.py            Provider-agnostic LLM client (OpenAI / Anthropic)
   llm_parser.py            LLM-backed parser (keyword-first, LLM fallback)
   webapp/                  Flask web UI for playing in the browser
@@ -73,18 +73,21 @@ with NPC actions correctly gated through `check_preconditions()`; scripted NPC
 behaviors (troll, guard, ghost); a provider-agnostic LLM client and an
 LLM-backed parser; terminal, Jupyter, and Flask front ends.
 
-**We're building** (this is the summer): promoting NPCs to **first-class agents**
-with goals and memory; a real **ReAct loop with a Reflect step** (today `npc.py` is
-an untested skeleton with no reflection and isn't wired into the live game); an
-**event/trigger** system; a **time** model; **agent-to-agent** interaction; and a
-**Godot 2D bridge**. See [`ROADMAP.md`](ROADMAP.md) and
-[`FEATURE-ROADMAP.md`](FEATURE-ROADMAP.md).
+**Also built over the summer** (all shipped, originally planned in
+[`ROADMAP.md`](ROADMAP.md) / [`FEATURE-ROADMAP.md`](FEATURE-ROADMAP.md)): NPCs
+promoted to **first-class agents** with goals, memory, planning, and reflection;
+the full **ReAct loop** in `npc.py` (tested, wired into the live game); an
+**event/trigger** system (`events.py`, `triggers.py`); a **time** model
+(`clock.py`); **agent-to-agent** interaction and conversations; and the
+**Godot viewer** under [`godot-generative-agents/`](godot-generative-agents/)
+with live and replay modes. [`AGENT-ARCHITECTURE.md`](AGENT-ARCHITECTURE.md)
+describes how the resulting generative-agents sim works today.
 
-**Longer-term, lower priority** (not on the critical path — revisit as agent
-counts grow and real-provider runs get costly): LLM **cost & observability** —
-per-call token/usage accounting, Anthropic prompt caching, per-run usage logs,
-and reproducible (seeded / replayable) runs. Design sketch in
-[`docs/design/llm-cost-observability.md`](docs/design/llm-cost-observability.md).
+**LLM cost & observability** also landed (`usage.py`, per-run usage ledgers, the
+in-viewer run monitor, prompt caching, seeded/replayable runs) — see the design
+sketch in [`docs/design/llm-cost-observability.md`](docs/design/llm-cost-observability.md)
+and the measured cost-scaling sweep in
+[`godot-generative-agents/runs/cost-scaling/`](godot-generative-agents/runs/cost-scaling/).
 
 ## Setup
 
@@ -224,9 +227,11 @@ uv run pytest tests/test_npc_behaviors.py -s  # watch the NPC behavior suite, na
 ### Serve a game over HTTP (backend API)
 
 For out-of-process frontends — a Godot/2D renderer, the web companion — there's a
-backend seam: a small FastAPI app that serves any engine `Game` over HTTP, so each
-frontend polls the same JSON endpoints (`GET /health`, `GET /world_state`,
-`POST /command`) instead of embedding Python. The `backend` package lives under
+backend seam: a FastAPI app that serves any engine `Game` over HTTP, so each
+frontend polls the same JSON endpoints instead of embedding Python. The core
+three are `GET /health`, `GET /world_state`, and `POST /command`; the full
+surface is ~25 endpoints (agent memory/plans, live mode + WebSocket, usage,
+run store, pause/resume). The `backend` package lives under
 `godot-generative-agents/backend/` (its import name is still `backend`).
 
 ```bash
@@ -242,14 +247,13 @@ the live interactive contract is at `/docs` while the server runs.
 
 ### Browse the documentation site
 
-A local [MkDocs](https://www.mkdocs.org/) site (Material theme) serves this home
-page plus an API reference pulled from the engine's docstrings. It's **local-only**
-— nothing is published to the internet.
+A local [MkDocs](https://www.mkdocs.org/) site (readthedocs theme) serves this
+home page plus an API reference pulled from the engine's docstrings. It's
+**local-only** — nothing is published to the internet.
 
 ```bash
-source venv/bin/activate
-pip install -e ".[docs]"             # mkdocs-material + mkdocstrings
-cd mkdocs && mkdocs serve            # then open http://127.0.0.1:8000
+uv sync --extra docs                 # mkdocs + mkdocstrings
+cd mkdocs && uv run mkdocs serve     # then open http://127.0.0.1:8000
 ```
 
 `mkdocs build` (also from the `mkdocs/` directory) renders a static site under

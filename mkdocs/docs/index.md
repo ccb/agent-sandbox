@@ -56,7 +56,7 @@ This project defaults to [**uv**](https://docs.astral.sh/uv/) — the committed
 uv sync                # editable install of the engine into .venv/ (from the lockfile)
 uv sync --extra dev    # + black, nbformat, pytest
 uv sync --extra llm    # + openai, anthropic, tiktoken
-uv sync --extra docs   # + mkdocs-material, mkdocstrings (this site)
+uv sync --extra docs   # + mkdocs, mkdocstrings (this site; readthedocs theme)
 ```
 
 No uv? The classic flow still works: `python3 -m venv venv && source

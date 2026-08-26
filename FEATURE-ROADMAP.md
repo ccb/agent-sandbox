@@ -1,5 +1,14 @@
 # Feature Roadmap
 
+> **Status (2026-08-04):** four of the five features below **shipped** — the
+> turn-based loop with NPC actions (`games.py`, `turns.py`), the LLM parser
+> (landed as `llm_parser.py`, with the client in `llm_client.py` rather than the
+> proposed `llm.py`), the time model (`clock.py`), and the event/trigger system
+> (`events.py`, `triggers.py`). Feature 2 (LLM-generated descriptions) remains
+> unbuilt. Each feature's "Current state" paragraph describes the **June 2026**
+> engine it was planned against, not today's — this file is kept as the original
+> spec; see [`AGENT-ARCHITECTURE.md`](AGENT-ARCHITECTURE.md) for the present.
+
 This document outlines planned features for the text adventure framework, in rough dependency order. Each feature builds on the framework's existing architecture: the `Game` loop in `games.py`, the `Action` system (`check_preconditions()` → `apply_effects()`), the `Parser` routing pipeline, and the `Thing` hierarchy (`Location`, `Item`, `Character`).
 
 ---

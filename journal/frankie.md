@@ -1,3 +1,170 @@
+## 2026-07-31
+**Focus:** closed out the week's web-companion work under the new showcase epic — one-button web boot merged, the setup-view module parked as a draft, the first flaky-CI issue of the release window filed.
+
+**Done today:**
+- Merged **#928** (#903): the web export now boots straight into a one-button "Start replay" menu instead of the dev App shell — and flagged that the deployed site needs a re-export/redeploy to pick it up.
+- Merged **#895** (#825): co-settled pair-steps now count under any brain, so mock runs stop reporting 0 co-settles over a day full of them.
+- Opened **#929** — the #735 pre-start setup view as a standalone module (cast picker + knobs + run controls) — and parked it as a draft pending the scope call; filed **#932**: the decide-timeout CI test races its pool worker's start (fix sketched in the issue).
+
+**Blockers / questions:**
+- #929's scope: the epic keeps the `#llm` dashboard out of public nav, so where the setup view mounts (and whether it ships at all for Aug 7) is an open call.
+- Yesterday's #861/#874/#894 are still open awaiting merge — they should land before QA starts reading dashboards.
+
+**Next:**
+- Start the #875 showcase children in date order: #877 release-candidate QA, then the #878 candidate freeze.
+- Re-export + redeploy the web bundle so #928 reaches the public site.
+
+## 2026-07-30
+**Focus:** the 2026-08-07 showcase epic landed (#875) — digested the plan, took my slices, and started the web-export boot work.
+
+**Done today:**
+- Worked through the #875 epic + its dated children (#876–#884): Aug-7 gate for a polished viewer, one frozen five-agent twelve-hour replay, and a public Vercel site. Co-assigned on #879 (final landing narrative) and #762 (persona library); Alistair's #899 base narrative (title/credits/abstract/architecture/KaTeX/BibTeX) merged overnight, leaving the case-study, run-locally, and nav-trim slots open behind their dependencies.
+- Built the #903 fix — the web export boots a one-button "Start replay" menu (PR #928 up by early morning).
+- Carved #735's browser pre-start setup view into a standalone module (PR #929 draft behind it).
+
+**Blockers / questions:**
+- #879's case study is blocked on #878 (candidate selection) and its run-locally section on #880 — the narrative can only be finished around a frozen run.
+- Poster content for #879: #899 merged before I pushed into the draft branch, so my additions go through fresh PRs off `main`.
+
+**Next:**
+- Land #928; resolve #929's mounting question.
+- #877 (release-candidate QA) is the next dated child — sketch the native + WASM matrix.
+
+## 2026-07-29
+**Focus:** run-analysis follow-through — spend attribution, a WishFeed panel for the web companion, and two counter fixes from the #760 backlog.
+
+**Done today:**
+- Fixed **#847**: plan/reflect role-client spend now lands on the agent in `by_actor` instead of pooling under `(unattributed)` (PR #861).
+- Built the web companion's **WishFeed panel** — a run's wishes rendered from replay and live feeds alike (#873 → PR #874, same day).
+- Evening pair from the analysis backlog: **#894** (analyze_run flags a run missing from sim.db instead of silently reporting 0 memory counters — #859's desync read) and **#895** (#825 co-settle counting decoupled from conversation capability).
+
+**Blockers / questions:**
+- All four PRs (#861/#874/#894/#895) are up together awaiting review — nothing from today is on `main` yet.
+
+**Next:**
+- Land the four; then pick the next #760 batch once #844's effort tiers are in.
+
+## 2026-07-28
+**Focus:** viewer conversation-rendering day — bubbles anchored, expandable, and honest about distance — plus adaptive thinking for Sonnet-5.
+
+**Done today:**
+- Shipped the bubble trio: **#832** bottom-anchored speech/wish/thinking bubbles (they never cover the NPC), **#834** click-a-bubble-to-read-it-in-full (a Godot Label swallows clicks unless `MOUSE_FILTER_STOP` is set *before* connecting `gui_input` — that cost a debug loop), and **#840**: the talk_to opener now gates on tile distance, not shared `Location` (#835 — found watching two agents converse across the map because the outdoor hub is one Location).
+- Landed yesterday's dashboards/setup pair (#818 planner-from-setup-scene, #823 live RunSocial); filed **#833** — `--brain scripted` idles every agent under default persist because RecordingClient drops `register_schedule` (workaround: `--no-persist`).
+- Built adaptive thinking + effort for Sonnet-5/Opus (**PR #844**: `serve_penn --effort`, Sonnet-5 pricing) and put two clean thinking-enabled runs on the #760 log ($4.67 combined); filed #845 (manifest doesn't record effort), #846 (agents keep wishing for a note-taking/observe verb), #847 from them.
+
+**Blockers / questions:**
+- #833 makes the default-persist scripted path a trap for viewer testing until fixed.
+- Effort isn't in run manifests (#845) — a provenance gap for exactly the runs where it matters.
+
+**Next:**
+- Land #844; fix the #847 attribution gap.
+- #846's note-taking demand belongs to the #617/#619 curated-action lineage — park it until after the showcase.
+
+## 2026-07-27
+**Focus:** batch 4 of the #760 live-run log — the first full twelve-hour day — plus the run-quality follow-through it demanded.
+
+**Done today:**
+- Merged **#805**: plan memories stay out of the reflection pass (#777, the second of the weekend's live-run fixes after #797/#776 landed Sunday).
+- Ran **#760 batch 4** on Sonnet-5: the log's first 4,320-step full day next to a same-model 1,200-step morning. Verb vocabulary jumped 3 → 8 distinct (check_out_book ×47, study, eat, read — verbs that had never fired live), and the batch surfaced two structural findings: the default 1200-step window systematically samples the least varied slice of the day (#827), and prompt caching never engages on Haiku because Penn prompts sit under its 4096-token cache minimum — the same prompts cache fine on Sonnet (#822).
+- Shipped the follow-through: **#818** — pick the day planner from the simulation setup scene (#791), **#823** — live RunSocial block on the web dashboard (#819); filed **#825** (mock runs always report 0 co-settled steps).
+
+**Blockers / questions:**
+- A full day costs ~11× a morning ($0.87 → $9.81) — whether evaluation runs default to a longer window is a team decision (#827).
+- Persona day-shapes can't express a non-08:00 start: every first stop begins at SIM_START, so night-owl personas only show their evening half.
+
+**Next:**
+- Bubble/conversation rendering fixes — the twelve-hour replay makes the viewer's conversation warts obvious.
+- Adaptive thinking effort for Sonnet-5, then another batch.
+
+## 2026-07-24
+**Focus:** first full live-LLM viewer day — run, file, fix, merge, repeat.
+
+**Done today:**
+- Got the live-LLM viewer recipe solid (`ANTHROPIC_API_KEY` at the checkout root, `--decide-timeout` tuned to force thinking bubbles) and spent the day driving #760 runs; filed the day's slate — #755–#759 in the engine/live loop plus the boot/cognition pair #776/#777.
+- Fixed and merged nine same-day: **#749** (#744 blocks survive save/load), **#750** (#745 mid-run LLM API failures surface as event + status + ledger row instead of a silent freeze), **#767** (#758 decide timeouts write a failure memory), **#768** (#759 bounded importance-scoring batch), #765/#766/#769/#748 — and **#771**, eight new personas across roles and schedule shapes (#762).
+- Landed **#743**: engine `Activate`/`Deactivate` + the Drink sickness arc, retiring the Penn-local verb copies — the #464 upstreaming list is finally empty.
+
+**Blockers / questions:**
+- #776 (repo root found by counting parents — breaks in worktrees) and #777 (plan memories flood reflection) are still open from today's runs.
+- Alistair fixes run-surfaced bugs same-day — re-check live state before picking one up, or we collide.
+
+**Next:**
+- Weekend: fix #776/#777, then more #760 batches on the fixed build.
+- Start the run-analysis pass over what's collected.
+
+## 2026-07-23
+**Focus:** merge the triage batch, build a second wave on top of it, and file what the work surfaced.
+
+**Done today:**
+- Merged the four-PR triage batch: **#724** (#686 crafting bare-verb guard), **#725** (#184 learned_recipes persist across save/load), **#726** (#644 finishing-tick events reach the feed + web renders game_event/wish + run-scoped dashboard usage), **#727** (#525 per-agent thinking bubbles + global cue on the web dashboard).
+- Built and merged a second wave same-day: **#737** most-taken-actions panel (#701), **#738** validate_tmj's three scope gaps closed (#643), **#739** boil_hard Kitchen-hidden-stove plumbing (#728), **#740** deciding-begin published out-of-band as the decide starts (#605); opened **#743** (the #464 engine-verbs arc).
+- Filed the next slate from working the stack: **#744** (blocks don't survive `from_primitive`), **#745** (mid-run LLM API failures invisible — no ledger row, no status), **#746** (furnish firstgid drift), **#747** (run manifests missing the scenario).
+
+**Blockers / questions:**
+- #745 is the scary one: a mid-run auth/quota outage today is indistinguishable from a healthy-but-quiet run.
+- #743 wants the careful review pass — engine-level verb changes ripple into every world.
+
+**Next:**
+- Fix the #744–#747 slate, then a real live-LLM viewer session on the fixed build.
+
+## 2026-07-22
+**Focus:** triage day — the post-audit fix batch opened, the tracker reconciled, boil_hard filed.
+
+**Done today:**
+- Opened the four-PR fix batch built over the last two days: **#724** (#686), **#725** (#184), **#726** (#644 observability), **#727** (#525 web thinking state).
+- Tracker triage: closed done-but-open #551/#578/#113/#266 with pointer comments; posted the #692 scenario-redesign draft for Alistair; filed **#728** — boil_hard, the "connect the dots" variant with the stove hidden in a separate Kitchen.
+- Salvaged the last un-landed #464 engine slice (Activate/Deactivate + the Drink arc) onto a fresh branch off `main`.
+
+**Blockers / questions:**
+- #692 waits on Alistair's take — no more keyed articulation runs until the scenario design changes.
+
+**Next:**
+- Merge the batch once CI clears; build the second wave (#643/#605/#701) behind it.
+
+## 2026-07-21
+**Focus:** land the perception gate on `main`, grind the post-audit fix batch.
+
+**Done today:**
+- Merged **#668**: `Game.can_perceive` — the engine-level, character-scoped perception gate — completing the #662 campus-perception fix (the Penn tile-gating rode #669 on the weekend) and closing tracking issue #670.
+- In flight on the post-audit batch: the #686 crafting bare-verb guard and the #184 learned_recipes save/load fix (both open as PRs tomorrow), with the bigger #644 observability change behind them.
+
+**Blockers / questions:**
+- #692 keyed re-runs stay paused pending the scenario-design decision — the articulation harness idles meanwhile.
+
+**Next:**
+- Open the batch (#724–#727) and do the tracker-triage pass that's been accumulating.
+
+## 2026-07-20
+**Focus:** merge Monday — the weekend's wish/unblock/live wave onto `main`, and `godot-ga-main` retired.
+
+**Done today:**
+- Merged the weekend wave: **#679** (#634 is_sick perceivable), **#680** (#635 `boil` routes to crafting), **#681** (#633 landmark_importance — high-importance memories exempt from recency burial), **#693** (#685 live crash surfaced instead of "thinking…"), **#694** (#689 dead-talk retry bound), **#695** (#688 wish goals in the report); then **#675** (#628 craft_gap split) and **#606** (#604 single enriched craft event — the 7/16 blocker) to `main`.
+- Retired **`godot-ga-main`**: after the 143-commit sync, the branch merged back into `main` — one branch, one review track; rebases target `main` from here on.
+- The #624 articulation re-run *with* all four #632–#635 fixes in still read 0% in both arms — #692's read stands: the scenario never creates goal pressure toward `propose` (the plan scripts the sickness; goals stay empty).
+
+**Blockers / questions:**
+- #692: no more paid articulation runs until the scenario is redesigned — the harness is fine, the world isn't asking the question.
+- CLAUDE.md's branch guidance still describes the two-track world — needs the post-retirement rewrite.
+
+**Next:**
+- Land #668 (`can_perceive`) on `main`, then the accumulated post-audit fixes.
+
+## 2026-07-17
+**Focus:** merged the run-lifecycle wave, filed the pre-epic audit slate, and built the #595 boil-from-memory substrate.
+
+**Done today:**
+- Merged the live/run-lifecycle wave: **#618** (de-flaked reset-mid-tick — closes #597, the standing 7/16 blocker), **#608** (`POST /runs` world-factory seam, #568), **#609** (per-process boot nonce on `GET /live`, #578), **#611** (docs).
+- Audited ahead of the #617/#619 epics: filed the twenty-issue slate **#626–#645** + umbrella **#646**; separately reviewed Alistair's #612–#617 designs (Eat needs a carried item and no portions, Read's gate is an OR, `perceivable_locations` over `get_locations_in_vision`, byte-safe tags prompt-side only).
+- Built the #595 experiment substrate on a branch: opt-in t=0 seeded persona memories (#632), thirst + sickness surfaced in the decide prompt (#594), DrinkPenn's authoritative outcome record, the harness + offline smoke, and #620's `propose` licensing (→ PRs #655/#667 over the weekend).
+
+**Blockers / questions:**
+- The audit found four #595 blockers (#632–#635); #633 is the sharpest — a t=0 seeded memory is mathematically buried by retrieval decay before the first water decision. The experiment can't run until they land.
+- Twenty issues ahead of two epics is a lot of slate — #646 orders them, but the epic owners should re-prioritize.
+
+**Next:**
+- Land the #595 unblock fixes and run the first articulation experiment.
+- Wire the wish-capture channel (#620–#625) so unmet intents become data instead of parser noise.
+
 ## 2026-07-16
 **Focus:** productionize the boil-water arc as engine *crafting*, review + merge the whole walking-on-walls / boil PR stack on `godot-ga-main`, and reconcile the issue tracker.
 

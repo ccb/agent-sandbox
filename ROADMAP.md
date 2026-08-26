@@ -1,5 +1,14 @@
 # Summer 2026 Roadmap
 
+> **Status (2026-08-04):** this plan is essentially **complete** — Phases 0–3
+> all shipped (first-class agents + ReAct, memory/planning/reflection, events,
+> the time model, and the Godot viewer), and Phase 4 became the **Penn campus
+> generative-agents showcase** (epic
+> [#875](https://github.com/ccb/agent-sandbox/issues/875), presenting
+> 2026-08-07). This file is kept as the original plan; for how the system works
+> *today* read [`AGENT-ARCHITECTURE.md`](AGENT-ARCHITECTURE.md) and
+> [`CLAUDE.md`](CLAUDE.md).
+
 This is the **project plan**: the phases, the order we build in, and who owns what.
 For the *technical* specs of individual framework features, see
 [`FEATURE-ROADMAP.md`](FEATURE-ROADMAP.md).
@@ -31,8 +40,10 @@ engine, and gets fluent with Claude Code. Outcome: a shared mental model of
 Turn the agent layer from a skeleton into a working system.
 - Promote NPCs from "a callable attached to a `Character`" to a first-class
   **`Agent`** with a persona, goals, and memory.
-- Build the real **ReAct loop**: Observe → Think → Act → **Reflect**. Today
-  `npc.py` has no reflect step and isn't wired into the live game; fix both.
+- Build the real **ReAct loop**: Observe → Think → Act → **Reflect**. At the
+  time of planning, `npc.py` had no reflect step and wasn't wired into the live
+  game; both shipped in Phase 1 (see `tests/test_reflection.py` and
+  `tests/test_react_live_game.py`).
 - Add a **mockable LLM client** so the agent layer can be tested without API calls.
 - Background reading: the **Generative Agents** and **ReAct** papers.
 
@@ -68,10 +79,12 @@ cage; swap and pair freely.
 ## Reference material (study, don't copy)
 
 There is an **earlier prototype**, "Generative Action Castle" (a Smallville-style
-simulator with a Python backend and a Godot front end), that lives on Chris's
-machine — it is **not** in this repo. It's incomplete and has known bugs, so it is
-**not a starting point**, but several parts are worth studying as reference once
-we reach the relevant phase:
+simulator with a Python backend and a Godot front end), which originally lived
+only on Chris's machine — it has since been **ported into this repo** under
+[`generative-agents/`](generative-agents/) (see
+[`docs/design/generative-agents-port.md`](docs/design/generative-agents-port.md)).
+It's incomplete and has known bugs, so it is **not a starting point**, but
+several parts are worth studying as reference:
 
 - A clean, correct implementation of the **Generative-Agents memory-retrieval
   scoring** (recency × importance × relevance) — the best reference for Phase 1/2
@@ -89,7 +102,9 @@ bugs as cautionary tales (and good "find the bug" exercises), not as gospel.
 
 ## Working agreement
 
-- Feature branches, reviewed via PR before merging to `main`.
+- Feature branches, reviewed via PR before merging to `main` — except anything
+  touching `godot-generative-agents/web/` (the showcase site), which branches
+  off and PRs into **`prod`** instead (see `CLAUDE.md`).
 - Use Claude Code freely — but read and understand what it writes; you own the code.
 - Demo something every week, however small. Momentum > polish.
 - Ask questions early and often, in Slack or in person.
