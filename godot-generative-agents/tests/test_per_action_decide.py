@@ -185,6 +185,9 @@ def test_travel_carries_the_location_enum_and_perform_stays_free_text():
         "perform", {"reasoning": "settling in", "activity": "stretching"}
     )
     game, ada = _world(llm_client=brain)
+    # This test pins the generic location-enum enrichment, independent of
+    # #849's schedule-aware curation (covered in test_same_place_travel_849).
+    ada.agent.schedule = None
 
     command = observe_and_decide(game, ada, 0)
     assert command == "perform stretching"
@@ -210,6 +213,9 @@ def test_penn_campus_fits_under_the_enum_cap():
     game, chars = pw.build_world_fn(pw.world_map)
     attach_agents(chars, pw.personas)
     char = chars[pw.personas[0]["name"]]
+    # Keep this as the campus-size / enum-cap regression.  Scheduled residents
+    # intentionally see a convergent subset under #849.
+    char.agent.schedule = None
 
     assert len(game.locations) <= DECIDE_MAX_ENUM
     tools = {t["name"]: t for t in action_tools_for(game, char)}

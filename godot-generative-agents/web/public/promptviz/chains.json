@@ -1,12 +1,7 @@
 [
   {
-    "id": "action_castle",
-    "label": "Action Castle",
-    "description": "One NPC's ReAct turn (decide -> precondition gate -> reflect & retry) and the LLM-fallback parser path a command takes (intent -> entity -> narrate). Each box is a real prompt; click it to read the template."
-  },
-  {
     "id": "cognition",
     "label": "Cognition",
-    "description": "A persona's day with a live LLM: generate a plan (day -> hourly -> minute), seed beliefs + plan into memory, then each step perceive, retrieve, decide, maybe converse, remember, and periodically reflect. Click a node to read its prompt. With the default mock brain the blue prompts aren't sent (the mock decides from location alone), but the green memory text is still written."
+    "description": "One Penn resident's simulated day. Before the clock starts, memories are seeded and a day plan is decomposed day -> hourly -> minute. Then each tick: perceive, retrieve, assemble context, decide through typed per-action tools, pass the precondition gate, remember the outcome, score its poignancy, and periodically reflect. Meeting someone can open a conversation, whose outcome can revise the rest of the plan. Click a node to read its prompt."
   }
 ]

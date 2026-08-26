@@ -48,6 +48,12 @@ static func config_summary(entry: Dictionary) -> String:
 	var temp: Variant = _config_temperature(cfg)
 	if temp != null and str(cfg.get("brain", "")) == "llm":
 		parts.append("temp %s" % str(temp))
+	# Thinking depth (#845), like temperature a paid-brain-only setting: show it
+	# only when a level was actually requested ("default" means none was, and a
+	# block saved before #845 records nothing at all).
+	var effort := str(cfg.get("effort", "default"))
+	if effort != "default" and str(cfg.get("brain", "")) == "llm":
+		parts.append("effort %s" % effort)
 	return " · ".join(parts)
 
 

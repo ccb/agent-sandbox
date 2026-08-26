@@ -283,7 +283,8 @@ class AgentMemory:
         # thing leaves view, so re-entering a room re-notices it.
         self._perceived: set[str] = set()
         # Importance accrued since the last reflection; reflection (a later
-        # stage) fires when this crosses a threshold, then resets it.
+        # stage) fires when this crosses a threshold, then resets it. Every
+        # record pays in: reflection can see plans as tagged intentions (#815).
         self.importance_since_reflection = 0.0
         self._next_id = 0
 
@@ -604,6 +605,7 @@ class AgentMemory:
         alpha_importance: float = ALPHA_IMPORTANCE,
         alpha_relevance: float = ALPHA_RELEVANCE,
         landmark_importance: float | None = None,
+        exclude_kinds: tuple = (),
         touch: bool = True,
     ) -> list[MemoryRecord]:
         """Return the most useful memories for *query* at *turn*.
@@ -625,6 +627,14 @@ class AgentMemory:
         override them to, say, favor relevance over recency (see
         ``generative-agents`` ``RetrievalConfig``).
 
+        ``exclude_kinds`` drops whole record kinds *before* the ranking, so an
+        excluded record's slot is backfilled by the next-best match and
+        ``max_records`` still means what it says -- unlike filtering the
+        returned list, which silently thins the result. Kinds are compared by
+        value (``MemoryKind`` is a str Enum), so duck-typed callers can use
+        plain strings without importing the enum. The default ``()`` excludes
+        nothing, preserving the historical behavior exactly.
+
         Set ``touch=False`` for a *read-only* retrieval that does not bump
         ``last_accessed_turn`` -- for inspecting or comparing what would surface
         without disturbing recency (e.g. scoring the same stream under two
@@ -644,6 +654,11 @@ class AgentMemory:
         relevance = self._relevance_by_id(query)
         scored = []
         for record in self.records:
+            if record.kind in exclude_kinds:
+                # Filtered *inside* the ranking, before the top-k cut, so an
+                # excluded record frees its slot for the next-best one and
+                # max_records still means what it says (#777).
+                continue
             recency = recency_score(record, turn, decay)
             if (
                 landmark_importance is not None

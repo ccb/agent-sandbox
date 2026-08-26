@@ -5,6 +5,10 @@ persona: I am Diego Torres, 24, a graduate student in architecture at Penn. I am
   creative, focused, and always sketching. I spend long hours in the Meyerson
   Hall studio.
 emoji: ✏️
+# Studio assistantship (job-expansion pass): paid per tick actually spent on
+# his own two Meyerson stops below (is_work: true) -- mirrors the wage shape
+# every other job persona uses.
+wage_rate: 0.06
 start_tile:
 - 194
 - 48
@@ -12,6 +16,7 @@ schedule:
 - place: Meyerson Hall
   activity: working on a studio model
   emoji: ✏️
+  is_work: true
   steps: 65
 - place: Van Pelt — Kamin Gallery
   activity: studying precedents in the gallery exhibits
@@ -34,13 +39,14 @@ schedule:
   # Diego froze at this stop. Keep activities clear of verb substrings
   # ("ate ", "eat ", "get ", "take ", "drink", ...) until the parser gives
   # `perform` precedence.
-  activity: refining the model into the evening
+  activity: refining the model
   emoji: ✏️
+  is_work: true
   steps: 60
 # Turns in for the night (#931 follow-up): see sofia.yaml's matching stop --
 # Houston Hall -- Reading Room is the only `sleepable` spot in the world.
 - place: Houston Hall — Reading Room
-  activity: turning in for the night
+  activity: turning in for bed
   emoji: 😴
   commands:
   - sleep

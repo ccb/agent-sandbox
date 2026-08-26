@@ -10,6 +10,7 @@ Fully offline. Run from the repo root::
     uv run pytest godot-generative-agents/tests/test_decide_context.py -v
 """
 
+import concurrent.futures
 import datetime
 import sys
 from pathlib import Path
@@ -24,6 +25,7 @@ sys.path.insert(0, str(_SIM_DIR))
 from backend.prompt_templates import render  # noqa: E402
 from backend.build_world import build_world  # noqa: E402
 from backend.cognition import (  # noqa: E402
+    at_scheduled_stop,
     attach_agents,
     decide_context_block,
     memories_for_frame,
@@ -106,7 +108,7 @@ def test_block_requires_a_clock_and_a_schedule():
     class Bare:  # an agent with no schedule attribute
         pass
 
-    assert decide_context_block(Bare(), 5, SimClock(START), 0) == ""
+    assert decide_context_block(Bare(), 5, SimClock(START, sec_per_step=10), 0) == ""
 
 
 def test_block_reads_the_clock_and_current_stop():
@@ -115,11 +117,198 @@ def test_block_reads_the_clock_and_current_stop():
     assert decide_context_block(ada.agent, 12, SimClock(START, sec_per_step=10), 6) == (
         "Right now it is Monday 08:02 AM.\n"
         "Your plan's current stop: reading a novel at Cafe. "
-        "You have been on this stop for 1 min."
+        "This has been your current stop for 1 min."
     )
 
 
+def test_block_states_a_long_same_activity_hold():
+    # #905: a re-chosen wait never shows up in `elapsed` (which clocks the
+    # schedule stop), so a 340-minute "waiting for theo" read as a fresh,
+    # plausible decision every tick. Past SAME_ACT_CONTEXT_MIN the block
+    # states the hold -- factually, with no directive.
+    _game, ada = _world()
+    # act unchanged for 600 steps = 100 min; the stop itself is 1 min old.
+    text = decide_context_block(
+        ada.agent,
+        606,
+        SimClock(START, sec_per_step=10),
+        600,
+        act_since=6,
+        activity_text="reviewing problems while waiting for theo",
+    )
+    assert text.endswith(
+        ' You have been doing exactly this -- "reviewing problems while '
+        'waiting for theo" -- for 100 min.'
+    )
+
+
+def test_block_names_the_no_show_person():
+    _game, ada = _world()
+    text = decide_context_block(
+        ada.agent,
+        606,
+        SimClock(START, sec_per_step=10),
+        600,
+        act_since=6,
+        activity_text="waiting for theo",
+        absent="Theo",
+    )
+    assert text.endswith(
+        ' You have been doing exactly this -- "waiting for theo" -- for '
+        "100 min, and Theo is not here."
+    )
+
+
+def test_short_holds_and_untracked_activities_stay_silent():
+    _game, ada = _world()
+    # 500 steps = 83 min: under the 90-min gate, a study block isn't nagged.
+    below = decide_context_block(
+        ada.agent,
+        500,
+        SimClock(START, sec_per_step=10),
+        0,
+        act_since=0,
+        activity_text="studying",
+        absent="Theo",
+    )
+    assert "doing exactly this" not in below
+    # No act_since threaded (the bake, offline callers): clause never renders.
+    untracked = decide_context_block(
+        ada.agent, 5000, SimClock(START, sec_per_step=10), 0
+    )
+    assert "doing exactly this" not in untracked
+
+
+def test_walking_replaces_the_elapsed_clause(monkeypatch=None):
+    # #916: 70 min into a correct 68-min leg, "this has been your current
+    # stop for 130 min" read as "the session ran long and is over" and the
+    # agent turned around 11 tiles from the door. Mid-walk toward the plan,
+    # the honest sentence is how far from arrival you are.
+    _game, ada = _world()
+    text = decide_context_block(
+        ada.agent, 606, SimClock(START, sec_per_step=10), 6, walking=12
+    )
+    assert text.endswith("You are walking there now, about 12 min from arrival.")
+    assert "current stop for" not in text
+
+
+def test_walking_minutes_left_prices_only_the_on_plan_walk():
+    from backend.run_simulation import _walking_minutes_left
+
+    _game, ada = _world()  # scheduled destination: Cafe
+    clock = SimClock(START, sec_per_step=10)
+    st = {"path": [(0, i) for i in range(60)], "walk_target": "Cafe"}
+    assert _walking_minutes_left(st, ada, clock) == 10  # 60 steps -> 10 min
+    # A walk AWAY from the plan keeps the neglect semantics: no clause.
+    assert _walking_minutes_left(dict(st, walk_target="Library"), ada, clock) is None
+    # Settled (path exhausted) or offline (no clock): nothing to price.
+    assert _walking_minutes_left(dict(st, path=[]), ada, clock) is None
+    assert _walking_minutes_left(st, ada, None) is None
+
+
+def test_travel_resets_the_905_stamp():
+    # #916: the walk is not the held activity. Without the reset, an agent
+    # walking for 90+ min carried its stale pre-walk activity into the hold
+    # clause -- "you have been doing exactly this (reviewing with priya) for
+    # 123 min, and Priya is not here" -- while mid-walk to a class.
+    from backend.run_simulation import step
+
+    class _TwoTileWalk:
+        def walk_path(self, start, address, furniture=None):
+            return [(0, 1), (0, 2)]
+
+    personas = _personas()
+    brain = MockLlmClient(tool_calls_responses=[TRAVEL])
+    game, chars = build_world(None, personas, LOCATIONS)
+    attach_agents(chars, personas, llm_client=brain)
+    state = {
+        "Ada": {
+            "tile": (0, 0),
+            "path": [],
+            "pron": "\U0001f4d6",
+            "desc": "waking up",
+            "performing": False,
+            "perform_until": None,
+            "reasoning": "",
+            "memories": [],
+            "chat": None,
+            "stop_since": 0,
+            "act_text": "reviewing diagrams with priya",
+            "act_since": 0,
+        }
+    }
+    step(
+        game,
+        chars,
+        state,
+        0,
+        order=["Ada"],
+        world_map=_TwoTileWalk(),
+        emoji={"Ada": "\U0001f4d6"},
+        clock=SimClock(START, sec_per_step=10),
+    )
+    assert state["Ada"]["act_text"] is None
+    assert state["Ada"]["walk_target"] == "Cafe"
+
+
+def test_absent_person_matches_a_named_no_show():
+    from backend.cognition import _absent_person
+
+    personas = _personas() + [
+        {
+            "name": "Theo Tester",
+            "home": "The Green",
+            "persona": "I am Theo.",
+            "emoji": "\U0001f4da",
+            "start_tile": [0, 0],
+            "destination": "Library",
+            "activity": "reading",
+            "schedule": [
+                {
+                    "place": "Library",
+                    "activity": "reading",
+                    "emoji": "\U0001f4da",
+                    "steps": None,
+                }
+            ],
+        }
+    ]
+    game, chars = build_world(None, personas, LOCATIONS)
+    attach_agents(chars, personas)
+    ada, theo = chars["Ada"], chars["Theo Tester"]
+    # Apart: Ada at the Cafe, Theo at the Library.
+    game.locations["Cafe"].add_character(ada)
+    game.locations["Library"].add_character(theo)
+    assert _absent_person(game, ada, "waiting for theo to arrive") == "Theo"
+    assert _absent_person(game, ada, "waiting for the bus") is None
+    assert _absent_person(game, ada, None) is None
+    # Co-located: the person is here, so there is no no-show to report.
+    game.locations["Cafe"].add_character(theo)
+    assert _absent_person(game, ada, "waiting for theo to arrive") is None
+
+
 # ------------------------------------------------- the decide-prompt wiring
+
+
+def test_decide_prompt_states_the_hold():
+    brain = MockLlmClient(tool_calls_responses=[TRAVEL])
+    game, ada = _world(llm_client=brain)
+    ada.set_property("activity", "waiting for the seminar to start")
+
+    observe_and_decide(
+        game,
+        ada,
+        606,
+        clock=SimClock(START, sec_per_step=10),
+        stop_since=600,
+        act_since=6,
+    )
+
+    user = brain.tool_calls_log[0]["messages"][-1]["content"]
+    assert (
+        'You have been doing exactly this -- "waiting for the seminar to '
+        'start" -- for 100 min.'
+    ) in user
 
 
 def test_decide_prompt_carries_the_block_after_the_environment_text():
@@ -135,7 +324,7 @@ def test_decide_prompt_carries_the_block_after_the_environment_text():
     assert (
         "Right now it is Monday 08:02 AM.\n"
         "Your plan's current stop: reading a novel at Cafe. "
-        "You have been on this stop for 1 min."
+        "This has been your current stop for 1 min."
     ) in user
     # The first non-empty line is still the location: the deterministic mock's
     # first-line read (ScheduleMockClient._current_location) is untouched.
@@ -161,7 +350,7 @@ def test_mock_decision_and_retrieval_unchanged_by_the_block():
     game1, ada1 = _world()
     plain = observe_and_decide(game1, ada1, 0)
     game2, ada2 = _world()
-    clocked = observe_and_decide(game2, ada2, 0, clock=SimClock(START))
+    clocked = observe_and_decide(game2, ada2, 0, clock=SimClock(START, sec_per_step=10))
 
     assert plain == clocked == "travel to Cafe"
     assert memories_for_frame(ada1.agent.last_retrieved) == memories_for_frame(
@@ -183,7 +372,7 @@ def test_render_pins_the_full_block():
     ) == (
         "Right now it is Monday 12:05 PM.\n"
         "Your plan's current stop: eating lunch at Houston Hall (planned ~40 min). "
-        "You have been on this stop for 15 min."
+        "This has been your current stop for 15 min."
     )
 
 
@@ -265,7 +454,7 @@ def test_step_restamps_stop_since_when_the_schedule_advances():
             "stop_since": 0,
         }
     }
-    clock = SimClock(START)
+    clock = SimClock(START, sec_per_step=10)
     common = dict(
         order=["Ada"], world_map=None, emoji={"Ada": "\U0001f4d6"}, clock=clock
     )
@@ -278,7 +467,7 @@ def test_step_restamps_stop_since_when_the_schedule_advances():
     assert state["Ada"]["stop_since"] == 1
     user = brain.tool_calls_log[1]["messages"][-1]["content"]
     assert "people-watching at The Green" in user
-    assert "You have been on this stop" not in user  # elapsed 0: just advanced
+    assert "This has been your current stop" not in user  # elapsed 0: just advanced
 
 
 def test_arrival_restamps_stop_since_so_elapsed_excludes_the_walk():
@@ -315,7 +504,7 @@ def test_arrival_restamps_stop_since_so_elapsed_excludes_the_walk():
         order=["Ada"],
         world_map=_TwoTileWalk(),
         emoji={"Ada": "\U0001f4d6"},
-        clock=SimClock(START),
+        clock=SimClock(START, sec_per_step=10),
     )
 
     step(game, chars, state, 0, **common)  # decides travel, walks 1st tile
@@ -328,7 +517,452 @@ def test_arrival_restamps_stop_since_so_elapsed_excludes_the_walk():
     step(game, chars, state, 2, **common)  # arrival decide: perform
     user = brain.tool_calls_log[1]["messages"][-1]["content"]
     assert "reading a novel at Cafe" in user
-    assert "You have been on this stop" not in user  # walk time excluded
+    assert "This has been your current stop" not in user  # walk time excluded
+
+
+def test_stop_since_survives_an_offplan_arrival():
+    # #826: arriving somewhere that is NOT the current stop's place must not
+    # re-anchor stop_since. It used to, on every arrival -- so `elapsed` was 0
+    # on every decide that followed a walk and the "this has been your current
+    # stop for N min" clause never rendered for a traveling agent. An agent
+    # alternating between two errands could then never see that its 10-minute
+    # coffee run had been running for two hours (the reported symptom).
+    class _TwoTileWalk:
+        def walk_path(self, start, address, furniture=None):
+            return [(0, 1), (0, 2)]
+
+    # Her stop is the Cafe; she travels to the Library instead -- a deviation.
+    library = ToolCallResult(
+        text=None,
+        tool_calls=[
+            {
+                "id": "call_1",
+                "name": "travel",
+                "arguments": {"reasoning": "browsing first", "destination": "Library"},
+            }
+        ],
+    )
+    brain = MockLlmClient(
+        tool_calls_responses=[library, _perform_call("reading a novel")]
+    )
+    personas = _personas()  # destination "Cafe", one Cafe stop
+    game, chars = build_world(None, personas, LOCATIONS)
+    attach_agents(chars, personas, llm_client=brain)
+    # Start at the scheduled Cafe so Library is a genuine cross-building
+    # deviation under #849, rather than an addressless-hub detour.
+    game.locations["The Green"].remove_character(chars["Ada"])
+    game.locations["Cafe"].add_character(chars["Ada"])
+    state = {
+        "Ada": {
+            "tile": (0, 0),
+            "path": [],
+            "pron": "\U0001f4d6",
+            "desc": "waking up",
+            "performing": False,
+            "perform_until": None,
+            "reasoning": "(waking up)",
+            "memories": [],
+            "chat": None,
+            "stop_since": 0,
+        }
+    }
+    common = dict(
+        order=["Ada"],
+        world_map=_TwoTileWalk(),
+        emoji={"Ada": "\U0001f4d6"},
+        clock=SimClock(START, sec_per_step=10),
+    )
+
+    step(game, chars, state, 0, **common)  # decides travel to Library, 1st tile
+    step(game, chars, state, 1, **common)  # last tile popped: off-plan arrival
+    assert chars["Ada"].location.name == "Library"
+    assert state["Ada"]["stop_since"] == 0  # NOT re-anchored to step 1
+
+    # The payoff: because the clock kept running, a decide later in the day now
+    # renders the elapsed clause instead of dropping it. 400 steps at 10 s/step
+    # is 66 min, measured from the preserved stop_since of 0.
+    assert "This has been your current stop for 66 min." in decide_context_block(
+        chars["Ada"].agent,
+        400,
+        SimClock(START, sec_per_step=10),
+        state["Ada"]["stop_since"],
+    )
+
+
+def test_stop_since_survives_a_completed_offplan_activity():
+    # #826 review: surviving the off-plan *arrival* is not enough. A settle that
+    # expires without moving the pointer used to re-anchor stop_since anyway, so
+    # a neglected stop's clock was reset while it stood still. The pointer has not
+    # moved in this branch, so its clock must not restart.
+    #
+    # #831 narrowed who reaches it: a completed off-plan activity now credits its
+    # stop and advances, so the only settle left that credits nothing is
+    # `settle_after_dead_talk` (#689) -- a dropped talk, which is the state this
+    # test builds. The invariant under test is unchanged: no advance, no restart.
+    personas = _personas()
+    brain = MockLlmClient(tool_calls_responses=[_perform_call("reading a novel")])
+    game, chars = build_world(None, personas, LOCATIONS)
+    attach_agents(chars, personas, llm_client=brain)
+    state = {
+        "Ada": {
+            "tile": (0, 0),
+            "path": [],
+            "pron": "\U0001f4d6",
+            "desc": "waiting after a dropped talk",
+            # Settled by a dropped talk (#689), expiring at 399: credits nothing.
+            "performing": True,
+            "credit_stop": False,
+            "perform_until": 399,
+            "reasoning": "(dropped talk)",
+            "memories": [],
+            "chat": None,
+            "stop_since": 0,
+        }
+    }
+    common = dict(
+        order=["Ada"],
+        world_map=None,
+        emoji={"Ada": "\U0001f4d6"},
+        clock=SimClock(START, sec_per_step=10),
+    )
+
+    step(game, chars, state, 400, **common)  # the pre-pass expires the deviation
+
+    assert state["Ada"]["performing"] is True  # re-decided into a new perform
+    assert state["Ada"]["stop_since"] == 0  # NOT re-anchored to step 400
+    # The payoff, in the prompt the agent actually got: 400 steps at 10 s/step
+    # is 66 min of neglect, and it now says so.
+    user = brain.tool_calls_log[0]["messages"][-1]["content"]
+    assert "This has been your current stop for 66 min." in user
+
+
+# ------------------------------------------- the shared at-scheduled-stop test
+#
+# @0frankie on PR #830: at_scheduled_stop is now a shared predicate five call
+# sites depend on, so pin its contract directly rather than only through the
+# behaviours that consume it.
+
+
+def _place(game, char, dest):
+    if char.location is not None:
+        char.location.remove_character(char)
+    game.locations[dest].add_character(char)
+
+
+def test_at_scheduled_stop_is_true_only_standing_at_the_stops_own_place():
+    game, ada = _world()  # her one stop is the Cafe
+    _place(game, ada, "Cafe")
+    assert at_scheduled_stop(ada) is True
+
+    _place(game, ada, "Library")
+    assert at_scheduled_stop(ada) is False
+
+
+def test_at_scheduled_stop_is_false_without_a_place_or_a_location():
+    game, ada = _world()
+    _place(game, ada, "Cafe")
+
+    # An unplaced stop is not somewhere you can be standing, even though the
+    # agent is somewhere. `bool(place)` covers both None and "".
+    ada.agent.schedule.schedule[0]["place"] = None
+    assert at_scheduled_stop(ada) is False
+    ada.agent.schedule.schedule[0]["place"] = "Cafe"
+
+    # Nowhere at all: char.location is None until the world places a character,
+    # and `_resting_pron`'s callers reach this predicate before that happens.
+    ada.location.remove_character(ada)
+    assert ada.location is None
+    assert at_scheduled_stop(ada) is False
+
+
+def test_at_scheduled_stop_is_false_for_an_agent_with_no_schedule():
+    game, ada = _world()
+    _place(game, ada, "Cafe")
+    ada.agent.schedule = None
+    assert at_scheduled_stop(ada) is False
+
+
+def test_an_offplan_travel_drops_the_furniture_hint():
+    # The consequence @0frankie flagged, pinned at the call site rather than
+    # only on the predicate. The furniture bias is dropped off-plan because the
+    # scheduled stop's furniture is for the wrong place -- and that call site
+    # reads `char.location` via at_scheduled_stop, relying on the engine having
+    # already moved the character to its destination at parse time. A predicate
+    # unit test cannot see that invariant break; this can. The mock bake only
+    # ever exercises the on-plan half (it never deviates), so without this the
+    # off-plan half had no coverage at all.
+    class _RecordingWalk:
+        def __init__(self):
+            self.calls = []
+
+        def walk_path(self, start, address, furniture=None):
+            self.calls.append((address, furniture))
+            return [(0, 1)]
+
+    def _travel_to(place):
+        return ToolCallResult(
+            text=None,
+            tool_calls=[
+                {
+                    "id": "call_1",
+                    "name": "travel",
+                    "arguments": {"reasoning": "going", "destination": place},
+                }
+            ],
+        )
+
+    personas = _personas()
+    personas[0]["schedule"][0]["furniture"] = "T:Cafe:counter:armchair"
+    brain = MockLlmClient(
+        tool_calls_responses=[_travel_to("Library"), _travel_to("Cafe")]
+    )
+    game, chars = build_world(None, personas, LOCATIONS)
+    attach_agents(chars, personas, llm_client=brain)
+    # Make the first off-plan leg a genuine cross-building deviation.  From the
+    # addressless hub #849 intentionally allows only the scheduled destination.
+    game.locations["The Green"].remove_character(chars["Ada"])
+    game.locations["Cafe"].add_character(chars["Ada"])
+    walker = _RecordingWalk()
+    state = {
+        "Ada": {
+            "tile": (0, 0),
+            "path": [],
+            "pron": "\U0001f4d6",
+            "desc": "waking up",
+            "performing": False,
+            "perform_until": None,
+            "reasoning": "(waking up)",
+            "memories": [],
+            "chat": None,
+            "stop_since": 0,
+        }
+    }
+    common = dict(
+        order=["Ada"],
+        world_map=walker,
+        emoji={"Ada": "\U0001f4d6"},
+        clock=SimClock(START, sec_per_step=10),
+    )
+
+    step(game, chars, state, 0, **common)  # off-plan: travels to the Library
+    state["Ada"]["path"] = []  # clear the walk so she is due to decide again
+    step(game, chars, state, 1, **common)  # on-plan: travels to the Cafe
+
+    assert walker.calls == [
+        ("T:Library:desks", None),  # off-plan -> hint dropped
+        ("T:Cafe:counter", "T:Cafe:counter:armchair"),  # on-plan -> hint kept
+    ]
+
+
+def _held_agent():
+    """Ada, mid-plan, with a second stop anchored to 10:00."""
+    game, chars = build_world(None, _personas(), LOCATIONS)
+    attach_agents(chars, _personas(), llm_client=None)
+    agent = chars["Ada"].agent
+    agent.schedule.schedule.append(
+        {
+            "place": "Library",
+            "activity": "meeting a friend",
+            "emoji": "\U0001f4d6",
+            "steps": 30,
+            "start_hour": 10,
+        }
+    )
+    return agent
+
+
+def test_a_held_stop_reports_itself_finished_and_names_the_next_one():
+    agent = _held_agent()
+    clock = SimClock(START, sec_per_step=10)
+
+    # step 180 == 08:30, and the next stop is anchored at 10:00.
+    assert decide_context_block(agent, 180, clock, stop_since=0, waiting=True) == (
+        "Right now it is Monday 08:30 AM.\n"
+        "Your plan's current stop: reading a novel at Cafe."
+        " You have already finished this stop."
+        " Your next stop is meeting a friend at Library,"
+        " starting at 10 AM (90 min from now)."
+    )
+
+
+def test_a_passed_anchor_says_due_now_instead_of_a_future_time():
+    agent = _held_agent()
+    clock = SimClock(START, sec_per_step=10)
+
+    # step 750 == 10:05: the anchor has passed, so a "starting at 10 AM" clause
+    # would be a false time word (#812).
+    assert decide_context_block(agent, 750, clock, stop_since=0, waiting=True) == (
+        "Right now it is Monday 10:05 AM.\n"
+        "Your plan's current stop: reading a novel at Cafe."
+        " You have already finished this stop."
+        " Your next stop is meeting a friend at Library, due now."
+    )
+
+
+def test_an_unheld_stop_still_renders_exactly_todays_elapsed_clause():
+    agent = _held_agent()
+    clock = SimClock(START, sec_per_step=10)
+
+    assert decide_context_block(agent, 180, clock, stop_since=0) == (
+        "Right now it is Monday 08:30 AM.\n"
+        "Your plan's current stop: reading a novel at Cafe."
+        " This has been your current stop for 30 min."
+    )
+
+
+def test_a_held_stop_with_no_anchored_next_stop_omits_the_next_sentence():
+    # #826 fix round 1: a DEVIATED revision (cognition.maybe_revise_plan) can
+    # replace the tail after stop_index while a hold stands -- Task 2's
+    # test_hold_survives_schedule_replacement pins that the flag correctly
+    # stays True in that state. If the replacement next stop carries no
+    # start_hour, there is no anchor hour to report, so the "finished"
+    # sentence must stand alone rather than render "starting at None".
+    agent = _held_agent()
+    del agent.schedule.schedule[-1]["start_hour"]
+    clock = SimClock(START, sec_per_step=10)
+
+    assert decide_context_block(agent, 180, clock, stop_since=0, waiting=True) == (
+        "Right now it is Monday 08:30 AM.\n"
+        "Your plan's current stop: reading a novel at Cafe."
+        " You have already finished this stop."
+    )
+
+
+def test_a_start_hour_that_is_not_a_real_hour_omits_the_next_sentence():
+    """``start_hour`` reaches here raw. planner.py keeps whatever the model
+    wrote (its own comment: "kept raw ... there is nothing to guard here",
+    because ``_anchor_correction`` only *skips validating* an out-of-window
+    anchor, it never drops the field), so a 99 or a -1 arrives intact -- and
+    ``advance()`` refuses every real hour against it, which makes the hold
+    permanent and this render the agent's context all run. Unguarded,
+    ``_hour_words(99)`` is "3 PM" beside "5445 min from now": two different
+    times in the one sentence whose whole job is saying when to be where, the
+    false-time-word class #812 exists to prevent.
+
+    Mutation check: widen the guard back to ``next_hour is None`` and this goes
+    RED with the 3 PM / 5445 min sentence."""
+    clock = SimClock(START, sec_per_step=10)
+    for hour in (99, -1, 24):
+        agent = _held_agent()
+        agent.schedule.schedule[-1]["start_hour"] = hour
+
+        assert decide_context_block(agent, 180, clock, stop_since=0, waiting=True) == (
+            "Right now it is Monday 08:30 AM.\n"
+            "Your plan's current stop: reading a novel at Cafe."
+            " You have already finished this stop."
+        ), f"start_hour={hour} leaked into the prompt"
+
+
+# ---------------------------------- the hold reaches step()'s real prompt
+#
+# The two families above pin the state machine (a completed, anchor-held stop
+# sets ``waiting_for_anchor``) and the renderer (a ``waiting`` flag produces
+# the "already finished" sentence) separately -- nothing joins them. `step()`
+# passes ``waiting=`` into every decide from two kwarg sites (run_simulation.py:
+# the serial fallback ~line 567, the #366 parallel submit ~line 489), and
+# dropping either one silently leaves every other test green. These two tests
+# drive `step()` itself, with a real `MockLlmClient` brain, and inspect the
+# actual prompt text the brain received.
+
+
+def _held_persona():
+    """Ada, mid-plan: her current Cafe stop is about to be credited, and a
+    second stop (Library, "meeting a friend") is anchored at 10 AM -- so
+    crediting the Cafe stop before 10 AM must hold the pointer rather than
+    advance it."""
+    persona = _personas()[0]
+    persona["schedule"].append(
+        {
+            "place": "Library",
+            "activity": "meeting a friend",
+            "emoji": "\U0001f4d6",
+            "steps": 30,
+            "start_hour": 10,
+        }
+    )
+    return persona
+
+
+def _held_step_state():
+    return {
+        "Ada": {
+            "tile": (0, 0),
+            "path": [],
+            "pron": "\U0001f4d6",
+            "desc": "reading a novel",
+            "performing": True,
+            "perform_until": 1,  # already elapsed by step 180
+            "reasoning": "(reading)",
+            "memories": [],
+            "chat": None,
+            "stop_since": 0,
+            "credit_stop": True,
+            "conversing": False,
+        }
+    }
+
+
+def test_step_serial_decide_carries_the_hold_into_the_prompt():
+    # Through the serial kwarg site (run_simulation.py ~line 567). Mutation
+    # check: hard-coding `waiting=False` at that site turns this red.
+    persona = _held_persona()
+    brain = MockLlmClient(tool_calls_responses=[_perform_call("meeting a friend")])
+    game, chars = build_world(None, [persona], LOCATIONS)
+    attach_agents(chars, [persona], llm_client=brain)
+    state = _held_step_state()
+    common = dict(
+        order=["Ada"],
+        world_map=None,
+        emoji={"Ada": "\U0001f4d6"},
+        clock=SimClock(START, sec_per_step=10),
+    )
+
+    # Step 180 == 08:30: the reading stop's activity completes and is
+    # credited, but the next stop's 10 AM anchor is not due -- so this one
+    # tick both sets the hold (the pre-pass) AND decides against it (the
+    # agent is now idle: not performing, no path), because the pre-pass runs
+    # before `due` is built.
+    step(game, chars, state, 180, **common)
+
+    assert state["Ada"]["waiting_for_anchor"] is True
+    user = brain.tool_calls_log[0]["messages"][-1]["content"]
+    assert "You have already finished this stop." in user
+    # The discriminator: this clause only renders when `waiting` reached the
+    # prompt as False (or never arrived), so its ABSENCE is what proves the
+    # flag traveled through the kwarg rather than the sentence appearing for
+    # some unrelated reason.
+    assert "This has been your current stop for" not in user
+
+
+def test_step_parallel_decide_carries_the_hold_into_the_prompt():
+    # Same scenario, through the #366 parallel kwarg site (~line 489): a real
+    # decide_executor, so the decision travels through decide_executor.submit
+    # instead of the inline `_decide_for` call. Mutation check: hard-coding
+    # `waiting=False` at that site turns this red.
+    persona = _held_persona()
+    brain = MockLlmClient(tool_calls_responses=[_perform_call("meeting a friend")])
+    game, chars = build_world(None, [persona], LOCATIONS)
+    attach_agents(chars, [persona], llm_client=brain)
+    state = _held_step_state()
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    try:
+        common = dict(
+            order=["Ada"],
+            world_map=None,
+            emoji={"Ada": "\U0001f4d6"},
+            clock=SimClock(START, sec_per_step=10),
+            decide_executor=executor,
+            decide_timeout=5.0,
+            decide_pending={},
+        )
+        step(game, chars, state, 180, **common)
+    finally:
+        executor.shutdown(wait=True)
+
+    assert state["Ada"]["waiting_for_anchor"] is True
+    user = brain.tool_calls_log[0]["messages"][-1]["content"]
+    assert "You have already finished this stop." in user
+    assert "This has been your current stop for" not in user
 
 
 def test_live_mock_decide_request_carries_the_block():
@@ -354,3 +988,65 @@ def test_live_mock_decide_request_carries_the_block():
         "Right now it is Monday 08:00 AM" in call["messages"][-1]["content"]
         for call in logged
     )
+
+
+# ------------------------------------------------- day-end awareness (#891)
+
+
+def test_day_end_clause_renders_only_in_the_final_stretch():
+    _game, ada = _world()
+    clock = SimClock(
+        START, sec_per_step=10
+    )  # 08:00, 10 s/step; a 4320-step day ends 20:00
+    # 19:37 (step 4182): 23 minutes left -- the batch-8 breach shape.
+    late = decide_context_block(ada.agent, 4182, clock, 4182, day_steps=4320)
+    assert "The day ends at 8 PM (23 min from now)." in late
+    # Midday (12:00, step 1440): 480 min left, clause absent.
+    midday = decide_context_block(ada.agent, 1440, clock, 1440, day_steps=4320)
+    assert "The day ends" not in midday
+    # No day length threaded (the bake, offline callers): absent.
+    bare = decide_context_block(ada.agent, 4182, clock, 4182)
+    assert "The day ends" not in bare
+
+
+def test_step_threads_the_day_length_into_the_decide_prompt():
+    # The seam: step() stamps game.sim_day_steps and observe_and_decide reads
+    # it -- drop either half and the clause never reaches a live prompt.
+    from backend.run_simulation import step as run_step
+
+    brain = MockLlmClient(tool_calls_responses=[TRAVEL])
+    game, ada = _world(llm_client=brain)
+    state = {
+        "Ada": {
+            "tile": (0, 0),
+            "path": [],
+            "pron": "📖",
+            "desc": "",
+            "performing": False,
+            "perform_until": None,
+            "reasoning": "",
+            "memories": [],
+            "chat": None,
+            "stop_since": 4182,
+            "waiting_for_anchor": False,
+            "conversing": False,
+        }
+    }
+
+    class _NoPathMap:
+        def walk_path(self, src, address, furniture=None):
+            return []
+
+    run_step(
+        game,
+        {"Ada": ada},
+        state,
+        4182,
+        order=["Ada"],
+        world_map=_NoPathMap(),
+        emoji={"Ada": "📖"},
+        clock=SimClock(START, sec_per_step=10),
+        num_steps=4320,
+    )
+    user = brain.tool_calls_log[0]["messages"][-1]["content"]
+    assert "The day ends at 8 PM (23 min from now)." in user

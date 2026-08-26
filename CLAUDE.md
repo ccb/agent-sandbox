@@ -159,7 +159,21 @@ or a live URL) and **`/serve-backend`** (serve the sim, mock or real-LLM).
   render it via `prompt_templates.render(name, **vars)`, then **update the usage table
   in `prompt_templates/README.md`** and pin its exact output in
   `tests/test_prompt_templates.py`.
-- Feature branches → PR → `main`. All work targets `main` now — the long-lived
+- Bug found during a live run: file it as its own issue **and attach it as a
+  sub-issue of [#760](https://github.com/ccb/agent-sandbox/issues/760)** (the live-LLM
+  run log), so every run-surfaced bug hangs off the log that evidenced it. The API
+  takes the *database* id, not the issue number:
+  ```bash
+  gh api --method POST /repos/ccb/agent-sandbox/issues/760/sub_issues \
+    -F sub_issue_id="$(gh api /repos/ccb/agent-sandbox/issues/<n> --jq .id)"
+  ```
+  Still link the run write-up comment from the issue body, as before.
+- Feature branches → PR → `main`, **except anything touching
+  `godot-generative-agents/web/` (the browser companion / showcase site), which
+  PRs into `prod` instead.** Base the branch on `prod` and set `--base prod`; a
+  web PR opened against `main` is targeting the wrong branch even if it merges
+  cleanly. Everything else — engine, `backend/`, the Godot project, `tools/geo/`,
+  docs — still goes to `main`. The long-lived
   `godot-ga-main` branch was retired and merged back in July 2026. Changes under
   `godot-generative-agents/` (the Godot viewer, `backend/`, `tools/geo/`) are
   still reviewed by the Godot/geo owners (@aking526 + @0frankie); everything else

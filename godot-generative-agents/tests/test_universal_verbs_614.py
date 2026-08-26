@@ -1,6 +1,7 @@
 """Universal verbs (issue #614): `wait` offered with #581 pacing slots so a
 chosen idle settles like `perform`, and agent-initiated `talk_to` that enters
-the existing #582/#371 conversation loop.
+the existing #582/#371 conversation loop -- including (#793) what a `talk_to`
+request owes its initiator when maybe_converse cannot open it.
 
 Fully offline. Run from the repo root::
 
@@ -18,6 +19,7 @@ sys.path.insert(0, str(_SIM_DIR))
 from backend.actions import TalkTo, WaitPenn  # noqa: E402
 from backend.build_world import build_world  # noqa: E402
 from backend.cognition import (  # noqa: E402
+    DEAD_TALK_SETTLE_STEPS,
     ActiveConversation,
     action_tools_for,
     attach_agents,
@@ -27,7 +29,11 @@ from backend.cognition import (  # noqa: E402
 from backend.prompt_templates import render  # noqa: E402
 from backend.run_simulation import step  # noqa: E402
 from backend.sim_config import CognitionConfig  # noqa: E402
-from penn_world import PENN_ACTION_VERBS, PENN_EXTRA_ACTIONS  # noqa: E402
+from penn_world import (  # noqa: E402
+    PENN_ACTION_VERBS,
+    PENN_EXTRA_ACTIONS,
+    _gate_conversations_by_perception,
+)
 from text_adventure_games import conversation as convo  # noqa: E402
 from text_adventure_games.llm_client import ToolCallResult  # noqa: E402
 
@@ -418,6 +424,197 @@ def test_talk_to_memory_is_written_only_when_the_conversation_opens():
     maybe_converse(game, chars, state, frame, 0, {}, order, active={})
     texts = [r.text for r in ada.agent.memory.retrieve(query="Bo", turn=0)]
     assert "I went to talk to Bo about the demo." in texts
+
+
+# ------------------------------------- a dropped request is not silent (#793)
+
+
+def test_dropped_talk_request_is_remembered_and_bounded_793():
+    # TalkTo.apply_effects already returned `ok`, so nothing else can record
+    # this: without both halves the agent re-decides talk_to against an
+    # unchanged world every tick (#793 measured a 112-decision streak).
+    brain = _ScriptedConvoBrain(["Hi again!"])
+    game, chars, state, frame, order = _request_setup(brain)
+    cooldowns = {frozenset(("Ada", "Bo")): 0}  # just talked
+    assert game.parser.parse_command("talk_to Bo about the demo", actor=chars["Ada"])
+    completed = maybe_converse(
+        game, chars, state, frame, 1, cooldowns, order, active={}
+    )
+    assert completed == 0
+    # (a) the reason is in the memory, keyed to the command the agent issued --
+    # the topic included, so the record matches what it actually asked for.
+    texts = [r.text for r in chars["Ada"].agent.memory.retrieve(query="Bo", turn=1)]
+    assert (
+        'I tried to "talk_to Bo about the demo" but it didn\'t work: we have'
+        " talked recently, and it's too soon to talk again." in texts
+    )
+    # (b) the retry is bounded: settled, off-plan, so the pre-pass un-latches
+    # without advancing the schedule pointer.
+    assert state["Ada"]["performing"] is True
+    assert state["Ada"]["credit_stop"] is False
+    assert state["Ada"]["perform_until"] == 1 + DEAD_TALK_SETTLE_STEPS
+
+
+def test_dropped_talk_request_reason_names_the_walking_target_793():
+    # Each gate gets its own clause: a generic "it didn't work" gives the model
+    # nothing to steer around, which is the whole point of the fix.
+    brain = _ScriptedConvoBrain(["Hey!"])
+    game, chars, state, frame, order = _request_setup(brain, target_walking=True)
+    assert game.parser.parse_command("talk_to Bo", actor=chars["Ada"])
+    assert maybe_converse(game, chars, state, frame, 0, {}, order, active={}) == 0
+    texts = [r.text for r in chars["Ada"].agent.memory.retrieve(query="Bo", turn=0)]
+    assert (
+        'I tried to "talk_to Bo" but it didn\'t work: they were walking '
+        "somewhere else." in texts
+    )
+
+
+def test_talk_request_that_opens_with_nothing_still_settles_793():
+    # The sibling hole: the conversation opened, so no gate dropped it, but it
+    # produced no line -- and _finish_conversation records no cooldown when
+    # nothing was said, so the settle is the ONLY thing bounding this retry.
+    brain = _ScriptedConvoBrain([])  # first ask returns {} -> dies at once
+    game, chars, state, frame, order = _request_setup(brain)
+    cooldowns: dict = {}
+    assert game.parser.parse_command("talk_to Bo", actor=chars["Ada"])
+    completed = maybe_converse(
+        game, chars, state, frame, 0, cooldowns, order, active={}
+    )
+    assert completed == 0
+    assert frozenset(("Ada", "Bo")) not in cooldowns  # nothing said -> no cooldown
+    assert state["Ada"]["perform_until"] == 0 + DEAD_TALK_SETTLE_STEPS
+
+
+def test_opened_talk_request_is_not_a_dead_talk_settle_793_837():
+    # A conversation that really opens writes the intent memory (asserted
+    # above), no failure record, and never receives the DEAD-talk retry settle.
+    # Since #837 its initiator does receive a completed one-shot latch so the
+    # schedule credit has a consumption site after the conversation releases.
+    brain = _ScriptedConvoBrain(["About that demo...", "Sure, let's sync."])
+    game, chars, state, frame, order = _request_setup(brain)
+    state["Ada"]["performing"] = False
+    assert game.parser.parse_command("talk_to Bo", actor=chars["Ada"])
+    maybe_converse(game, chars, state, frame, 0, {}, order, active={})
+    texts = [r.text for r in chars["Ada"].agent.memory.retrieve(query="Bo", turn=0)]
+    assert not [t for t in texts if t.startswith("I tried to")]
+    assert state["Ada"]["performing"] is True
+    assert state["Ada"]["credit_stop"] is True
+    assert state["Ada"]["perform_until"] == 0
+    assert state["Ada"]["conversing"] is True
+    # The target did not choose talk_to and was already performing; its own
+    # activity latch is left intact.
+    assert state["Bo"].get("perform_until") is None
+
+
+def test_talk_request_credit_advances_schedule_after_release_837():
+    """The successful opener's latch reaches the real schedule pre-pass.
+
+    This is the regression from #837 end to end: the first line earns a
+    one-shot latch, the playback hold delays it, and the first tick after
+    release advances the pointer rather than leaving the conversation stop
+    current forever.
+    """
+    brain = _ScriptedConvoBrain(["Hi Bo!"])  # one real line, then playback hold
+    game, chars, state, frame, order = _request_setup(brain)
+    ada = chars["Ada"]
+    ada.agent.schedule.schedule.append(
+        {"place": "Plaza", "activity": "walking", "emoji": None, "steps": 5}
+    )
+    state["Ada"]["performing"] = False
+    assert game.parser.parse_command("talk_to Bo", actor=ada)
+
+    active: dict = {}
+    assert maybe_converse(game, chars, state, frame, 0, {}, order, active=active) == 1
+    assert ada.agent.schedule.stop_index == 0
+    assert state["Ada"]["conversing"] is True
+
+    # Release the completed exchange after its viewer playback hold. The
+    # schedule pre-pass has not run yet, so the pointer must still be at stop 0.
+    hold_until = next(iter(active.values())).hold_until
+    assert hold_until is not None
+    maybe_converse(game, chars, state, frame, hold_until, {}, order, active=active)
+    assert not active
+    assert state["Ada"]["conversing"] is False
+    assert ada.agent.schedule.stop_index == 0
+
+    # Fill the display state step() reads. A one-tile path keeps Ada out of the
+    # decision phase after the pre-pass; it is immaterial to credit consumption.
+    state["Ada"].update(
+        {
+            "tile": (0, 0),
+            "path": [(0, 0)],
+            "pron": "\U0001f9d1",
+            "desc": "talking",
+            "reasoning": "(r)",
+            "memories": [],
+            "trace": [],
+            "stop_since": 0,
+        }
+    )
+    step(
+        game,
+        chars,
+        state,
+        hold_until + 1,
+        order=["Ada"],
+        world_map=None,
+        emoji={"Ada": "\U0001f9d1"},
+    )
+
+    assert ada.agent.schedule.stop_index == 1
+    assert state["Ada"]["perform_until"] is None
+
+
+# ---------------------------------------- proximity is tiles, not rooms (#835)
+
+
+def _colocate_at_tiles(chars, ada_tile, bo_tile, vision_r=8):
+    """Put Ada/Bo out of (or in) tile range within their shared Location, and
+    install the Penn perception gate the live sim wires in (build_world alone
+    leaves audience_for room-based, so can_converse would ignore tiles)."""
+    for n in ("Ada", "Bo"):
+        chars[n].vision_r = vision_r
+    chars["Ada"].tile = ada_tile
+    chars["Bo"].tile = bo_tile
+
+
+def test_talk_request_dropped_when_target_is_out_of_tile_range_835():
+    # Ada and Bo share one engine Location (the hub) but stand 50 tiles apart --
+    # a Penn building interior / the outdoor hub is one ~2000-tile address, so
+    # room identity is not proximity. The opener must gate on the same tile
+    # metric the auto-pairing scan uses, or it pairs them into a conversation
+    # that renders as stretching across the map (#835). The parse gate is still
+    # room-based, so the request is issued and it's THIS gate that must drop it.
+    brain = _ScriptedConvoBrain(["Hey, over here!"])
+    game, chars, state, frame, order = _request_setup(brain)
+    _gate_conversations_by_perception((game, chars))
+    _colocate_at_tiles(chars, (0, 0), (50, 50))
+    assert game.parser.parse_command("talk_to Bo", actor=chars["Ada"])
+    completed = maybe_converse(game, chars, state, frame, 0, {}, order, active={})
+    assert completed == 0
+    assert frame["Ada"].get("chat") is None
+    # Not a silent drop: the #793 failure memory names the reason and the retry
+    # is bounded by a dead-talk settle.
+    texts = [r.text for r in chars["Ada"].agent.memory.retrieve(query="Bo", turn=0)]
+    assert (
+        'I tried to "talk_to Bo" but it didn\'t work: they were not close'
+        " enough to talk to." in texts
+    )
+    assert state["Ada"]["perform_until"] == 0 + DEAD_TALK_SETTLE_STEPS
+
+
+def test_talk_request_opens_when_target_is_within_tile_range_835():
+    # The same setup and gate, but 3 tiles apart (within vision_r=8): the
+    # conversation opens, so the gate isn't just always-closed -- it's the tile
+    # distance that decides, exactly as it does for the automatic pair scan.
+    brain = _ScriptedConvoBrain(["Hey, over here!"])
+    game, chars, state, frame, order = _request_setup(brain)
+    _gate_conversations_by_perception((game, chars))
+    _colocate_at_tiles(chars, (0, 0), (3, 3))
+    assert game.parser.parse_command("talk_to Bo", actor=chars["Ada"])
+    maybe_converse(game, chars, state, frame, 0, {}, order, active={})
+    assert frame["Ada"]["chat"] == [["Ada", "Hey, over here!"]]  # opened
+    assert state["Ada"]["conversing"] and state["Bo"]["conversing"]
 
 
 def test_talk_to_target_match_skips_the_verb_token():

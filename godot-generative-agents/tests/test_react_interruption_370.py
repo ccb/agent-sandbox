@@ -80,6 +80,7 @@ from backend.cognition import (  # noqa: E402
     maybe_converse,
     maybe_react,
 )
+from text_adventure_games.enums import Property  # noqa: E402
 
 _LOCATIONS = [
     {"name": "Plaza", "description": "the plaza", "address": None, "hub": True},
@@ -413,6 +414,28 @@ def test_pair_conversation_cooldown_blocks_consult():
     assert consults == 0 and brain.react_calls == []
 
 
+def test_escalated_pair_cooldown_also_blocks_a_greet():
+    """#803 applies on the react path too, since it reads the same pair cooldown:
+    a pair on their third conversation stays blocked at a step the plain window
+    has already cleared. Crossing paths again isn't news *sooner* just because
+    they keep re-meeting."""
+    brain = _ReactBrain(choice="greet")
+    game, chars, state, frame, order = _pair(brain)
+    # Two conversations held, the last ending at step 0 -> the third owes 2 x 90.
+    cooldowns = {frozenset(("Maria Lopez", "Ayesha Khan")): (0, 2)}
+    consults = maybe_react(
+        chars,
+        state,
+        100,  # 100 - 0 >= 90 would have passed the flat window
+        cooldowns,
+        order,
+        react_state={},
+        active={},
+        cooldown_steps=90,
+    )
+    assert consults == 0 and brain.react_calls == []
+
+
 def test_greeted_walkers_hold_through_playback_then_resume():
     """#673 on the react path: when a greet-started conversation ends, the
     playback hold keeps BOTH pinned walks paused for ``len(lines) *
@@ -562,7 +585,7 @@ def _full_state(tile, path, conversing=False):
         "memories": [],
         "chat": None,
         "stop_since": 0,
-        "on_plan": True,
+        "credit_stop": True,
         "conversing": conversing,
     }
 
@@ -682,3 +705,57 @@ def test_default_cog_equals_explicit_default():
     assert {k: {x: v[x] for x in ("tile", "path")} for k, v in s1.items()} == {
         k: {x: v[x] for x in ("tile", "path")} for k, v in s2.items()
     }
+
+
+def test_sleeping_participant_is_never_greeted_via_react():
+    # Same root cause as 45df120b's maybe_converse fix, a separate entry
+    # point: a walking reactor crossing paths with a sleeping resident must
+    # never be handed a "greet" -- the rule tier should short-circuit before
+    # the LLM gate is even consulted (code review, 2026-08-14).
+    brain = _ReactBrain(choice="greet")
+    game, chars, state, frame, order = _pair(brain)
+    # Ayesha is asleep: no path (nothing to walk toward), but still
+    # "performing" the way a sleeping character does.
+    chars["Ayesha Khan"].set_property(Property.IS_SLEEPING, True)
+    state["Ayesha Khan"]["path"] = []
+    state["Ayesha Khan"]["performing"] = True
+    active: dict = {}
+    consults = maybe_react(chars, state, 0, {}, order, react_state={}, active=active)
+    assert consults == 0
+    assert brain.react_calls == []  # the LLM gate was never reached
+    assert active == {}
+    assert state["Maria Lopez"]["conversing"] is False
+    assert state["Ayesha Khan"]["conversing"] is False
+
+
+def test_sleeping_reactor_is_never_greeted_via_react():
+    # Mirror of the above with the sleeping resident as the would-be reactor
+    # (still has a path in this synthetic state, to isolate the guard).
+    brain = _ReactBrain(choice="greet")
+    game, chars, state, frame, order = _pair(brain)
+    chars["Maria Lopez"].set_property(Property.IS_SLEEPING, True)
+    active: dict = {}
+    consults = maybe_react(chars, state, 0, {}, order, react_state={}, active=active)
+    assert consults == 0
+    assert brain.react_calls == []
+    assert active == {}
+    assert state["Maria Lopez"]["conversing"] is False
+    assert state["Ayesha Khan"]["conversing"] is False
+
+
+def test_sleeping_member_gets_no_new_encounter_memory():
+    # Spot 2 (Minor, folded into the same fix): a sleeping character's
+    # `performing` flag stays True with no path, so it used to still qualify
+    # for a fresh "encounter" observation whenever someone walked past.
+    brain = _ReactBrain(choice="continue")
+    game, chars, state, frame, order = _pair(brain)
+    chars["Ayesha Khan"].set_property(Property.IS_SLEEPING, True)
+    state["Ayesha Khan"]["path"] = []
+    state["Ayesha Khan"]["performing"] = True
+    maybe_react(chars, state, 0, {}, order, react_state={}, active={})
+    # Maria (awake, walking) still remembers passing Ayesha.
+    maria_texts = [r.text for r in chars["Maria Lopez"].agent.memory.records]
+    assert any("I noticed Ayesha Khan nearby" in t for t in maria_texts)
+    # Ayesha (asleep) gets no new encounter memory about Maria.
+    ayesha_texts = [r.text for r in chars["Ayesha Khan"].agent.memory.records]
+    assert not any("I noticed Maria Lopez nearby" in t for t in ayesha_texts)

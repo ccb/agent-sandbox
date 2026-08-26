@@ -26,15 +26,104 @@ inputs:
   elapsed:
     type: integer
     description: >
-      Minutes the agent has been on this stop so far, re-anchored on arrival
-      so it counts time AT the stop (commensurate with the planned minutes).
-      The sentence is dropped at 0 -- the stop just began.
+      Minutes this stop has been the agent's current one, re-anchored on
+      arrival at the stop's own place so the walk there is excluded (leaving
+      it commensurate with the planned minutes). NOT "time spent at the
+      place": an agent that wanders off-plan never arrives, so the clock
+      keeps running on the stop it is neglecting -- which is the point
+      (#826). Hence "this has been your current stop", not "you have been
+      here", which would be false for exactly that agent. The sentence is
+      dropped at 0 -- the stop just became current.
+  finished:
+    type: boolean
+    description: >
+      Is this stop already done, with its pointer held back by the next stop's
+      start_hour (#838)? The loop credits a completed activity wherever it ran
+      (#831) but will not run the plan ahead of an anchored hour, so a finished
+      errand can stay "current" for up to an hour. Saying so REPLACES the
+      elapsed clause: in #760 batch 5 an agent read "77 min" on a planned-15
+      coffee break it had already had, called itself behind schedule, and walked
+      62 sim-minutes back across campus to redo it.
+  next_place:
+    type: string
+    description: The next stop's place, e.g. "Library". Omitted at the last stop.
+  next_activity:
+    type: string
+    description: The next stop's activity, e.g. "meeting a friend".
+  next_hour:
+    type: string
+    description: >
+      The next stop's start_hour in words, e.g. "10 AM". Rendered only when that
+      hour is still ahead -- see next_due.
+  next_in:
+    type: integer
+    description: >
+      Whole minutes from now until next_hour. Given explicitly so the model does
+      not have to subtract two clock times to learn whether a walk fits.
+  next_due:
+    type: boolean
+    description: >
+      Has the anchor hour already arrived? True renders "due now" instead of a
+      start time. No in-loop render ever sets this true: any agent that
+      reaches a decide already had `advance()` attempted the same tick, and
+      its refusal implies the anchor is still ahead. This is defence in depth
+      for a #366 straggler decide thread building its observation from a
+      stale snapshot while the schedule is mutated underneath it, not the
+      common case -- kept because printing "starting at 10 AM" at 10:05 would
+      be the #812 false-time-word class if that path is ever hit.
+  day_end:
+    type: string
+    description: >
+      When the day ends, in clock words, e.g. "8 PM" (#891). Rendered -- with
+      day_end_in -- only inside the run's final stretch, where it changes
+      decisions: batch 8 had an agent start a ~50-minute walk 23 minutes
+      before a day end nothing had ever told it about. Omitted earlier in the
+      day and whenever the loop threads no day length (the bake, offline
+      tests).
+  day_end_in:
+    type: integer
+    description: >
+      Whole minutes from now until day_end. Explicit for the same reason as
+      next_in -- the model should not have to do clock arithmetic to learn
+      whether a walk fits in the day.
+  walking:
+    type: integer
+    description: >
+      Whole minutes of walk remaining when the agent is mid-walk toward the
+      CURRENT scheduled stop (#916). Replaces the elapsed clause: mid-walk,
+      "this has been your current stop for 130 min" reads as time already
+      spent at the stop -- batch 11's Tanaka concluded her session "ran well
+      past its planned time" and turned around 11 tiles from the classroom
+      door, 70 minutes into a correct 68-minute leg. Omitted when settled or
+      when walking away from the plan (which keeps the neglect semantics the
+      elapsed clause exists for).
+  held:
+    type: integer
+    description: >
+      Minutes the agent's current PERFORMED activity text has gone unchanged
+      (#905). Set only past cognition.SAME_ACT_CONTEXT_MIN, so a normal study
+      block is never nagged. Distinct from elapsed, which clocks the schedule
+      stop: a re-chosen off-plan wait ("reviewing problems while waiting for
+      theo", 340 min in #760 batch 10) never shows up in elapsed at all. The
+      sentence is deliberately factual with no directive -- the model decides
+      whether the hold is still worth it.
+  held_activity:
+    type: string
+    description: The unchanged activity text itself, quoted back verbatim.
+  absent:
+    type: string
+    description: >
+      First name of a cast member held_activity mentions who is NOT here
+      (#905): a person-contingent wait decays with every minute the person
+      doesn't show, but their absence is otherwise only ever the absence of
+      an observation. Omitted when the activity names no absent person.
 sample:
   time: Monday 12:05 PM
   place: Houston Hall
   activity: eating lunch
   minutes: 40
   elapsed: 15
+  finished: false
 ---
 Right now it is {{ time }}.
-Your plan's current stop: {{ activity }} at {{ place }}{% if minutes %} (planned ~{{ minutes }} min){% endif %}.{% if elapsed %} You have been on this stop for {{ elapsed }} min.{% endif %}
+Your plan's current stop: {{ activity }} at {{ place }}{% if minutes %} (planned ~{{ minutes }} min){% endif %}.{% if finished %} You have already finished this stop.{% if next_place %} Your next stop is {{ next_activity }} at {{ next_place }}{% if next_due %}, due now.{% else %}, starting at {{ next_hour }} ({{ next_in }} min from now).{% endif %}{% endif %}{% elif walking %} You are walking there now, about {{ walking }} min from arrival.{% elif elapsed %} This has been your current stop for {{ elapsed }} min.{% endif %}{% if held %} You have been doing exactly this -- "{{ held_activity }}" -- for {{ held }} min{% if absent %}, and {{ absent }} is not here{% endif %}.{% endif %}{% if day_end %} The day ends at {{ day_end }} ({{ day_end_in }} min from now).{% endif %}

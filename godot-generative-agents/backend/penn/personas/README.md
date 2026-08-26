@@ -71,12 +71,37 @@ Persona fields (same shape `build_world` has always consumed): `name`, `home`,
 `persona`, `emoji`, `start_tile`, `schedule` (see the big comment atop
 `backend/build_world.py` for the schedule contract, and note a stop's `place`
 must not contain a bare compass word — the parser reads "West Wing" as "go
-west"). Plus two optional blocks that compose into the world's top level:
+west").
+
+A stop's `activity:` says **what** the agent is doing, never **when**. The stop's
+position in the `schedule` already encodes the timing, so a wall-clock word there
+is a second source of truth that can disagree with the run clock: a run covers
+08:00–11:20 (`SIM_START` 08:00 + 1200 steps × 10 s/step) and the planner is told
+to plan only that window, so an activity naming a time outside it ("heading to an
+*afternoon* seminar") asks a well-grounded model to do the right thing and drop
+the stop — silently. That was #795's zero. The sweep in
+`tests/test_persona_library_762.py` therefore rejects `afternoon`, `midday`,
+`noon`, `evening`, `night`, `tonight`, `midnight`, `dusk` and `sunset` in
+`activity:` (#812). `morning` stays legal — the window *is* the morning — as do
+`dawn`/`sunrise`/`overnight`, which are already finished at 08:00 and read as
+past reference. An explicit clock time is the one deliberate exception, and only
+to anchor a shared world event that falls inside the window, the way
+`tanaka.yaml`'s "setting up for the 10:00 guest lecture" mirrors the world YAML's
+`when: at 10:00`. Habitual `persona:` prose is unaffected — `victor.yaml`'s
+"spends afternoons in the union" is true as written.
+
+Plus two optional blocks that compose into the world's top level:
 
 - `relationships:` — seed social-graph edges (`{a, b, kind, closeness,
   description}`; `closeness` is 1 (acquaintance) to 5 (inseparable) and drives
-  edge thickness in the viewer's social-graph pop-up, #252). `description`
-  stays natural language so a future pass (#409) can seed it into agent memory.
+  edge thickness in the viewer's social-graph pop-up, #252). Since #779 an edge
+  is also **seeded into both ends' agent memory** at t=0 (importance 3.0, tagged
+  `seed`/`relationship`): one memory each, naming the other person, the `kind`,
+  and the `closeness` as a sentence ("We know each other a little.") — see
+  `prompt_templates/relationship_memory.prompty`. So `kind` and `description`
+  are read by the *model*, not just drawn: keep them natural language, write
+  `description` as something true of the pair (both ends see the same text), and
+  expect the wording to shape how the two behave when they meet.
 - `meetings:` — scripted encounters (`{label, at, participants, dialogue}`)
   the replay/live conversation injectors play when the participants are
   actually co-located (proximity-honest: if they never converge in a given

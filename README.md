@@ -56,6 +56,10 @@ notebooks/                 Notebooks: HW1 "Action Castle" onboarding + framework
 tests/                     Pytest suite (agent layer, ReAct live game, NPC behaviors)
 godot-generative-agents/   Godot 2D frontend + UPenn campus replay  (reviewed by the
   tools/geo/               OSM → tilemap map-generation tooling       Godot/geo owners; see ONBOARDING §6)
+ASSETS.md                  The viewer's licensed art packs — not in the repo; where
+                           to buy them and where the files go
+AGENT-ARCHITECTURE.md      How the generative-agents sim works today, and which
+                           features are actually switched on by default
 FEATURE-ROADMAP.md         Technical specs for the framework features to build
 ROADMAP.md                 The summer plan: phases, who owns what
 ONBOARDING.md              Start here on day one
@@ -266,3 +270,12 @@ framework demo (mock-LLM agents, clock, triggers, event log).
 Engine adapted from the UPenn Interactive Fiction class
 ([interactive-fiction-class.org](https://interactive-fiction-class.org/)),
 itself inspired by the Adventuron Classroom design by Chris Ainsley. Licensed MIT.
+
+## The Tomb of Nassak An-Rah has moved
+
+The tomb game (web app, iOS wrapper, Playdate port, its adventure module,
+tests, and design docs) now lives in its own repository with full history:
+https://github.com/ccb/tomb-of-nassak-an-rah
+
+That repo vendors a frozen copy of the `text_adventure_games` engine; the
+engine's home for ongoing development remains here.

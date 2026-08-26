@@ -114,6 +114,65 @@ func _initialize() -> void:
 	_check(merged["game"]["agent"]["max_tokens"] == 128, "nested merge preserves the deep sibling")
 	_check(is_equal_approx(cur["game"]["agent"]["temperature"], 0.7), "nested merge leaves the input unchanged")
 
+	# --- planner knob (#791): only a CHANGED plan is sent ---
+	s = _base_state()
+	s["plan"] = "auto"
+	s["initial_plan"] = "auto"
+	body = ConfigBody.build_post_body(s)
+	_check(not body.has("plan"), "untouched plan is omitted (keeps the session's request)")
+	s["plan"] = "schedule"
+	body = ConfigBody.build_post_body(s)
+	_check(body.get("plan") == "schedule", "changed plan is sent")
+	# No planner row rendered (a pre-#790 backend serves no `plans`): the scene
+	# passes empty strings for both -> nothing is sent.
+	body = ConfigBody.build_post_body(_base_state())
+	_check(not body.has("plan"), "absent plan state sends nothing")
+
+	# --- seed_plan (#791): a re-run reproduces the REQUEST, not the resolution ---
+	_check(
+		ConfigBody.seed_plan({"plan_request": "auto", "plan": "llm"}) == "auto",
+		"seed_plan prefers the saved plan_request"
+	)
+	_check(ConfigBody.seed_plan({"plan": "llm"}) == "llm", "seed_plan falls back to the resolved plan")
+	_check(ConfigBody.seed_plan({}) == "", "seed_plan with no planner in the seed -> empty")
+
+	# --- thinking-depth knob (#845): only a CHANGED effort is sent ---
+	s = _base_state()
+	s["effort"] = "default"
+	s["initial_effort"] = "default"
+	body = ConfigBody.build_post_body(s)
+	_check(not body.has("effort"), "untouched effort is omitted (keeps the session's depth)")
+	s["effort"] = "medium"
+	body = ConfigBody.build_post_body(s)
+	_check(body.get("effort") == "medium", "changed effort is sent")
+	# "default" is a real request, not an absence: it is how a re-run of a run
+	# that asked for no thinking clears a depth the server launched with.
+	s["effort"] = "default"
+	s["initial_effort"] = "high"
+	body = ConfigBody.build_post_body(s)
+	_check(body.get("effort") == "default", "clearing a depth back to default is sent")
+	# No effort row rendered (a pre-#845 backend serves no `efforts`).
+	body = ConfigBody.build_post_body(_base_state())
+	_check(not body.has("effort"), "absent effort state sends nothing")
+
+	# --- model knob (#887): only a CHANGED model is sent ---
+	s = _base_state()
+	s["model"] = "claude-haiku-4-5"
+	s["initial_model"] = "claude-haiku-4-5"
+	body = ConfigBody.build_post_body(s)
+	_check(not body.has("model"), "untouched model is omitted (keeps the session's model)")
+	s["model"] = "claude-sonnet-5"
+	body = ConfigBody.build_post_body(s)
+	_check(body.get("model") == "claude-sonnet-5", "changed model is sent")
+	# No model row rendered (a pre-#887 backend serves no `models`).
+	body = ConfigBody.build_post_body(_base_state())
+	_check(not body.has("model"), "absent model state sends nothing")
+
+	# --- effective_plan (#791): the hint label's client-side auto rule ---
+	_check(ConfigBody.effective_plan("auto", "llm") == "llm", "auto resolves to llm under the llm brain")
+	_check(ConfigBody.effective_plan("auto", "mock") == "schedule", "auto resolves to schedule under a free brain")
+	_check(ConfigBody.effective_plan("schedule", "llm") == "schedule", "an explicit plan passes through")
+
 	if _failures == 0:
 		print("test_simulation_setup: all checks passed")
 	quit(1 if _failures > 0 else 0)

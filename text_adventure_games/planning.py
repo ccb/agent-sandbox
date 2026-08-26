@@ -7,9 +7,9 @@ decomposed top-down across three levels (see ``docs/design/daily-planning.md``):
   cafe"), no exact times;
 * **hourly plan** -- one :class:`HourBlock` per in-sim hour;
 * **minute plan** -- concrete :class:`Stop`s
-  ``{place, activity, emoji, steps, commands, furniture}``, the *only* level the
-  step loop consumes (it is exactly the schedule shape the Smallville port
-  already drives via ``advance()``).
+  ``{place, activity, emoji, steps, commands, furniture, start_hour}``, the
+  *only* level the step loop consumes (it is exactly the schedule shape the
+  Smallville port already drives via ``advance()``).
 
 Following the same restraint as ``memory.py`` and ``knowledge.py``, this module
 is **pure data with no engine imports**: the dataclasses and the helper
@@ -75,6 +75,16 @@ class Stop:
     walk target to that furniture's tile instead of the room centroid. Like
     ``commands`` it was dropped by the whitelist round-trip before this field
     (#603); ``None`` for a stop with no such hint.
+
+    ``start_hour`` is the clock hour this stop is *pinned* to -- a lecture at
+    10:00, a meeting at 14:00 -- and ``None`` for the ordinary stop that simply
+    happens whenever the ones before it finish. A planner that reasons about the
+    day in hours before decomposing it into stops (``LLMPlanner``) knows this
+    number one stage before it emits the stop, and used to throw it away at that
+    boundary: nothing carried the anchor forward, so nothing could check that the
+    preceding durations plus travel actually land the stop on its hour (#821).
+    Note it is only an *intention*, like every other field here -- it moves
+    nobody; the planner reads it back to validate its own arithmetic.
     """
 
     place: str  # must resolve to a known Location name when executed
@@ -83,6 +93,7 @@ class Stop:
     steps: int | None = None  # None => stay put indefinitely
     commands: tuple[str, ...] = ()  # authored commands to fire at this stop
     furniture: str | None = None  # fixture to occupy at this stop (#603)
+    start_hour: int | None = None  # clock hour this stop is pinned to (#821)
 
     def __post_init__(self):
         # Normalize commands to a tuple no matter how it arrived -- a YAML/JSON
@@ -97,11 +108,15 @@ class Stop:
     def to_schedule_entry(self) -> dict:
         """The plain dict the Smallville client/loop already understands.
 
-        ``commands`` and ``furniture`` are emitted only when set, so a stop
-        without them serializes byte-identically to its authored
+        ``commands``, ``furniture`` and ``start_hour`` are emitted only when set,
+        so a stop without them serializes byte-identically to its authored
         ``world_data.yaml`` entry -- the round-trip fidelity the Smallville suite
         pins (a committed schedule must equal the authored spec, which carries no
-        empty ``commands``/``furniture`` key).
+        empty ``commands``/``furniture``/``start_hour`` key).
+
+        ``start_hour`` tests ``is not None``, not truthiness: midnight is hour
+        ``0``, which is falsy, so a truthiness guard here would silently drop a
+        legitimate anchor rather than merely add a key.
         """
         entry = {
             "place": self.place,
@@ -113,6 +128,8 @@ class Stop:
             entry["commands"] = list(self.commands)
         if self.furniture:
             entry["furniture"] = self.furniture
+        if self.start_hour is not None:
+            entry["start_hour"] = self.start_hour
         return entry
 
     @classmethod
@@ -125,6 +142,7 @@ class Stop:
             steps=entry.get("steps"),
             commands=entry.get("commands") or (),
             furniture=entry.get("furniture"),
+            start_hour=entry.get("start_hour"),
         )
 
 
@@ -133,18 +151,24 @@ class DailyPlan:
     """An agent's plan for the day, across all three levels.
 
     ``stops`` is the part the step loop consumes; ``day``/``hours`` are the
-    higher-altitude reasoning, kept so retrieval, reflection, and revision can see
-    the agent's intentions at every level (and written into the memory stream as
-    ``MemoryKind.PLAN`` records -- see :func:`plan_memory_lines`).
+    higher-altitude reasoning, kept so retrieval and plan revision can see the
+    agent's intentions at every level (and written into the memory stream as
+    ``MemoryKind.PLAN`` records -- see :func:`plan_memory_lines`). Reflection
+    sees those records as explicitly tagged intentions, so it can reason forward
+    without treating an unreached stop as lived experience (#777 / #815).
 
     ``revision`` starts at 0 and is bumped every time :func:`replace_tail`
-    rewrites the not-yet-executed tail of the plan.
+    rewrites the not-yet-executed tail of the plan. ``immediate_next`` is
+    proposal-only metadata: a planner sets it when the first unstarted stop is
+    structurally guaranteed to be an immediate commitment (#829). The commit
+    seam consumes and clears it; it is deliberately excluded from persistence.
     """
 
     day: list[DayBlock] = field(default_factory=list)
     hours: list[HourBlock] = field(default_factory=list)
     stops: list[Stop] = field(default_factory=list)
     revision: int = 0
+    immediate_next: bool = field(default=False, compare=False, repr=False)
 
     def to_primitive(self) -> dict:
         """Serialize to JSON-safe primitives (mirrors ``MemoryRecord``).
@@ -187,6 +211,8 @@ class DailyPlan:
 ACTION_FAILED = "action_failed"  # a travel/perform command failed the gate
 PERCEPTION = "perception"  # a perceived memory contradicts the plan
 BEHIND_SCHEDULE = "behind_schedule"  # still en route when the hour's budget ran out
+# Revision urgency shared by engine triggers and planner implementations (#829).
+IMMEDIATE_URGENCY = "immediate"
 
 
 @dataclass(frozen=True)
@@ -195,13 +221,23 @@ class RevisionTrigger:
 
     ``reason`` is one of the module constants above; ``step`` is the sim step it
     fired on; ``detail`` is free text for context (e.g. the failed command or the
-    parser's failure message). A :class:`Planner` reads this to decide whether and
-    how to rewrite the plan's tail; a mock planner ignores it.
+    parser's failure message). ``current_stop_index`` is the schedule driver's
+    ground-truth boundary between the protected prefix and the unstarted tail;
+    ``urgency`` lets a narrow event such as an immediate conversation commitment
+    require the first tail stop to run next (#829); use
+    :data:`IMMEDIATE_URGENCY` instead of spelling that protocol value locally. A
+    :class:`Planner` reads this to decide whether and how to rewrite the plan's
+    tail; a mock planner ignores it.
+
+    Both newer fields have inert defaults so existing engine callers and custom
+    planners keep their old behavior.
     """
 
     reason: str
     step: int
     detail: str = ""
+    current_stop_index: int | None = None
+    urgency: str = "normal"
 
 
 # ---------------------------------------------------------------------------

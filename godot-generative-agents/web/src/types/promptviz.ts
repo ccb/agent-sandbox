@@ -69,15 +69,3 @@ export interface ChainIndexEntry {
   label: string;
   description: string;
 }
-
-/** One row of the flat prompt catalog (prompts.json) for the Prompts reader. */
-export interface PromptEntry {
-  template: string;
-  package: string;
-  name: string;
-  description: string;
-  inputs: Record<string, PromptInput>;
-  rendered?: string;
-  raw_source?: string;
-  error?: string;
-}

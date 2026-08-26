@@ -29,10 +29,8 @@ from typing import Callable
 # `backend` package now, so a plain import works -- no sys.path juggling.
 from backend import path_finder
 from backend.actions import (
-    Activate,
     Buy,
     CheckOutBook,
-    Deactivate,
     DrinkPenn,
     EatPenn,
     ReadPenn,
@@ -69,17 +67,30 @@ WORLD_DATA_BOIL_HARD = os.path.join(_SIM_DIR, "world_data_boil_hard.yaml")
 UPENN_DIR = os.path.join(_SIM_DIR, "the_upenn")
 # adding a eat scene to the baked version of the penn sim
 WORLD_DATA_EAT = os.path.join(_SIM_DIR, "world_data_eat.yaml")
+# A one-persona wage DEMO world (regression demo for cf7ef4fb): a Houston Hall
+# cashier who walks in from the open campus before settling into a work stop,
+# so the bake visibly separates "still walking" (wage must stay 0) from
+# "settled and on the clock" (wage accrues). `generate_penn_replay.py
+# --scenario work` loads this instead of the full cast.
+WORLD_DATA_WORK = os.path.join(_SIM_DIR, "world_data_work.yaml")
+# A two-persona sleep-interrupt DEMO world (regression demo for 45df120b,
+# c12b3723, 44729cf5): a resident sleeps in Houston Hall's Reading Room while
+# a passerby's errand brings them into the same room during the sleep window.
+# `generate_penn_replay.py --scenario sleep` loads this instead of the full
+# cast.
+WORLD_DATA_SLEEP = os.path.join(_SIM_DIR, "world_data_sleep.yaml")
 # The Penn-local verb set (#300): registered on top of Travel/Act via
 # build_world(extra_actions=...). DrinkPenn overrides the engine's "drink"; Craft is
 # the engine crafting action that drives the boil-water Recipe (see _boil_recipe) --
-# boiling is now a declarative transform, not a bespoke action. Sell/Buy (#931) are
+# boiling is now a declarative transform, not a bespoke action. The device verbs
+# (activate/deactivate) and the generic sicken/cure drink pair were upstreamed
+# into the engine by #464: the engine now registers Activate/Deactivate by
+# default, so they need no entry here, and DrinkPenn keeps only Penn's
+# experiment bookkeeping on top of the engine's arc. Sell/Buy (#931) are
 # the Houston Hall sandwich-shop verbs: a worker `sell`s a for-sale item to a named
 # buyer (stamping dibs), the buyer then `buy`s to complete the trade -- both gated on
-# a `marketplace`-tagged location in scope. Upstreaming these into the engine
-# library is #464.
+# a `marketplace`-tagged location in scope.
 PENN_EXTRA_ACTIONS = [
-    Activate,
-    Deactivate,
     DrinkPenn,
     EatPenn,
     Craft,
@@ -346,8 +357,11 @@ class PennWorld:
     perception gating, ``meetings`` is the authored dialogue script both
     conversation injectors consume, ``llm`` is the world's declared LLM
     settings (the YAML ``llm:`` block; only ``serve_penn --brain llm`` acts
-    on it), and ``relationships`` is the validated t=0 seed social graph the
-    viewer's social-graph pop-up draws (#252)."""
+    on it), ``relationships`` is the validated t=0 seed social graph the
+    viewer's social-graph pop-up draws (#252), and ``events`` is the
+    validated world-level ``events:`` noticeboard (#795) that
+    ``cognition.attach_agents`` seeds into every agent but the host's
+    memory, gated on a real planner client."""
 
     world_map: WorldMap
     personas: list
@@ -356,6 +370,7 @@ class PennWorld:
     build_world_fn: Callable
     llm: dict | None = None
     relationships: list = field(default_factory=list)
+    events: list = field(default_factory=list)
     # The world YAML this world was built from (#732): lets the live config
     # surface enumerate the adjacent personas/ library. None for a PennWorld
     # assembled by hand in tests.
@@ -523,39 +538,41 @@ def make_meal(
 
 
 def _furnish_meals(game) -> None:
-    """Stock Houston Hall with EDIBLE meals (#615). An EDIBLE thing in scope is
-    exactly what makes the engine's `eat` (declared `(Property.EDIBLE,)` in
-    #612) offered -- so agents can eat here and only here. Meals live in the
-    building-level "Houston Hall" location, next to the boil props, for the
-    same reason those do (see the world-YAML comment): schedule stops that act
-    on them must target "Houston Hall" itself. Gated on the authored `dining`
-    arena tag (#613): a world that doesn't tag the hall -- the isolated boil
-    scenario (#299/#301), whose one resident lives in Houston Hall and must
-    keep a decision surface of only the drink/boil arc -- gets no meals, so
-    `eat` is never offered there.
+    """Stock every ``dining``-tagged location with EDIBLE meals (#615). An
+    EDIBLE thing in scope is exactly what makes the engine's `eat` (declared
+    `(Property.EDIBLE,)` in #612) offered -- so agents can eat at dining spots
+    and only there. Per-location stocking (#907): meals used to live only in
+    the building-level "Houston Hall", so an agent whose travel grounded to a
+    named room inside it (the Reception Hall food court) stood surrounded by
+    fictional food it could neither see nor `get`, and retried invented item
+    names across two buildings before giving up. Gated on the authored
+    `dining` tag (#613): a world that doesn't tag any hall -- the isolated
+    boil scenario (#299/#301), whose one resident lives in Houston Hall and
+    must keep a decision surface of only the drink/boil arc -- gets no meals,
+    so `eat` is never offered there.
 
     No free sandwich here (#931): sandwiches used to be a free ambient meal,
     but now come only from a Sell/Buy trade with a Houston Hall worker (see
     `_furnish_sandwich_shop`) -- a free item sharing that name would also be
     ambiguous to `match_item`, which matches by name, not by IS_FOR_SALE."""
-    hall = game.locations.get("Houston Hall")
-    if hall is None or not hall.get_property("dining"):
-        return
-    for name, description, examine, energy_value in (
-        (
-            "bowl of soup",
-            "a bowl of lentil soup",
-            "Steaming lentil soup from the Houston Hall food court.",
-            30,
-        ),
-        (
-            "apple",
-            "a red apple",
-            "A crisp apple from the fruit basket by the register.",
-            10,
-        ),
-    ):
-        hall.add_item(make_meal(name, description, examine, energy_value))
+    for location in game.locations.values():
+        if not location.get_property("dining"):
+            continue
+        for name, description, examine, energy_value in (
+            (
+                "bowl of soup",
+                "a bowl of lentil soup",
+                "Steaming lentil soup from the Houston Hall food court.",
+                30,
+            ),
+            (
+                "apple",
+                "a red apple",
+                "A crisp apple from the fruit basket by the register.",
+                10,
+            ),
+        ):
+            location.add_item(make_meal(name, description, examine, energy_value))
 
 
 def make_drink(
@@ -822,6 +839,7 @@ def build_penn_world(
     personas = _normalize_personas(data["personas"])
     locations = data["locations"]
     meetings = data.get("meetings") or []
+    events = data.get("events") or []
 
     world_map = _pin_building_meeting_points(WorldMap(upenn_dir))
     # Route each meeting's participants to a tight rendezvous cluster inside its
@@ -853,6 +871,22 @@ def build_penn_world(
             game.add_recipe(_boil_recipe())  # boiling = Craft over this Recipe (#300)
         return _gate_conversations_by_perception((game, characters))
 
+    # Validated once here, so an authoring typo fails the bake / the live
+    # server's boot loudly instead of drawing a wrong graph.
+    relationships = relationships_meta(personas, data.get("relationships") or [])
+    # Deliver each edge to the agents it is about (#779). The YAML authors an edge
+    # ONCE, under its first-named persona, but both ends have to know -- so each
+    # spec carries every edge it is an endpoint of, and `cognition.attach_agents`
+    # seeds it into that agent's t=0 memory from its own side. Attached here, at
+    # the one factory every Penn entry point shares (the bake, the live server,
+    # the experiments), rather than threaded through each of them as an argument:
+    # this is exactly the wiring #779 found missing, and a new entry point gets it
+    # for free. Deliberately NOT the key name `relationships` -- load_world_yaml
+    # strips that off persona dicts on purpose (the block lives at world level).
+    for spec in personas:
+        spec["relationship_edges"] = [
+            e for e in relationships if spec["name"] in (e["a"], e["b"])
+        ]
     return PennWorld(
         world_map=world_map,
         personas=personas,
@@ -860,9 +894,8 @@ def build_penn_world(
         meetings=meetings,
         build_world_fn=_build,
         llm=data.get("llm") or None,
-        # Validated once here, so an authoring typo fails the bake / the live
-        # server's boot loudly instead of drawing a wrong graph.
-        relationships=relationships_meta(personas, data.get("relationships") or []),
+        relationships=relationships,
+        events=events,
         world_data=world_data,
     )
 
@@ -936,6 +969,15 @@ def persona_meta_entry(spec):
     ``{place, activity, emoji, steps}`` stops (``steps=None`` => stays put for the
     rest of the day). ``vision_r`` is deliberately NOT here: Penn personas don't
     override it, so it stays a single top-level ``meta`` global.
+
+    ``schedule`` is the **authored seed YAML**, never the day a run executed
+    (#824). It is what the world was built from, so it is correct for the
+    inspector and identical live and baked -- but a real planner (``--plan
+    llm``, the live default) returns a ``DailyPlan`` that never writes back
+    into ``world.personas``, so on such a run this schedule is NOT what the
+    agent did. The executed plan is the run manifest's ``daily_plans``
+    (``serve_penn.PennStepper._plans_for_manifest``) or, live, ``GET
+    /agents/{name}/plan``.
     """
     return {
         "name": spec["name"],

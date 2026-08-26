@@ -1,0 +1,29 @@
+---
+name: walk_minutes
+description: >
+  What a walk costs, appended to a live decide observation (issue #826).
+  Rendered by cognition.walk_minutes_line() and folded into
+  observe_and_decide's observation when the step loop threads a SimClock and
+  the world has a map. Penn legs are long -- Van Pelt to Houston Hall is ~57
+  sim-minutes -- but the exits list prices every destination identically, so an
+  agent forms "quick coffee run" intentions that are two-hour round trips.
+  planner.median_travel_minutes gives the PLANNER a travel budget; this is the
+  per-tick decide's equivalent. The estimate is a per-destination BFS distance
+  field over the collision grid (WorldMap.walk_steps_from, #866) -- it walks
+  around walls, so the price matches the leg the agent will actually take.
+  Still "at least about": the BFS lands at the nearest destination tile and
+  the patched walk_path routes a few tiles further, so it is a tight lower
+  bound. The destination list is
+  assembled in Python (it is data), like nearby_affordances; only the wording
+  lives here. The deterministic mock reads only the observation's first line, so
+  this can never change a mock decision.
+inputs:
+  destinations:
+    type: string
+    description: >
+      Pre-joined "<name> <minutes> min" fragments, nearest first, e.g.
+      "Van Pelt — Moelis Reading Room 0 min; Houston Hall 27 min".
+sample:
+  destinations: "Van Pelt — Moelis Reading Room 0 min; Houston Hall 27 min"
+---
+Walking from here takes at least about: {{ destinations }}.

@@ -30,6 +30,11 @@ export interface LlmCallRecord {
   cost_usd: number;
   cum_cost_usd: number;
   latency_ms: number | null;
+  // A FAILED call (#745): the provider exception the adapter degraded to
+  // None ("ExcClass: message"), or null for a call that answered. Failed
+  // calls bill nothing but stay countable — a mid-run auth/quota/network
+  // outage shows up here instead of freezing the cast silently.
+  error: string | null;
   // Per-call tool metadata (#359): which tools were offered / chosen, the
   // choice mode, a truncated args digest, and the tool-loop round. All null
   // outside a tool-driven call.
@@ -44,9 +49,9 @@ export interface LlmCallRecord {
 // - "frame": `step` + `agents` (persona name → AgentFrame, the live
 //   counterpart of `replay.frames[step]`);
 // - "status": the run-control state after a start/pause/resume/reset;
-// - "engine": an engine event, payload in `event` (`llm_call` rows and
-//   `game_event` rows — the #305 EventState shape — told apart by the
-//   payload's own `kind`);
+// - "engine": an engine event, payload in `event` (`llm_call` rows,
+//   `game_event` rows — the #305 EventState shape — and `llm_error` rows,
+//   #745's failed-call records, told apart by the payload's own `kind`);
 // - "wish": an ActionWish demand record (#622), the WishState fields spread
 //   at the top level beside `cursor`/`kind`;
 // - "deciding": a per-agent decision-lifecycle marker (#551) — `agent`,
@@ -65,6 +70,12 @@ export interface FeedRecord {
   agent?: string;
   state?: string;
   elapsed_ms?: number;
+  // Run-scoped usage + social (#819): a `frame` record (and the `reset` status
+  // record) carries the stepper's run_usage() so the run counters and the #795
+  // social card ride the one feed — no separate /usage poll. A subset of
+  // UsageSummary (the run_* fields + `social`); absent on steppers/records that
+  // don't report it.
+  run_usage?: Partial<UsageSummary>;
 }
 
 // The GET /events?since=N response envelope.
@@ -97,6 +108,27 @@ export interface LiveStatusResponse {
   boot_id?: string | null;
 }
 
+// This run's social opportunity (#795): co-settled pair-steps (both agents
+// settled within earshot of each other), broken down by pair ("A + B" keys,
+// busiest first), plus the conversation count. Zero co_settled_pair_steps with a
+// nonzero step count means conversation was structurally impossible this
+// run — surfaced instead of silently reporting nothing.
+export interface RunSocial {
+  co_settled_pair_steps: number;
+  by_pair: Record<string, number>;
+  conversations: number;
+  // #819/#825: whether a zero above is meaningful. `counted` is false only
+  // from a pre-#825 backend, where the mock brain never counted co-settling —
+  // there its permanent 0 is "not measured", not a drought. Current backends
+  // count under every brain and always send true. `resumed` is true when this process adopted a
+  // mid-day run, restarting the accumulators at 0 — its 0 is "not fully
+  // observed". Both mirror the backend's #795 finish-warning gate, so the card
+  // can tell a real drought from those two non-signals. Optional: a backend
+  // predating the fields omits them and the card falls back to soft wording.
+  counted?: boolean;
+  resumed?: boolean;
+}
+
 // GET /usage — the run ledger's summary (tokens and dollars, #264).
 // `available: false` means no ledger is wired (a zeroed summary with only the
 // core fields); the budget fields appear only when the server was started with
@@ -117,8 +149,10 @@ export interface UsageSummary {
   max_cost_usd?: number;
   remaining_budget_usd?: number;
   // Ledger detail present whenever a ledger is wired (absent from the zeroed
-  // `available: false` shape): per-role cost and tool-schema health (#357/#359).
+  // `available: false` shape): per-role cost, failed calls (#745 — API errors
+  // the adapters degraded to None), and tool-schema health (#357/#359).
   by_role?: Record<string, number>;
+  failed_calls?: number;
   validation_failures?: number;
   repairs?: number;
   repair_successes?: number;
@@ -127,10 +161,15 @@ export interface UsageSummary {
   // The run-scoped slice (#526/#569, served since #601): REAL model calls only
   // — the mock brain's $0 pacing records don't inflate these — so the dashboard
   // headline agrees with its per-run call log. Present only when the stepper
-  // reports per-run usage.
+  // reports per-run usage. `run_failed_calls` (#745) counts the run's FAILED
+  // real calls: climbing while `run_cost_usd` stands still is the
+  // mid-run-outage fingerprint.
   run_calls?: number;
+  run_failed_calls?: number;
   run_cost_usd?: number;
   run_by_actor?: Record<string, number>;
+  // Present only alongside the other run-scoped fields above.
+  social?: RunSocial;
 }
 
 // GET /agents/{name}/memory — the live counterpart of the baked

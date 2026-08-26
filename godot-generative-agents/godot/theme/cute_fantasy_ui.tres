@@ -115,8 +115,11 @@ content_margin_top = 3.0
 content_margin_bottom = 5.0
 
 [resource]
-; Use Godot's clean built-in font (no default_font set) — the pack's pixel font
-; reads poorly at small sizes; the textured frame/buttons/ribbon still carry the look.
+; Deliberately no default_font: Godot's clean built-in font (Open Sans) is what we
+; want. The pack shipped a 5x9 pixel font, but it read poorly at these sizes and was
+; ASCII-only — the UI is full of ✕ ▶ ▸ · × ⓘ 💭 that would have fallen back to a
+; system face mid-string. It was never wired up and has now been deleted; the
+; textured frame/buttons/ribbon carry the look on their own.
 default_font_size = 20
 Button/colors/font_color = Color(0.27, 0.17, 0.11, 1)
 Button/colors/font_hover_color = Color(0.18, 0.1, 0.06, 1)
@@ -129,6 +132,10 @@ Button/styles/pressed = SubResource("SB_btn_pressed")
 Button/styles/disabled = SubResource("SB_btn_normal")
 Button/styles/focus = SubResource("SB_focus")
 Label/colors/font_color = Color(0.27, 0.17, 0.11, 1)
+; RichTextLabel defaults to WHITE text, which is invisible on the parchment panel.
+; Themed here rather than per-node so the next RichTextLabel added to a panel is
+; readable by default (live_hud.gd's request log used to patch this by hand).
+RichTextLabel/colors/default_color = Color(0.24, 0.18, 0.12, 1)
 OptionButton/colors/font_color = Color(0.27, 0.17, 0.11, 1)
 OptionButton/colors/font_hover_color = Color(0.18, 0.1, 0.06, 1)
 OptionButton/colors/font_pressed_color = Color(0.18, 0.1, 0.06, 1)

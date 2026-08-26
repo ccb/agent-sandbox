@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { fattenFrames } from "./replayCodec";
 import type { Replay } from "./types/replay";
 
 // The Godot canvas plays this exact file (web/public/replay/penn_replay.json,
@@ -27,6 +28,10 @@ export function useReplay(): ReplayState {
         const res = await fetch(REPLAY_URL);
         if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${REPLAY_URL}`);
         const replay = (await res.json()) as Replay;
+        // Rehydrate the schema-1.1 slim encoding (#941): carry-forward fields
+        // omitted by the writer come back, so components read full rows.
+        // Identity on pre-#941 fat files.
+        if (Array.isArray(replay.frames)) fattenFrames(replay.frames);
         if (!cancelled) setState({ status: "ready", replay, error: null });
       } catch (err) {
         if (!cancelled) {

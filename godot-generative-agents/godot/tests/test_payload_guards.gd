@@ -72,12 +72,14 @@ func _initialize() -> void:
 		"meta.personas that isn't an array is a load error")
 
 	# --- schema_ok: a version rail that tolerates absent/unknown, flags drift ---
-	_check(PayloadGuards.schema_ok({"schema_version": "1"}, "1"),
+	_check(PayloadGuards.schema_ok({"schema_version": "1"}, ["1"]),
 		"matching schema_version is ok")
-	_check(PayloadGuards.schema_ok({}, "1"),
+	_check(PayloadGuards.schema_ok({"schema_version": "1.1"}, ["1.0", "1.1"]),
+		"any listed schema_version is ok (#941: the viewer renders 1.0 and 1.1)")
+	_check(PayloadGuards.schema_ok({}, ["1"]),
 		"absent schema_version is tolerated (older payloads)")
-	_check(not PayloadGuards.schema_ok({"schema_version": "2"}, "1"),
-		"a different schema_version is flagged")
+	_check(not PayloadGuards.schema_ok({"schema_version": "2"}, ["1"]),
+		"an unlisted schema_version is flagged")
 
 	# --- is_known_kind: unknown feed kinds are detectable (to warn, not drop silently) ---
 	_check(PayloadGuards.is_known_kind("frame"), "frame is a known kind")

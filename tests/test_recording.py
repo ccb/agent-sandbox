@@ -281,6 +281,37 @@ def test_recording_client_proxies_context(tmp_path):
     rec.close()
 
 
+def test_recording_client_registers_schedule_on_capable_inner(tmp_path):
+    cassette = tmp_path / "run.jsonl"
+    schedule = object()
+
+    class _WithSchedules(_ToolStub):
+        def __init__(self):
+            super().__init__()
+            self.schedules = {}
+
+        def register_schedule(self, name, registered_schedule):
+            self.schedules[name] = registered_schedule
+
+    inner = _WithSchedules()
+    rec = RecordingClient(inner, str(cassette))
+    rec.register_schedule("Ada", schedule)
+    rec.close()
+
+    assert inner.schedules["Ada"] is schedule
+    assert cassette.read_text() == ""  # configuration is not an LLM request
+
+
+def test_recording_client_ignores_schedule_for_unsupported_inner(tmp_path):
+    cassette = tmp_path / "run.jsonl"
+    rec = RecordingClient(_ToolStub(), str(cassette))
+
+    rec.register_schedule("Ada", object())  # paid-style clients lack the hook
+    rec.close()
+
+    assert cassette.read_text() == ""
+
+
 # ----------------------------------------------------------------------
 # Section B: engine determinism (seed_world)
 # ----------------------------------------------------------------------

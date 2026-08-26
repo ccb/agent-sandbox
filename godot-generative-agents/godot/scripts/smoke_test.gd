@@ -49,7 +49,10 @@ func _ready() -> void:
 	# The snapshot gallery (issue #253) is a code-built pop-up, not a scene in SCENES;
 	# check that it builds and accepts snapshots (the capture path it feeds is GPU-only).
 	failures += _check_gallery()
-	var checks := SCENES.size() + 4
+	# The capture tools (snapshot + clip export) are hidden for the release; assert no
+	# mode switch or setter can bring them back (agent_panel.gd's _capture_tools).
+	failures += _check_capture_tools()
+	var checks := SCENES.size() + 5
 	if failures == 0:
 		print("smoke_test: PASS — %d scene(s) OK" % checks)
 	else:
@@ -216,7 +219,17 @@ func _check_simulation_setup() -> int:
 func _rerun_seed() -> Dictionary:
 	return {
 		"cast": ["diego"],
-		"brain": "scripted",
+		# The llm brain, so the saved thinking depth below survives
+		# _update_effort_row (a depth is a paid-brain setting) -- a saved
+		# Sonnet-at-medium run is the case #845 exists for.
+		"brain": "llm",
+		# The saved planner REQUEST (#791): the seed reproduces what was asked
+		# ("schedule"), not the resolved value.
+		"plan_request": "schedule",
+		# The saved thinking depth (#845) and model (#887) -- the two brain
+		# settings a re-run has to ask for again rather than inherit.
+		"effort": "medium",
+		"model": "claude-sonnet-5",
 		"sim_config": {
 			"game": {"agent": {"temperature": 1.1}},
 			"cognition": {"vision_r": 3},
@@ -245,7 +258,23 @@ func _fake_config() -> Dictionary:
 			},
 		},
 		"brains": ["mock", "scripted", "llm"],
-		"run": {"brain": "mock", "steps": 1080, "tick_seconds": 0.1, "max_cost": null},
+		# The day-planner surface (#791): `plans` is the vocabulary, run.plan the
+		# resolved value (auto under the mock brain -> schedule), plan_request the
+		# raw ask the dropdown defaults to.
+		"plans": ["auto", "schedule", "llm"],
+		# The thinking-depth surface (#845): `efforts` is the vocabulary,
+		# run.effort the depth in force ("default" = none requested).
+		"efforts": ["default", "low", "medium", "high", "xhigh", "max"],
+		# The model surface (#887): `models` is the priced vocabulary, run.model
+		# the model in force (concrete even under this fake's mock brain).
+		"models": ["claude-haiku-4-5", "claude-opus-4-8", "claude-sonnet-5"],
+		"run": {
+			"brain": "mock", "steps": 1080, "tick_seconds": 0.1, "max_cost": null,
+			"plan": "schedule", "plan_request": "auto", "effort": "default",
+			# Differs from the seed's claude-sonnet-5, so the pre-fill is visible
+			# and rides the POST body as a change (#887).
+			"model": "claude-haiku-4-5",
+		},
 	}
 
 
@@ -261,8 +290,36 @@ func _check_seed_prefill(inst: Node) -> int:
 	if inst._checked_ids() != ["diego"]:
 		printerr("  simulation_setup seed: cast not pre-filled (%s)" % str(inst._checked_ids()))
 		fails += 1
-	if inst._brains[inst._brain_opt.selected] != "scripted":
+	if inst._brains[inst._brain_opt.selected] != "llm":
 		printerr("  simulation_setup seed: brain not selected from seed")
+		fails += 1
+	# The thinking-depth row (#845), like the planner row below: the saved depth
+	# must land on the real dropdown, not just survive the pure helper.
+	if inst._effort_opt == null:
+		printerr("  simulation_setup seed: no thinking-depth row built (efforts not read?)")
+		fails += 1
+	elif inst._selected_effort() != "medium":
+		printerr("  simulation_setup seed: depth not selected from seed (%s)" % inst._selected_effort())
+		fails += 1
+	# The model row (#887): the saved model must land on the real dropdown -- this
+	# is the assertion that a cross-process re-run reproduces the model at all.
+	if inst._model_opt == null:
+		printerr("  simulation_setup seed: no model row built (models not read?)")
+		fails += 1
+	elif inst._selected_model() != "claude-sonnet-5":
+		printerr("  simulation_setup seed: model not selected from seed (%s)" % inst._selected_model())
+		fails += 1
+	# The planner row (#791) drives the real scene wiring, not just the pure
+	# helpers: the seed's plan_request ("schedule") must land on the dropdown and
+	# the hint must reflect the resolved planner it will run.
+	if inst._plan_opt == null:
+		printerr("  simulation_setup seed: no planner row built (plans not read?)")
+		fails += 1
+	elif inst._selected_plan() != "schedule":
+		printerr("  simulation_setup seed: planner not selected from seed (%s)" % inst._selected_plan())
+		fails += 1
+	elif not ("schedule" in inst._plan_hint.text):
+		printerr("  simulation_setup seed: plan hint doesn't reflect the planner (%s)" % inst._plan_hint.text)
 		fails += 1
 	var edits: Dictionary = inst._knob_edits()
 	if not is_equal_approx(edits.get("game", {}).get("agent", {}).get("temperature", -1.0), 1.1):
@@ -315,6 +372,52 @@ func _check_gallery() -> int:
 		printerr("  snapshot_gallery: expected 2 snapshots + 2 thumbnails, got %d + %d" % [n, thumbs])
 		return 1
 	print("  snapshot_gallery: OK (%d snapshots)" % n)
+	return 0
+
+
+# Returns 0 if the sidebar's capture tools (snapshot + clip export) stay hidden, 1 if not.
+# They are switched off for the release (see agent_panel.gd's _capture_tools) but their
+# member vars are still written by set_live/set_clip_span/set_clip_status -- so the check
+# that matters is that *no setter can bring them back*, and that none of them crash on
+# nodes that are alive but hidden. _play is the positive control: if it were invisible too
+# the panel simply isn't in the tree and every assertion below would pass vacuously.
+func _check_capture_tools() -> int:
+	var panel: Node = load("res://scripts/agent_panel.gd").new()
+	add_child(panel)  # entering the tree runs _ready(), which builds the sidebar
+	var problems := PackedStringArray()
+
+	if not panel._play.is_visible_in_tree():
+		problems.append("positive control failed: _play is not visible, test is vacuous")
+
+	# Replay mode: set_live(false) explicitly sets _clip_gif_btn/_clip_status visible.
+	panel.set_live(false)
+	if panel._clip_gif_btn.is_visible_in_tree():
+		problems.append("Export GIF visible in replay mode")
+	if panel._clip_status.is_visible_in_tree():
+		problems.append("clip status visible in replay mode")
+	if panel._capture_tools.is_visible_in_tree():
+		problems.append("capture tools visible in replay mode")
+
+	# Live mode: set_live(true) explicitly sets _live_clip_row visible.
+	panel.set_live(true)
+	if panel._live_clip_row.is_visible_in_tree():
+		problems.append("live clip row visible in live mode")
+	if panel._capture_tools.is_visible_in_tree():
+		problems.append("capture tools visible in live mode")
+
+	# The setters viewer.gd calls must not crash on hidden-but-alive nodes.
+	panel.set_clip_span(0, 5)
+	panel.set_clip_status("saved -> /tmp/x.gif", "/tmp")
+	panel.set_live_clip_ready(true)
+	if panel._capture_tools.is_visible_in_tree():
+		problems.append("capture tools visible after the clip setters ran")
+
+	panel.queue_free()
+	if problems.size() > 0:
+		for p in problems:
+			printerr("  capture_tools: %s" % p)
+		return 1
+	print("  capture_tools: OK (hidden in both modes, setters safe)")
 	return 0
 
 

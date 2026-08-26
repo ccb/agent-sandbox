@@ -184,22 +184,37 @@
   visibility: hidden;
 }
 
-/* The prompt views (chains graph, reader) are opaque dark overlays, mounted only
-   when active (App.tsx), so they just need a layer above the canvas. */
-.view-prompts,
-.view-reader {
-  z-index: 2;
-  overflow: hidden;
-  background: #0d1117;
-}
-
 /* The landing page: an opaque white overlay (mounted only when active) that owns
    its own vertical scroll, like the live dashboard. */
 .view-home {
   z-index: 2;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  /* `none`, not `contain`: contain stops the scroll chaining but still lets the
+     page rubber-band at either end, and a bounce slides the content off its own
+     background — so the landing page's near-white footer band would part company
+     with the white behind it at the bottom. No bounce, nothing to see. */
+  overscroll-behavior: none;
   background: var(--color-surface);
+  scrollbar-width: thin;
+  scrollbar-color: #c5c9d0 var(--color-bg-soft);
+}
+
+.view-home::-webkit-scrollbar {
+  width: 10px;
+}
+
+.view-home::-webkit-scrollbar-track {
+  background: var(--color-bg-soft);
+}
+
+.view-home::-webkit-scrollbar-thumb {
+  background: #c5c9d0;
+  border: 2px solid var(--color-bg-soft);
+  border-radius: 5px;
+}
+
+.view-home::-webkit-scrollbar-thumb:hover {
+  background: #a8adb8;
 }
 
 /* Shown while a lazy-loaded prompt chunk downloads. */

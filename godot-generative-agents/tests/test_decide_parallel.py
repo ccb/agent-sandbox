@@ -36,6 +36,7 @@ from backend.live import (
     _pace,
     run_loop,
 )
+from backend.prompt_templates import render
 
 # The Penn sim modules live in the Godot tree and are run as scripts (no
 # package); import them off the sim directory, like test_penn_live.py.
@@ -210,6 +211,100 @@ def test_timeout_degrades_to_idle_never_double_asks_then_applies_the_late_answer
     assert brains[hung].tool_calls.count("choose_action") == 1
     assert hung not in stepper._decide_pending
     assert stepper.state[hung]["performing"]  # the late answer landed
+
+
+# ------------------------------------- timeout -> failure memory (#758)
+#
+# #636 gave gate-blocked actions an "I tried X but it didn't work" memory but
+# deliberately left the timeout path silent. A timed-out decide now writes the
+# analogous "couldn't decide in time" record -- once per timeout EVENT, never
+# again while the straggler stays parked, and the late answer's own outcome
+# memory is a different fact, so applying it adds no second timeout record.
+
+_TIMEOUT_PHRASE = "couldn't decide in time"
+
+
+def test_reflection_template_pins_the_timeout_line():
+    assert (
+        render("reflection", timed_out=True, place="Van Pelt Library")
+        == "I was thinking about what to do at Van Pelt Library but couldn't decide in time."
+    )
+    # Standing nowhere drops the place clause instead of rendering "at ".
+    assert (
+        render("reflection", timed_out=True, place="")
+        == "I was thinking about what to do but couldn't decide in time."
+    )
+
+
+def test_decide_timeout_writes_one_failure_memory_and_the_late_answer_adds_none(
+    monkeypatch,
+):
+    gates = {}
+
+    def fake_create(config, ledger=None):
+        return _GatedBrain(ledger=ledger, gates=gates)
+
+    monkeypatch.setattr(serve_penn, "create_llm_client", fake_create)
+    llm = {"provider": "anthropic", "model": "claude-haiku-4-5", "max_cost_usd": 5.0}
+    stepper = PennStepper(
+        num_steps=50,
+        world=build_penn_world(),
+        llm=llm,
+        decide_workers=8,
+        # 1.0 s, not 0.2: this test asserts BOTH that the gated agent times out
+        # AND that the healthy ones don't, so the budget has to actually separate
+        # "hung" from "merely slow". At 0.2 s it didn't -- a healthy decide is
+        # microseconds of gated fake plus a real prompt/perception/retrieval pass,
+        # and on a 2-vCPU CI runner (8 decide threads on 2 cores) that pass can
+        # exceed 0.2 s, so a healthy agent wrote its own timeout memory and the
+        # "everyone else" assertion below failed. It fired on ~1 run in 4, on
+        # whichever Python version lost the coin flip -- 3.11 and 3.13 both seen,
+        # on this test's own branch and on an unmodified main.
+        # Free to raise: the gated agent blocks on gate.wait(timeout=5), so it
+        # blows ANY budget under ~5 s. Costs ~0.8 s of wall clock on the one tick
+        # that waits the budget out. Keep it well under that 5 s gate deadline.
+        decide_timeout=1.0,
+    )
+    hung = stepper.order[0]
+    gates[hung] = threading.Event()
+
+    def timeout_memories(name):
+        return [
+            r
+            for r in stepper.chars[name].agent.memory.records
+            if _TIMEOUT_PHRASE in r.text
+        ]
+
+    # Tick 1: the gated decide blows its budget -> exactly one failure
+    # memory, keyed to where the agent stood, at #636's failure conventions
+    # (importance 3.0, unlocked -- only the pre-score floor).
+    stepper.tick()
+    recs = timeout_memories(hung)
+    assert len(recs) == 1
+    place = stepper.chars[hung].location.name
+    assert (
+        recs[0].text
+        == f"I was thinking about what to do at {place} but couldn't decide in time."
+    )
+    assert recs[0].importance == 3.0
+    # Everyone else decided within budget: a normal decide writes no such memory.
+    assert all(not timeout_memories(n) for n in stepper.order if n != hung)
+
+    # Tick 2: the straggler is still in flight. A parked tick is not a new
+    # timeout event -- no second record.
+    stepper.tick()
+    assert len(timeout_memories(hung)) == 1
+
+    # Release the straggler. Its late answer is applied at the next decision
+    # point and remembered as a normal OUTCOME -- a different fact, so the
+    # timeout memory count stays at one (no double-write).
+    gates[hung].set()
+    stepper._decide_pending[hung].result(timeout=5)
+    stepper.tick()
+    assert stepper.state[hung]["performing"]  # the late answer landed
+    assert len(timeout_memories(hung)) == 1
+    texts = [r.text for r in stepper.chars[hung].agent.memory.records]
+    assert "I was pondering the day." in texts  # the applied answer's memory
 
 
 def test_decide_threads_cap_bounds_concurrent_decides():

@@ -219,6 +219,9 @@ def test_decide_prompt_carries_the_nearby_line_under_a_real_brain():
     brain = MockLlmClient(tool_calls_responses=[TRAVEL])
     game, ada = _world_with_offer(None)
     ada.agent.llm_client = brain  # make _use_action_tools(agent) true
+    # Pin the generic nearby-affordance rendering; #849's focused tests cover
+    # the schedule-aware destination filter.
+    ada.agent.schedule = None
 
     # Ada stands on The Green (untagged); the Library nearby is studyable.
     game.locations["Library"].set_property("studyable", True)
@@ -275,9 +278,12 @@ def test_known_food_and_sleep_lines_are_campus_wide_not_distance_gated():
     char.set_property("is_low_energy", True)
     char.set_property(Property.IS_SLEEPY, True)
 
+    # Houston Hall — Reception Hall is also stocked now (#907: every
+    # dining-tagged location, not just the building-level hall), so it joins
+    # the list; sorted by name, it lands after "Houston Hall" itself.
     assert known_food_location_line(game, char) == (
         "Even if it isn't nearby, you know food can be found at: "
-        "Houston Hall (dining, marketplace)."
+        "Houston Hall (dining, marketplace); Houston Hall — Reception Hall (dining)."
     )
     assert known_sleep_location_line(game, char) == (
         "Even if it isn't nearby, you know you can sleep at: "

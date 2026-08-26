@@ -139,6 +139,30 @@ def test_ledger_summary_shape():
     assert s["validation_failures"] == 0
     assert s["repairs"] == 0
     assert s["repair_successes"] == 0
+    # #745: the failed-call counter is always present too (0 on a healthy run).
+    assert s["failed_calls"] == 0
+
+
+def test_ledger_summary_counts_failed_calls():
+    # #745: a failed call -- the API exception an adapter degraded to None --
+    # lands as a zero-cost error row and is countable in the summary, so a
+    # mid-run outage shows up in GET /usage instead of flatlining.
+    led = UsageLedger()
+    led.record(_rec("troll", 0.001))
+    led.record(
+        CallRecord(
+            usage=Usage.zero("anthropic", "claude-haiku-4-5"),
+            cost_usd=0.0,
+            actor="troll",
+            error="AuthenticationError: 401 key revoked",
+        )
+    )
+    s = led.summary()
+    assert s["calls"] == 2  # the failed attempt is still a call
+    assert s["failed_calls"] == 1
+    # The error rides the flattened record (the monitor row / live feed shape).
+    assert led.records[-1].to_primitive()["error"].startswith("AuthenticationError")
+    assert led.records[0].to_primitive()["error"] is None
 
 
 def test_ledger_summary_counts_schema_outcomes():

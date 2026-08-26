@@ -46,6 +46,6 @@ schedule:
   is_work: true
   steps: 60
 - place: Irvine Auditorium
-  activity: tightening loose bolts in the auditorium rows before the evening event
+  activity: tightening loose bolts in the auditorium rows before the next event
   emoji: 🔧
   is_work: true

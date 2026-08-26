@@ -88,14 +88,19 @@ const MONTHS := [
 # no activity/goal bubbles) -- a visible bubble means "this agent is speaking right
 # now". A bubble is this wide (its text wraps and centres inside); position.x =
 # -half that centres it over the sprite.
-const BUBBLE_WIDTH := 210.0
-# Bubble text size, and how far the bubble's top sits above the nameplate.
+const BUBBLE_WIDTH := 210.0        # default/min bubble width; long text widens toward BUBBLE_MAX_WIDTH
+const BUBBLE_MAX_WIDTH := 380.0    # cap so a wide (expanded) bubble can't blanket neighbouring agents
+const BUBBLE_WIDE_AT := 350        # char count at which the box reaches BUBBLE_MAX_WIDTH (ramps from BUBBLE_MAX_CHARS)
 const BUBBLE_FONT_SIZE := 18
-const BUBBLE_Y_OFFSET := 78.0
-# The per-agent "thinking…" cue (#551) parks this much further up than the
-# speech bubble, so a mid-decision agent who is also mid-conversation shows
-# both without them overlapping.
-const THINK_Y_EXTRA := 30.0
+# Each floating label is BOTTOM-anchored: its bottom edge is pinned this many px
+# above the sprite head and the box grows UPWARD as text wraps taller, so a long
+# utterance never descends onto the sprite (see scripts/bubble_anchor.gd). The
+# three gaps stagger the labels (dialogue lowest, then thinking, then wish) so
+# the common co-occurring pair — a mid-decision agent who is also mid-conversation
+# — shows both without overlap; a very long line can still reach the tier above
+# on the rare step two are visible at once (tolerated, as before).
+const BUBBLE_BOTTOM_GAP := 80.0   # dialogue speech bubble
+const THINK_BOTTOM_GAP := 135.0   # "thinking…" cue, above a 2-line dialogue bubble
 # A conversation plays back as staggered turn-taking: each line is shown for this
 # many sim steps, by ONLY its speaker, before the reply takes over -- so a
 # back-and-forth reads as a real exchange, not both agents talking at once. Each
@@ -112,12 +117,12 @@ const BUBBLE_MAX_CHARS := 120
 const SPEECH_TEXT_COLOR := Color(0.10, 0.10, 0.12)
 
 # Wish bubble (#622 ActionWish, surfaced #625): a distinct 💭 marker shown over
-# the wishing agent, parked ABOVE the dialogue bubble's slot (BUBBLE_Y_OFFSET)
-# so the two never overlap on the rare step where both fire. Unlike the
-# dialogue bubble's staggered turn-taking playback, a wish is a single flash:
-# it fades in, holds, and fades out over WISH_FADE_STEPS sim steps once
-# triggered (see _update_agent_wish / _refresh_wish_bubble).
-const WISH_BUBBLE_Y_OFFSET := 140.0
+# the wishing agent, bottom-anchored a tier above the dialogue bubble's slot
+# (WISH_BOTTOM_GAP > BUBBLE_BOTTOM_GAP) so the two never overlap on the rare step
+# where both fire. Unlike the dialogue bubble's staggered turn-taking playback, a
+# wish is a single flash: it fades in, holds, and fades out over WISH_FADE_STEPS
+# sim steps once triggered (see _update_agent_wish / _refresh_wish_bubble).
+const WISH_BOTTOM_GAP := 175.0   # 💭 wish bubble, top tier
 const WISH_FADE_STEPS := 8.0
 const WISH_FADE_IN_STEPS := 1.0
 const WISH_FADE_OUT_STEPS := 2.0
@@ -151,19 +156,24 @@ const ActionTally := preload("res://scripts/action_tally.gd")
 const GifEncoder := preload("res://scripts/gif_encoder.gd")
 const ClipExport := preload("res://scripts/clip_export.gd")
 const LiveClipSpan := preload("res://scripts/live_clip_span.gd")
+const BubbleAnchor := preload("res://scripts/bubble_anchor.gd")
 const ThinkingIndicator := preload("res://scripts/thinking_indicator.gd")
 const AgentFanout := preload("res://scripts/agent_fanout.gd")
+const DialogueLog := preload("res://scripts/dialogue_log.gd")
 const LivePacer := preload("res://scripts/live_pacer.gd")
 const RestartDetect := preload("res://scripts/restart_detect.gd")
 const RunState := preload("res://scripts/run_state.gd")
 const PayloadGuards := preload("res://scripts/payload_guards.gd")
+const ReplayCodec := preload("res://scripts/replay_codec.gd")
 const DecidingState := preload("res://scripts/deciding_indicator.gd")
 const ReplaySave := preload("res://scripts/replay_save.gd")
 
-# The replay/live contract schema this viewer renders (backend.contract
-# SCHEMA_VERSION). A payload declaring a different one still renders, but warns
-# once about likely drift (#638); an absent one is tolerated (older payloads).
-const SUPPORTED_SCHEMA_VERSION := "1.0"
+# The replay/live contract schemas this viewer renders (backend.contract
+# SCHEMA_VERSION). 1.1 (#941) added the carry-forward slim file encoding,
+# rehydrated at load by ReplayCodec, so 1.0 fat files still render bit-for-bit.
+# A payload declaring a different version still renders, but warns once about
+# likely drift (#638); an absent one is tolerated (older payloads).
+const SUPPORTED_SCHEMA_VERSIONS := ["1.0", "1.1"]
 # One-shot dedupe for the "unknown feed kind" warning so a newer backend
 # streaming an unrecognized kind every tick warns once, not per record (#638).
 var _warned_feed_kinds := {}
@@ -196,6 +206,7 @@ var _filter_location := ""
 var _agent_location := {}           # name -> building this step
 var _sky: CanvasModulate            # clock-driven day-night tint over the campus
 var _trails: Node2D                 # parent of the per-agent breadcrumb Line2Ds
+var _replay_error: CanvasLayer      # the #937 load-failure surface; first failure wins
 # Web only: push the current step to the page so the React companion panel can
 # follow the replay. `_is_web` gates the JS calls to web exports; `_last_step`
 # (-1 = none pushed yet) lets us call out only when the integer step changes.
@@ -210,20 +221,25 @@ var _last_heat_step := -1
 var _last_graph_step := -1
 var _relationships: Array = []
 
-# Step the day-plans pop-up last drew (same push-on-change contract as the
-# heatmap/social graph, issue #251).
-var _last_plan_step := -1
-
 # Most-taken-actions HUD (issue #700): the baked `events` array, the panel node,
 # and the last step its tally was computed for -- so _process only re-tallies on
 # an integer-step change, the same push-on-step-change contract as the heatmap /
-# social-graph / day-plan pop-ups above. ACTIONS_TOP_N caps the ranked rows.
+# social-graph pop-ups above. ACTIONS_TOP_N caps the ranked rows.
 # Replay-only for v1: the panel is hidden in live mode (see _setup + _process),
 # where the run monitor owns the top-right corner.
 const ACTIONS_TOP_N := 6
 var _action_events: Array = []
 var _actions_hud: PanelContainer
 var _last_actions_step := -1
+
+# Dialogue-log panel (#963): the right-docked, persistent history of every line
+# spoken up to the playhead, so dialogue stays readable without slowing the
+# bubbles (whose pacing the sim mirrors -- see DIALOGUE_LINE_STEPS) or the
+# agents. Same push-on-step-change contract as the panels above, but active in
+# BOTH replay and live mode; rows come from dialogue_log.gd. Shown by default;
+# toggled off/on with L / the sidebar's speech-bubble button.
+var _dialogue_log: PanelContainer
+var _last_dialogue_step := -1
 
 # In-world dialogue: when two agents converse, the shared transcript is played back
 # above their heads one line at a time -- only the current speaker shows a bubble --
@@ -234,6 +250,7 @@ var _convo_lines := {}      # name -> the transcript [[speaker, line], ...] bein
 var _convo_start := {}      # name -> sim step (float) the exchange began playing
 var _convo_partner := {}    # name -> the other speaker's name, for the link
 var _bubble_idx := {}       # name -> transcript line currently in its bubble (-1 = none)
+var _expanded := {}         # name -> bool: render the current line in full instead of clipped (click to toggle; still hides off-turn)
 var _links_node: Node2D     # parents one Line2D per active conversation pair
 var _link_lines := {}       # sorted "A\nB" pair key -> Line2D
 var _speech_style: StyleBoxFlat
@@ -339,7 +356,6 @@ var _quitting := false              # window close in progress (shutdown then qu
 @onready var _inspector = $PersonaInspectorLayer/PersonaInspector  # persona_inspector.gd
 @onready var _social_graph = $SocialGraphLayer/SocialGraphPanel  # social_graph_panel.gd
 @onready var _gallery = $SnapshotLayer/SnapshotGallery  # snapshot_gallery.gd snapshot pop-up
-@onready var _day_plans = $DayPlanLayer/DayPlanPanel  # day_plan_panel.gd pop-up (#251)
 @onready var _building_labels = $BuildingLabels  # building_labels.gd (for center_of)
 
 
@@ -389,12 +405,9 @@ func _ready() -> void:
 	_panel.social_graph_requested.connect(_toggle_social_graph)
 	_social_graph.close_requested.connect(_close_social_graph)
 
-	# Day-plans pop-up (issue #251): the sidebar calendar button (or T) toggles
-	# it; ribbon clicks seek through the same path as the scrubber (_on_seek
-	# already ignores seeks in live mode).
-	_panel.day_plans_requested.connect(_toggle_day_plans)
-	_day_plans.close_requested.connect(_close_day_plans)
-	_day_plans.seek_requested.connect(_on_seek)
+	# Dialogue-log dock (#963): the sidebar speech-bubble button (or L) toggles
+	# the right-docked history of everything said up to the playhead.
+	_panel.dialogue_log_requested.connect(_toggle_dialogue_log)
 
 	# Snapshot capture + gallery pop-up (issue #253): the camera button (or C) captures
 	# the current campus view into the gallery; the gallery button toggles the pop-up of
@@ -441,6 +454,14 @@ func _ready() -> void:
 	_actions_hud.theme = _panel.theme
 	$UI.add_child(_actions_hud)
 	_actions_hud.visible = _resolve_backend_url() == ""
+
+	# The right-docked dialogue-log panel (#963), same code-built pattern. Shown
+	# by default (L toggles it away); unlike the actions HUD it works in live
+	# mode too (its data path is the frames array, which live playback fills
+	# identically).
+	_dialogue_log = preload("res://scripts/dialogue_log_panel.gd").new()
+	_dialogue_log.theme = _panel.theme
+	$UI.add_child(_dialogue_log)
 
 	# A clock-driven tint over the 2D world (the screen-space UI layer is unaffected),
 	# so the campus warms/dims with the in-game time of day.
@@ -573,16 +594,62 @@ func _on_run_halted(halted: bool) -> void:
 		_panel.set_playing(false)
 
 
+func _show_replay_load_error(message: String) -> void:
+	# The visible half of a replay-load failure (#937): every load path used to
+	# abort with only a console push_error, leaving an empty campus a viewer
+	# can't tell from a hang. One surface for all of them — what failed, and the
+	# way back. The first failure wins (it's the root cause); repeats still
+	# reach the console below but don't stack panels.
+	push_error("penn_replay: %s" % message)
+	if _replay_error != null:
+		return
+	_replay_error = CanvasLayer.new()
+	_replay_error.name = "ReplayLoadError"
+	_replay_error.layer = 100
+	add_child(_replay_error)
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_replay_error.add_child(center)
+	var panel := PanelContainer.new()
+	center.add_child(panel)
+	var margin := MarginContainer.new()
+	for side in ["left", "right", "top", "bottom"]:
+		margin.add_theme_constant_override("margin_" + side, 20)
+	panel.add_child(margin)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 12)
+	margin.add_child(col)
+	var title := Label.new()
+	title.text = "Couldn't load the replay"
+	title.add_theme_font_size_override("font_size", 24)
+	col.add_child(title)
+	var detail := Label.new()
+	detail.text = message
+	detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	detail.custom_minimum_size = Vector2(420, 0)
+	col.add_child(detail)
+	var back := Button.new()
+	back.text = "◀  Back to menu"
+	back.pressed.connect(_on_back_to_menu)
+	col.add_child(back)
+
+
 func _load_replay_desktop() -> void:
 	var f := FileAccess.open(replay_path, FileAccess.READ)
 	if f == null:
-		push_error("penn_replay: cannot open %s" % replay_path)
+		_show_replay_load_error("cannot open %s" % replay_path)
 		return
 	_load_replay_from_text(f.get_as_text())
 
 
 func _load_replay_web() -> void:
 	var http := HTTPRequest.new()
+	# The browser's fetch layer owns transfer encoding on web exports: it
+	# negotiates Content-Encoding and hands over an already-decompressed body.
+	# With accept_gzip on, Godot sees the response's gzip header and runs its
+	# own StreamPeerGZIP pass over that plaintext — FAILED, garbage to the JSON
+	# parser, silent blank campus behind any compressing host, e.g. Vercel (#938).
+	http.accept_gzip = false
 	add_child(http)
 	http.request_completed.connect(_on_replay_request_completed)
 	# Godot's HTTPRequest needs an absolute URL (with a scheme) — unlike the
@@ -593,14 +660,14 @@ func _load_replay_web() -> void:
 		url = str(JavaScriptBridge.eval("new URL('%s', window.location.href).href" % web_replay_url, true))
 	var err := http.request(url)
 	if err != OK:
-		push_error("penn_replay: could not start HTTP request for %s (%d)" % [url, err])
+		_show_replay_load_error("could not start the replay request for %s (error %d)" % [url, err])
 
 
 func _on_replay_request_completed(
 	_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray
 ) -> void:
 	if code != 200:
-		push_error("penn_replay: fetching %s returned HTTP %d" % [web_replay_url, code])
+		_show_replay_load_error("fetching %s returned HTTP %d" % [web_replay_url, code])
 		return
 	_load_replay_from_text(body.get_string_from_utf8())
 
@@ -611,17 +678,20 @@ func _load_replay_from_text(text: String) -> void:
 	# hard-indexing meta/frames off a truncated re-bake or a skewed backend (#638).
 	var load_error := PayloadGuards.replay_load_error(data)
 	if load_error != "":
-		push_error("penn_replay: %s" % load_error)
+		_show_replay_load_error(load_error)
 		return
 	var replay := data as Dictionary
 	var meta := replay["meta"] as Dictionary
-	if not PayloadGuards.schema_ok(meta, SUPPORTED_SCHEMA_VERSION):
+	if not PayloadGuards.schema_ok(meta, SUPPORTED_SCHEMA_VERSIONS):
 		push_warning(
-			"penn_replay: replay schema_version '%s' != supported '%s'; rendering may be degraded"
-			% [String(meta.get("schema_version", "?")), SUPPORTED_SCHEMA_VERSION])
+			"penn_replay: replay schema_version '%s' not in supported %s; rendering may be degraded"
+			% [String(meta.get("schema_version", "?")), str(SUPPORTED_SCHEMA_VERSIONS)])
 
 	_apply_meta(meta)
-	_frames = replay["frames"]
+	# Rehydrate the 1.1 slim encoding (#941): carry-forward fields omitted by
+	# the writer come back, so every reader below sees full rows. Identity on
+	# 1.0 fat files. Live frames arrive fat and never pass through here.
+	_frames = ReplayCodec.fatten_frames(replay["frames"])
 	# The per-persona full memory history, for the State Details inspector's memory
 	# stream (issue #408). Baked replays carry it; a payload without it (or the live
 	# feed) leaves this empty and the inspector shows only the retrieved-this-step set.
@@ -648,6 +718,13 @@ func _load_replay_from_text(text: String) -> void:
 	_action_events = data.get("events", [])
 	_last_actions_step = preview_step
 	_actions_hud.set_rows(ActionTally.tally(_action_events, preview_step, ACTIONS_TOP_N))
+	# Re-seed the dialogue log the same way, so a replay loaded over a previous
+	# one (or a preview start) doesn't show the old run's lines until the next
+	# step change.
+	_last_dialogue_step = -1
+	if _dialogue_log.visible:
+		_last_dialogue_step = preview_step
+		_dialogue_log.set_rows(_dialogue_rows(preview_step))
 
 	# Fill the sidebar's Focus dropdown with every building the cast visits over the whole
 	# replay (a one-time scan of all frames), sorted, so the option list is stable as the
@@ -680,10 +757,6 @@ func _load_replay_from_text(text: String) -> void:
 	# And to the social-graph pop-up (issue #252), with the seed relationships the
 	# meta carried, so it can accumulate conversations up to any step on demand.
 	_social_graph.set_replay(_frames, _names, _relationships)
-
-	# And to the day-plans pop-up (issue #251): schedules from the meta's
-	# persona detail, actuals derived from the same by-reference frame buffer.
-	_day_plans.set_replay(_frames, _names, _persona_detail)
 
 	# Tell the run monitor's source who the cast is, so its per-actor spend
 	# attribution matches the real ledger's by_actor rollup.
@@ -741,9 +814,6 @@ func _spawn_from_meta(meta: Dictionary) -> void:
 	# Same by-reference hand-off for the social graph; its seed view is meaningful
 	# right away, before the first frame ever arrives.
 	_social_graph.set_replay(_frames, _names, _relationships)
-	# Day-plans pop-up: same by-reference hand-off, so live frames flow into
-	# the actual ribbons as they arrive (planned is known from the meta now).
-	_day_plans.set_replay(_frames, _names, _persona_detail)
 	_hud_source.set_cast(_names)
 	_update_clock()
 
@@ -1425,19 +1495,24 @@ func _spawn_agent(name: String, index: int) -> void:
 	bubble.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	bubble.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	bubble.custom_minimum_size = Vector2(BUBBLE_WIDTH, 0)
-	# Centre it over the sprite and park it above the nameplate (which sits at
-	# -(foot_lift + half + 50) after the feet-anchor lift); it grows downward but the
-	# clip keeps it short.
-	bubble.position = Vector2(
-		-BUBBLE_WIDTH / 2.0, -(foot_lift + SPRITE_HALF_PX + 50.0 + BUBBLE_Y_OFFSET)
-	)
+	# Bottom-anchored just above the nameplate; _refresh_bubble re-anchors from the
+	# current line's measured height each time it's shown, so it grows upward.
+	_anchor_bubble(bubble, BUBBLE_BOTTOM_GAP)
 	bubble.visible = false
 	node.add_child(bubble)
+
+	# Click the bubble to expand it in place into the full conversation transcript
+	# (_on_bubble_input toggles _expanded[name]; _refresh_bubble renders it). A
+	# pointing-hand cursor advertises it. Clicking the SPRITE still tracks (its Area2D
+	# hit box is over the body, below this bubble), so the two gestures don't collide.
+	bubble.mouse_filter = Control.MOUSE_FILTER_STOP  # Label defaults to IGNORE; opt in to clicks
+	bubble.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	bubble.gui_input.connect(_on_bubble_input.bind(name))
 
 	# A wish "thought" marker (#622 ActionWish, surfaced #625): a distinct 💭
 	# bubble that flashes over the agent the moment they wish for an action the
 	# game doesn't have. Parked further above the nameplate than the dialogue
-	# bubble (WISH_BUBBLE_Y_OFFSET > BUBBLE_Y_OFFSET) so the two never overlap;
+	# bubble (WISH_BOTTOM_GAP > BUBBLE_BOTTOM_GAP) so the two never overlap;
 	# _update_agent_wish triggers it, _refresh_wish_bubble fades it.
 	var wish_bubble := Label.new()
 	wish_bubble.add_theme_font_size_override("font_size", BUBBLE_FONT_SIZE)
@@ -1446,9 +1521,7 @@ func _spawn_agent(name: String, index: int) -> void:
 	wish_bubble.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	wish_bubble.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	wish_bubble.custom_minimum_size = Vector2(BUBBLE_WIDTH, 0)
-	wish_bubble.position = Vector2(
-		-BUBBLE_WIDTH / 2.0, -(foot_lift + SPRITE_HALF_PX + 50.0 + WISH_BUBBLE_Y_OFFSET)
-	)
+	_anchor_bubble(wish_bubble, WISH_BOTTOM_GAP)
 	wish_bubble.visible = false
 	node.add_child(wish_bubble)
 
@@ -1465,9 +1538,12 @@ func _spawn_agent(name: String, index: int) -> void:
 	think.add_theme_constant_override("outline_size", 4)
 	think.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	think.custom_minimum_size = Vector2(BUBBLE_WIDTH, 0)
-	think.position = Vector2(
-		-BUBBLE_WIDTH / 2.0, -(SPRITE_HALF_PX + 50.0 + BUBBLE_Y_OFFSET + THINK_Y_EXTRA)
-	)
+	# Seed one line of text so its measured height is valid from the first anchor,
+	# then bottom-anchor like the others (this also picks up foot_lift, which the
+	# old fixed offset omitted). Its text is a single line always, so its height —
+	# and thus its bottom-anchored position — is stable while it animates.
+	think.text = "thinking"
+	_anchor_bubble(think, THINK_BOTTOM_GAP)
 	think.visible = false
 	think.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	node.add_child(think)
@@ -1553,6 +1629,23 @@ func _on_agent_input(
 	):
 		get_viewport().set_input_as_handled()
 		_panel.toggle_track(name)
+
+
+func _on_bubble_input(event: InputEvent, name: String) -> void:
+	# Left-click toggles this agent's bubble between the clipped one-line-at-a-time
+	# playback and the current line rendered in full (its whole utterance, in a box
+	# widened to fit — see _refresh_bubble). Either way the bubble still follows the
+	# dialogue: it hides on the partner's turns and when the exchange ends. No manual
+	# redraw needed: _process refreshes bubbles every frame, even while paused.
+	# Mark the click handled so it isn't also read as a map drag/pan.
+	if (
+		event is InputEventMouseButton
+		and event.pressed
+		and event.button_index == MOUSE_BUTTON_LEFT
+	):
+		get_viewport().set_input_as_handled()
+		_expanded[name] = not bool(_expanded.get(name, false))
+		_bubble_idx[name] = -1  # re-render next frame: the line switches clipped<->full
 
 
 func _tile_to_world(x: int, y: int) -> Vector2:
@@ -1701,15 +1794,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			# Toggle the social-graph pop-up (issue #252).
 			_toggle_social_graph()
 			get_viewport().set_input_as_handled()
-		KEY_T:
-			# Toggle the day-plans pop-up (issue #251).
-			_toggle_day_plans()
-			get_viewport().set_input_as_handled()
-		KEY_C:
-			# Capture the current campus view into the snapshot gallery (issue #253).
-			# _take_snapshot no-ops if a modal is open, so this is safe to fire always.
-			_take_snapshot()
-			get_viewport().set_input_as_handled()
+		# Snapshot capture (issue #253) is off for the release along with its sidebar
+		# button -- C would otherwise capture into a gallery with no way to open it.
+		# Re-enable together with agent_panel.gd's _capture_tools.
+#		KEY_C:
+#			# Capture the current campus view into the snapshot gallery (issue #253).
+#			# _take_snapshot no-ops if a modal is open, so this is safe to fire always.
+#			_take_snapshot()
+#			get_viewport().set_input_as_handled()
 		KEY_P:
 			# Toggle the State Details inspector for the tracked agent (issue #408) --
 			# unless the social graph is above it (layer 13 > 12): opening a modal
@@ -1720,13 +1812,15 @@ func _unhandled_input(event: InputEvent) -> void:
 			elif _tracked_name != "" and not _social_graph.visible:
 				_open_inspector(_tracked_name)
 				get_viewport().set_input_as_handled()
+		KEY_L:
+			# Toggle the right-docked dialogue-log panel (#963). A dock, not a
+			# modal: no backdrop, no Esc arm, playback keeps running behind it.
+			_toggle_dialogue_log()
+			get_viewport().set_input_as_handled()
 		KEY_ESCAPE:
 			# Close the topmost open modal first (their CanvasLayer stacking order:
-			# day plans 15 > gallery 14 > social graph 13 > inspector 12 > heatmap 11).
-			if _day_plans.visible:
-				_close_day_plans()
-				get_viewport().set_input_as_handled()
-			elif _gallery.visible:
+			# gallery 14 > social graph 13 > inspector 12 > heatmap 11).
+			if _gallery.visible:
 				_close_gallery()
 				get_viewport().set_input_as_handled()
 			elif _social_graph.visible:
@@ -1752,12 +1846,16 @@ func _unhandled_input(event: InputEvent) -> void:
 			elif _heatmap.visible:
 				_heatmap.cycle_view(-1 if event.keycode == KEY_LEFT else 1)
 				get_viewport().set_input_as_handled()
-		KEY_BRACKETLEFT:
-			_set_clip_marker(true)
-			get_viewport().set_input_as_handled()
-		KEY_BRACKETRIGHT:
-			_set_clip_marker(false)
-			get_viewport().set_input_as_handled()
+		# Clip in/out markers (issue #488) are off for the release with the Export
+		# buttons: set_clip_span still highlights the span on the timeline strip, so
+		# leaving these live would advertise an export that cannot be run.
+		# Re-enable together with agent_panel.gd's _capture_tools.
+#		KEY_BRACKETLEFT:
+#			_set_clip_marker(true)
+#			get_viewport().set_input_as_handled()
+#		KEY_BRACKETRIGHT:
+#			_set_clip_marker(false)
+#			get_viewport().set_input_as_handled()
 
 
 func _toggle_heatmap() -> void:
@@ -1815,27 +1913,47 @@ func _close_social_graph() -> void:
 	_camera.keyboard_enabled = not _heatmap.visible
 
 
-func _toggle_day_plans() -> void:
-	if _day_plans.visible:
-		_close_day_plans()
+func _toggle_dialogue_log() -> void:
+	if _dialogue_log.visible:
+		_close_dialogue_log()
 	else:
-		_open_day_plans()
+		_open_dialogue_log()
 
 
-func _open_day_plans() -> void:
-	# Show plans against progress up to the step on screen right now; playback
-	# keeps running behind the pop-up (it live-updates via _process). No
-	# camera-keyboard suppression: this pop-up has no arrow-key views.
+func _open_dialogue_log() -> void:
+	# Seed with everything said up to the step on screen right now; playback
+	# keeps appending behind it via _process. No camera-keyboard suppression:
+	# the dock has no arrow-key views (the wheel scrolls it because GUI input
+	# wins over _unhandled_input).
 	if not _frames.is_empty():
 		var last := maxi(_frames.size() - 1, 0)
 		var i := mini(int(_t / step_seconds), last)
-		_last_plan_step = i
-		_day_plans.show_up_to(i)
-	_day_plans.visible = true
+		_last_dialogue_step = i
+		_dialogue_log.set_rows(_dialogue_rows(i))
+	_dialogue_log.visible = true
 
 
-func _close_day_plans() -> void:
-	_day_plans.visible = false
+func _close_dialogue_log() -> void:
+	_dialogue_log.visible = false
+
+
+func _dialogue_rows(step: int) -> Array:
+	# Extract the history and stamp each line with the sim time its bubble
+	# fired. The viewer owns the pacing constant and the clock; the panel and
+	# the extractor stay pure.
+	var rows: Array = []
+	for e in DialogueLog.extract(_frames, _names, step, int(DIALOGUE_LINE_STEPS)):
+		# Clock time only (HH:MM) -- the full _format_sim_time date would eat
+		# most of the narrow header line, and the sidebar clock shows the date.
+		var dt: Dictionary = Time.get_datetime_dict_from_unix_time(
+			_start_unix + int(e["step"]) * _sec_per_step)
+		rows.append({
+			"time": "%02d:%02d" % [dt["hour"], dt["minute"]],
+			"speaker": e["speaker"],
+			"with": e.get("with", ""),
+			"line": e["line"],
+		})
+	return rows
 
 
 func _take_snapshot() -> void:
@@ -1843,7 +1961,7 @@ func _take_snapshot() -> void:
 	# open: its full-screen dim would darken the shot, and the C hotkey fires even when a
 	# modal's backdrop has swallowed the sidebar button.
 	if _heatmap.visible or _inspector.visible or _social_graph.visible \
-			or _gallery.visible or _day_plans.visible:
+			or _gallery.visible:
 		return
 	# Label it with the world time on screen right now (the sidebar clock's value).
 	var label := _format_sim_time(int(_t / step_seconds) * _sec_per_step)
@@ -2243,12 +2361,6 @@ func _process(delta: float) -> void:
 		_last_graph_step = i
 		_social_graph.show_up_to(i)
 
-	# Same for the day-plans pop-up: the actual ribbons + cursor advance as the
-	# playhead crosses each step while it's open.
-	if _day_plans.visible and i != _last_plan_step:
-		_last_plan_step = i
-		_day_plans.show_up_to(i)
-
 	# Keep the most-taken-actions panel current (issue #700): re-tally up to the
 	# new step whenever the playhead crosses into it, so counts grow as actions
 	# accrue and DROP when you scrub backward. Gated on .visible, which also skips
@@ -2256,6 +2368,14 @@ func _process(delta: float) -> void:
 	if _actions_hud.visible and i != _last_actions_step:
 		_last_actions_step = i
 		_actions_hud.set_rows(ActionTally.tally(_action_events, i, ACTIONS_TOP_N))
+
+	# Same for the dialogue-log panel (#963): re-extract up to the new step so
+	# lines appear as their bubbles fire and DROP when you scrub backward. On
+	# steady playback the panel appends just the tail (extract() output is
+	# prefix-stable), so the per-step UI cost stays tiny.
+	if _dialogue_log.visible and i != _last_dialogue_step:
+		_last_dialogue_step = i
+		_dialogue_log.set_rows(_dialogue_rows(i))
 
 	# Fan out co-located agents so stacked sprites stay visible (#560). Group by
 	# each agent's tile THIS step; the per-agent offset below is VIEW-ONLY -- it
@@ -2379,11 +2499,12 @@ func _update_agent_speech(name: String, frame: Dictionary, step: int) -> void:
 		var lines: Array = []
 		for pair in chat:
 			if pair is Array and (pair as Array).size() >= 2:
-				lines.append([String(pair[0]), _clip(String(pair[1]))])
+				lines.append([String(pair[0]), String(pair[1])])  # full text; collapsed view clips at render
 		_convo_lines[name] = lines
 		_convo_start[name] = float(step)
 		_convo_partner[name] = _other_speaker(chat, name)
 		_bubble_idx[name] = -1
+		_expanded[name] = false  # a new exchange starts collapsed, never inheriting a stale expansion
 	_last_chat[name] = chat
 
 
@@ -2408,34 +2529,73 @@ func _refresh_deciding(name: String) -> void:
 		return
 	var think: Label = _agents[name]["think"]
 	think.visible = _deciding_state.is_deciding(name)
+	if think.visible:
+		_anchor_bubble(think, THINK_BOTTOM_GAP)
+
+
+func _anchor_bubble(label: Label, gap: float) -> void:
+	# Pin `label`'s BOTTOM edge `gap` px above the sprite head so it grows upward
+	# as its wrapped text gets taller, never covering the sprite. foot_lift matches
+	# _spawn_agent (constant across agents); the head sits at -(foot_lift + SPRITE_HALF_PX).
+	# fit_to_text shrink-wraps the box to the current text first -- without it a
+	# collapsed bubble keeps the tall box of the expanded line it grew to (a Label
+	# never self-shrinks) -- and returns the recomputed height for the anchor.
+	var foot_lift := SPRITE_HALF_PX - float(_tile_px)
+	var bottom_y := -(foot_lift + SPRITE_HALF_PX + gap)
+	# Scale the box width to the amount of text so a long line reflows into a wider,
+	# shorter box instead of a tall column (capped at BUBBLE_MAX_WIDTH). Lines clipped
+	# to BUBBLE_MAX_CHARS stay at the min width, so normal playback never jitters --
+	# only the click-to-expand pin (the one text that exceeds the clip) actually widens.
+	var width := BubbleAnchor.width_for(
+		label.text.length(), BUBBLE_WIDTH, BUBBLE_MAX_WIDTH, BUBBLE_MAX_CHARS, BUBBLE_WIDE_AT)
+	label.custom_minimum_size = Vector2(width, 0.0)
+	# Center on the ACTUAL width (label.size.x after fit_to_text), not BUBBLE_WIDTH, or
+	# a widened bubble would render off-center from the sprite.
+	var height := BubbleAnchor.fit_to_text(label)
+	label.position = BubbleAnchor.top_left(label.size.x, bottom_y, height)
 
 
 func _refresh_bubble(name: String, fpos: float) -> void:
 	# Play this agent's conversation back one line at a time: show its bubble only
 	# during the slots where IT is the speaker (with that line's text), and hide it
 	# on the partner's turns and once the exchange is over -- so the dialogue reads
-	# as staggered turn-taking rather than both agents speaking at once.
+	# as staggered turn-taking rather than both agents speaking at once. A bubble
+	# clicked "expanded" follows this SAME timeline (it still vanishes on the partner's
+	# turn and at the end); expanding only renders the current line in full (the
+	# collapsed view clips it), at full opacity, in a box widened to fit.
 	var bubble: Label = _agents[name]["bubble"]
 	var lines: Array = _convo_lines.get(name, [])
 	if lines.is_empty():
+		_expanded[name] = false  # nothing to show; drop a stale expand flag
 		bubble.visible = false
 		return
+
+	bubble.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var elapsed := fpos - float(_convo_start.get(name, 0.0))
 	var total := float(lines.size()) * DIALOGUE_LINE_STEPS
 	if elapsed < 0.0 or elapsed >= total:
-		bubble.visible = false
+		bubble.visible = false  # exchange over -- expanded or not, the bubble disappears
 		return
 
 	var idx := int(elapsed / DIALOGUE_LINE_STEPS)  # whose turn it is right now
 	var pair: Array = lines[idx]
 	if String(pair[0]) != name:
-		bubble.visible = false  # the partner is speaking this turn
+		bubble.visible = false  # the partner is speaking this turn (an expanded bubble hides too)
 		return
 
+	# Set the text only when the shown line changes; _on_bubble_input clears _bubble_idx
+	# on a click so a toggle re-renders the SAME line clipped<->full. Expanded shows the
+	# whole utterance (collapsed clips at BUBBLE_MAX_CHARS); _anchor_bubble then fits the
+	# box to whichever it is.
+	var expanded := bool(_expanded.get(name, false))
 	if _bubble_idx.get(name, -1) != idx:
 		_bubble_idx[name] = idx
-		bubble.text = String(pair[1])
+		bubble.text = String(pair[1]) if expanded else _clip(String(pair[1]))
+	_anchor_bubble(bubble, BUBBLE_BOTTOM_GAP)  # re-fit width + height to the current text
 	bubble.visible = true
+	if expanded:
+		bubble.modulate.a = 1.0  # pinned open: full opacity, no fade, easy to read
+		return
 	# Ease in at the start of the line and out at its end, for a spoken beat.
 	var within := elapsed - float(idx) * DIALOGUE_LINE_STEPS
 	var fade_in := clampf(within, 0.0, 1.0)
@@ -2472,6 +2632,7 @@ func _refresh_wish_bubble(name: String, fpos: float) -> void:
 		bubble.visible = false
 		return
 	bubble.text = String(_wish_text.get(name, ""))
+	_anchor_bubble(bubble, WISH_BOTTOM_GAP)  # re-anchor for this wish's height
 	bubble.visible = true
 	var fade_in := clampf(elapsed / WISH_FADE_IN_STEPS, 0.0, 1.0)
 	var fade_out := clampf((WISH_FADE_STEPS - elapsed) / WISH_FADE_OUT_STEPS, 0.0, 1.0)

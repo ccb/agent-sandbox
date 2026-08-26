@@ -865,6 +865,10 @@ class LlmConfig:
     # to a model id. Roles not listed -- and calls with no role stamped --
     # use ``model``. None/empty disables tiering.
     models_by_role: dict[str, str] | None = None
+    # Thinking depth on models that support it: "low" | "medium" | "high" |
+    # "max". None (the default) sends no thinking config at all, leaving every
+    # existing run's request payload untouched. Anthropic-only.
+    effort: str | None = None
     max_output_tokens: int = 256
     max_context_tokens: int = 8000
     base_url: str | None = None  # e.g. Helicone proxy
@@ -973,6 +977,20 @@ class OpenAIClient:
             )
             return text
         except Exception as e:
+            # Degrading to None is the brain-outage contract, but the failure
+            # must stay countable (#745): land a zero-cost error row so a
+            # mid-run auth/quota/network outage reaches the ledger (and so the
+            # monitor and the live feed) instead of vanishing.
+            record_call(
+                getattr(self, "ledger", None),
+                getattr(self, "context", {}),
+                "openai",
+                getattr(self, "_model", "openai"),
+                None,
+                messages,
+                None,
+                error=f"{type(e).__name__}: {e}",
+            )
             if self._verbose:
                 print(f"OpenAI API error: {e}")
             return None
@@ -1037,6 +1055,17 @@ class OpenAIClient:
                 tool_choice=tool_choice,
             )
         except Exception as e:
+            # See chat() above: the failed call lands an error row (#745).
+            record_call(
+                getattr(self, "ledger", None),
+                getattr(self, "context", {}),
+                "openai",
+                getattr(self, "_model", "openai"),
+                None,
+                messages,
+                None,
+                error=f"{type(e).__name__}: {e}",
+            )
             if self._verbose:
                 print(f"OpenAI tool-call error: {e}")
             return None
@@ -1087,6 +1116,67 @@ class OpenAIClient:
 # LLM_MODEL / LlmConfig.model.
 _DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5"
 
+# Newer Claude models reject temperature/top_p/top_k outright (HTTP 400) --
+# prompting replaced sampling knobs as the way to steer them. Sending our
+# usual temperature to one of these fails *every* call, so drop it for them.
+_OMITS_SAMPLING_PARAMS = (
+    "claude-opus-4-7",
+    "claude-opus-4-8",
+    "claude-opus-5",
+    "claude-sonnet-5",
+    "claude-fable-5",
+    "claude-mythos-5",
+)
+
+# Adaptive thinking + effort exist only on Sonnet/Opus 4.6 and newer; Haiku 4.5
+# and older models reject both with a 400 ("adaptive thinking is not supported
+# on this model"). A tiered run (#368) can route one role's calls to such a
+# model while the run-level --effort stands, so the gate is per call, on the
+# model the call actually routes to.
+_SUPPORTS_ADAPTIVE_EFFORT = (
+    "claude-opus-4-6",
+    "claude-opus-4-7",
+    "claude-opus-4-8",
+    "claude-opus-5",
+    "claude-sonnet-4-6",
+    "claude-sonnet-5",
+    "claude-fable-5",
+    "claude-mythos-5",
+)
+
+# `max_tokens` caps thinking AND the visible reply together. Our call sites are
+# sized for a no-thinking reply (decide 128, reflect 400, plan 700), so a
+# thinking model would spend the whole budget reasoning and return no tool_use
+# block -- a silent dead decision. Floor it here rather than in all three call
+# sites; a ceiling is free, billing is on tokens actually generated.
+_THINKING_MIN_MAX_TOKENS = 4096
+
+
+def _omits_sampling_params(model: str) -> bool:
+    return str(model or "").startswith(_OMITS_SAMPLING_PARAMS)
+
+
+def _sampling_kwargs(client, model: str, max_tokens: int, temperature: float) -> dict:
+    """Request kwargs for output length, sampling, and thinking depth.
+
+    With no ``effort`` configured and an older model this is exactly what it
+    always was -- ``max_tokens`` + ``temperature`` -- so existing runs stay
+    byte-identical. ``effort`` turns on adaptive thinking: on current models
+    the fixed ``budget_tokens`` budget is gone and depth is an effort level
+    (``low``/``medium``/``high``/``max``) instead.
+    """
+    # getattr: adapters are also built via __new__ in tests, as elsewhere here.
+    effort = getattr(client, "_effort", None)
+    if effort and not str(model or "").startswith(_SUPPORTS_ADAPTIVE_EFFORT):
+        effort = None  # this call routed to a model that would 400 on it
+    if not (effort or _omits_sampling_params(model)):
+        return {"max_tokens": max_tokens, "temperature": temperature}
+    kwargs: dict = {"max_tokens": max(max_tokens, _THINKING_MIN_MAX_TOKENS)}
+    if effort:
+        kwargs["thinking"] = {"type": "adaptive"}
+        kwargs["output_config"] = {"effort": effort}
+    return kwargs
+
 
 class AnthropicClient:
     """Wraps the ``anthropic`` Python SDK (lazy-imported)."""
@@ -1112,6 +1202,7 @@ class AnthropicClient:
         self._models_by_role = (
             dict(config.models_by_role) if config.models_by_role else None
         )
+        self._effort = config.effort
         self._verbose = config.verbose
         self._max_retries = config.max_retries
         self._timeout = config.timeout_sec
@@ -1127,8 +1218,10 @@ class AnthropicClient:
         max_tokens: int = 256,
         temperature: float = 0.0,
     ) -> str | None:
+        # Outside the try: the error row below must name the model this call
+        # actually routed to (#368), not the adapter's base model.
+        model = _tiered_model(self)
         try:
-            model = _tiered_model(self)
             system_text, chat_messages = _split_anthropic_messages(messages)
 
             if self._verbose:
@@ -1137,8 +1230,7 @@ class AnthropicClient:
             kwargs = {
                 "model": model,
                 "messages": chat_messages,
-                "max_tokens": max_tokens,
-                "temperature": temperature,
+                **_sampling_kwargs(self, model, max_tokens, temperature),
             }
             if system_text:
                 kwargs["system"] = _cacheable_system(system_text)
@@ -1149,7 +1241,18 @@ class AnthropicClient:
                 provider="anthropic",
                 messages=messages,
             )
-            text = response.content[0].text
+            # First block carrying text, not content[0]: a thinking model puts
+            # its thinking block first (it has .thinking, not .text), and blind
+            # indexing would raise into the except below -- turning a perfectly
+            # good reply into a silent brain outage.
+            text = next(
+                (
+                    b.text
+                    for b in response.content
+                    if getattr(b, "text", None) is not None
+                ),
+                None,
+            )
             record_call(
                 getattr(self, "ledger", None),
                 getattr(self, "context", {}),
@@ -1162,6 +1265,20 @@ class AnthropicClient:
             )
             return text
         except Exception as e:
+            # Degrading to None is the brain-outage contract, but the failure
+            # must stay countable (#745): land a zero-cost error row so a
+            # mid-run auth/quota/network outage reaches the ledger (and so the
+            # monitor and the live feed) instead of vanishing.
+            record_call(
+                getattr(self, "ledger", None),
+                getattr(self, "context", {}),
+                "anthropic",
+                model,
+                None,
+                messages,
+                None,
+                error=f"{type(e).__name__}: {e}",
+            )
             if self._verbose:
                 print(f"Anthropic API error: {e}")
             return None
@@ -1174,8 +1291,9 @@ class AnthropicClient:
         max_tokens: int = 256,
         temperature: float = 0.0,
     ) -> "ToolCallResult | None":
+        # Outside the try: see chat() -- the error row names the routed model.
+        model = _tiered_model(self)
         try:
-            model = _tiered_model(self)
             anthropic_tools = [_to_anthropic_tool(t) for t in tools]
 
             def once(msgs):
@@ -1185,8 +1303,7 @@ class AnthropicClient:
                 kwargs = {
                     "model": model,
                     "messages": chat_messages,
-                    "max_tokens": max_tokens,
-                    "temperature": temperature,
+                    **_sampling_kwargs(self, model, max_tokens, temperature),
                     "tools": anthropic_tools,
                     "tool_choice": _anthropic_tool_choice(tool_choice),
                 }
@@ -1230,6 +1347,17 @@ class AnthropicClient:
                 tool_choice=tool_choice,
             )
         except Exception as e:
+            # See chat() above: the failed call lands an error row (#745).
+            record_call(
+                getattr(self, "ledger", None),
+                getattr(self, "context", {}),
+                "anthropic",
+                model,
+                None,
+                messages,
+                None,
+                error=f"{type(e).__name__}: {e}",
+            )
             if self._verbose:
                 print(f"Anthropic tool-call error: {e}")
             return None

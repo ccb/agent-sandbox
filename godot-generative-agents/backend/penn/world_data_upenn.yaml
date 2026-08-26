@@ -47,6 +47,30 @@
 # is the replay's persona order, so reordering changes the baked bytes (#640).
 cast: [diego, tanaka, sofia]
 
+# Public events (#795): announced happenings every resident could know about,
+# seeded into memory at t=0 under a real planner. This is the honest shared
+# anchor a model-authored day can converge on -- Tanaka is obliged to be here,
+# Diego's seeded relationship edge already says he sits in on her lectures, and
+# Sofia is curious about everything. Exactly one, deliberately: if the live A/B
+# run shows one anchor is not enough, a second is four more lines.
+events:
+- label: a guest lecture on gravitational waves
+  at: Irvine Auditorium
+  # A concrete clock time, not "this morning" (post-run review, #795): "this
+  # morning" gave both sides something to intend but nothing to aim at, so a
+  # live run settled Diego and Tanaka in Irvine with zero overlap -- both
+  # correctly *there for the lecture*, at times 78 minutes apart. 10:00 sits
+  # inside the acceptance run's window (SIM_START 08:00, 1200 steps of
+  # SEC_PER_STEP=10 -> 11:20, the window LLMPlanner._window_line states) and
+  # inside Tanaka's authored Irvine stop (800 steps from step 0 -> 08:00-10:13),
+  # so the anchor is reachable on both the run clock and her own schedule.
+  when: at 10:00
+  # attach_agents deliberately does not seed this announcement to the host
+  # (her own schedule already carries the commitment) -- so the time also has
+  # to live in her authored activity string (personas/tanaka.yaml) or she would
+  # never learn it while her guests do. See that file's comment for why.
+  host: Professor Tanaka
+
 locations:
 - name: Penn campus
   description: The streets and walks of Penn's campus, tying every corner together.
@@ -102,8 +126,12 @@ locations:
 #   "Houston Hall" location, so a stop that runs the murky-water commands must
 #   keep targeting "Houston Hall" itself.
 - name: Houston Hall — Reception Hall
-  description: The reception hall just inside Houston Hall's doors.
+  description: The reception hall just inside Houston Hall's doors, food counters along the wall.
   address: UPenn:Houston Hall:Reception Hall
+  # dining (#907): agents routed to this named room (rather than the
+  # building-level location) must find the same meals -- _furnish_meals
+  # stocks every dining-tagged location.
+  properties: [dining]
 - name: Houston Hall — Billiard Room
   description: The billiard room off the student union's main hall.
   address: UPenn:Houston Hall:Billiard Room

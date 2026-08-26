@@ -12,17 +12,18 @@
   background: #000;
   /* Pixel art: never smooth the campus tiles when the canvas is scaled. */
   image-rendering: pixelated;
-  /* The Godot engine (canvasResizePolicy: 2) sets the canvas to
-     `position:absolute; top:0; left:0` and sizes it to the whole window on every
-     resize. Pin it to the wrap (which fills the stage, below the header) and
-     force its display size to the wrap with !important so that engine-set inline
-     size can't make it overflow the stage or cover the nav bar. The drawing
-     buffer stays window-sized; the browser scales it into this box. */
+  /* canvasResizePolicy: 0 — the page owns both sizes: this box, and the drawing
+     buffer GodotCanvas.tsx keeps at this box's shape × devicePixelRatio, floored
+     at the 1920×1080 design base (#952; a ResizeObserver follows the wrap). The
+     two must stay the SAME shape — a uniform scale is fine, a letterbox is not:
+     the engine maps pointer input linearly across the element's rect
+     (GodotInput.computePosition), so any object-fit/letterbox correction here
+     desyncs clicks from pixels — the #942 offset. No !important needed either:
+     the engine's noResize branch never writes canvas CSS. */
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100% !important;
-  height: 100% !important;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 
 .status {
@@ -36,4 +37,33 @@
   text-align: center;
   max-width: 80%;
   pointer-events: none;
+}
+
+/* The status slot's other occupant: what a browser that can't run the export gets
+   instead of the engine (#957). Same place and colour as .status — it replaces the
+   "Starting…" that used to sit there forever — but this is the reader's content
+   rather than a progress note, so it takes real type, a measure, and (unlike
+   .status) its pointer events, for #880's link. */
+.blocked {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  max-width: min(34rem, 85%);
+  color: #cfd6e0;
+  font-size: 15px;
+  line-height: 1.6;
+  text-align: center;
+}
+.blocked p {
+  margin: 0 0 0.6em;
+}
+.blocked p:last-child {
+  margin-bottom: 0;
+}
+/* The feature list is diagnostic — for us if the deployed headers ever regress, not
+   something a visitor has to read. Present, quiet. */
+.blockedWhy {
+  color: #8a939f;
+  font-size: 12px;
 }

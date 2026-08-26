@@ -49,7 +49,7 @@ schedule:
   is_work: true
   steps: 300
 - place: Houston Hall
-  activity: closing down the kitchen for the night
+  activity: closing down the kitchen
   emoji: 🌙
   is_work: true
 

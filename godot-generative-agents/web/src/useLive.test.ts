@@ -60,6 +60,7 @@ const idle = (): LiveState => ({
   frame: null,
   calls: [],
   events: [],
+  wishes: [],
   deciding: {},
   lastFrameAt: null,
 });
@@ -166,6 +167,26 @@ describe("applyFeedRecords", () => {
     for (let i = 1; i <= 205; i++) s = applyFeedRecords(s, [gameEvent(i, `e${i}`)], 0);
     expect(s.events).toHaveLength(200);
     expect(s.events[0]).toMatchObject({ summary: "e6" }); // oldest 5 evicted
+  });
+
+  it("wishes survive event eviction in their own retention (#873)", () => {
+    // A real-LLM day logs thousands of game_events; an early wish must stay in
+    // the demand log (WishFeed's source) even after the shared 200-row event
+    // feed evicts it — the panel's count must never shrink mid-run.
+    let s = applyFeedRecords(idle(), [wish(1, "a bike rack")], 0);
+    for (let i = 2; i <= 260; i++) s = applyFeedRecords(s, [gameEvent(i, `e${i}`)], 0);
+    expect(s.events.some((e) => e.kind === "wish")).toBe(false); // gone from the shared feed
+    expect(s.wishes.map((w) => w.desired)).toEqual(["a bike rack"]); // still on the demand log
+  });
+
+  it("a reset drops the retained wishes with the dead run (#873)", () => {
+    const held = applyFeedRecords(idle(), [wish(1, "old run")], 0);
+    const s = applyFeedRecords(
+      held,
+      [{ cursor: 2, kind: "status", reason: "reset", step: 0 }, wish(3, "fresh")],
+      1,
+    );
+    expect(s.wishes.map((w) => w.desired)).toEqual(["fresh"]);
   });
 });
 
@@ -302,6 +323,7 @@ describe("followLive", () => {
   // mid-run (the restart tests rewind the cursor this way).
   let live: Record<string, unknown>;
   let events: Record<string, unknown>;
+  let usage: Record<string, unknown>;
   let stop: () => void = () => {};
   const setState = (up: (s: LiveState) => LiveState) => {
     state = up(state);
@@ -321,17 +343,14 @@ describe("followLive", () => {
       meta: null,
     };
     events = { latest_cursor: 9, oldest_cursor: null, events: [call(9, 9)] };
+    usage = { available: false };
     FakeWS.all = [];
     vi.stubGlobal("WebSocket", FakeWS);
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) => {
         fetched.push(url);
-        const body = url.endsWith("/live")
-          ? live
-          : url.endsWith("/usage")
-            ? { available: false }
-            : events;
+        const body = url.endsWith("/live") ? live : url.endsWith("/usage") ? usage : events;
         return { ok: true, json: async () => body };
       }),
     );
@@ -552,5 +571,98 @@ describe("followLive", () => {
     await vi.advanceTimersByTimeAsync(1000);
     expect(urls("/events?since=4")).toHaveLength(1); // re-anchored at the handshake's cursor
     expect(state.calls.map((c) => c.call_no)).toEqual([2]); // old log cleared, new rows flow
+  });
+
+  const social = (over: Record<string, unknown> = {}) => ({
+    co_settled_pair_steps: 0,
+    by_pair: {},
+    conversations: 0,
+    counted: true,
+    resumed: false,
+    ...over,
+  });
+
+  it("folds run_usage off the frame feed — the run counters and social move with no second poll (#819)", async () => {
+    const sock = await start();
+    sock.open();
+    expect(state.usage).toEqual({ available: false }); // the handshake's one read
+    sock.push({
+      cursor: 2,
+      kind: "frame",
+      step: 4,
+      agents: {},
+      run_usage: {
+        run_calls: 3,
+        run_cost_usd: 0.5,
+        social: social({ co_settled_pair_steps: 12, by_pair: { "a + b": 12 }, conversations: 1 }),
+      },
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    const merged = state.usage as unknown as Record<string, unknown>;
+    expect(merged.run_calls).toBe(3); // run-scoped counters ride the frame too
+    expect(merged.social).toEqual(
+      social({ co_settled_pair_steps: 12, by_pair: { "a + b": 12 }, conversations: 1 }),
+    );
+    expect(merged.available).toBe(false); // handshake's lifetime fields survive the merge
+    expect(urls("/usage")).toHaveLength(1); // ONLY the handshake read — no poll loop
+  });
+
+  it("a reset status carrying zeroed run_usage clears the dead run's social at once (#823)", async () => {
+    const sock = await start();
+    sock.open();
+    sock.push({
+      cursor: 2,
+      kind: "frame",
+      step: 4,
+      agents: {},
+      run_usage: { social: social({ co_settled_pair_steps: 12, conversations: 1 }) },
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect((state.usage as unknown as Record<string, unknown>).social).toMatchObject({
+      co_settled_pair_steps: 12,
+    });
+    sock.push({
+      cursor: 3,
+      kind: "status",
+      reason: "reset",
+      step: 0,
+      run_usage: { social: social() }, // the fresh stepper's zeros
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect((state.usage as unknown as Record<string, unknown>).social).toMatchObject({
+      co_settled_pair_steps: 0,
+      conversations: 0,
+    });
+  });
+
+  it("a transient /usage failure on a reconnect keeps the last good snapshot (#823)", async () => {
+    const sock = await start();
+    sock.open();
+    sock.push({
+      cursor: 2,
+      kind: "frame",
+      step: 4,
+      agents: {},
+      run_usage: { social: social({ co_settled_pair_steps: 7 }) },
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    // Make the next /usage (the reconnect handshake's read) fail, then drop the
+    // socket so a reconnect handshake fires.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        fetched.push(url);
+        if (url.endsWith("/usage")) return { ok: false, status: 500, json: async () => ({}) };
+        const body = url.endsWith("/live") ? live : events;
+        return { ok: true, json: async () => body };
+      }),
+    );
+    sock.drop(); // opened then dropped → reconnect through a fresh handshake
+    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(0);
+    // The failed /usage read must NOT blank the snapshot the frame supplied.
+    expect((state.usage as unknown as Record<string, unknown> | null)?.social).toMatchObject({
+      co_settled_pair_steps: 7,
+    });
   });
 });

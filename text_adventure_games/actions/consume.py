@@ -56,7 +56,7 @@ class Eat(base.Action):
         """
         self.character.discard_item(self.item)
         self.character.set_property(Property.IS_HUNGRY, False)
-        
+
         description = "{name} {verb} the {food}.".format(
             name=self.character.name.capitalize(),
             verb=_conj(self.character, "eat", "eats"),
@@ -162,6 +162,82 @@ class Drink(base.Action):
                 verb=_conj(self.character, "are", "is"),
             )
             self.parser.ok(description)
+
+        self._apply_health_effects()
+
+    # -- the sickness arc (#464): bad drinks sicken, boiled water cures -----
+    #
+    # Lifted from the Penn boil-water port (#300), where the arc drink ->
+    # sicken -> boil -> recover is the measurable motivation signal for its
+    # agents. The two gate methods are the subclass seam: a game overrides
+    # them to change WHICH drinks sicken or cure without touching the effects,
+    # narration, or events (the Penn port keys sickening on raw water).
+
+    def _sickens(self) -> bool:
+        """Does this drink sicken the drinker? Contaminated liquids do."""
+        return bool(self.item.get_property(Property.IS_CONTAMINATED))
+
+    def _cures(self) -> bool:
+        """Does this drink cure a sick drinker? Only *boiled* water does.
+
+        Deliberately narrow (aking526's #464 review): a loose "any safe
+        beverage cures" default would mean, in any engine game, that juice or
+        beer clears dysentery -- surprising for the library students build on,
+        and it would erase the #301 signal of whether an agent *learned to
+        boil*. A game that wants a different cure (e.g. spring water) overrides
+        this one-line seam."""
+        return bool(self.item.get_property(Property.IS_BOILED))
+
+    def _apply_health_effects(self):
+        """Apply the sicken/cure pair after the drink itself resolves.
+
+        Skipped when the drink just killed the drinker (a poisonous item):
+        don't sicken or "recover" a corpse. The cure only fires on the
+        sick -> well transition, so a healthy drinker logs nothing.
+        """
+        if self.character.get_property(Property.IS_DEAD):
+            return
+        if self._sickens():
+            self._sicken()
+        elif self.character.get_property(Property.IS_SICK) and self._cures():
+            self._recover()
+
+    def _sicken(self):
+        """Sicken the drinker: set ``is_sick``, narrate it, and log a
+        ``sickness`` GameEvent (the signal an experiment/timeline watches)."""
+        self.character.set_property(Property.IS_SICK, True)
+        self.parser.ok(
+            f"{self.character.name} clutches their stomach -- " "that water was foul."
+        )
+        self.game.log_event(
+            self.character.name,
+            "sickness",
+            summary=(f"{self.character.name} got sick drinking {self.item.name}"),
+            payload={
+                "item": self.item.name,
+                "location": getattr(self.character.location, "name", None),
+            },
+        )
+
+    def _recover(self):
+        """The cure half: clear ``is_sick``, narrate the relief, and log a
+        ``recovery`` GameEvent."""
+        self.character.set_property(Property.IS_SICK, False)
+        self.parser.ok(
+            f"{self.character.name} drinks deep -- the clean "
+            "water settles their stomach, and the sickness passes."
+        )
+        self.game.log_event(
+            self.character.name,
+            "recovery",
+            summary=(
+                f"{self.character.name} recovered after drinking {self.item.name}"
+            ),
+            payload={
+                "item": self.item.name,
+                "location": getattr(self.character.location, "name", None),
+            },
+        )
 
 
 class Light(base.Action):

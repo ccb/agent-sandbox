@@ -135,7 +135,7 @@ scene reads (the same split as the upstream Phaser replay):
 uv run python godot-generative-agents/backend/penn/generate_penn_replay.py
 
 # 2. Watch it:
-/Applications/Godot.app/Contents/MacOS/Godot --path . res://scenes/viewer.tscn
+/Applications/Godot.app/Contents/MacOS/Godot --path godot res://scenes/viewer.tscn
 ```
 
 **Boil-water demo (#592).** For a short, self-contained view of the
@@ -169,12 +169,51 @@ and more-recent conversations, and `←`/`→` flips to the authored t=0 **seed
 relationships** (the `relationships:` blocks in `backend/penn/personas/*.yaml`) so you can
 compare who *started out* knowing whom against who actually met during the day.
 
-You can also **snapshot the campus** as it plays (issue #253): the sidebar's camera
-button (or `C`) grabs the current view — UI chrome hidden, so it's the bare
-campus + agents — and stamps it with the world time. The stacked-photos button opens
-a **gallery** of every snapshot taken this session, each captioned with its timestamp;
-click one to enlarge it (`←`/`→` to browse, `Esc` to close). Snapshots live in memory
-for the session — saving them to disk is a separate follow-up.
+**Snapshots and clip export are off in this build.** The campus-snapshot button and
+its gallery (issue #253) and the GIF/MP4 clip export (issues #488/#548) are built but
+hidden — the sidebar rows all live in a hidden container in `scripts/agent_panel.gd`
+(`_capture_tools`), and the `C` / `[` / `]` shortcuts are commented out in
+`scripts/viewer.gd`. The scripts, exporters and their tests are all still in the tree,
+so switching the feature back on is one deleted line plus those shortcuts.
+(`scripts/snapshot.gd` is unrelated and still works — it's the headless dev utility
+for screenshotting a scene, not a viewer feature.)
+
+**Analyzing a saved run offline.** `tools/analyze_run.py` (promoted from a
+batch-2 scratch script, #795) summarises one `runs/<id>/` directory: verbs,
+`talk_to` share, conversations, co-settled pair-steps (two agents settled
+within earshot of each other, with a per-pair breakdown), and how the agents
+moved — longest unbroken walk, who was still walking when the run ended, and
+every arrival that departed again:
+
+```bash
+uv run python godot-generative-agents/tools/analyze_run.py <run-id>
+uv run python godot-generative-agents/tools/analyze_run.py <run-id> --json
+uv run python godot-generative-agents/tools/analyze_run.py --self-check
+```
+
+Co-settled prefers the count `run.yaml`'s `result:` block already carries
+(the backend's own tally) and only falls back to approximating it from
+`frames.jsonl` for runs saved before that counter existed — frames alone
+can't tell settled from merely-idle, so the fallback can over-report. Either
+way the output states which source it used. Like the sibling
+`most_common_actions.py` / `most_wanted_actions.py`, it's stdlib-only and
+reads a run without importing the engine, so it stays runnable against an
+archived run long after the code that wrote it has moved on.
+
+**Turn-arounds are reported as two numbers, not one (#850).** An arrival that
+departs again is either an agent hopping between a building and its own
+sub-places (#849) or one abandoning a real cross-campus leg (#826), and a fix
+to either moves a combined count in either direction — #760 batch 5 measured
+17 of its baseline's 20 as a single agent oscillating inside one building. The
+split compares the *building segment of the destination address*
+(`UPenn:Van Pelt Library:Moelis Family Grand Reading Room`), never the display
+name: `Van Pelt — Moelis Reading Room` shares no prefix with its own
+building's name, `Van Pelt Library`, and reducing names is how the first
+published split was wrong. Each cross-building event carries
+`abandoned_minutes` — how long the agent had been walking the leg it gave up
+on — which is #826's acceptance measure. Minutes come from `manifest.json`'s
+`sec_per_step`/`start`; with no manifest the tool assumes 10 s/step and says
+so on the `walking` line.
 
 ### Live mode — follow a running sim (issue #263)
 
@@ -206,6 +245,14 @@ into **Run a live simulation**, and press **Connect**. The menu probes `GET /liv
 first, so a wrong URL or a backend with no live loop is reported right there instead
 of the viewer silently retrying. (`SIM_API_URL` / `SIM_API_TOKEN`, when set, prefill
 that form.)
+
+Connecting to a backend that is **paused at tick zero** (the default under
+`--brain llm`, or any brain with `--start-paused`) doesn't drop you straight
+into the viewer: it opens the **setup scene** (#733) first — pick the cast from
+the persona library, the planner/model/effort, the day length, and the
+retrieval/perception/conversation knobs, then press **Start** (`POST /config` →
+`POST /resume`). A backend already running skips the setup scene and the viewer
+follows the sim directly.
 
 On boot the viewer does one `GET /live` handshake (world meta → spawn the cast),
 one `GET /events?since=0` backfill (history so far → jump to the live head),
@@ -242,8 +289,14 @@ Claude Haiku (`claude-haiku-4-5`) on every model call** — each agent's
 travel/perform decisions, every line of dialogue when the routing brings two
 agents within perception range (the scripted `meetings:` dialogue stands down;
 what you see is the model's own words), and the periodic reflection passes.
-The daily itinerary stays on the authored schedules for now (a Penn-aware LLM
-planner is follow-up work).
+The daily itinerary is the model's too: since #787 `--plan` defaults to `auto`,
+which under a paying brain means `LLMPlanner` (#397) authors each agent's day
+at attach — so the plan is something the agent can also *revise* when the day
+turns, which the authored schedule never could. Pass `--plan schedule` to force
+the hand-authored days back; their stop windows are tuned so agents converge for
+the scripted rendezvous, which a free-play generated day does not guarantee.
+The mock and scripted brains are unaffected (no client to plan with), so the
+bundled bake and every offline replay stay byte-identical.
 
 ```bash
 # One-time: the llm extra alongside server (installs the anthropic SDK):
@@ -259,7 +312,10 @@ SIM_API_URL=http://127.0.0.1:8080 ./godot-generative-agents/run.sh
 ```
 
 Key hygiene: only `ANTHROPIC_API_KEY` is ever read — never `LLM_PROVIDER` /
-`LLM_API_KEY` / `OPENAI_API_KEY` — and the server refuses to start without it
+`LLM_API_KEY` / `OPENAI_API_KEY` (`LLM_PROVIDER=mock` in the bake examples
+above belongs to `generate_penn_replay.py`, which routes through the engine's
+provider-agnostic client; `serve_penn.py` never reads it) — and the server
+refuses to start without it
 (or with a non-Anthropic `provider:` in the config) rather than serving a day
 of silently failing calls. The key is also **verified at boot** with one free
 models-list request: an *invalid* key (typo, placeholder, revoked) aborts with
@@ -363,13 +419,21 @@ Engine `GameEvent`s (e.g. the boil-water `sickness` event) ride the same feed
 as `game_event` records (#467); the HUD's generic rows currently render only
 `text`-bearing records, so surfacing these on-screen is #302/#264 follow-up.
 
-**Cost & safety.** A full 3-agent 1200-step day is ≈ 55–60 Haiku calls ≈
-**$0.10** (the per-call-site arithmetic is in
-[`../docs/design/agent-llm-interface.md`](../docs/design/agent-llm-interface.md),
-along with the exact tool schemas and prompts the model gets). The config's
+**Cost & safety.** Measured, not estimated (#921 — the sweep lives in
+[`runs/cost-scaling/README.md`](runs/cost-scaling/README.md)): under the
+showcase recipe (Sonnet 5 on `decide`/`plan`/`reflect`/`outcome`, Haiku 4.5 on
+the rest, effort medium, cognition tools on) a 5-agent 12-sim-hour day costs
+**$5.4–6.8 per run**, scaling ≈ linearly with duration (~$0.49/sim-hour:
+$1.38 / $2.96 / $5.86 for 3 h / 6 h / 12 h) and with cast size past three
+agents ($0.52 / $3.16 / $5.86 / $8.57 for 1 / 3 / 5 / 7). The exact tool
+schemas and prompts the model gets are in
+[`../docs/design/agent-llm-interface.md`](../docs/design/agent-llm-interface.md)
+(its per-call-site cost arithmetic is the stale pre-tiering estimate — trust
+the measured sweep). The config's
 `max_cost_usd` (default $5) is a hard kill-switch: the moment cumulative spend
 reaches it the day ends — the live loop pauses and the run monitor's budget
-row shows **TRIPPED**. Two operational notes on latency (#366): under
+row shows **TRIPPED**. (Note the numbers above: a full 5-agent showcase day
+overshoots the default — raise it deliberately, or run a shorter day.) Two operational notes on latency (#366): under
 `--brain llm` the agents at a decision point decide **concurrently** (one
 worker per persona by default; `--decide-workers N` caps how many model calls
 run at once — tune it under your provider's rate limit — and `0` restores the
@@ -439,3 +503,12 @@ Two design docs in the repo sketch the road from here to a fully-wired Godot fro
   `Cute_Fantasy_Free/` with its original `read_me.txt`. Per that license it is **free
   for non-commercial use and may be modified, but not redistributed or resold**. It
   lives here only for this private research repo.
+- **UI chrome** — the **Cute Fantasy UI / Dungeons** pack by Kenmi, kept under
+  `Cute_Fantasy_UI/` with its original `read_me.txt`. `theme/cute_fantasy_ui.tres`
+  9-slices the parchment frames, buttons, sliders and ribbons out of its sheets.
+  Same terms as above: usable and modifiable, **not redistributable or resalable**,
+  here only for this private research repo.
+- **Fonts** — none bundled. All UI text uses Godot's built-in font (Open Sans). The
+  UI pack's 5×9 pixel font was never wired up (it read poorly at the small sizes the
+  panels use, and was ASCII-only) and was deleted; `theme/cute_fantasy_ui.tres`
+  deliberately sets no `default_font`.

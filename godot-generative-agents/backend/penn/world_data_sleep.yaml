@@ -1,0 +1,89 @@
+# A two-persona sleep-interrupt DEMO world (regression demo for 45df120b,
+# c12b3723, 44729cf5): one resident sleeps through the night in Houston
+# Hall's Reading Room (the campus's only `sleepable`-tagged spot, #931), while
+# a passerby's evening errand brings them into the same room during the sleep
+# window. `generate_penn_replay.py --scenario sleep` loads this instead of
+# the full cast.
+#
+# The bugs this replays past, all fixed on this branch:
+#   - maybe_converse could still pair a sleeping resident into a conversation
+#     (45df120b) -- Priya must never get paired with Ben while IS_SLEEPING.
+#   - maybe_react could still hand a walking passerby a "greet" for a
+#     sleeping resident (44729cf5) -- Ben must never greet Priya while she's
+#     asleep, even standing right next to her.
+#   - needs_interrupt_seen stayed frozen through sleep, suppressing a real
+#     interrupt on waking (c12b3723) -- covered by this same world under
+#     `--reactive-sleep` (see test_sleep_demo.py), not the plain bake.
+
+personas:
+- name: Priya Nair
+  # `home` is the sleepable Reading Room itself, so the arc is self-contained:
+  # no travel needed to reach the one place she can actually sleep.
+  home: Houston Hall — Reading Room
+  persona: I am Priya Nair, 21, a Penn junior who does her best studying after
+    midnight and always falls asleep in the same reading-room armchair.
+  emoji: 📖
+  start_tile:
+  - 148
+  - 230
+  schedule:
+  # Stays put long enough for accrue_tiredness to cross the sleepy threshold
+  # on its own (~240 ticks, the same 1-in-game-hour pacing as hunger) before
+  # she ever tries to sleep -- so the "sleep" command's IS_SLEEPY precondition
+  # is genuinely satisfied by the time it's issued, not scripted around it.
+  - place: Houston Hall — Reading Room
+    activity: studying late into the night
+    emoji: 📖
+    steps: 248
+  - place: Houston Hall — Reading Room
+    activity: turning in for the night
+    emoji: 😴
+    steps: 80
+    commands:
+    - sleep
+  - place: Houston Hall — Reading Room
+    activity: feeling rested after the nap
+    emoji: 🙂
+    steps: null
+
+- name: Ben Ochoa
+  # Home is the Houston Hall lobby -- a real ~96-tile walk from the Reading
+  # Room (the two rooms share a building but not a hub-graph edge), so his
+  # errand there is a genuine cross-room commute, not a teleport.
+  home: Houston Hall
+  persona: I am Ben Ochoa, 20, a Penn sophomore who likes browsing the
+    Reading Room's shelves for something to read before bed.
+  emoji: 🎒
+  start_tile:
+  - 80
+  - 248
+  schedule:
+  # Stays in the lobby, then sets off for the Reading Room -- timed (by the
+  # ~96-tick walk) to arrive well inside Priya's sleep window (she starts
+  # sleeping at step ~248) and linger past her expected wake, so the bake
+  # shows both "still asleep" and "just woke up" with Ben present.
+  - place: Houston Hall
+    activity: flipping through a magazine in the lobby
+    emoji: 🎒
+    steps: 174
+  - place: Houston Hall — Reading Room
+    activity: browsing the shelves for something to read
+    emoji: 🎒
+    steps: 80
+  - place: Houston Hall
+    activity: back in the lobby
+    emoji: 🎒
+    steps: null
+
+locations:
+- name: Penn campus
+  description: The streets and walks of Penn's campus, tying every corner together.
+  address: null
+  hub: true
+- name: Houston Hall
+  description: The student union -- the nation's first -- with dining and lounges.
+  address: UPenn:Houston Hall:lobby
+- name: Houston Hall — Reading Room
+  description: Houston Hall's reading room, armchairs and newspapers.
+  address: UPenn:Houston Hall:Reading Room
+  properties: [sleepable]
