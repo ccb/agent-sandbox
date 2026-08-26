@@ -1,0 +1,58 @@
+# Evelyn Marsh -- visiting alum, back for her 25th reunion. Library entry
+# (#762 round 3): NOT in the default cast. Coverage: a second VISITOR type
+# (the library has a prospective student, casey; this is the other end of the
+# pipeline) with a nostalgia criss-cross day. Owns the reunion edge + meeting
+# with her old coach Angela Rooks (also new this round); both fire only when
+# Angela is also cast.
+name: Evelyn Marsh
+home: Penn campus
+persona: I am Evelyn Marsh, 47, Class of 2001, back on campus for my 25th
+  reunion. I ran the 400 meter here and wrote a thesis in Van Pelt, and I keep
+  stopping mid-sentence because a building has moved. Buildings do not move.
+emoji: 🎗️
+# Spawns on the walk outside College Hall, where the nostalgia tour begins.
+start_tile:
+- 114
+- 217
+schedule:
+- place: College Hall
+  activity: retracing the route to her first-ever classroom
+  emoji: 🎗️
+  steps: 140
+- place: Houston Hall
+  activity: union coffee that tastes exactly like 1999
+  emoji: ☕
+  steps: 150
+- place: Van Pelt — Moelis Reading Room
+  activity: finding her old thesis carrel by muscle memory
+  emoji: 📖
+  steps: 90
+- place: Penn campus
+  activity: a slow lap of College Green with her camera out
+  emoji: 📷
+  steps: 60
+- place: Irvine Auditorium
+  activity: sitting in on a guest lecture for old times' sake
+  emoji: 🎓
+
+relationships:
+- a: Evelyn Marsh
+  b: Angela Rooks
+  kind: coach & former athlete
+  closeness: 3
+  description: Angela coached Evelyn's 4x400 relay in the late nineties and
+    they have kept in touch through alumni meets ever since; every reunion
+    weekend starts with a Houston Hall catch-up.
+
+meetings:
+# Proximity-honest: Angela's 240-step Houston Hall stop opens around step 70
+# and Evelyn arrives from College Hall around step 160 -- a shared window of
+# roughly 150 steps, plenty for four ~14-step lines.
+- label: A reunion catch-up over union coffee (Houston Hall)
+  at: Houston Hall
+  participants: [Evelyn Marsh, Angela Rooks]
+  dialogue:
+  - [Evelyn Marsh, "Coach Rooks! Still timing your own coffee breaks?"]
+  - [Angela Rooks, "Marsh! Twenty-five years and you still walk like you're late for warm-ups."]
+  - [Evelyn Marsh, "Some habits stick. How is the relay squad looking this spring?"]
+  - [Angela Rooks, "Fast. Come by the green later and see for yourself."]

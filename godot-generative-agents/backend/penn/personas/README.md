@@ -50,6 +50,12 @@ lists every persona here with `in_default_cast`, and `POST /config {"cast":
 | `fatima` | Fatima Al-Rashid, orientation buddy | no (#762) |
 | `wesley` | Wesley Okafor, night-owl CS master's (one-room day; stranger at t=0) | no (#762) |
 | `dana` | Dana Ellsworth, varsity rower (early riser; criss-crosses; knows `imani`) | no (#762) |
+| `benny` | Benny Tran, coffee-cart vendor (early riser; barely leaves the walks; cart regular `terrence`) | no (#762) |
+| `terrence` | Terrence Boyd, public-safety officer (overnight shift's end; patrols all six buildings; knows `gus`) | no (#762) |
+| `angela` | Angela Rooks, track & field sprints coach (athletics staff; coaches `imani`) | no (#762) |
+| `evelyn` | Evelyn Marsh, visiting alum at her 25th reunion (nostalgia criss-cross; old athlete of `angela`) | no (#762) |
+| `amara` | Amara Diallo, visiting astrophysicist (jet-lagged; in town for `tanaka`'s 10:00 lecture) | no (#762) |
+| `vera` | Vera Kovacs, Irvine Auditorium AV technician (never leaves Irvine; stranger at t=0) | no (#762) |
 
 The #762 entries grow the library across roles (staff, librarian, athlete,
 visitor, postdoc, admin, musicians, journalist, TA) and schedule shapes
@@ -59,7 +65,13 @@ second round adds interaction *threads*: a 3-person friend cluster, competitive
 rivals, a dating couple, a just-met roommate pair (closeness 1, meant to warm
 up live, #582), siblings, a TA/tutee pair, and cross-links into the existing
 cast (`ravi`→`tanaka`, `tessa`→`ellis`, `dana`→`imani`) that fire only when
-both ends are cast. The full-library sweep in
+both ends are cast. The third round fills the campus-*workforce* gap around
+the mostly-student cast: a vendor, a public-safety officer, a coach, an AV
+technician, plus two new visitor types (a reunion alum and a visiting
+scholar), threaded the same way — two new-pair threads with scripted
+meetings (`benny`↔`terrence` at the cart, `evelyn`↔`angela` in the union)
+and cross-links into earlier rounds (`terrence`→`gus`, `angela`→`imani`,
+`amara`→`tanaka` with a pre-lecture meeting). The full-library sweep in
 `tests/test_persona_library_762.py` validates every file here: it must build,
 its places must resolve, and its activities must re-parse as `perform` (see the
 wording rules below).

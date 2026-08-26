@@ -73,6 +73,14 @@ def test_library_personas_catalog():
         "victor",
         "wesley",
         "yuki",
+        # ... plus the #762 library growth, round 3 (campus workforce +
+        # visitors; also all parked)
+        "amara",
+        "angela",
+        "benny",
+        "evelyn",
+        "terrence",
+        "vera",
     }
     by_id = {e["id"]: e for e in entries}
     assert by_id["diego"]["name"] == "Diego Torres"

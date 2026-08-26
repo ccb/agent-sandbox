@@ -1,0 +1,55 @@
+# Benny Tran -- coffee-cart vendor. Library entry (#762 round 3): NOT in the
+# default cast. Coverage: a non-university STAFF role (campus vendor) with an
+# EARLY-RISER day that barely leaves the walks -- the cart IS his post, so his
+# whole day is the outdoor hub plus one Houston Hall restock run. Owns the
+# staff-thread edge + meeting with Terrence Boyd (the public-safety officer
+# whose overnight shift ends at the cart); both fire only when Terrence is
+# also cast.
+name: Benny Tran
+home: Penn campus
+persona: I am Benny Tran, 52, and I have run a coffee cart on Penn's walks for
+  eighteen years. The cart was set up before sunrise, I know half the campus by
+  their usual order, and I never forget a face.
+emoji: ☕
+# Spawns at the cart's pitch on the College Green walks -- stop 1 IS the hub,
+# so he performs at his spawn tile (right next to Terrence's) from step 0.
+start_tile:
+- 122
+- 198
+schedule:
+- place: Penn campus
+  activity: serving the sunrise coffee rush at the cart
+  emoji: ☕
+  steps: 300
+- place: Houston Hall
+  activity: restocking cups and beans from the loading dock
+  emoji: 📦
+  steps: 60
+- place: Penn campus
+  activity: back at the cart for the mid-morning rush
+  emoji: ☕
+  steps: 300
+- place: Penn campus
+  activity: wiping down the cart and counting the till
+  emoji: 🧾
+
+relationships:
+- a: Benny Tran
+  b: Terrence Boyd
+  kind: vendor & regular
+  closeness: 3
+  description: Terrence's overnight patrol has ended at Benny's cart nearly
+    every morning for a decade; Benny has the double espresso going before the
+    uniform is halfway across the green.
+
+meetings:
+# Proximity-honest: both spawn on adjacent hub tiles and both open the day at
+# the hub -- Benny's 300-step cart stop wraps Terrence's whole 60-step first
+# stop, and three lines (~14 steps each) fit inside it.
+- label: The end-of-shift espresso (College Green)
+  at: Penn campus
+  participants: [Benny Tran, Terrence Boyd]
+  dialogue:
+  - [Benny Tran, "There he is, right on time. The usual, officer?"]
+  - [Terrence Boyd, "Double shot, Benny. Long night -- the Meyerson alarm had me walking laps."]
+  - [Benny Tran, "On the house today. Go home and sleep."]
