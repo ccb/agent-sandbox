@@ -121,8 +121,8 @@ export function ImplementationSection() {
             <p>Three things follow from that declaration.</p>
             <p>
               <strong>The menu is curated by place.</strong> Declaring an affordance means the verb
-              is offered only where something carrying that property is in scope. Of the eleven
-              verbs this cast declares, seven survive the affordance check at the book stacks;{" "}
+              is offered only where something carrying that property is in scope. Of the twelve
+              verbs this cast declares, eight survive the affordance check at the book stacks;{" "}
               <em>study</em>, <em>eat</em>, <em>activate</em> and <em>deactivate</em> are simply
               absent, because nothing there affords them.
             </p>

@@ -8,7 +8,8 @@ description: >
   as a settled-wait #614), agent-initiated talk_to (with an optional topic,
   #614), studying or eating (#615), checking out or reading a library book
   (#616, the read phrasing quoting the book's content when there is any),
-  or a quoted fallback for any other command.
+  taking notes on something observed (#846), or a quoted fallback for any
+  other command.
   A failed/blocked attempt (#636) is recorded instead as
   I tried to "<command>" but it didn't work: <reason> -- the failed flag
   overrides the verb-selected phrasing. The reason clause is dropped when
@@ -24,7 +25,7 @@ description: >
 inputs:
   verb:
     type: string
-    description: The command verb -- "travel", "perform", "drink", "boil", "wait", "talk_to", "study", "eat", "check_out_book", "read", or anything else.
+    description: The command verb -- "travel", "perform", "drink", "boil", "wait", "talk_to", "study", "eat", "check_out_book", "read", "take_notes", or anything else.
   person:
     type: string
     description: Who was talked to (used when verb == "talk_to").
@@ -48,7 +49,7 @@ inputs:
     description: Whether this drink just cured the persona's sickness (verb == "drink", #300).
   topic:
     type: string
-    description: What was brought up (verb == "talk_to") or studied (verb == "study"); may be empty.
+    description: What was brought up (verb == "talk_to"), studied (verb == "study"), or noted (verb == "take_notes", #846); may be empty.
   minutes:
     type: integer
     description: How many in-game minutes the study took (verb == "study", #615).
@@ -106,6 +107,10 @@ I went to talk to {{ person }}.
 I studied {{ topic }} for {{ minutes }} minutes.
 {%- elif verb == "study" -%}
 I studied for {{ minutes }} minutes.
+{%- elif verb == "take_notes" and topic -%}
+I took notes on {{ topic }}.
+{%- elif verb == "take_notes" -%}
+I took some notes.
 {%- elif verb == "eat" -%}
 I ate the {{ item }}.
 {%- elif verb == "check_out_book" -%}
