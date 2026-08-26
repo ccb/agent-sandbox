@@ -6,6 +6,9 @@ persona: I am Maya Chen, 19, a sophomore at Penn studying biology. I am curious,
   diligent, and a little caffeine-dependent. I spend most of my day studying in
   Van Pelt Library between classes.
 emoji: 📚
+# Peer-tutoring job (job-expansion pass): paid per tick actually spent on her
+# own last stop below (is_work: true) -- her morning with Priya is untouched.
+wage_rate: 0.03
 start_tile:
 - 164
 - 57
@@ -35,8 +38,9 @@ schedule:
   emoji: 📖
   steps: 20
 - place: Van Pelt — Study Booths
-  activity: reviewing her notes before tomorrow
+  activity: tutoring a freshman through the reading before tomorrow
   emoji: 📖
+  is_work: true
 
 relationships:
 - a: Maya Chen

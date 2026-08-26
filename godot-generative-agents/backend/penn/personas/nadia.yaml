@@ -9,6 +9,10 @@ persona: I am Dr. Nadia Osei, 31, a physics postdoc in Professor Tanaka's group.
   I live in my data, distrust any result that looks too clean, and do my best
   arguing at a blackboard with chalk on my hands.
 emoji: 🧪
+# Wage (#931 follow-up): paid per tick actually spent on a work stop below --
+# every stop of her day is research, including the working lunch, so every
+# stop is tagged.
+wage_rate: 0.08
 # Starts on the walk outside Van Pelt's east door: her morning belongs to the
 # Digital Scholarship Exchange and last night's detector run.
 start_tile:
@@ -18,18 +22,22 @@ schedule:
 - place: Van Pelt — Digital Scholarship Exchange
   activity: cleaning up detector data from an overnight run
   emoji: 🧪
+  is_work: true
   steps: 180
 - place: Van Pelt — Moelis Reading Room
   activity: combing the literature for a stray factor of two
   emoji: 📖
+  is_work: true
   steps: 80
 - place: Houston Hall
   activity: a working lunch over a stack of plots
   emoji: 🥪
+  is_work: true
   steps: 60
 - place: Williams Hall — Classroom A
   activity: working through the day's results at the blackboard
   emoji: 🧮
+  is_work: true
   # No `steps`: she holds the blackboard for the rest of the day. Professor
   # Tanaka's own last stop is this classroom (after her long Irvine window),
   # so when both are cast, Nadia is already mid-derivation when Tanaka

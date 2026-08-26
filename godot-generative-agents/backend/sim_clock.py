@@ -37,7 +37,7 @@ class SimClock:
     """
 
     start_dt: datetime.datetime
-    sec_per_step: int = 10
+    sec_per_step: int = 15
 
     def __post_init__(self):
         if self.sec_per_step <= 0:

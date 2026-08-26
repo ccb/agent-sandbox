@@ -108,13 +108,13 @@ def test_block_requires_a_clock_and_a_schedule():
     class Bare:  # an agent with no schedule attribute
         pass
 
-    assert decide_context_block(Bare(), 5, SimClock(START), 0) == ""
+    assert decide_context_block(Bare(), 5, SimClock(START, sec_per_step=10), 0) == ""
 
 
 def test_block_reads_the_clock_and_current_stop():
     _game, ada = _world()  # schedule steps=None -> no planned clause
     # Step 12 at 10 s/step = 08:02; stop_since=6 -> 6 steps = 1 min elapsed.
-    assert decide_context_block(ada.agent, 12, SimClock(START), 6) == (
+    assert decide_context_block(ada.agent, 12, SimClock(START, sec_per_step=10), 6) == (
         "Right now it is Monday 08:02 AM.\n"
         "Your plan's current stop: reading a novel at Cafe. "
         "This has been your current stop for 1 min."
@@ -131,7 +131,7 @@ def test_block_states_a_long_same_activity_hold():
     text = decide_context_block(
         ada.agent,
         606,
-        SimClock(START),
+        SimClock(START, sec_per_step=10),
         600,
         act_since=6,
         activity_text="reviewing problems while waiting for theo",
@@ -147,7 +147,7 @@ def test_block_names_the_no_show_person():
     text = decide_context_block(
         ada.agent,
         606,
-        SimClock(START),
+        SimClock(START, sec_per_step=10),
         600,
         act_since=6,
         activity_text="waiting for theo",
@@ -165,7 +165,7 @@ def test_short_holds_and_untracked_activities_stay_silent():
     below = decide_context_block(
         ada.agent,
         500,
-        SimClock(START),
+        SimClock(START, sec_per_step=10),
         0,
         act_since=0,
         activity_text="studying",
@@ -173,7 +173,9 @@ def test_short_holds_and_untracked_activities_stay_silent():
     )
     assert "doing exactly this" not in below
     # No act_since threaded (the bake, offline callers): clause never renders.
-    untracked = decide_context_block(ada.agent, 5000, SimClock(START), 0)
+    untracked = decide_context_block(
+        ada.agent, 5000, SimClock(START, sec_per_step=10), 0
+    )
     assert "doing exactly this" not in untracked
 
 
@@ -183,7 +185,9 @@ def test_walking_replaces_the_elapsed_clause(monkeypatch=None):
     # agent turned around 11 tiles from the door. Mid-walk toward the plan,
     # the honest sentence is how far from arrival you are.
     _game, ada = _world()
-    text = decide_context_block(ada.agent, 606, SimClock(START), 6, walking=12)
+    text = decide_context_block(
+        ada.agent, 606, SimClock(START, sec_per_step=10), 6, walking=12
+    )
     assert text.endswith("You are walking there now, about 12 min from arrival.")
     assert "current stop for" not in text
 
@@ -192,7 +196,7 @@ def test_walking_minutes_left_prices_only_the_on_plan_walk():
     from backend.run_simulation import _walking_minutes_left
 
     _game, ada = _world()  # scheduled destination: Cafe
-    clock = SimClock(START)
+    clock = SimClock(START, sec_per_step=10)
     st = {"path": [(0, i) for i in range(60)], "walk_target": "Cafe"}
     assert _walking_minutes_left(st, ada, clock) == 10  # 60 steps -> 10 min
     # A walk AWAY from the plan keeps the neglect semantics: no clause.
@@ -241,7 +245,7 @@ def test_travel_resets_the_905_stamp():
         order=["Ada"],
         world_map=_TwoTileWalk(),
         emoji={"Ada": "\U0001f4d6"},
-        clock=SimClock(START),
+        clock=SimClock(START, sec_per_step=10),
     )
     assert state["Ada"]["act_text"] is None
     assert state["Ada"]["walk_target"] == "Cafe"
@@ -292,7 +296,12 @@ def test_decide_prompt_states_the_hold():
     ada.set_property("activity", "waiting for the seminar to start")
 
     observe_and_decide(
-        game, ada, 606, clock=SimClock(START), stop_since=600, act_since=6
+        game,
+        ada,
+        606,
+        clock=SimClock(START, sec_per_step=10),
+        stop_since=600,
+        act_since=6,
     )
 
     user = brain.tool_calls_log[0]["messages"][-1]["content"]
@@ -306,7 +315,9 @@ def test_decide_prompt_carries_the_block_after_the_environment_text():
     brain = MockLlmClient(tool_calls_responses=[TRAVEL])
     game, ada = _world(llm_client=brain)
 
-    command = observe_and_decide(game, ada, 12, clock=SimClock(START), stop_since=6)
+    command = observe_and_decide(
+        game, ada, 12, clock=SimClock(START, sec_per_step=10), stop_since=6
+    )
 
     assert command == "travel to Cafe"
     user = brain.tool_calls_log[0]["messages"][-1]["content"]
@@ -339,7 +350,7 @@ def test_mock_decision_and_retrieval_unchanged_by_the_block():
     game1, ada1 = _world()
     plain = observe_and_decide(game1, ada1, 0)
     game2, ada2 = _world()
-    clocked = observe_and_decide(game2, ada2, 0, clock=SimClock(START))
+    clocked = observe_and_decide(game2, ada2, 0, clock=SimClock(START, sec_per_step=10))
 
     assert plain == clocked == "travel to Cafe"
     assert memories_for_frame(ada1.agent.last_retrieved) == memories_for_frame(
@@ -443,7 +454,7 @@ def test_step_restamps_stop_since_when_the_schedule_advances():
             "stop_since": 0,
         }
     }
-    clock = SimClock(START)
+    clock = SimClock(START, sec_per_step=10)
     common = dict(
         order=["Ada"], world_map=None, emoji={"Ada": "\U0001f4d6"}, clock=clock
     )
@@ -493,7 +504,7 @@ def test_arrival_restamps_stop_since_so_elapsed_excludes_the_walk():
         order=["Ada"],
         world_map=_TwoTileWalk(),
         emoji={"Ada": "\U0001f4d6"},
-        clock=SimClock(START),
+        clock=SimClock(START, sec_per_step=10),
     )
 
     step(game, chars, state, 0, **common)  # decides travel, walks 1st tile
@@ -559,7 +570,7 @@ def test_stop_since_survives_an_offplan_arrival():
         order=["Ada"],
         world_map=_TwoTileWalk(),
         emoji={"Ada": "\U0001f4d6"},
-        clock=SimClock(START),
+        clock=SimClock(START, sec_per_step=10),
     )
 
     step(game, chars, state, 0, **common)  # decides travel to Library, 1st tile
@@ -571,7 +582,10 @@ def test_stop_since_survives_an_offplan_arrival():
     # renders the elapsed clause instead of dropping it. 400 steps at 10 s/step
     # is 66 min, measured from the preserved stop_since of 0.
     assert "This has been your current stop for 66 min." in decide_context_block(
-        chars["Ada"].agent, 400, SimClock(START), state["Ada"]["stop_since"]
+        chars["Ada"].agent,
+        400,
+        SimClock(START, sec_per_step=10),
+        state["Ada"]["stop_since"],
     )
 
 
@@ -609,7 +623,7 @@ def test_stop_since_survives_a_completed_offplan_activity():
         order=["Ada"],
         world_map=None,
         emoji={"Ada": "\U0001f4d6"},
-        clock=SimClock(START),
+        clock=SimClock(START, sec_per_step=10),
     )
 
     step(game, chars, state, 400, **common)  # the pre-pass expires the deviation
@@ -727,7 +741,7 @@ def test_an_offplan_travel_drops_the_furniture_hint():
         order=["Ada"],
         world_map=walker,
         emoji={"Ada": "\U0001f4d6"},
-        clock=SimClock(START),
+        clock=SimClock(START, sec_per_step=10),
     )
 
     step(game, chars, state, 0, **common)  # off-plan: travels to the Library
@@ -759,7 +773,7 @@ def _held_agent():
 
 def test_a_held_stop_reports_itself_finished_and_names_the_next_one():
     agent = _held_agent()
-    clock = SimClock(START)
+    clock = SimClock(START, sec_per_step=10)
 
     # step 180 == 08:30, and the next stop is anchored at 10:00.
     assert decide_context_block(agent, 180, clock, stop_since=0, waiting=True) == (
@@ -773,7 +787,7 @@ def test_a_held_stop_reports_itself_finished_and_names_the_next_one():
 
 def test_a_passed_anchor_says_due_now_instead_of_a_future_time():
     agent = _held_agent()
-    clock = SimClock(START)
+    clock = SimClock(START, sec_per_step=10)
 
     # step 750 == 10:05: the anchor has passed, so a "starting at 10 AM" clause
     # would be a false time word (#812).
@@ -787,7 +801,7 @@ def test_a_passed_anchor_says_due_now_instead_of_a_future_time():
 
 def test_an_unheld_stop_still_renders_exactly_todays_elapsed_clause():
     agent = _held_agent()
-    clock = SimClock(START)
+    clock = SimClock(START, sec_per_step=10)
 
     assert decide_context_block(agent, 180, clock, stop_since=0) == (
         "Right now it is Monday 08:30 AM.\n"
@@ -805,7 +819,7 @@ def test_a_held_stop_with_no_anchored_next_stop_omits_the_next_sentence():
     # sentence must stand alone rather than render "starting at None".
     agent = _held_agent()
     del agent.schedule.schedule[-1]["start_hour"]
-    clock = SimClock(START)
+    clock = SimClock(START, sec_per_step=10)
 
     assert decide_context_block(agent, 180, clock, stop_since=0, waiting=True) == (
         "Right now it is Monday 08:30 AM.\n"
@@ -827,7 +841,7 @@ def test_a_start_hour_that_is_not_a_real_hour_omits_the_next_sentence():
 
     Mutation check: widen the guard back to ``next_hour is None`` and this goes
     RED with the 3 PM / 5445 min sentence."""
-    clock = SimClock(START)
+    clock = SimClock(START, sec_per_step=10)
     for hour in (99, -1, 24):
         agent = _held_agent()
         agent.schedule.schedule[-1]["start_hour"] = hour
@@ -900,7 +914,7 @@ def test_step_serial_decide_carries_the_hold_into_the_prompt():
         order=["Ada"],
         world_map=None,
         emoji={"Ada": "\U0001f4d6"},
-        clock=SimClock(START),
+        clock=SimClock(START, sec_per_step=10),
     )
 
     # Step 180 == 08:30: the reading stop's activity completes and is
@@ -936,7 +950,7 @@ def test_step_parallel_decide_carries_the_hold_into_the_prompt():
             order=["Ada"],
             world_map=None,
             emoji={"Ada": "\U0001f4d6"},
-            clock=SimClock(START),
+            clock=SimClock(START, sec_per_step=10),
             decide_executor=executor,
             decide_timeout=5.0,
             decide_pending={},
@@ -981,7 +995,9 @@ def test_live_mock_decide_request_carries_the_block():
 
 def test_day_end_clause_renders_only_in_the_final_stretch():
     _game, ada = _world()
-    clock = SimClock(START)  # 08:00, 10 s/step; a 4320-step day ends 20:00
+    clock = SimClock(
+        START, sec_per_step=10
+    )  # 08:00, 10 s/step; a 4320-step day ends 20:00
     # 19:37 (step 4182): 23 minutes left -- the batch-8 breach shape.
     late = decide_context_block(ada.agent, 4182, clock, 4182, day_steps=4320)
     assert "The day ends at 8 PM (23 min from now)." in late
@@ -1029,7 +1045,7 @@ def test_step_threads_the_day_length_into_the_decide_prompt():
         order=["Ada"],
         world_map=_NoPathMap(),
         emoji={"Ada": "📖"},
-        clock=SimClock(START),
+        clock=SimClock(START, sec_per_step=10),
         num_steps=4320,
     )
     user = brain.tool_calls_log[0]["messages"][-1]["content"]

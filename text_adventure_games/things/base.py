@@ -1,16 +1,19 @@
-from __future__ import annotations
+from __future__ import annotations  # what is this?
 
-from collections import defaultdict
+from collections import defaultdict  # okay so we use dictonaries and json makes sense
 import json
-from typing import Union
+from typing import Union  # WHAT'S this ?
 
-from ..enums import Property
+from ..enums import Property  # what is this?
 
 # Property keys are *either* a Property enum member or a plain string -- the
 # two are fully interchangeable. Property inherits from ``str``, so an enum
 # member IS a string at runtime (same hash, same equality, same dict key).
 # The enum just gives autocomplete and a single source of truth for the
 # well-known keys; ad-hoc properties stay as raw strings.
+# ME - So it's a string that inherets from the string class but it also has this speacial deafault value? I dont get it
+# what does this mean: "The enum just gives autocomplete and a single source of truth for the
+#                       well-known keys; ad-hoc properties stay as raw string"
 PropertyKey = Union[Property, str]
 
 
@@ -58,6 +61,9 @@ class Thing:
         # config like reactions/veils; not serialized.
         self._senses: dict = {}
 
+    # chunk one - thing fields name,description,aliases,properties,commands,reactions,senses
+
+    # chubnk 2
     def perceptible_by(self, sense, text: str | None = None):
         """Tag this thing as perceptible by a non-sight *sense* (touch, hearing,
         smell), with the *text* that sense reveals -- e.g.::
@@ -91,6 +97,7 @@ class Thing:
             return self._senses[sense] or GENERIC_SENSE_TEXT.get(sense, "")
         return None
 
+    # chunk 3
     def to_primitive(self):
         """
         Puts the main fields of this base class into a dictionary
@@ -135,6 +142,7 @@ class Thing:
         instance = cls.from_primitive(data)
         return instance
 
+    # chunk 4
     def set_property(self, property_name: PropertyKey, property):
         """
         Sets the property of this item.
@@ -166,6 +174,8 @@ class Thing:
         string or a :class:`~text_adventure_games.enums.Property` member.
         """
         return self.properties.get(property_name, False)
+
+    # chunk 5
 
     def add_alias(self, alias: str):
         """Register an alternate name the parser will also match (e.g. ``cot``

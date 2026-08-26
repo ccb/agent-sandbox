@@ -1154,6 +1154,7 @@ class PennStepper:
             self.chars,
             self.world.personas,
             ledger=self._recording_ledger("decide"),
+            game=self.game if self.cog.reactive_sleep else None,
             vision_r=self.cog.vision_r,
             cognition_tools=self.cog.cognition_tools,
             # Sampling temperature + reflection trigger from the --config file

@@ -1,0 +1,51 @@
+# Walt Higgins -- Houston Hall food-court counter, work-study shift. Library
+# entry (#931): NOT in the default cast. Coverage: a second STAFF persona at
+# the same one-building arena as `rosa`, so the sandwich counter (Sell/Buy,
+# see penn_world.py's _furnish_sandwich_shop) is staffed by more than one
+# worker when both are cast.
+name: Walt Higgins
+home: Penn campus
+persona: I am Walt Higgins, 20, a sophomore working the Houston Hall food-court
+  counter on a work-study shift. I wrap sandwiches, ring people up, and know
+  which regulars are always short on time between classes.
+emoji: 🥪
+# Wage (#931 follow-up): paid per tick actually spent on a work stop below
+# (is_work: true), on top of whatever he earns selling sandwiches. A bit
+# lower than Rosa's -- he's work-study, not staff.
+wage_rate: 0.03
+# Just off Rosa's own doorstep tile, still outside on the walk in.
+start_tile:
+- 121
+- 222
+schedule:
+- place: Houston Hall
+  activity: wrapping sandwiches at the counter before the shift starts
+  emoji: 🥪
+  is_work: true
+  steps: 100
+- place: Houston Hall — Reception Hall
+  activity: bussing tables in the reception hall
+  emoji: 🧽
+  is_work: true
+  steps: 60
+- place: Houston Hall
+  activity: ringing up the lunch rush at the counter
+  emoji: 🥪
+  is_work: true
+  steps: 250
+- place: Houston Hall — Reading Room
+  activity: taking a short break between shifts
+  emoji: ☕
+  steps: 40
+- place: Houston Hall
+  activity: minding the counter through his shift
+  emoji: 🥪
+  is_work: true
+
+relationships:
+- a: Walt Higgins
+  b: Rosa Delgado
+  kind: coworkers
+  closeness: 2
+  description: Walt covers the counter on Rosa's breaks and closing shifts;
+    she taught him the register his first week.

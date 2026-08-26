@@ -130,7 +130,7 @@ def test_tile_gap_from_matches_tile_gap_semantics_on_the_real_map():
 
 def test_line_is_empty_without_a_map_or_a_clock():
     game, ada = _ada(None)
-    assert walk_minutes_line(game, ada, SimClock(START)) == ""
+    assert walk_minutes_line(game, ada, SimClock(START, sec_per_step=10)) == ""
     game2, ada2 = _ada(_FakeMap())
     assert walk_minutes_line(game2, ada2, None) == ""
 
@@ -143,7 +143,7 @@ def test_line_prices_destinations_nearest_first_and_drops_unmapped_ones():
     ada.tile = (0, 0)
     # Library is 6 tiles away (1 min at 10 s/step), Cafe 30 tiles (5 min).
     # The Green has address None -- no tiles -- so it is dropped.
-    assert walk_minutes_line(game, ada, SimClock(START)) == (
+    assert walk_minutes_line(game, ada, SimClock(START, sec_per_step=10)) == (
         "Walking from here takes at least about: Library 1 min; Cafe 5 min."
     )
 
@@ -152,7 +152,7 @@ def test_line_lists_the_place_the_agent_is_standing_in_at_zero():
     game, ada = _ada(_FakeMap())
     ada.agent.schedule = None
     ada.tile = (0, 6)  # standing on the Library's tile
-    got = walk_minutes_line(game, ada, SimClock(START))
+    got = walk_minutes_line(game, ada, SimClock(START, sec_per_step=10))
     assert got.startswith("Walking from here takes at least about: Library 0 min;")
 
 
@@ -160,7 +160,7 @@ def test_line_is_empty_when_the_character_has_no_tile():
     game, ada = _ada(_FakeMap())
     if hasattr(ada, "tile"):
         del ada.tile
-    assert walk_minutes_line(game, ada, SimClock(START)) == ""
+    assert walk_minutes_line(game, ada, SimClock(START, sec_per_step=10)) == ""
 
 
 class _ManyLocsGame:
@@ -194,7 +194,7 @@ def test_line_caps_at_decide_max_enum_nearest_first():
     # DECIDE_MAX_ENUM nearest.
     game = _ManyLocsGame(DECIDE_MAX_ENUM + 5)
     char = type("C", (), {"tile": (0, 0)})()
-    got = walk_minutes_line(game, char, SimClock(START))
+    got = walk_minutes_line(game, char, SimClock(START, sec_per_step=10))
     assert got.count(" min") == DECIDE_MAX_ENUM
     assert f"Loc{DECIDE_MAX_ENUM - 1} " in got  # farthest destination that survives
     assert f"Loc{DECIDE_MAX_ENUM} " not in got  # first one dropped by the cap
@@ -232,7 +232,7 @@ def test_decide_prompt_orders_walk_before_recent_before_memories():
         "I traveled to Cafe.", turn=300, importance=2.0, tags={ACTION_TAG}
     )
 
-    command = observe_and_decide(game, ada, 360, clock=SimClock(START))
+    command = observe_and_decide(game, ada, 360, clock=SimClock(START, sec_per_step=10))
 
     assert command == "travel to Cafe"
     user = brain.tool_calls_log[0]["messages"][-1]["content"]
@@ -293,6 +293,6 @@ def test_line_prices_via_walk_steps_when_the_map_offers_it():
     ada.agent.schedule = None
     ada.tile = (0, 0)
     # Library: 6 tiles Chebyshev -> 12 BFS (2 min); Cafe: 30 -> 60 (10 min).
-    assert walk_minutes_line(game, ada, SimClock(START)) == (
+    assert walk_minutes_line(game, ada, SimClock(START, sec_per_step=10)) == (
         "Walking from here takes at least about: Library 2 min; Cafe 10 min."
     )

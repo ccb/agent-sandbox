@@ -178,6 +178,13 @@ cython_debug/
 godot-generative-agents/godot/maps/penn_replay.json
 # The boil-water demo replay (#592), baked on demand with --scenario boil.
 godot-generative-agents/godot/maps/penn_replay_boil.json
+# The wage-drive demo replay, baked on demand with --scenario work.
+godot-generative-agents/godot/maps/penn_replay_work.json
+# The sleep-interrupt demo replay, baked on demand with --scenario sleep.
+godot-generative-agents/godot/maps/penn_replay_sleep.json
+# The eat/sickness demo replay, baked on demand with --scenario eat (#1003:
+# was tracked by oversight while its siblings above were already ignored).
+godot-generative-agents/godot/maps/penn_replay_eat.json
 godot-generative-agents/tools/geo/out/upenn_core_ville_addresses.json
 godot-generative-agents/tools/geo/out/upenn_furniture_debug.tmj
 

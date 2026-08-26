@@ -11,6 +11,10 @@ that, each going through the engine's precondition gate like any built-in action
 """
 
 from text_adventure_games.actions import base, consume, investigate
+from text_adventure_games.enums import Property
+from text_adventure_games.things.characters import MAX_ENERGY
+
+from .drives import clear_low_energy_if_recovered
 
 
 def _tile_address_parent(location):
@@ -77,6 +81,19 @@ def travel_destination_allowed(game, character, destination) -> bool:
     next_loc = game.locations.get(next_place) if next_place else None
     if next_loc is not None and destination is next_loc:
         return current is not next_loc
+    # Reactive sleep (#931 follow-up): ScheduleMockClient._choose overrides the
+    # schedule entirely once the character is tired, heading for sleep_spot
+    # instead of whatever the authored stop says -- this gate must recognize
+    # that destination as legal too, or a character reactively redirected away
+    # from an addressless hub (same_place is unconditionally True there) gets
+    # refused with "stay at your scheduled stop" and never reaches bed.
+    sleep_spot = getattr(schedule, "sleep_spot", None)
+    if (
+        sleep_spot
+        and character.get_property(Property.IS_SLEEPY)
+        and destination is game.locations.get(sleep_spot)
+    ):
+        return current is not destination
     return False
 
 
@@ -219,6 +236,9 @@ class Travel(base.Action):
     def check_preconditions(self) -> bool:
         if not self.was_matched(self.character, "No one is traveling."):
             return False
+        if self.character.get_property(Property.IS_SLEEPING):
+            self.parser.fail(f"{self.character.name.capitalize()} is asleep.")
+            return False
         if not self.was_matched(
             self.destination, "I don't know how to get to that place."
         ):
@@ -311,6 +331,9 @@ class Act(base.Action):
     def check_preconditions(self) -> bool:
         if not self.was_matched(self.character, "No one is acting."):
             return False
+        if self.character.get_property(Property.IS_SLEEPING):
+            self.parser.fail(f"{self.character.name.capitalize()} is asleep.")
+            return False
         if self.character.location is None:
             self.parser.fail("There is nowhere to do that.")
             return False
@@ -360,6 +383,12 @@ class WaitPenn(base.Wait):
         super().__init__(game, command, actor=actor)
         self.character = self.acting_character(command, hint="waiter")
 
+    def check_preconditions(self) -> bool:
+        if self.character.get_property(Property.IS_SLEEPING):
+            self.parser.fail(f"{self.character.name.capitalize()} is asleep.")
+            return False
+        return super().check_preconditions()
+
     def apply_effects(self):
         # Stamp "waiting" so the settle branch's card/desc reads honest idle
         # instead of the previous stop's stale activity -- but ONLY when this
@@ -374,7 +403,10 @@ class WaitPenn(base.Wait):
 
 
 class DrinkPenn(consume.Drink):
-    """The engine's Drink with Penn's boil-experiment specifics kept local.
+    """The engine's Drink with Penn's boil-experiment specifics kept local,
+    plus one Penn twist of its own: the energy payoff (#931, mirroring
+    ``EatPenn``) that restores ``Property.ENERGY`` from the drunk item's
+    ``energy_value`` capped at ``MAX_ENERGY``.
 
     The generic sickness arc -- a sickening drink sets ``is_sick`` (+ a
     ``sickness`` GameEvent), boiled water cures it (+ ``recovery``) -- was
@@ -398,6 +430,12 @@ class DrinkPenn(consume.Drink):
     Registered with the same "drink" action name, so it overrides the
     built-in for this game only."""
 
+    def check_preconditions(self) -> bool:
+        if self.character.get_property(Property.IS_SLEEPING):
+            self.parser.fail(f"{self.character.name.capitalize()} is asleep.")
+            return False
+        return super().check_preconditions()
+
     def _sickens(self) -> bool:
         # Penn's rule: this drink is raw water the agent did NOT boil first.
         return self.item.get_property(
@@ -413,6 +451,15 @@ class DrinkPenn(consume.Drink):
             # The engine skips the arc on a corpse too; checked here as well
             # so the #595 counters below never stamp a drink that just killed.
             return
+        # Energy restore (#931), unconditional like EatPenn's: hydration is a
+        # fact about the drink, separate from whether it also sickens you.
+        energy_value = self.item.get_property("energy_value") or 0
+        if energy_value:
+            current_energy = self.character.get_property(Property.ENERGY) or 0
+            self.character.set_property(
+                Property.ENERGY, min(MAX_ENERGY, current_energy + energy_value)
+            )
+            clear_low_energy_if_recovered(self.character)
         # Authoritative outcome (#595): stamp which kind of drink this was.
         # "safe", not "boiled", for the else-branch: it also counts outside
         # the boil world, where safe drinks needn't involve a stove.
@@ -447,6 +494,286 @@ class DrinkPenn(consume.Drink):
         # One-shot marker mirroring just_sickened: cognition.remember_outcome
         # keys off it to write the "feel better" memory to the agent's card.
         self.character.set_property("just_recovered", True)
+
+
+class EatPenn(consume.Eat):
+    """The engine's Eat, plus the Penn energy payoff (#931): restores
+    ``Property.ENERGY`` from the eaten item's ``energy_value``, capped at
+    ``MAX_ENERGY``. This is the scaffold slice of the port from Action
+    Castle's ``Eat`` (``text_adventure_games/adventures/action_castle.py``),
+    which also gates re-eating behind a 16-in-game-hour cooldown
+    (``ate_food``/``ate_at``) -- that cooldown is deliberately NOT ported yet
+    (#931's open design question: a boolean-flag pair vs. a single
+    ``NOT_HUNGRY_TIME`` timestamp), so this slice only wires the energy
+    restore, the same way #300's ``DrinkPenn`` started with sickness before
+    the drive/cooldown machinery existed. Registered with the same "eat"
+    action name, so it overrides the built-in for this game only.
+
+    Guarded like ``DrinkPenn``: if the item was poisonous and the engine's
+    Eat just killed the character, don't also restore energy on a corpse."""
+
+    def check_preconditions(self) -> bool:
+        if self.character.get_property(Property.IS_SLEEPING):
+            self.parser.fail(f"{self.character.name.capitalize()} is asleep.")
+            return False
+        return super().check_preconditions()
+
+    def apply_effects(self):
+        super().apply_effects()
+        if self.character.get_property("is_dead"):
+            return
+        energy_value = self.item.get_property("energy_value") or 0
+        current_energy = self.character.get_property(Property.ENERGY) or 0
+        self.character.set_property(
+            Property.ENERGY, min(MAX_ENERGY, current_energy + energy_value)
+        )
+        clear_low_energy_if_recovered(self.character)
+
+
+class Sleep(base.Action):
+    """Sleep in place to recover energy (#931). Gated on a world-tagged
+    "sleepable" affordance -- the Study precedent (REQUIRED_AFFORDANCES) --
+    so a location needs that tag before Sleep is reachable there at all, and
+    on the character actually being tired: Property.IS_SLEEPY, the same flag
+    drives.accrue_energy flips once Property.ENERGY crosses its
+    energy_low_threshold. One signal, not two -- "the system says you're
+    sleepy" and "you're allowed to sleep" used to be separate, independently
+    tuned numbers (this gate's own raw-energy threshold vs. accrue_energy's),
+    which could disagree about when a character was actually tired.
+    apply_effects only sets Property.IS_SLEEPING; the actual energy recovery
+    happens on subsequent ticks via drives.sleep_accumulation, the same "act
+    now, drive restores over time" split EatPenn/accrue_energy uses for
+    eating."""
+
+    ACTION_NAME = "sleep"
+    ACTION_DESCRIPTION = "Sleep here to recover energy (only somewhere sleepable)"
+    ACTION_ALIASES = ["nap", "rest"]
+    REQUIRED_AFFORDANCES = ("sleepable",)
+
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
+        self.character = self.acting_character(command, hint="sleeper")
+
+    def check_preconditions(self) -> bool:
+        if not self.was_matched(self.character, "No one is sleeping."):
+            return False
+        if not self.has_affordance_in_scope(
+            self.character, "There is nowhere to sleep here."
+        ):
+            return False
+        if self.character.get_property(Property.IS_SLEEPING):
+            self.parser.fail(f"{self.character.name.capitalize()} is already asleep.")
+            return False
+        if not self.character.get_property(Property.IS_SLEEPY):
+            self.parser.fail(
+                f"{self.character.name.capitalize()} isn't tired enough to sleep."
+            )
+            return False
+        return True
+
+    def apply_effects(self):
+        self.character.set_property(Property.IS_SLEEPING, True)
+        # Stamp "sleeping" so the frame's desc/pron (run_simulation's settle
+        # branch reads Property "activity") shows the sleep, not whatever
+        # activity label the previous stop left behind (the Act/Study
+        # precedent).
+        self.character.set_property("activity", "sleeping")
+        return self.parser.ok(f"{self.character.name} settles in to sleep.")
+
+
+class Sell(base.Action):
+    """Offer a for-sale item to a named buyer (#931). Gated on a world-tagged
+    "marketplace" affordance. A seller can offer an item they carry and are
+    authorized to sell (``Property.OWNER`` names them) once it's marked
+    ``Property.IS_FOR_SALE``. Selling doesn't move the item or money by
+    itself -- it stamps the item with the buyer's dibs (``Property.BUYER``,
+    mirrors ``CheckOutBook.checked_out_by``), and ``Buy`` (below) is what
+    the named buyer then calls to actually complete the trade."""
+
+    ACTION_NAME = "sell"
+    ACTION_DESCRIPTION = "Offer a for-sale item you own to a named buyer"
+    ACTION_ALIASES = []
+    REQUIRED_AFFORDANCES = ("marketplace",)
+    # Typed tool slots (issue #356), so a tool-calling brain fills structured
+    # item/character fields instead of composing "sell <item> to <buyer>" as
+    # free text -- reassembled with the "to" connector into that same phrasing.
+    ARGUMENTS_SCHEMA = {
+        "item": {
+            "type": "item",
+            "description": "the for-sale item to offer",
+            "required": True,
+        },
+        "buyer": {
+            "type": "character",
+            "description": "who to sell it to",
+            "connector": "to",
+            "required": True,
+        },
+    }
+
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
+        self.character = self.acting_character(command, hint="seller")
+        seller_held = self.character.carried_items() if self.character else {}
+        self.item = self.parser.match_item(command, seller_held, hint="item for sale")
+        self.buyer = self.target_character(
+            command, hint="buyer", exclude=self.character
+        )
+
+    def check_preconditions(self) -> bool:
+        if not self.was_matched(self.character, "No one is selling."):
+            return False
+        if not self.has_affordance_in_scope(
+            self.character, "There is nowhere to sell here."
+        ):
+            return False
+        if self.character.get_property(Property.IS_SLEEPING):
+            self.parser.fail(f"{self.character.name.capitalize()} is asleep.")
+            return False
+        if not self.was_matched(self.item, "I don't see anything like that to sell."):
+            return False
+        if self.item.get_property(Property.OWNER) != self.character.name:
+            self.parser.fail(
+                f"{self.character.name.capitalize()} isn't authorized to sell the "
+                f"{self.item.name}."
+            )
+            return False
+        if not self.item.get_property(Property.IS_FOR_SALE):
+            self.parser.fail(f"The {self.item.name} isn't for sale.")
+            return False
+        if not self.was_matched(self.buyer, "Sell it to whom?"):
+            return False
+        return True
+
+    def apply_effects(self):
+        self.item.set_property(Property.BUYER, self.buyer.name)
+        return self.parser.ok(
+            f"{self.character.name.capitalize()} offers the {self.item.name} to "
+            f"{self.buyer.name}."
+        )
+
+
+class Buy(base.Action):
+    """Complete the trade a ``Sell`` started (#931): buy the item you've been
+    given dibs on. Transfers the item seller -> buyer and its price from the
+    buyer's ``Property.MONEY`` to the seller's, then clears the listing."""
+
+    ACTION_NAME = "buy"
+    ACTION_DESCRIPTION = "Buy an item you have dibs on from its owner"
+    ACTION_ALIASES = []
+    REQUIRED_AFFORDANCES = ("marketplace",)
+    # Typed tool slot (issue #356): the seller is resolved from the item's
+    # Property.OWNER (see _match_for_sale_item), not named in the command, so
+    # only the item itself needs a slot.
+    ARGUMENTS_SCHEMA = {
+        "item": {
+            "type": "item",
+            "description": "the for-sale item to buy",
+            "required": True,
+        },
+    }
+
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
+        self.character = self.acting_character(command, hint="buyer")
+        self.item = self._match_for_sale_item(command)
+        self.seller = None
+        if self.item is not None:
+            self.seller = self.game.characters.get(
+                self.item.get_property(Property.OWNER)
+            )
+
+    def _match_for_sale_item(self, command: str):
+        """The named item, pooled from the buyer's own scope plus whatever
+        anyone else standing here carries (mirrors
+        ``CheckOutBook._match_book`` above) -- the buyer doesn't hold the
+        item yet, so it isn't in their own inventory or location items until
+        the trade completes.
+
+        Two co-located sellers can carry identically-named items (e.g. both
+        Rosa and Walt stock a "turkey sandwich"). A same-named item is keyed
+        once in ``items_in_scope``, so pooling by plain dict update would let
+        whichever seller is iterated last silently shadow the other's item --
+        even when the buyer already has dibs (``Property.BUYER``) on the
+        first one. Once this buyer has dibs on a same-named item, a
+        non-dibbed same-named item from another seller must not replace it."""
+        if self.character is None:
+            return None
+        items_in_scope = dict(self.parser.get_items_in_scope(self.character))
+        loc = self.character.location
+        if loc is not None:
+            for other in loc.characters.values():
+                if other is self.character:
+                    continue
+                for name, item in other.carried_items().items():
+                    existing = items_in_scope.get(name)
+                    if (
+                        existing is not None
+                        and existing.get_property(Property.BUYER) == self.character.name
+                        and item.get_property(Property.BUYER) != self.character.name
+                    ):
+                        continue
+                    items_in_scope[name] = item
+        return self.parser.match_item(command, items_in_scope, hint="item for sale")
+
+    def check_preconditions(self) -> bool:
+        if not self.was_matched(self.character, "No one is buying."):
+            return False
+        if not self.has_affordance_in_scope(
+            self.character, "There is nowhere to buy here."
+        ):
+            return False
+        if self.character.get_property(Property.IS_SLEEPING):
+            self.parser.fail(f"{self.character.name.capitalize()} is asleep.")
+            return False
+        if not self.was_matched(
+            self.item, "I don't see anything for sale like that here."
+        ):
+            return False
+        if not self.item.get_property(Property.IS_FOR_SALE):
+            self.parser.fail(f"The {self.item.name} isn't for sale.")
+            return False
+        if self.item.get_property(Property.BUYER) != self.character.name:
+            self.parser.fail(
+                f"{self.character.name.capitalize()} doesn't have dibs on the "
+                f"{self.item.name}."
+            )
+            return False
+        if not self.was_matched(
+            self.seller, f"No one is selling the {self.item.name}."
+        ):
+            return False
+        if not self.at(self.seller, self.character.location):
+            return False
+        price = self.item.get_property(Property.PRICE)
+        if self.character.get_property(Property.MONEY) < price:
+            self.parser.fail(
+                f"{self.character.name.capitalize()} can't afford the "
+                f"{self.item.name} ({price})."
+            )
+            return False
+        return True
+
+    def apply_effects(self):
+        price = self.item.get_property(Property.PRICE)
+        self.seller.discard_item(self.item)
+        self.character.accept_item(self.item)
+        self.character.set_property(
+            Property.MONEY, self.character.get_property(Property.MONEY) - price
+        )
+        self.seller.set_property(
+            Property.MONEY, self.seller.get_property(Property.MONEY) + price
+        )
+        self.item.set_property(Property.IS_FOR_SALE, False)
+        self.item.set_property(Property.BUYER, False)
+        return self.parser.ok(
+            f"{self.character.name.capitalize()} buys the {self.item.name} from "
+            f"{self.seller.name} for {price}."
+        )
+
+
+# Activate/Deactivate used to live here (#300); upstreamed into the engine
+# by #464 (registered by default), so Penn no longer needs a local copy.
 
 
 class TalkTo(base.Action):
@@ -510,6 +837,9 @@ class TalkTo(base.Action):
         self.topic = tail.strip()
 
     def check_preconditions(self) -> bool:
+        if self.character.get_property(Property.IS_SLEEPING):
+            self.parser.fail(f"{self.character.name.capitalize()} is asleep.")
+            return False
         if self.target is None:
             self.parser.fail("There is no one by that name here to talk to.")
             return False
@@ -580,6 +910,9 @@ class Study(base.Action):
 
     def check_preconditions(self) -> bool:
         if not self.was_matched(self.character, "No one is studying."):
+            return False
+        if self.character.get_property(Property.IS_SLEEPING):
+            self.parser.fail(f"{self.character.name.capitalize()} is asleep.")
             return False
         # The #612 place-check: same fact the toolset builder read to offer
         # this verb, so offered <=> this passes (the #617 invariant).
@@ -683,6 +1016,9 @@ class CheckOutBook(base.Action):
     def check_preconditions(self) -> bool:
         if not self.was_matched(self.character, "No one is checking out a book."):
             return False
+        if self.character.get_property(Property.IS_SLEEPING):
+            self.parser.fail(f"{self.character.name.capitalize()} is asleep.")
+            return False
         if not self.has_affordance_in_scope(
             self.character,
             "There is no library shelf to check a book out from here.",
@@ -720,8 +1056,9 @@ class ReadPenn(investigate.Read):
     duration/emoji pacing meta-slots, so a live brain can settle in with a
     book instead of skimming it in one tick. Registered under the same "read"
     name, overriding the built-in for this game only (the DrinkPenn
-    precedent). Gate, narration, and the READABLE affordance declaration are
-    all inherited unchanged."""
+    precedent). Narration and the READABLE affordance declaration are
+    inherited unchanged; the gate adds one Penn-only check (#931): an asleep
+    character can't read."""
 
     ARGUMENTS_SCHEMA = {
         "item": {
@@ -744,3 +1081,9 @@ class ReadPenn(investigate.Read):
             "required": False,
         },
     }
+
+    def check_preconditions(self) -> bool:
+        if self.character.get_property(Property.IS_SLEEPING):
+            self.parser.fail(f"{self.character.name.capitalize()} is asleep.")
+            return False
+        return super().check_preconditions()

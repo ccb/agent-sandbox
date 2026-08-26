@@ -61,8 +61,8 @@ class SimulationRuntimeConfig:
     """
 
     start: str = "2023-02-13 08:00:00"  # in-game start, ISO 8601 (parsed by the runner)
-    steps: int = 1080  # number of steps to simulate (1080 x 10s = 3 hours)
-    sec_per_step: int = 10  # seconds of in-game time advanced per step
+    steps: int = 1080  # number of steps to simulate (1080 x 15s = 4.5 hours)
+    sec_per_step: int = 15  # seconds of in-game time advanced per step
     seed: int | None = (
         None  # global RNG seed; carried for reproducibility, not yet used
     )
@@ -145,6 +145,15 @@ class CognitionConfig:
     react_enabled: bool = False
     react_cooldown_steps: int = 90  # min steps between one agent's react consults
     react_hour_cap: int = 4  # hard cap on one agent's react consults per sim hour
+
+    # Reactive sleep (#931 follow-up): when True, every mock-driven agent's
+    # ScheduleMockClient overrides its schedule the moment it's actually tired
+    # (Property.IS_SLEEPY) and walks to a `sleepable`-tagged location instead
+    # of only sleeping at an authored bedtime stop. Off by default -- the mock
+    # bake stays byte-identical; a run opts in explicitly (e.g.
+    # generate_penn_replay's --reactive-sleep) because it changes *when* and
+    # *where* every persona's day gets interrupted.
+    reactive_sleep: bool = False
 
 
 @dataclass

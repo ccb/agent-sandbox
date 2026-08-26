@@ -26,6 +26,7 @@ _AFFORDANCE_KEYS = (
     Property.WIELDABLE,
     Property.IS_DEVICE,
 )
+# objectect properties as an enum
 
 
 def _format_item(item) -> str:
@@ -54,6 +55,7 @@ class Game:
     """
 
     def __init__(
+        # contcuter - with location character, actions time turn and config
         self,
         start_at: Location,
         player: Character,
@@ -63,14 +65,16 @@ class Game:
         turn_mode=None,
         config=None,
     ):
-        self.start_at = start_at
-        self.player = player
+        self.start_at = start_at  # given
+        self.player = player  # given
 
         # Unified config (see config.py). Every field defaults to the engine's
         # historical value, so an omitted config -- or a bare GameConfig() -- is
         # a no-op. The explicit `time_config`/`turn_mode` arguments still work and
         # take precedence over the config's clock/turn_mode, for back-compat.
-        self.config = config if config is not None else GameConfig()
+        self.config = (
+            config if config is not None else GameConfig()
+        )  # game config seems to be something that starts up the game
 
         # Print the special commands associated with items in the game (helpful
         # for debugging and for novice players).
@@ -112,6 +116,8 @@ class Game:
         self.add_character(player)
         self.start_at.add_character(player)
         self.start_at.has_been_visited = True
+
+        # at this point theres different fields for character, history (a list) , and I don't remeber - REVIEW #########
 
         # Add NPCs to game
         if characters:
@@ -239,6 +245,7 @@ class Game:
                     self.parser.add_block(b)
                     seen_before[name] = True
 
+    ####Important******************************
     def do_command(self, command: str) -> bool:
         """
         Public entry point for processing a player command. In the default
@@ -246,6 +253,8 @@ class Game:
         end-of-turn phase (increment turn counter, run NPC behaviors). In
         simultaneous mode (issue #25), runs a gather -> resolve round instead.
         """
+
+        # chunk one- SImulatnous mode - if turn_mode simultanous (no need to wait for one to tfinish acting for your to act) return run_simultanopus_round(self,command)
         if self.turn_mode == "simultaneous":
             # Local import: turns.py imports npc.py, and the default
             # sequential path shouldn't need either module to run.
@@ -267,14 +276,21 @@ class Game:
                     continue
                 if self.is_game_over():
                     break
-                results.append(self.do_command(part))
+                results.append(self.do_command(part))  # Result is the list of commands
             return all(results) if results else False
+        # chunk 2 - Multiple commands breakdown - You get one large list of commands and you split them on commas,
+        # you strip the trailing spaces and you check whethere there is or isn;t anything left, if not continue if game over
+        # break - there's no point in commands - append all you have found in results and call do_command on the part of the command.
 
         # A finished game closes the parser (CCB: the dead were still walking).
         # Only verbs that leave the ended story intact pass: RESTORE a save,
         # SCRIPT the record, RESTART (for shells that offer it above this
         # loop) -- and the read-only ledger (INVENTORY, SCORE), so the final
         # accounting of wounds and slots can be studied post-mortem.
+
+        # chunk 3 - post game commands - if the game is over there are some commands that still work
+        # strip command, split on space, split only once and get the first one and make it lowercase
+        # if it's not on the list below - restor scrips restart etc. self.parser.fail send an fail message
         if self.is_game_over():
             first = command.strip().split(" ", 1)[0].lower()
             if first not in (
@@ -299,19 +315,24 @@ class Game:
                 )
                 return False
 
+        #######check point 1######################################
+
         # The player is the subject of any command entered here, so pass them as
         # the explicit actor. This keeps the event log correct even when the
         # command names another character (e.g. "attack troll") — without it the
         # parser falls back to scanning the command for a name and would mis-log
         # the event under the named target instead of the player.
         self._round_event_start = len(self.events)  # this command begins a round
-        success = self.parser.parse_command(command, actor=self.player)
+        success = self.parser.parse_command(
+            command, actor=self.player
+        )  # chunk 4 - starting a round and excetuing commands
         if success:
             # A FREE action (Inventory, Help) is the player consulting their
             # own memory, not the character acting: it reports without
             # advancing the round -- no turn tick, no NPC turns, no triggers.
             # config.engine.meta_actions_cost_turns restores the classic
             # everything-costs-time behavior.
+
             last = getattr(self.player, "last_action", None)
             if (
                 getattr(last, "FREE_ACTION", False)
@@ -320,7 +341,9 @@ class Game:
                 # A JOURNALED free action costs no turn but must survive the
                 # (seed, journal) replay -- HINT reveals, e.g., would silently
                 # vanish from a restored game otherwise.
-                if getattr(last, "JOURNALED", False):
+                if getattr(
+                    last, "JOURNALED", False
+                ):  ##what's a jorunla and what does this doo?
                     self.journal.append(command)
                 return success
             # A turn-consuming success enters the journal (a comma-sequence
@@ -328,8 +351,16 @@ class Game:
             # the journal never re-splits). Failed commands and FREE actions
             # change no state and are deliberately absent.
             self.journal.append(command)
+            # issue something - deduct energy from the player
+            # Commented out (engine-wide) -- energy cost is being scoped to
+            # Action Castle only, via a custom action, not the shared do_command.
+            # curr_energy = self.player.get_property(Property.ENERGY)
+            # self.player.set_property(Property.ENERGY, max(0, curr_energy - 1))
+
             self.end_turn()
         return success
+
+    ###############################################################################################
 
     def replay(self, commands, quiet: bool = True) -> int:
         """Re-run *commands* through :meth:`do_command`, by default with
@@ -357,6 +388,7 @@ class Game:
                 self.parser.set_renderer(old_renderer)
         return ran
 
+    ###IMPORTANT ************************
     def end_turn(self):
         """
         Called after a successful player command. Increments the turn counter,
@@ -379,6 +411,8 @@ class Game:
                 break
         if not self.is_game_over():
             self._run_triggers()
+
+    ##########################################
 
     def log_event(self, actor, action, summary="", payload=None):
         """Append a GameEvent to the event log (issue #6)."""

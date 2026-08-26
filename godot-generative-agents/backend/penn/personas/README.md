@@ -29,6 +29,7 @@ lists every persona here with `in_default_cast`, and `POST /config {"cast":
 | `leon` | Leon Brooks, circulation librarian (never leaves Van Pelt; stranger at t=0) | no (#762) |
 | `nadia` | Nadia Osei, physics postdoc (advisor--advisee pair with `tanaka`) | no (#762) |
 | `rosa` | Rosa Delgado, dining staff (early riser; never leaves Houston Hall) | no (#762) |
+| `walt` | Walt Higgins, Houston Hall counter (work-study, coworkers with `rosa`) | no (#931) |
 | `theo` | Theo Lindqvist, philosophy junior (night owl; friend group with `imani` + `priya`) | no (#762) |
 | `nina` | Nina Alvarez, a cappella lead (friend-group trio w/ `jamal` + `grace`) | no (#762) |
 | `jamal` | Jamal Reed, a cappella beatboxer | no (#762) |

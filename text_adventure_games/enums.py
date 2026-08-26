@@ -115,6 +115,38 @@ class Property(_StrEnum):
     IS_ROYAL = "is_royal"
     IS_MARRIED = "is_married"
     IS_BANISHED = "is_banished"
+    IS_SLEEPING = (
+        "is_sleeping"  # a true false to check if a character is in fact sleeping
+    )
+    IS_SLEEPY = (
+        "is_sleepy"  # if a character is really tired that characeter gets sleepy
+    )
+
+    # numerical properties
+    ENERGY = "energy"
+    ENREGY_VALUE = "energy_value"
+    ENERGY_LOW_THRESHOLD = "energy_low_threshold"
+
+    # Money / commerce (#932, scaffold -- see actions/base.py's Buy/Sell and
+    # tests/test_commerce_scaffold.py for the spec these back).
+    MONEY = "money"  # numerical: how much a character has to spend
+    IS_FOR_SALE = "is_for_sale"  # bool: an item Buy/Sell will offer to trade
+    PRICE = "price"  # numerical: what a buyer's MONEY must cover
+    # Who's authorized to sell an item -- NOT the same thing as the engine's
+    # `item.owner` attribute (set automatically by add_to_inventory/
+    # discard_item to track whoever currently CARRIES the item). A shop item
+    # sitting on a table has `item.owner is None` (nobody's carrying it yet)
+    # but `item.get_property(Property.OWNER) == "<merchant's name>"` (who
+    # Buy/Sell should transact with). Read this property, not item.owner, for
+    # "is there a seller" checks.
+    OWNER = "owner"
+    # A dibs/contention marker, not a permanent fact: stamp the item with
+    # who's mid-purchase so a second buyer can't also buy it out from under
+    # the first in the same round -- mirrors CheckOutBook.checked_out_by in
+    # godot-generative-agents/backend/actions.py. Set at the start of a
+    # purchase, cleared once it resolves (success or failure) so the next
+    # attempt starts clean.
+    BUYER = "buyer"
 
 
 # ----------------------------------------------------------------------
@@ -182,6 +214,8 @@ class ActionName(_StrEnum):
     READ = "read"
     SEARCH = "search"
     GIVE = "give"
+    BUY = "buy"  # #932 scaffold, see actions/things.py
+    SELL = "sell"  # #932 scaffold, see actions/things.py
     UNLOCK_DOOR = "unlock door"
     # Holders: put things in containers / on surfaces, and open/close containers
     PUT = "put"

@@ -1,7 +1,7 @@
 from __future__ import annotations
 from ..things import Thing, Character, Item, Location
 from ..reactions import GatedEffect
-from ..enums import ActionName
+from ..enums import ActionName, Property
 import re
 
 
@@ -680,3 +680,196 @@ class Describe(Action):
                     fig(self.game) if callable(fig) else fig, force=True
                 )
         self.parser.ok(self.game.describe())
+
+
+class Buy(Action):
+    """Scaffold for #932: ``buy <item>`` -- the buyer-initiated half of a
+    trade. ``Sell`` (below) is the owner-initiated mirror of the same trade.
+
+    Money is a plain numerical ``Property.MONEY`` any character can carry.
+    An item becomes purchasable once it carries ``Property.IS_FOR_SALE``, a
+    ``Property.PRICE``, and a ``Property.OWNER`` naming who's authorized to
+    sell it. ``Property.OWNER`` is NOT the same thing as the engine's
+    ``item.owner`` attribute (set automatically by ``add_to_inventory``/
+    ``discard_item`` to track whoever currently CARRIES the item) -- a shop
+    item sitting on a table has ``item.owner is None`` (nobody's carrying it
+    yet) but ``item.get_property(Property.OWNER) == "<merchant's name>"``
+    (who to actually transact with). Read ``Property.OWNER``, not
+    ``item.owner``, for "is there a seller" checks.
+
+    Matching the item is the one genuinely new wrinkle here versus e.g.
+    ``Give``: the buyer doesn't carry it yet, so ``self.character.
+    carried_items()`` is the wrong scope, and ``parser.get_items_in_scope``
+    only covers the buyer's own location + inventory -- it does NOT reach
+    into another character's inventory, so an item the seller is physically
+    holding (not lying on the ground) needs its own combined-scope match.
+    ``CheckOutBook._match_book`` in
+    ``godot-generative-agents/backend/actions.py`` solves this exact problem
+    the same way: pool "items in scope" with "items carried by anyone else
+    standing here."
+
+    TDD scaffold -- see ``tests/test_commerce_scaffold.py`` for the checks
+    this needs and the test covering each. ``check_preconditions``/
+    ``apply_effects`` below ``raise NotImplementedError`` -- fill them in to
+    turn that file green; nothing else in the engine depends on this yet.
+    """
+
+    ACTION_NAME = ActionName.BUY
+    ACTION_DESCRIPTION = "Buy a for-sale item from its owner"
+
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
+        self.character = self.acting_character(command, hint="buyer")
+        self.item = self._match_for_sale_item(command)
+        self.seller = None
+        if self.item is not None:
+            self.seller = self.game.characters.get(
+                self.item.get_property(Property.OWNER)
+            )
+
+    def _match_for_sale_item(self, command: str):
+        """The named item, pooled from the buyer's own scope plus whatever
+        anyone else standing here carries -- the buyer doesn't hold the item
+        yet, so it isn't in their own inventory or location items until the
+        trade completes (mirrors ``CheckOutBook._match_book``'s combined-scope
+        pattern, ``godot-generative-agents/backend/actions.py``)."""
+        if self.character is None:
+            return None
+        items_in_scope = dict(self.parser.get_items_in_scope(self.character))
+        loc = self.character.location
+        if loc is not None:
+            for other in loc.characters.values():
+                if other is self.character:
+                    continue
+                for name, item in other.carried_items().items():
+                    items_in_scope[name] = item
+        return self.parser.match_item(command, items_in_scope, hint="item for sale")
+
+    def check_preconditions(self) -> bool:
+        if not self.was_matched(self.character, "No one is buying."):
+            return False
+        if not self.was_matched(self.item, "I don't see anything for sale like that."):
+            return False
+        if not self.item.get_property(Property.IS_FOR_SALE):
+            self.parser.fail(f"The {self.item.name} isn't for sale.")
+            return False
+        if not self.was_matched(
+            self.seller, f"No one is selling the {self.item.name}."
+        ):
+            return False
+        if self.character.get_property(Property.IS_SLEEPING):
+            self.parser.fail(f"{self.character.name.capitalize()} is asleep.")
+            return False
+        if not self.at(self.seller, self.character.location):
+            return False
+        price = self.item.get_property(Property.PRICE)
+        if self.character.get_property(Property.MONEY) < price:
+            self.parser.fail(
+                f"{self.character.name.capitalize()} can't afford the "
+                f"{self.item.name}."
+            )
+            return False
+        return True
+
+    def apply_effects(self):
+        price = self.item.get_property(Property.PRICE)
+        self.seller.discard_item(self.item)
+        self.character.accept_item(self.item)
+        self.character.set_property(
+            Property.MONEY, self.character.get_property(Property.MONEY) - price
+        )
+        self.seller.set_property(
+            Property.MONEY, self.seller.get_property(Property.MONEY) + price
+        )
+        self.item.set_property(Property.IS_FOR_SALE, False)
+        self.item.set_property(Property.BUYER, False)
+        return self.parser.ok(
+            "{buyer} buys the {item} from {seller} for {price}.".format(
+                buyer=self.character.name.capitalize(),
+                item=self.item.name,
+                seller=self.seller.name,
+                price=price,
+            )
+        )
+
+
+class Sell(Action):
+    """Scaffold for #932: ``sell <item> to <buyer>`` -- the owner-initiated
+    mirror of ``Buy`` above; see its docstring for the full design (money,
+    ``Property.OWNER`` vs. ``item.owner``, the ``Property.BUYER`` dibs idea).
+
+    Mirrors ``Give``'s ``__init__``/``check_preconditions`` shape almost
+    exactly (``Give``, in ``actions/things.py``) -- reuse its helper calls
+    (``target_character``, ``at``, ``can_accept_item``) rather than
+    reinventing them; the only genuinely new checks are the money/
+    for-sale ones ``Buy`` also needs.
+    """
+
+    ACTION_NAME = ActionName.SELL
+    ACTION_DESCRIPTION = "Sell a for-sale item you own to another character"
+
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
+        sell_words = ["sell"]
+        self.seller = self.acting_character(
+            command, hint="seller", split_words=sell_words, position="before"
+        )
+        self.buyer = self.target_character(
+            command,
+            hint="buyer",
+            split_words=sell_words,
+            position="after",
+            exclude=self.seller,
+        )
+        seller_held = self.seller.carried_items() if self.seller else {}
+        self.item = self.parser.match_item(command, seller_held, hint="item being sold")
+
+    def check_preconditions(self) -> bool:
+        if not self.was_matched(self.seller, "No one is selling."):
+            return False
+        if not self.was_matched(self.item, "I don't see anything like that to sell."):
+            return False
+        if self.item.get_property(Property.OWNER) != self.seller.name:
+            self.parser.fail(
+                f"{self.seller.name.capitalize()} isn't authorized to sell the "
+                f"{self.item.name}."
+            )
+            return False
+        if not self.item.get_property(Property.IS_FOR_SALE):
+            self.parser.fail(f"The {self.item.name} isn't for sale.")
+            return False
+        if not self.was_matched(self.buyer, "Sell it to whom?"):
+            return False
+        if self.buyer.get_property(Property.IS_SLEEPING):
+            self.parser.fail(f"{self.buyer.name.capitalize()} is asleep.")
+            return False
+        if not self.at(self.buyer, self.seller.location):
+            return False
+        price = self.item.get_property(Property.PRICE)
+        if self.buyer.get_property(Property.MONEY) < price:
+            self.parser.fail(
+                f"{self.buyer.name.capitalize()} can't afford the {self.item.name}."
+            )
+            return False
+        return True
+
+    def apply_effects(self):
+        price = self.item.get_property(Property.PRICE)
+        self.seller.discard_item(self.item)
+        self.buyer.accept_item(self.item)
+        self.buyer.set_property(
+            Property.MONEY, self.buyer.get_property(Property.MONEY) - price
+        )
+        self.seller.set_property(
+            Property.MONEY, self.seller.get_property(Property.MONEY) + price
+        )
+        self.item.set_property(Property.IS_FOR_SALE, False)
+        self.item.set_property(Property.BUYER, False)
+        return self.parser.ok(
+            "{seller} sells the {item} to {buyer} for {price}.".format(
+                seller=self.seller.name.capitalize(),
+                item=self.item.name,
+                buyer=self.buyer.name,
+                price=price,
+            )
+        )

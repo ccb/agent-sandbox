@@ -1,0 +1,50 @@
+# A one-persona wage DEMO world (regression demo for cf7ef4fb): a single
+# Houston Hall cashier whose day starts on the open campus, a short real walk
+# from the building, so the arc has a genuine "still walking" phase before the
+# "settled and on the clock" phase. `generate_penn_replay.py --scenario work`
+# loads this instead of the full cast.
+#
+# The bug this replays past: accrue_wage used to pay wage_rate into
+# Property.MONEY for every tick a persona with a job was ticking at all, even
+# while still walking to the work stop -- so a commute paid the same as
+# actually working. The fix (cf7ef4fb) only pays once the character is
+# settled (location matches the stop's place AND activity is set); this
+# world's whole point is a persona who visibly walks in first, so the bake
+# shows the starting balance held flat through the commute, then climbing
+# once settled.
+
+personas:
+- name: Theo Marsh
+  # `home` is "Penn campus" (the shared hub, not a building) -- Rosa Delgado's
+  # own persona file (personas/rosa.yaml) uses the same trick for the same
+  # reason: a start_tile just outside Houston Hall means the day opens with a
+  # real walk in, not an instant arrival. `start_tile` below is Rosa's own
+  # verified-walkable spawn point (22 tiles from the Houston Hall lobby by the
+  # real pathfinder).
+  home: Penn campus
+  persona: I am Theo Marsh, 26, and I ring up sandwiches at the Houston Hall
+    counter every morning. I'm punctual and a little proud of it -- I like
+    getting my apron on before the first customer walks in.
+  emoji: 💼
+  wage_rate: 0.1
+  start_tile:
+  - 119
+  - 222
+  schedule:
+  # One stop: the walk there (~22 steps) is the "still walking" phase money
+  # must stay 0 through; once arrived and settled, wage accrues every tick for
+  # the rest of the bake.
+  - place: Houston Hall
+    activity: ringing up sandwiches at the counter
+    emoji: 💼
+    is_work: true
+    steps: null
+
+locations:
+- name: Penn campus
+  description: The streets and walks of Penn's campus, tying every corner together.
+  address: null
+  hub: true
+- name: Houston Hall
+  description: The student union -- the nation's first -- with dining and lounges.
+  address: UPenn:Houston Hall:lobby

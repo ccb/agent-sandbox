@@ -14,8 +14,9 @@ import json
 import os
 import shutil
 
-# The sim's clock: one step is 10 seconds of in-game time.
-SEC_PER_STEP = 10
+# The sim's clock: one step is 15 seconds of in-game time (matches
+# penn_world.SEC_PER_STEP / sim_config.sec_per_step).
+SEC_PER_STEP = 15
 MAZE_NAME = "the_ville"
 
 

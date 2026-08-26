@@ -8,6 +8,10 @@ persona: I am Wesley Okafor, 23, a computer science master's student at Penn. I
   am a night owl, happiest with headphones on and a terminal open, and I lose
   whole nights to a good bug.
 emoji: 🌙
+# Research/dev assistantship (job-expansion pass): paid per tick actually
+# spent on his own DSE stops below (is_work: true) -- every stop in his
+# one-building day qualifies, since it's all the same funded work.
+wage_rate: 0.08
 start_tile:
 - 46
 - 271
@@ -15,11 +19,14 @@ schedule:
 - place: Van Pelt — Digital Scholarship Exchange
   activity: debugging a stubborn program
   emoji: 🌙
+  is_work: true
   steps: 120
 - place: Van Pelt — Digital Scholarship Exchange
   activity: chasing down a memory leak
   emoji: 💻
+  is_work: true
   steps: 120
 - place: Van Pelt — Digital Scholarship Exchange
   activity: committing code before dawn
   emoji: 💻
+  is_work: true

@@ -7,6 +7,9 @@ persona: I am Rosa Delgado, 44, and I run the food-court counter at Houston Hall
   I have opened the kitchen before sunrise for eleven years, I know half the
   regulars by their orders, and I keep a clean counter and a full coffee urn.
 emoji: 🍳
+# Wage (#931 follow-up): paid per tick actually spent on a work stop below
+# (is_work: true), on top of whatever she earns selling sandwiches.
+wage_rate: 0.04
 # Starts on the doorstep just outside Houston Hall, so her day opens with the
 # walk in to unlock the food court.
 start_tile:
@@ -16,6 +19,7 @@ schedule:
 - place: Houston Hall
   activity: opening the food court before the breakfast rush
   emoji: 🍳
+  is_work: true
   # Gus swaps a trap under the kitchen sink through this same window (see the
   # `meetings` block below), so the opening shift stays long enough for their
   # whole exchange.
@@ -23,10 +27,12 @@ schedule:
 - place: Houston Hall — Reception Hall
   activity: wiping down tables in the reception hall
   emoji: 🧽
+  is_work: true
   steps: 60
 - place: Houston Hall
   activity: serving the lunch rush at the counter
   emoji: 🍳
+  is_work: true
   steps: 200
 - place: Houston Hall — Reading Room
   activity: resting her feet on a well-earned break
@@ -35,14 +41,17 @@ schedule:
 - place: Houston Hall
   activity: restocking the counter for the dinner crowd
   emoji: 🍳
+  is_work: true
   steps: 250
 - place: Houston Hall
   activity: serving the dinner line as the union quiets down
   emoji: 🍳
+  is_work: true
   steps: 300
 - place: Houston Hall
   activity: closing down the kitchen
   emoji: 🌙
+  is_work: true
 
 relationships:
 - a: Rosa Delgado

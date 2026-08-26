@@ -1,0 +1,45 @@
+# A single persona eat sandwich  DEMO world (#931), Its whole purpose is the eat a sandiwch
+# and feel energized and not hungry after (#931). 
+
+personas:
+- name: John Green
+  # `home` is the location the persona wakes in (build_world places them there), so
+  # it MUST be Houston Hall for the boil props to be in scope from step 0 -- no
+  # cross-campus commute, so the arc starts early. `start_tile` is the lobby-centre
+  # tile the sprite spawns on (verified walkable; Houston Hall lobby centroid).
+  home: Houston Hall
+  persona: I am John Green ,23, a Penn graduate student. I'm practical and a quick learner,
+    and I really likes sanwiches, and I'm very passionate about student rights, that's why I joined the
+    student union.
+  emoji: 🥪
+  start_tile:
+  - 113
+  - 248
+  schedule:
+  # eating enegizes the player
+  - place: Houston Hall
+    activity: setting in before lunch
+    emoji: 🥪
+    steps: 10
+    
+  - place: Houston Hall
+    activity: having lunch after classes
+    emoji: 🥪
+    steps: 15
+    commands:
+    - get sandwich
+    - eat sandwich   # -> energy = curr_energy + sandwich energy value
+  - place: Houston Hall
+    activity: feeling full at the table
+    emoji: 👍
+    steps: null
+
+locations:
+- name: Penn campus
+  description: The streets and walks of Penn's campus, tying every corner together.
+  address: null
+  hub: true
+- name: Houston Hall
+  description: The student union -- the nation's first -- with dining and lounges.
+  address: UPenn:Houston Hall:lobby
+  properties: [dining]

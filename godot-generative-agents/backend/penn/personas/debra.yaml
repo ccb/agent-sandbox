@@ -9,6 +9,9 @@ persona: I am Debra Hollis, 49, a coordinator in the registrar's office in
   College Hall. Every classroom on this campus is a row in my spreadsheet. I am
   unflappable, organized, and I have seen every scheduling disaster twice.
 emoji: 🗓️
+# Wage (#931 follow-up): paid per tick actually spent on a work stop below
+# (is_work: true) -- her lunch stop doesn't count.
+wage_rate: 0.05
 # Starts on the walk just south of College Hall, a short hop from her desk.
 start_tile:
 - 126
@@ -17,10 +20,12 @@ schedule:
 - place: College Hall
   activity: working through the morning's room-change requests
   emoji: 🗓️
+  is_work: true
   steps: 200
 - place: Williams Hall
   activity: confirming a classroom swap with the language department
   emoji: 📋
+  is_work: true
   steps: 50
 - place: Houston Hall
   activity: a quick lunch between errands
@@ -29,14 +34,17 @@ schedule:
 - place: College Hall
   activity: fielding walk-in questions at the registrar's window
   emoji: 🗓️
+  is_work: true
   steps: 250
 - place: Irvine Auditorium
   activity: double-checking seating for commencement rehearsal
   emoji: 📋
+  is_work: true
   steps: 60
 - place: College Hall
   activity: clearing her inbox before closing time
   emoji: 🗓️
+  is_work: true
 
 relationships:
 - a: Debra Hollis

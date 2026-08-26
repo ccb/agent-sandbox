@@ -25,6 +25,11 @@ HEARD_MAX = 5
 # onto this seam by overriding ``Game.perceivable_locations``.
 DEFAULT_VISION_R = 0
 
+# Deafult energy (issue number uknwon)
+DEFAULT_ENERGY = 50
+# Cap so Eat can't push energy past this (see actions/consume.py).
+MAX_ENERGY = 100
+
 
 class GoalType(str, Enum):
     """
@@ -73,6 +78,11 @@ class Character(Thing):
         super().__init__(name, description)
         self.set_property(Property.CHARACTER_TYPE, "notset")
         self.set_property(Property.IS_DEAD, False)
+        # issue number unknown right now =
+        # Commented out (engine-wide) -- energy is being scoped to Action Castle
+        # only, via a custom Eat action + setting this property in the notebook.
+        # self.set_property(Property.ENERGY, DEFAULT_ENERGY)
+
         self.persona = persona
         self.inventory = {}
         self.worn = {}
@@ -122,7 +132,7 @@ class Character(Thing):
         # character, so dialogue never leaks across rooms. Runtime-only --
         # like `behavior` and `agent`, it is not serialized.
         self.heard: list[str] = []
-        # What this character believes about the world (issue #45). Empty by
+        # What this character b elieves about the world (issue #45). Empty by
         # default, so existing games/characters are unchanged. Distinct from
         # memory (#37): knowledge is the current world-model; memory is the log.
         self.knowledge = Knowledge(owner=name)

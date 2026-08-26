@@ -182,7 +182,7 @@ def test_a_completed_conversation_is_tagged_and_reaches_the_block():
     assert record.text == "I went to talk to Bo about the exam."
     assert ACTION_TAG in record.tags
 
-    got = recent_actions_block(ada.agent, 0, SimClock(START))
+    got = recent_actions_block(ada.agent, 0, SimClock(START, sec_per_step=10))
     assert "I went to talk to Bo about the exam." in got
 
 
@@ -198,14 +198,14 @@ def test_block_is_empty_without_a_clock():
 def test_block_is_empty_without_any_tagged_record():
     _game, ada = _ada()
     ada.agent.memory.add_observation("I see a bench nearby.", turn=1, importance=1.0)
-    assert recent_actions_block(ada.agent, 10, SimClock(START)) == ""
+    assert recent_actions_block(ada.agent, 10, SimClock(START, sec_per_step=10)) == ""
 
 
 def test_block_lists_the_newest_actions_first_with_elapsed_minutes():
     _game, ada = _ada()
     _act(ada.agent, "I am grabbing coffee.", 0)  # 360 steps back = 60 min
     _act(ada.agent, "I traveled to Cafe.", 300)  # 60 steps back = 10 min
-    got = recent_actions_block(ada.agent, 360, SimClock(START))
+    got = recent_actions_block(ada.agent, 360, SimClock(START, sec_per_step=10))
     assert got == (
         "Recently, you:\n"
         " - 10 min ago: I traveled to Cafe.\n"
@@ -216,7 +216,7 @@ def test_block_lists_the_newest_actions_first_with_elapsed_minutes():
 def test_block_shows_just_now_for_a_same_minute_action():
     _game, ada = _ada()
     _act(ada.agent, "I traveled to Cafe.", 358)
-    got = recent_actions_block(ada.agent, 360, SimClock(START))
+    got = recent_actions_block(ada.agent, 360, SimClock(START, sec_per_step=10))
     assert got == "Recently, you:\n - just now: I traveled to Cafe."
 
 
@@ -224,7 +224,7 @@ def test_block_caps_at_the_configured_count():
     _game, ada = _ada()
     for turn in range(10):
         _act(ada.agent, f"I did thing {turn}.", turn)
-    got = recent_actions_block(ada.agent, 100, SimClock(START))
+    got = recent_actions_block(ada.agent, 100, SimClock(START, sec_per_step=10))
     assert len(got.splitlines()) == RECENT_ACTIONS_MAX + 1  # + the header line
     assert "I did thing 9." in got
     assert "I did thing 6." not in got
@@ -241,7 +241,7 @@ def test_block_keeps_only_the_newest_of_each_repeated_action():
     _act(ada.agent, "I am grabbing coffee.", 60)
     for turn in (120, 180, 240):
         _act(ada.agent, 'I tried "get latte" but it didn\'t work: not here.', turn)
-    got = recent_actions_block(ada.agent, 360, SimClock(START))
+    got = recent_actions_block(ada.agent, 360, SimClock(START, sec_per_step=10))
     assert got == (
         "Recently, you:\n"
         ' - 20 min ago: I tried "get latte" but it didn\'t work: not here.\n'
@@ -261,7 +261,7 @@ def test_block_collapses_whitespace_and_caps_length_in_record_text():
     # and a bare \r breaks a rendered line just as a newline does.
     long_text = 'I read the flyer. It said: "' + ("x" * 300) + '\r\n\tmore"'
     _act(ada.agent, long_text, 0)
-    got = recent_actions_block(ada.agent, 0, SimClock(START))
+    got = recent_actions_block(ada.agent, 0, SimClock(START, sec_per_step=10))
     assert len(got.splitlines()) == 2  # header + exactly one action line
     assert not (set("\r\n\t") & set(got.splitlines()[1]))
     action_line = got.splitlines()[1]
@@ -319,7 +319,7 @@ def test_decide_prompt_carries_the_block_before_the_memories():
     game, ada = _ada_with_brain(brain)
     _act(ada.agent, "I traveled to Cafe.", 300)
 
-    command = observe_and_decide(game, ada, 360, clock=SimClock(START))
+    command = observe_and_decide(game, ada, 360, clock=SimClock(START, sec_per_step=10))
 
     assert command == "travel to Cafe"
     user = brain.tool_calls_log[0]["messages"][-1]["content"]
@@ -356,7 +356,9 @@ def test_the_block_does_not_shift_which_memories_surface():
     brain2 = MockLlmClient(tool_calls_responses=[TRAVEL])
     game2, ada2 = _ada_with_brain(brain2)
     _act(ada2.agent, "I traveled to Cafe.", 300)
-    clocked = observe_and_decide(game2, ada2, 360, clock=SimClock(START))
+    clocked = observe_and_decide(
+        game2, ada2, 360, clock=SimClock(START, sec_per_step=10)
+    )
 
     assert plain == clocked == "travel to Cafe"
     assert memories_for_frame(ada1.agent.last_retrieved) == memories_for_frame(

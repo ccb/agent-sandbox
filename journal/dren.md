@@ -13,6 +13,134 @@ on top; copy the template block each working day.
 **Next:**
 - ...
 -->
+## 2026-08-22
+**Focus:** The real fix for `godot (smoke)`, instead of the workaround I'd proposed
+
+**Done today:**
+- Was about to ship a `continue-on-error: true` workaround on the `godot` CI job (already approved) when a quick check first turned up something better: `main` already has the real fix for this exact problem (#876, merged back on 08-04) -- a "Restore licensed art" CI step that pulls the Kenmi/Franuka packs from a private release repo (`aking526/agent-sandbox-assets`) via an `ASSETS_REPO_TOKEN` secret, skipping the smoke test gracefully on forks without it. Confirmed the secret is actually configured on this repo before recommending it over the workaround.
+- `food-system-branch` had only ported #876's `.gitignore` half (an earlier commit, "Add missing licensed-asset gitignore rules"), never its CI/`ASSETS.md` half -- an incomplete port from before my time on this branch.
+- `main` and `food-system-branch` have diverged far more than this one file (566 files, ~68k lines) -- full-merging was clearly out of scope, so cherry-picked just the two relevant commits (`e5daab5e`, `32232587`) instead of the whole branch.
+- Two merge conflicts, both resolved by keeping both sides rather than picking one (`README.md`'s file-tree listing, `HomeView.tsx`'s asset-credits paragraph) -- dropped one unrelated line (`AGENT-ARCHITECTURE.md`, referenced only because it sat adjacent in the diff hunk; that file doesn't exist on this branch).
+- The cherry-pick's `HomeView.tsx` content used `<SectionHeading>`, a component that only exists in `main`'s far-more-evolved version of that file (its own file + a dozen usages) -- broke the `web` build (`TS2304: Cannot find name 'SectionHeading'`). Swapped for a plain `<h3>`, matching every other heading in this branch's actual (much simpler) version of the file.
+- PR #1008: all 7 CI checks green, including `godot (smoke)` genuinely passing (not skipped) -- confirmed via a live watched run, twice (once to catch the build break, once to confirm the fix). Merged into `food-system-branch`.
+
+**Blockers / questions:**
+- None blocking.
+
+**Next:**
+- Still open: real author names/logo/contact for the poster.
+
+## 2026-08-21
+**Focus:** A poster for the project, grounded in real repo data
+
+**Done today:**
+- Built an academic-poster Design canvas (Claude Design preview) for the project, using a user-provided template (navy/red/cream, 48x36in) as the structural basis, translated from its econ-paper "findings" pattern into this project's actual content: the classical-planning motivation, architecture, and — after narrowing per feedback — the needs/drives system specifically (my own work this summer). Added a dedicated "The Decay Function" section with the real formulas from `drives.py`: the shared exponential curve tuned to cross the low threshold after exactly 1 in-game hour, why hunger and tiredness are deliberately independent resources (eating never cures tiredness, sleeping never cures hunger), the asymptotic sleep-recovery formula, and wage's linear accrue-only-when-settled rule.
+- Iterated to exactly 3 figures, all real baked-run data instead of invented or generic screenshots: the boil-water hunger arc (sickness@11/boiled@40/recovery@69 of a 90-step bake), a zoomed real timeline from the `sleep` scenario bake (sleepy@239 -> asleep@248 -> awake@290), and a real money-over-time chart from the `work` scenario bake (flat at $20 through a 43-step commute, then climbing to $25.70). Dropped an earlier social-encounters/campus-map/memory-reflection draft once the ask narrowed specifically to the decay/needs system.
+- All poster stats (245x279 map tiles, 36 library personas, 4 drives, 2,400+ passing tests) are real numbers pulled from the repo this session, not fabricated; author names, group/department logo, and contact info are left as marked placeholders since they're not mine to invent.
+- Implemented the 08-19 job-expansion plan: 8 of the 9 proposed personas (Diego, Elena, Theo, Tessa, Wesley, Desmond, Priya, Maya). Caught and skipped the 9th (Fatima) mid-implementation: her persona text says she "volunteers" as an orientation buddy, and tagging that as paid work would have contradicted her own authored backstory. New `test_persona_library_jobs.py` (5 tests). Verified with a real 1200-step, full-36-persona bake: all 18 job holders (10 pre-existing + 8 new) show a strictly positive wage delta proportional to `wage_rate` x authored work-stop duration, including the trickiest structural cases -- Diego's second work stint (separated from the first by 3 non-work stops and an 800-tick gap) and Wesley's 3 consecutive same-place work stops -- traced tick-by-tick, no bugs found.
+- Opened PRs one by one for the accumulated branch work (#999 work/sleep demos, #1000 persona jobs, #1001 journal) and found all 3 fail CI identically on the same 4 checks, despite touching completely disjoint files -- proof they're pre-existing `food-system-branch` issues, not regressions: black-format drift on 4 files nobody in this work touched, the intentional `#932` Buy/Sell `NotImplementedError` scaffold, and a missing Godot theme asset.
+- Fixed what was actually fixable: black formatting (#1004 -- the original 4 files plus a 5th newly-found stale spot in `generate_penn_replay.py`'s `eat` scenario dict), then properly implemented Buy/Sell (#932, #1006) instead of leaving it stubbed -- `Buy` resolves the item from a combined buyer + co-located-sellers scope (mirrors `CheckOutBook._match_book`), `Sell` mirrors `Give`'s shape, both complete a one-command trade. Turned all 7 previously-failing tests green; `tests/` now 1661 passed, 0 failed.
+- Traced the `godot (smoke)` CI failure past the UI theme to its real, bigger cause: 8 licensed Kenney tileset images (`decor_plants.png`, `interior_*.png`) the actual campus tileset depends on are also `.gitignore`'d, so the whole `TileSet` atlas fails to build in any bare checkout. Filed/updated #1005 with the full picture.
+- Per request, consolidated all 5 PRs into one (#1007) -- resolved one real merge conflict (the work/sleep `SCENARIOS` additions and the black-format fix touched adjacent lines in the same dict). Found and fixed 2 more pre-existing stale test pins along the way in `test_config_api_732.py` (a missing `"walt"` in an expected persona-id set; a `stop_time` assertion still assuming the old `SEC_PER_STEP=10` instead of `15`) -- `godot-generative-agents/tests/` is now 774 passed, 0 failed. PR #1007 sits at 6/7 checks green; only `godot (smoke)` remains red.
+- Attempted a targeted fix for `godot (smoke)` (skip the tile-paint check when the licensed images are known-absent) and caught it failing its own safety test before shipping it: with a deliberately corrupted `.tmj`, the fix still reported PASS, because Godot fails the whole `TileSet` atomically on any missing source image -- there's no way to tell "images legitimately absent" apart from "the tileset is actually broken" from the 0-cells symptom alone, and CI *always* has the images absent. Reverted; verified the repo was left exactly as found (the licensed assets and `.godot/` cache were moved aside to reproduce CI locally, then restored).
+- Merged #1007 into `food-system-branch` (fast-forwarded local to `eb156be9`) and closed out #999/#1000/#1001/#1004/#1006 -- GitHub auto-recognized all 5 as `MERGED` rather than needing an explicit close, since their exact commits are now ancestors of `food-system-branch` via #1007's own merges. `food-system-branch` carries everything from today and 08-15/08-16/08-19/08-20 now; only `godot (smoke)` stays red, for the documented licensing reason.
+
+**Blockers / questions:**
+- `godot (smoke)` can only be fixed with CI-side secure asset provisioning, or a maintainer decision to accept it as permanently red -- not something fixable in code without weakening real regression protection (see #1005).
+
+**Next:**
+- Decide on #1005 (CI asset provisioning) as separate, later infra work.
+- Fill in real author names, group/department logo, and contact info on the poster once available.
+
+## 2026-08-20
+**Focus:** Real-LLM smoke check on the live server
+
+**Done today:**
+- Ran a real-LLM smoke check (`serve_penn.py --brain llm`): the API key was pasted directly into chat (flagged as compromised, told the user to revoke it) and turned out to be invalid regardless — a minimal direct call to Anthropic returned a real `401 authentication_error`, isolating it to the key rather than a network/SSL issue (a benign preflight-check warning in the server log was a red herring).
+- Noted, not yet investigated: the live server's decide-call failures produced no visible error anywhere (log or `/usage` counters) — it just silently idled through all 15 turns as if nothing were wrong.
+
+**Blockers / questions:**
+- Possible silent-failure gap in `serve_penn.py --brain llm`'s error handling (decide-call auth/API failures produce no visible signal) — flagged, not investigated.
+
+**Next:**
+- Investigate the silent-failure gap in the live server's LLM decide path.
+- Re-run the real-LLM smoke check once a valid `ANTHROPIC_API_KEY` is set safely (not pasted in chat).
+- Decide on and implement the 9-persona job-expansion plan from 08-19.
+
+## 2026-08-19
+**Focus:** Scoping the live cast's job coverage
+
+**Done today:**
+- Spiked whether the live/bundled sim has "enough jobs": the default MVP cast (`diego, tanaka, sofia`) has only 1 job-holder (Tanaka, who never leaves her lecture hall), and both dedicated `SANDWICH_WORKERS` (Rosa, Walt) sit outside the default cast — so the Buy/Sell sandwich economy is completely dormant in the default bake, even though 10/36 library personas already have real jobs. A live session can already fix this with zero code (`POST /config {"cast": [...]}`).
+- Brainstormed, not built: a plan to give 9 more library personas a job (Diego, Elena, Fatima, Theo, Tessa, Wesley, Desmond, Priya, Maya), each via tagging one existing schedule stop `is_work: true` — a pure metadata flag, zero risk to any authored meeting's timing — rather than rewriting schedules, with real job-type variety (library circ-desk clerk, design-studio assistant, campus-newspaper reporter, CS research assistant, billiard-room attendant, peer tutor). Explicitly scoped out the other 17 (day-1/visitor/exchange arcs, student-athletes with no schedule slack, extracurricular-only personas) as implausible. Presented for approval; not yet implemented.
+
+**Blockers / questions:**
+- The 9-persona job-expansion plan is designed but not implemented — open question on scope (whether to push further into the 17 "skip" personas too).
+
+**Next:**
+- Decide on and implement the 9-persona job-expansion plan (or a larger version of it).
+- Run a real-LLM smoke check to confirm the live path holds up outside the mock brain.
+
+## 2026-08-16
+**Focus:** Baking targeted regression demos for the 08-14 fixes
+
+**Done today:**
+- Built two new regression-demo scenarios for `generate_penn_replay.py --scenario {work,sleep}`, following the existing boil/eat pattern: `world_data_work.yaml` (a cashier who walks ~22 tiles in from the open campus before settling — demos cf7ef4fb, money holding flat through the commute then accruing once settled) and `world_data_sleep.yaml` (a sleeper in the Reading Room plus a passerby whose errand brings him into the same room during her sleep window — demos 45df120b/c12b3723/44729cf5 together).
+- New `test_work_demo.py` (3 tests) and `test_sleep_demo.py` (5 tests), both green; both bake cleanly. Added `.gitignore` entries for the two new output JSONs, matching the existing boil/penn convention.
+
+**Blockers / questions:**
+- None blocking.
+
+**Next:**
+- Check whether the live/bundled cast actually has enough jobs to make the new wage demo meaningful outside a synthetic scenario.
+
+## 2026-08-15
+**Focus:** Verifying the branch's 08-14 fixes hold up end-to-end
+
+**Done today:**
+- Ran a full-suite + mock-brain bake sanity check on the branch post-merge: 1654 passed / 2 skipped / 7 pre-existing (the intentional `#932` Buy/Sell scaffold) in `tests/`; 767 passed / 2 pre-existing unrelated in `godot-generative-agents/tests/`. Found and fixed a real bug while at it: a stale, untracked `./backend/` directory at the repo root (bytecode-only, predates the #399 move to `godot-generative-agents/backend/`) was shadowing the real package via Python namespace-package resolution, breaking `tests/test_api.py` collection — this is exactly the loose end flagged on 08-11 ("Root `tests/test_api.py` still fails to collect"). Deleted it (nothing tracked, pure cache, nothing lost).
+- Baked and eyeballed the full campus replay end to end (mock brain, 1200 steps): food/sickness mechanic, 2/2 scripted meetings, sleep mechanic — all held up.
+
+**Blockers / questions:**
+- None blocking.
+
+**Next:**
+- Build targeted regression-demo scenarios for the 08-14 fixes (work/sleep) rather than relying on the full-cast bake alone.
+
+## 2026-08-14
+**Focus:** Gap-check on the food-system work, then executing the 08-13 fix plan end-to-end
+
+**Done today:**
+- Ran a two-part gap check on `food-system-branch`: open loose ends (PR #997's CI still red on pre-existing base-branch failures, the Sweeten spec still awaiting sign-off, #995/#996 still untouched) and test-coverage gaps in the sleep/wage/commerce code (independent of the known review findings) — ranked list topped by live wage wiring never exercised end-to-end and 11 of 13 `IS_SLEEPING` action-gate sites having no test.
+- Executed the 08-13 plan (`docs/superpowers/plans/2026-08-13-sleep-gating-and-wage-commerce-fixes.md`) via subagent-driven-development in an isolated worktree: 4 tasks, each its own implementer + task review, all approved clean — `maybe_converse` pairing a sleeping character into a conversation, `Buy` matching the wrong seller's same-named item, `accrue_wage` paying wage mid-walk on a stale `activity` flag, and `needs_interrupt_seen` staying frozen through sleep.
+- The final whole-branch review (opus, ~72 min) caught a 5th bug no per-task review could see: `maybe_react`'s `greet` path is a third conversation entry point that Task 1 didn't gate on `IS_SLEEPING`. Ruled to fix it immediately as a 5th commit rather than file it as a follow-up, since it directly undercuts Task 1's stated invariant — fixed, re-reviewed clean.
+- Merged all 5 commits into `food-system-branch` (now at `44729cf5`). Verified the merged result against the full suite: 9 pre-existing failures remain, all confirmed unrelated by diffing against the branch's exact base commit (7 are an intentional `#932` homework scaffold, 2 are stale test expectations predating this branch) — nothing new broken.
+
+**Blockers / questions:**
+- None blocking.
+- 5 minor findings from the day's reviews were deferred, not fixed — logged in the (now-deleted) SDD ledger, biggest one is `accrue_wage` still paying wage while a character naps at their work stop.
+
+**Next:**
+- Decide on the 5 deferred minor findings (`accrue_wage` sleeping-at-work is the one worth prioritizing).
+- Follow up on the test-coverage gaps found this morning (live wage wiring, the untested `IS_SLEEPING` gate sites).
+- Still open from before: PR #997, the Sweeten spec sign-off, #995/#996.
+
+## 2026-08-13
+**Focus:** Turning yesterday's 9 open code-review findings into a 4-task implementation plan; syncing journal entries to `main`
+
+**Done today:**
+- Merged PR #998 (journal entries for 08-04/08-07/08-10/08-11/08-12) into `main`.
+- Wrote `docs/superpowers/plans/2026-08-13-sleep-gating-and-wage-commerce-fixes.md`: 4 independent TDD tasks covering 4 of the 9 open findings from the 08-12 code review — `maybe_converse` pairing a sleeping character into a conversation, `Buy` matching the wrong seller's same-named item, `accrue_wage` paying mid-walk on a stale `activity` flag, and `needs_interrupt_seen` staying frozen through sleep. Each fix was implemented and test-verified (fail → fix → pass) while drafting, then reverted, so the plan's diffs are exact. Deliberately scoped out the remaining findings (Craft/persona YAML/`world_data_eat.yaml`) as separate follow-ups.
+
+**Blockers / questions:**
+- None blocking.
+- PR #997 (wage-spend-loop test) is still open/unmerged.
+
+**Next:**
+- Execute the 4-task plan via subagent-driven-development, one commit per task.
+- Decide on the remaining out-of-scope review findings.
+- Merge PR #997.
+
 ## 2026-08-12
 **Focus:** Committing the 08-07/08-10/08-11 uncommitted sleep/wage/commerce work, a wage-to-food integration test, a Sweeten second-sleepable-location design, and a first real code review of the feature commits (which found and fixed a live bug)
 
@@ -462,7 +590,6 @@ on top; copy the template block each working day.
 **Next:**
 - Implement in order: `enums.py` → `Character.__init__` → `Eat.apply_effects`
   → `end_turn()` decay, running the tests after each step.
-
 
 ## 2026-07-20
 **Focus:** Design choice for food system

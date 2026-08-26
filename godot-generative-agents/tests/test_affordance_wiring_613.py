@@ -21,6 +21,8 @@ from backend.cognition import (  # noqa: E402
     ARENA_AFFORDANCE_TAGS,
     action_tools_for,
     attach_agents,
+    known_food_location_line,
+    known_sleep_location_line,
     nearby_affordances_line,
     observe_and_decide,
 )
@@ -130,9 +132,27 @@ def test_penn_arena_tags_are_authored():
     assert game.locations["Van Pelt — Moelis Reading Room"].get_property("studyable")
     assert game.locations["Van Pelt — Study Booths"].get_property("studyable")
     assert game.locations["Houston Hall"].get_property("dining")
+    assert game.locations["Houston Hall"].get_property("marketplace")
+    assert game.locations["Houston Hall — Reading Room"].get_property("sleepable")
     # An untagged arena stays untagged -- tags are authored, not blanket.
     assert not game.locations["College Hall"].get_property("studyable")
     assert not game.locations["College Hall"].get_property("dining")
+
+
+def test_penn_hungry_and_sleepy_arenas_surface_their_full_tag_set():
+    # #931 follow-up: a hungry/sleepy brain needs a locational hint, the same
+    # way thirst/dining already worked -- Houston Hall's marketplace tag (not
+    # just dining) and the Reading Room's sleepable tag must both appear in
+    # the nearby-affordances line once in sight, not just be set on the
+    # location object (test_penn_arena_tags_are_authored checks the latter).
+    pw = build_penn_world()
+    game, _chars = pw.build_world_fn(pw.world_map)
+    houston = game.locations["Houston Hall"]
+    reading_room = game.locations["Houston Hall — Reading Room"]
+    game.perceivable_locations = lambda char: [houston, reading_room]
+    line = nearby_affordances_line(game, _CharAt(game.locations["College Hall"]))
+    assert "Houston Hall (dining, marketplace)" in line
+    assert "Houston Hall — Reading Room (sleepable)" in line
 
 
 TRAVEL = ToolCallResult(
@@ -239,6 +259,88 @@ def test_mock_never_sees_the_nearby_line():
 
     assert "observation" in captured  # the mock path really ran
     assert "Nearby, worth traveling to" not in captured["observation"]
+
+
+def test_known_food_and_sleep_lines_are_campus_wide_not_distance_gated():
+    # #931 follow-up: nearby_affordances_line only names arenas within
+    # vision_r; known_food_location_line/known_sleep_location_line must find
+    # Houston Hall / its Reading Room regardless of where the character is
+    # standing or what it can currently see -- these functions never consult
+    # perceivable_locations or char.location at all, only game.locations.
+    pw = build_penn_world()
+    game, chars = pw.build_world_fn(pw.world_map)
+    char = next(iter(chars.values()))
+    game.locations["College Hall"].add_character(char)  # far from Houston Hall
+
+    assert known_food_location_line(game, char) == ""  # not hungry yet
+    assert known_sleep_location_line(game, char) == ""  # not sleepy yet
+
+    char.set_property("is_low_energy", True)
+    char.set_property(Property.IS_SLEEPY, True)
+
+    # Houston Hall — Reception Hall is also stocked now (#907: every
+    # dining-tagged location, not just the building-level hall), so it joins
+    # the list; sorted by name, it lands after "Houston Hall" itself.
+    assert known_food_location_line(game, char) == (
+        "Even if it isn't nearby, you know food can be found at: "
+        "Houston Hall (dining, marketplace); Houston Hall — Reception Hall (dining)."
+    )
+    assert known_sleep_location_line(game, char) == (
+        "Even if it isn't nearby, you know you can sleep at: "
+        "Houston Hall — Reading Room."
+    )
+
+
+def test_decide_prompt_carries_known_food_and_sleep_lines_under_a_real_brain():
+    brain = MockLlmClient(tool_calls_responses=[TRAVEL])
+    game, ada = _world_with_offer(None)
+    ada.agent.llm_client = brain  # make _use_action_tools(agent) true
+    game.locations["Cafe"].set_property("dining", True)
+    game.locations["Library"].set_property("sleepable", True)
+    ada.set_property("is_low_energy", True)
+    ada.set_property(Property.IS_SLEEPY, True)
+    # Ada is on The Green, neither Cafe nor Library is in her perceivable set.
+    game.perceivable_locations = lambda char: [game.locations["The Green"]]
+
+    observe_and_decide(game, ada, 0)
+
+    user = brain.tool_calls_log[0]["messages"][-1]["content"]
+    assert (
+        "Even if it isn't nearby, you know food can be found at: Cafe (dining)." in user
+    )
+    assert "Even if it isn't nearby, you know you can sleep at: Library." in user
+
+
+def test_mock_never_sees_known_food_or_sleep_lines():
+    # Same byte-identical-mock guarantee as nearby_affordances_line.
+    game, ada = _world_with_offer(None)  # no llm_client -> mock == schedule brain
+    game.locations["Cafe"].set_property("dining", True)
+    ada.set_property("is_low_energy", True)
+    ada.set_property(Property.IS_SLEEPY, True)
+    captured = {}
+    orig_decide = ada.agent.decide
+
+    def _spy(observation):
+        captured["observation"] = observation
+        return orig_decide(observation)
+
+    ada.agent.decide = _spy
+    observe_and_decide(game, ada, 0)
+
+    assert "observation" in captured
+    assert "you know food can be found at" not in captured["observation"]
+    assert "you know you can sleep at" not in captured["observation"]
+
+
+def test_render_pins_the_known_food_and_sleep_lines():
+    assert (
+        render("known_food_location", places="Houston Hall (dining, marketplace)")
+        == "Even if it isn't nearby, you know food can be found at: Houston Hall (dining, marketplace)."
+    )
+    assert (
+        render("known_sleep_location", places="Houston Hall — Reading Room")
+        == "Even if it isn't nearby, you know you can sleep at: Houston Hall — Reading Room."
+    )
 
 
 def test_render_pins_the_nearby_line():

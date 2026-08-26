@@ -27,12 +27,13 @@ from text_adventure_games.planning import (
     BEHIND_SCHEDULE,
     RevisionTrigger,
 )
-from text_adventure_games.enums import ActionName
+from text_adventure_games.enums import ActionName, Property
 from text_adventure_games.npc import maybe_reflect
 from text_adventure_games.reporting import Channel, Message, default_renderer
 from text_adventure_games.usage import UsageLedger
 
 from .cognition import (
+    _use_action_tools,
     at_scheduled_stop,
     attach_agents,
     maybe_converse,
@@ -47,7 +48,14 @@ from .cognition import (
     settle_after_dead_talk,
     settle_after_instant_stop_work,
 )
-from backend.drives import accrue_thirst
+from backend.drives import (
+    accrue_energy,
+    accrue_thirst,
+    accrue_tiredness,
+    accrue_wage,
+    sleep_accumulation,
+)
+from .penn.penn_world import restock_sandwiches
 from .sim_clock import SimClock
 from .sim_config import CognitionConfig
 from .world_map import WorldMap
@@ -484,6 +492,96 @@ def step(
             if not done_for_the_day:
                 st["performing"] = False
             st["perform_until"] = None
+        elif (
+            st["performing"]
+            and st["perform_until"] is None
+            and st.get("sleep_settle")
+            and not char.get_property(Property.IS_SLEEPING)
+        ):
+            # Sleep just ended -- drives.sleep_accumulation woke the character
+            # on an earlier tick (#931 follow-up). perform_until was
+            # deliberately left None in the settle branch below (sleep has no
+            # schedule bound to race against), so the block above -- keyed on
+            # `perform_until is not None` -- never fires for it; without this,
+            # a reactive nap (or the authored bedtime stop, if anything ever
+            # ran after it) would leave the agent "performing" forever with no
+            # way to become due again. Mirrors "deviation completed": keep the
+            # schedule pointer (the day resumes where it left off, on-plan or
+            # not), un-latch, re-anchor the elapsed clock.
+            st["performing"] = False
+            st["sleep_settle"] = False
+            st["stop_since"] = step_idx
+            # The need-driven interrupt below is never re-evaluated while
+            # IS_SLEEPING (it's gated on `not IS_SLEEPING`), so this flag is
+            # frozen at whatever it was when sleep began. Hunger/thirst persist
+            # through sleep by design (#931 follow-up, accrue_energy), so on
+            # waking the character can still be needy -- reset the flag so the
+            # fresh performing block that follows gets one legitimate
+            # interrupt, instead of reading the stale True as "already seen".
+            st["needs_interrupt_seen"] = False
+
+        # Need-driven interrupt (#931 follow-up): a long `steps:` schedule
+        # block (Professor Tanaka's 800-step lecture prep, e.g.) would
+        # otherwise pin a character past its perform_until for hours with
+        # zero decision points at all -- accrue_thirst/accrue_energy (below,
+        # per-character each step) can flip is_thirsty/is_low_energy/
+        # IS_SLEEPY mid-block, but without this the character has no way to
+        # act on it until the block naturally ends, however long that is.
+        # Mirrors maybe_react's one-shot edge-trigger for perception (#370):
+        # fire on the tick a need is newly seen, not every tick it's still
+        # high -- otherwise a character choosing to keep doing the same
+        # thing would be re-interrupted every single tick. Same shape as the
+        # "deviation completed" branch above (the block didn't actually
+        # finish, so keep the schedule pointer, un-latch, re-anchor).
+        # Gated on _use_action_tools (the SAME real-brain check that gates
+        # every drive-hint prompt line in cognition.py, #613/#931): a mock or
+        # scripted brain's decisions are deterministic regardless of drives,
+        # and accrue_energy runs unconditionally on EVERY character (it's
+        # not opt-in, see drives.py) -- so a bare test/engine character that
+        # was never furnished a starting Property.ENERGY (only
+        # penn_world.build_world_fn's _furnish_starting_energy does that)
+        # decays from an effective 0 and reads as "needy" from tick one. That
+        # was always harmless before (nothing acted on the flag at this
+        # layer); gating on a real brain here keeps every mock/scripted-only
+        # test's behavior byte-identical, same as the rest of this file's
+        # drive-adjacent additions.
+        #
+        # One exception (bug fix, #931 follow-up): when --reactive-sleep is
+        # on, a mock-driven agent's decision is NOT unconditional on drives
+        # for sleepiness specifically -- ScheduleMockClient._choose
+        # (cognition.py) has a dedicated branch that overrides the schedule
+        # the moment it observes IS_SLEEPY. Without also letting IS_SLEEPY
+        # through this gate in that mode, that reactive-sleep agent is never
+        # re-decided mid-block, so the whole feature silently does nothing
+        # until the block ends on its own. Scoped to IS_SLEEPY only (not
+        # thirst/low-energy) since those still have no mock-side reactive
+        # branch to act on, so interrupting for them would just be no-op
+        # churn -- keeping every other mock/scripted test byte-identical.
+        reactive_sleep_wakeup = (
+            cog is not None
+            and cog.reactive_sleep
+            and char.get_property(Property.IS_SLEEPY)
+        )
+        if (
+            st["performing"]
+            and not st.get("conversing")
+            and not char.get_property(Property.IS_SLEEPING)
+            and (_use_action_tools(char.agent) or reactive_sleep_wakeup)
+        ):
+            # IS_SLEEPING itself is excluded from `needy` on purpose: it means
+            # the character is already asleep and recovering via
+            # sleep_accumulation -- interrupting *that* would wake it before
+            # it actually recovered, defeating the point.
+            needy = bool(
+                char.get_property("is_thirsty")
+                or char.get_property("is_low_energy")
+                or char.get_property(Property.IS_SLEEPY)
+            )
+            if needy and not st.get("needs_interrupt_seen"):
+                st["performing"] = False
+                st["perform_until"] = None
+                st["stop_since"] = step_idx
+            st["needs_interrupt_seen"] = needy
 
         # #826: a hold must end when its reason does. The block above retries a
         # held pointer only when an activity *completes*, so an agent that walked
@@ -626,6 +724,46 @@ def step(
         # thirst_rate, so the default bake is untouched.
         accrue_thirst(char)
 
+        # Opt-in wage drive (#931 follow-up): same per-character, per-step
+        # placement and no-op-by-default shape as accrue_thirst above -- a
+        # no-op for any persona without wage_rate. Reads char.agent.schedule's
+        # current stop directly (see drives.accrue_wage), so it doesn't need
+        # anything from `st` -- it only pays while actually on an authored
+        # `is_work` stop, not just for having a job.
+        accrue_wage(char)
+
+        # Energy-decay drive (#931): same per-character, per-step placement
+        # and no-op-by-default shape as accrue_thirst above. Unconditional
+        # (#931 follow-up) -- hunger is its own resource now, never restored
+        # by sleep_accumulation, so there's no recovery to fight over; a
+        # character just gets hungrier while asleep, the same as thirst
+        # already does.
+        accrue_energy(char)
+
+        # Tiredness-decay drive (#931 follow-up): the same shape again, for
+        # sleep. Gated on NOT IS_SLEEPING -- mirroring Action Castle's own
+        # should_decay_energy gate (not is_the_player_sleeping), and exactly
+        # what accrue_energy used to need before hunger and tiredness split
+        # onto separate resources -- because without it, decay and
+        # sleep_accumulation's recovery run back-to-back in the same tick and
+        # settle into a fixed point *below* _WAKE_RESTEDNESS_THRESHOLD
+        # (empirically ~94-99 depending on the decay constant, always short
+        # of 99): a sleeping character would decay and recover forever
+        # without ever actually crossing the wake threshold.
+        if not char.get_property(Property.IS_SLEEPING):
+            accrue_tiredness(char)
+
+        # Restedness recovery while asleep (#931 follow-up): a no-op for
+        # anyone not currently IS_SLEEPING (see backend.actions.Sleep), same
+        # per-character, per-step placement as the drives above.
+        sleep_accumulation(char)
+
+        # Houston Hall sandwich-shop restock (#931): a no-op for anyone not
+        # opted in via `sells_sandwiches` (see penn_world._furnish_sandwich_shop),
+        # same per-character, per-step placement as the drives above. Lives in
+        # penn_world.py, not backend.drives, since it needs Houston-Hall-specific
+        # item knowledge the generic drives don't carry.
+        restock_sandwiches(char)
         # Decision point: idle and not yet settled into an activity. The
         # pre-pass above already evaluated exactly that predicate into `due`
         # (nothing between the two passes touches another agent's state), so
@@ -670,10 +808,20 @@ def step(
             # side-effect-free lookup the #42 simultaneous gather phase uses),
             # so this works whether the talk is about to succeed empty or fail
             # the precondition gate.
+            # Sleep settles the same way: without this, a successful "sleep"
+            # isn't a pacing-slot verb (no duration_minutes -- its "duration"
+            # is drive-driven, not model-picked), so the very next tick would
+            # re-decide, fall through to the schedule's stale `perform
+            # <activity>`, and fail every remaining tick (Act blocks while
+            # IS_SLEEPING) -- the "mock never lands here" failure branch
+            # below, forever. Settling here reuses the existing on-plan
+            # stay-put duration logic untouched (#931 follow-up).
             is_talk = False
+            is_sleep = False
             if command:
                 peeked = game.parser.peek_action(command, actor=char)
                 is_talk = peeked is not None and peeked.ACTION_NAME == ActionName.TALK
+                is_sleep = peeked is not None and peeked.ACTION_NAME == "sleep"
             # #581 pacing args are minutes -> steps; with no clock they can't
             # be honored (_model_duration_steps below returns None), so drop
             # the stash BEFORE the command runs. This keeps the settled-wait
@@ -736,6 +884,13 @@ def step(
                     )
                     st["pron"] = WALK_EMOJI
                     st["desc"] = f"walking to {dest.name} @ {address}"
+                    # Clear the previous stop's activity label the instant
+                    # travel starts (#931 follow-up): accrue_wage's "settled,
+                    # not still walking" check reads Property "activity" for
+                    # truthiness, and nothing else clears it -- left stale, a
+                    # newly-arrived work stop reads as already settled for the
+                    # whole walk there, paying wage mid-transit.
+                    char.set_property("activity", False)
                     # #916: a walk is not the held activity. Reset the #905
                     # stamp so the hold clause can't fire mid-walk on the
                     # stale pre-walk activity property, and record the walk's
@@ -745,6 +900,7 @@ def step(
                     st["walk_target"] = dest.name
                 elif (
                     command.startswith("perform")
+                    or is_sleep
                     or (clock is not None and _settles_in_place(game, command))
                     or model_duration_steps is not None
                 ):
@@ -816,7 +972,21 @@ def step(
                     # -- correct for an on-plan end-of-day stop, but a deviation
                     # must never freeze there with no way to re-decide, so an
                     # off-plan perform with no bound gets the max-duration ceiling.
-                    if model_duration_steps is not None:
+                    if is_sleep:
+                        # Sleep's duration is governed by drives.sleep_accumulation
+                        # waking the character, never by a schedule bound -- true
+                        # whether this is the authored bedtime stop (on-plan) or a
+                        # reactive nap triggered by IS_SLEEPY mid-schedule
+                        # (off-plan, #931 follow-up): either way there is no
+                        # schedule step count to race against, and capping it like
+                        # a generic deviation would wake the agent for a redecide
+                        # while still IS_SLEEPING, which only fails Sleep's
+                        # "already asleep" gate every tick until sleep_accumulation
+                        # actually wakes them. The pre-pass's wake un-latch (below)
+                        # is what ends this, not a perform_until bound.
+                        st["perform_until"] = None
+                        st["sleep_settle"] = True
+                    elif model_duration_steps is not None:
                         st["perform_until"] = step_idx + model_duration_steps
                     else:
                         schedule_steps = schedule.steps
@@ -1167,6 +1337,7 @@ def simulate(
         personas,
         ledger=ledger,
         embedding_client=embedding_client,
+        game=game if cog.reactive_sleep else None,
         relationships_csv=relationships_csv,
         base_personas_dir=base_personas_dir,
         vision_r=cog.vision_r,

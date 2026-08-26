@@ -269,6 +269,14 @@ def _normalize_personas(personas: list[dict]) -> list[dict]:
                     # (#559 -- e.g. "blackboard" for a teacher). None => the
                     # router's default nearest-spot pick.
                     "furniture": stop.get("furniture"),
+                    # Marks this stop as an actual job duty, not just any
+                    # activity a job-holder happens to be doing (#931 follow-up
+                    # wages): drives.accrue_wage only pays while the character
+                    # is settled on a stop tagged here. False for every stop
+                    # unless authored otherwise, so a non-job persona (or a
+                    # job-holder's non-work stop, e.g. attending a lecture) is
+                    # never mistaken for being on the clock.
+                    "is_work": bool(stop.get("is_work", False)),
                 }
                 for stop in spec["schedule"]
             ]
@@ -283,6 +291,7 @@ def _normalize_personas(personas: list[dict]) -> list[dict]:
                     "steps": None,
                     "commands": [],
                     "furniture": None,
+                    "is_work": False,
                 }
             ]
     return personas
