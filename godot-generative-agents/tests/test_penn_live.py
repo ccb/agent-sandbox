@@ -356,12 +356,15 @@ def test_run_usage_rebaselines_on_reset_and_run_rows_carry_run_cost(tmp_path):
         "counted": True,
         "resumed": False,
     }
+    # #811: no ticks yet, so no decisions in the verb histogram either.
+    no_verbs = {"decisions": 0, "by_verb": {}, "resumed": False}
     assert stepper.run_usage() == {
         "run_calls": 0,
         "run_failed_calls": 0,
         "run_cost_usd": 0.0,
         "run_by_actor": {},
         "social": no_social,
+        "verbs": no_verbs,
     }
     _spend(stepper.ledger, 0.25)
     _spend(stepper.ledger, 0.05)
@@ -371,13 +374,19 @@ def test_run_usage_rebaselines_on_reset_and_run_rows_carry_run_cost(tmp_path):
         "run_cost_usd": 0.3,
         "run_by_actor": {"Diego Torres": 0.3},
         "social": no_social,
+        "verbs": no_verbs,
     }
     stepper.tick()
     first = stepper.run_id
     # A mock tick appended $0 records, but run_calls/run_by_actor ignore them.
     # The scripted world's first tick doesn't settle the cast together either
-    # (they're still walking to their first schedule stop).
-    assert stepper.run_usage() == {
+    # (they're still walking to their first schedule stop). Their decisions DO
+    # land in the #811 verb histogram, though -- pop it and check it alone,
+    # so this test doesn't pin the mock cast's exact first-tick verb picks.
+    after_tick = stepper.run_usage()
+    verbs = after_tick.pop("verbs")
+    assert verbs["decisions"] == sum(verbs["by_verb"].values()) > 0
+    assert after_tick == {
         "run_calls": 2,
         "run_failed_calls": 0,
         "run_cost_usd": pytest.approx(0.3),
@@ -387,13 +396,14 @@ def test_run_usage_rebaselines_on_reset_and_run_rows_carry_run_cost(tmp_path):
     assert store.get_run(first)["cost"] == pytest.approx(0.3)
     lifetime_calls = stepper.ledger.summary()["calls"]  # spends + mock records
     stepper.reset()
-    # The new run starts from zero...
+    # The new run starts from zero... (the verb histogram re-baselines too)
     assert stepper.run_usage() == {
         "run_calls": 0,
         "run_failed_calls": 0,
         "run_cost_usd": 0.0,
         "run_by_actor": {},
         "social": no_social,
+        "verbs": no_verbs,
     }
     # ...while the lifetime ledger keeps everything, so a tripped cost
     # ceiling stays tripped across the reset.
@@ -412,6 +422,7 @@ def test_run_usage_rebaselines_on_reset_and_run_rows_carry_run_cost(tmp_path):
         "run_cost_usd": 0.15,
         "run_by_actor": {"Diego Torres": 0.1, "Sofia Ramirez": 0.05},
         "social": no_social,
+        "verbs": no_verbs,
     }
     stepper.tick()
     second = stepper.run_id
@@ -424,6 +435,7 @@ def test_run_usage_rebaselines_on_reset_and_run_rows_carry_run_cost(tmp_path):
         "run_cost_usd": 0.0,
         "run_by_actor": {},
         "social": no_social,
+        "verbs": no_verbs,
     }
 
 

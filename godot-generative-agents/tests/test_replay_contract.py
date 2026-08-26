@@ -456,6 +456,15 @@ def test_live_ts_run_social_mirrors_the_stepper_social_block():
     _assert_ts_matches("RunSocial", set(social))
 
 
+def test_live_ts_run_verbs_mirrors_the_stepper_verbs_block():
+    # The #811 verb histogram is the second nested object inside run_usage()
+    # (the #795 social block was the first) -- same drift risk, same pin:
+    # mirror RunVerbs against the real emitter, one level below the
+    # UsageSummary mirror above.
+    verbs = PennStepper(num_steps=2, world=build_penn_world()).run_usage()["verbs"]
+    _assert_ts_matches("RunVerbs", set(verbs))
+
+
 def test_live_ts_llm_call_record_mirrors_the_monitor_row():
     # The llm_call feed row is the monitor's kept record -- a flattened
     # CallRecord.to_primitive() plus the printed row's extras -- with
